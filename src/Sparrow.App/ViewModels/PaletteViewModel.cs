@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Sparrow.App.History;
 using Sparrow.App.Services;
 using Sparrow.Plugin.Sdk;
 using Sparrow.Plugin.Sdk.Inputs;
@@ -22,6 +23,7 @@ public partial class PaletteViewModel : ObservableObject
     private readonly Func<ToolRegistry> _registryFactory;
     private readonly IClipboardAccess _clipboard;
     private readonly IAppLog _log;
+    private readonly IHistoryStore _history;
 
     private ToolRegistry? _registry;
 
@@ -51,11 +53,16 @@ public partial class PaletteViewModel : ObservableObject
 
     public ObservableCollection<ToolItemViewModel> Items { get; } = [];
 
-    public PaletteViewModel(Func<ToolRegistry> registryFactory, IClipboardAccess clipboard, IAppLog log)
+    public PaletteViewModel(
+        Func<ToolRegistry> registryFactory,
+        IClipboardAccess clipboard,
+        IAppLog log,
+        IHistoryStore history)
     {
         _registryFactory = registryFactory;
         _clipboard = clipboard;
         _log = log;
+        _history = history;
 
         // 刻意不在这里 Refresh：构造函数运行在启动路径上，
         // 而 Refresh 会触发插件扫描 + ALC 加载。首次搜索或 Reset 时才加载。
@@ -125,7 +132,18 @@ public partial class PaletteViewModel : ObservableObject
 
             if (result.Success && result.Payload is not null)
             {
-                ShowResult(FormatPayload(result.Payload), $"{tool.Descriptor.Name} · {elapsed.TotalMilliseconds:F0} ms");
+                var text = FormatPayload(result.Payload);
+                ShowResult(text, $"{tool.Descriptor.Name} · {elapsed.TotalMilliseconds:F0} ms");
+
+                _history.Add(new HistoryEntry(
+                    Guid.NewGuid().ToString("N"),
+                    tool.Descriptor.Id,
+                    tool.Descriptor.Name,
+                    text,
+                    PreviewInput(context.Input),
+                    DateTimeOffset.Now,
+                    (long)elapsed.TotalMilliseconds));
+
                 return;
             }
 
@@ -224,6 +242,13 @@ public partial class PaletteViewModel : ObservableObject
             Host = entry.Host
         }, null);
     }
+
+    private static string PreviewInput(IToolInput input) => input switch
+    {
+        TextInput text => text.Text.Length <= 120 ? text.Text : text.Text[..120] + "…",
+        ImageInput image => $"图片 {image.ByteSize} 字节",
+        _ => input.GetType().Name
+    };
 
     private static string FormatPayload(IToolPayload payload)
     {

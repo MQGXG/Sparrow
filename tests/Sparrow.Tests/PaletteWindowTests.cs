@@ -51,7 +51,8 @@ public sealed class PaletteWindowTests
         var viewModel = new PaletteViewModel(
             () => ToolRegistry.FromTools([new JsonFormatTool()]),
             clipboard,
-            new NullLog());
+            new NullLog(),
+            new NullHistoryStore());
 
         viewModel.Query = "json";
 
@@ -101,7 +102,8 @@ public sealed class PaletteWindowTests
         var viewModel = new PaletteViewModel(
             () => ToolRegistry.FromTools([]),
             clipboard,
-            new NullLog());
+            new NullLog(),
+            new NullHistoryStore());
 
         // 不设置查询：列表为空，Selected 为 null
         var window = new PaletteWindow { DataContext = viewModel };

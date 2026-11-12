@@ -36,6 +36,12 @@ public partial class WorkspaceWindow : Window
             viewModel.CopyResult();
     }
 
+    private void OnHistoryClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: HistoryEntryViewModel history } && DataContext is WorkspaceViewModel viewModel)
+            viewModel.CopyHistory(history);
+    }
+
     private void OnSettingsClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is WorkspaceViewModel viewModel)

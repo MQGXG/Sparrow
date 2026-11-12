@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Sparrow.App.History;
 using Sparrow.App.Plugins;
 using Sparrow.App.Services;
 using Sparrow.App.Settings;
@@ -59,15 +60,21 @@ public partial class App : Application
 
         _catalog = new ToolCatalog(pluginsRoot, log, settings);
 
+        var historyPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Sparrow",
+            "history.jsonl");
+        var history = new JsonlHistoryStore(historyPath, log);
+
         var clipboard = new Win32Clipboard(log);
 
         // 传方法组而不是实例：第一次搜索时才真正扫描 + 加载插件
-        _paletteViewModel = new PaletteViewModel(_catalog.GetRegistry, clipboard, log);
+        _paletteViewModel = new PaletteViewModel(_catalog.GetRegistry, clipboard, log, history);
         _palette = new PaletteWindow { DataContext = _paletteViewModel };
 
         // 工作区与面板共用同一个 ToolCatalog：插件只加载一次
         var settingsViewModel = new SettingsViewModel(_catalog, settingsStore, settings);
-        _workspaceViewModel = new WorkspaceViewModel(_catalog, clipboard, log, settingsViewModel);
+        _workspaceViewModel = new WorkspaceViewModel(_catalog, clipboard, log, history, settingsViewModel);
         _workspace = new WorkspaceWindow { DataContext = _workspaceViewModel };
 
         _tray = new TrayService(_palette, ShowWorkspace);

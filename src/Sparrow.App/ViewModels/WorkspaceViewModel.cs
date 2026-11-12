@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Sparrow.App.History;
 using Sparrow.App.Plugins;
 using Sparrow.App.Services;
 using Sparrow.Plugin.Sdk;
@@ -19,16 +20,19 @@ public partial class WorkspaceViewModel : ObservableObject
     private readonly ToolCatalog _catalog;
     private readonly IClipboardAccess _clipboard;
     private readonly IAppLog _log;
+    private readonly IHistoryStore _history;
 
     public WorkspaceViewModel(
         ToolCatalog catalog,
         IClipboardAccess clipboard,
         IAppLog log,
+        IHistoryStore history,
         SettingsViewModel settings)
     {
         _catalog = catalog;
         _clipboard = clipboard;
         _log = log;
+        _history = history;
         Settings = settings;
     }
 
@@ -37,6 +41,8 @@ public partial class WorkspaceViewModel : ObservableObject
     public ObservableCollection<ToolGroupViewModel> Groups { get; } = [];
 
     public ObservableCollection<ParameterViewModel> Parameters { get; } = [];
+
+    public ObservableCollection<HistoryEntryViewModel> Recent { get; } = [];
 
     [ObservableProperty]
     private ToolItemViewModel? _selectedTool;
@@ -91,6 +97,10 @@ public partial class WorkspaceViewModel : ObservableObject
 
             SelectedTool = Groups.SelectMany(group => group.Tools).FirstOrDefault();
             InputText = _clipboard.GetText() ?? string.Empty;
+
+            Recent.Clear();
+            foreach (var entry in _history.Recent(20))
+                Recent.Add(new HistoryEntryViewModel(entry));
         }
         catch (Exception ex)
         {
@@ -153,6 +163,18 @@ public partial class WorkspaceViewModel : ObservableObject
                 HasResult = true;
                 HasError = false;
                 ErrorText = null;
+
+                var historyEntry = new HistoryEntry(
+                    Guid.NewGuid().ToString("N"),
+                    entry.Descriptor.Id,
+                    entry.Descriptor.Name,
+                    text.Text,
+                    PreviewInput(context.Input),
+                    DateTimeOffset.Now,
+                    0);
+
+                _history.Add(historyEntry);
+                Recent.Insert(0, new HistoryEntryViewModel(historyEntry));
                 return;
             }
 
@@ -170,6 +192,16 @@ public partial class WorkspaceViewModel : ObservableObject
     {
         if (!string.IsNullOrEmpty(ResultText))
             _clipboard.SetText(ResultText);
+    }
+
+    /// <summary>点击历史记录：把内容放回结果区和剪贴板。</summary>
+    public void CopyHistory(HistoryEntryViewModel history)
+    {
+        ResultText = history.Entry.Output;
+        HasResult = true;
+        HasError = false;
+        ErrorText = null;
+        _clipboard.SetText(history.Entry.Output);
     }
 
     public void ShowSettings() => IsSettingsVisible = true;
@@ -197,6 +229,13 @@ public partial class WorkspaceViewModel : ObservableObject
 
         return new TextInput(InputText);
     }
+
+    private static string PreviewInput(IToolInput input) => input switch
+    {
+        TextInput text => text.Text.Length <= 120 ? text.Text : text.Text[..120] + "…",
+        ImageInput image => $"图片 {image.ByteSize} 字节",
+        _ => input.GetType().Name
+    };
 
     private void ShowError(string message)
     {

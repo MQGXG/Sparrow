@@ -113,6 +113,30 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
+
+            <TextBlock Text="最近结果" FontSize="13" Foreground="#8B98A8" Margin="0,12,0,0" />
+
+            <ItemsControl ItemsSource="{Binding Recent}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:HistoryEntryViewModel">
+                  <Button Tag="{Binding}"
+                          Click="OnHistoryClick"
+                          HorizontalAlignment="Stretch"
+                          HorizontalContentAlignment="Left"
+                          Margin="0,2"
+                          Padding="8"
+                          Background="#161B22">
+                    <StackPanel Spacing="2">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="{Binding ToolName}" FontSize="12" Foreground="#E6EDF3" />
+                        <TextBlock Grid.Column="1" Text="{Binding TimeLabel}" FontSize="10" Foreground="#6E7B8B" />
+                      </Grid>
+                      <TextBlock Text="{Binding Preview}" FontSize="11" Foreground="#8B98A8" TextWrapping="Wrap" />
+                    </StackPanel>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
           </StackPanel>
         </ScrollViewer>
 

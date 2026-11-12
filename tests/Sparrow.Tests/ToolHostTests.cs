@@ -93,7 +93,8 @@ public sealed class ToolHostTests
         var viewModel = new PaletteViewModel(
             () => ToolRegistry.FromTools([probe]),
             new FakeClipboard(),
-            new NullLog());
+            new NullLog(),
+            new NullHistoryStore());
 
         viewModel.Query = "宿主探针";
 

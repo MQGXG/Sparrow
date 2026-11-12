@@ -45,7 +45,8 @@ public sealed class PaletteViewModelTests
         return (new PaletteViewModel(
             () => ToolRegistry.FromTools([new JsonFormatTool()]),
             clipboard,
-            new NullLog()), clipboard);
+            new NullLog(),
+            new NullHistoryStore()), clipboard);
     }
 
     [Fact]
