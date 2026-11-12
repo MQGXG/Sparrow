@@ -144,6 +144,22 @@ public partial class PaletteViewModel : ObservableObject
         }
     }
 
+    /// <summary>宿主流程（截图识别等）直接展示结果。</summary>
+    public void ShowExternalResult(string title, string text) => ShowResult(text, title);
+
+    /// <summary>宿主流程直接展示错误。</summary>
+    public void ShowExternalError(string message) => ShowError(message);
+
+    /// <summary>执行中占位，避免用户以为没反应。</summary>
+    public void ShowPending(string message)
+    {
+        ResultText = message;
+        ResultTitle = null;
+        HasResult = true;
+        HasError = false;
+        ErrorText = null;
+    }
+
     /// <summary>复制当前结果。没有结果时静默忽略。</summary>
     public void CopyResult()
     {

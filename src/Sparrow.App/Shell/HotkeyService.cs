@@ -2,8 +2,11 @@ using System.Runtime.InteropServices;
 
 namespace Sparrow.App.Shell;
 
+/// <summary>一条全局热键的注册信息。</summary>
+public sealed record HotkeyBinding(int Id, uint Modifiers, uint VirtualKey, Action OnPressed);
+
 /// <summary>
-/// 全局热键（Ctrl + Alt + S）。
+/// 全局热键（默认 Ctrl+Alt+S 搜索、Ctrl+Alt+C 截图）。
 ///
 /// 实现方式：创建一个 message-only 窗口（HWND_MESSAGE），在独立线程上跑自己的消息循环。
 /// 为什么不用 Avalonia 主窗口的 HWND + WndProc 钩子：
@@ -13,17 +16,17 @@ namespace Sparrow.App.Shell;
 /// </summary>
 public sealed class HotkeyService : IDisposable
 {
-    private const int HotkeyId = 0x5A5A;
+    public const uint ModAlt = 0x0001;
+    public const uint ModControl = 0x0002;
+    /// <summary>按住不放时不重复触发。</summary>
+    public const uint ModNoRepeat = 0x4000;
+
     private const int WmHotkey = 0x0312;
-    private const uint ModAlt = 0x0001;
-    private const uint ModControl = 0x0002;
-    // 按住不放时不重复触发，否则长按 Ctrl+Alt+S 会把面板开关抖成一片
-    private const uint ModNoRepeat = 0x4000;
-    private const uint VkS = 0x53;
 
     private static readonly IntPtr HwndMessage = new(-3);
 
-    private readonly Action _onPressed;
+    private readonly IReadOnlyList<HotkeyBinding> _bindings;
+    private readonly Dictionary<int, HotkeyBinding> _byId;
     private readonly WndProcDelegate _wndProc;
     private readonly ManualResetEventSlim _ready = new(false);
     private readonly Thread _thread;
@@ -34,9 +37,11 @@ public sealed class HotkeyService : IDisposable
     private volatile bool _disposed;
     private bool _started;
 
-    public HotkeyService(Action onPressed)
+    public HotkeyService(IEnumerable<HotkeyBinding> bindings)
     {
-        _onPressed = onPressed;
+        _bindings = bindings.ToArray();
+        _byId = _bindings.ToDictionary(binding => binding.Id);
+
         // 委托必须被字段持有，否则会被 GC 回收，窗口过程变成野指针直接崩溃
         _wndProc = WndProc;
 
@@ -48,9 +53,8 @@ public sealed class HotkeyService : IDisposable
     }
 
     /// <summary>
-    /// 启动消息循环并注册热键。
-    /// 返回 false 表示被其它程序占用或系统拒绝——调用方必须提示用户，
-    /// 静默失败会让用户以为软件坏了（这是 M0 的验收项之一）。
+    /// 启动消息循环并注册全部热键。
+    /// 返回 false 表示至少一个热键被占用或系统拒绝——调用方必须提示用户。
     /// </summary>
     public bool Register()
     {
@@ -94,7 +98,14 @@ public sealed class HotkeyService : IDisposable
             return;
         }
 
-        _registered = RegisterHotKey(_hwnd, HotkeyId, ModControl | ModAlt | ModNoRepeat, VkS);
+        var allRegistered = true;
+        foreach (var binding in _bindings)
+        {
+            if (!RegisterHotKey(_hwnd, binding.Id, binding.Modifiers, binding.VirtualKey))
+                allRegistered = false;
+        }
+
+        _registered = allRegistered;
         _ready.Set();
 
         while (!_disposed)
@@ -107,11 +118,13 @@ public sealed class HotkeyService : IDisposable
             DispatchMessage(ref message);
         }
 
-        if (_registered)
-            UnregisterHotKey(_hwnd, HotkeyId);
-
         if (_hwnd != IntPtr.Zero)
+        {
+            foreach (var binding in _bindings)
+                UnregisterHotKey(_hwnd, binding.Id);
+
             DestroyWindow(_hwnd);
+        }
 
         if (_atom != 0)
             UnregisterClass(className, instance);
@@ -119,10 +132,10 @@ public sealed class HotkeyService : IDisposable
 
     private IntPtr WndProc(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam)
     {
-        if (message == WmHotkey && wParam.ToInt32() == HotkeyId)
+        if (message == WmHotkey && _byId.TryGetValue(wParam.ToInt32(), out var binding))
         {
             // 在热键线程触发；调用方负责切回 UI 线程
-            _onPressed();
+            binding.OnPressed();
             return IntPtr.Zero;
         }
 
@@ -136,7 +149,6 @@ public sealed class HotkeyService : IDisposable
 
         _disposed = true;
 
-        // 让 GetMessage 返回 0，从而退出消息循环并清理资源
         if (_hwnd != IntPtr.Zero)
             PostMessage(_hwnd, 0x0012 /* WM_QUIT */, IntPtr.Zero, IntPtr.Zero);
 

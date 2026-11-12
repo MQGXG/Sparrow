@@ -1,0 +1,34 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Sparrow.App.Views.CaptureWindow"
+        Title="SparrowCapture"
+        WindowState="FullScreen"
+        WindowDecorations="None"
+        Topmost="True"
+        ShowInTaskbar="False"
+        Cursor="Cross"
+        Background="#80000000">
+
+  <Canvas x:Name="Root" Background="Transparent">
+
+    <Rectangle x:Name="Selection"
+               IsVisible="False"
+               Fill="#20D97706"
+               Stroke="#D97706"
+               StrokeThickness="2" />
+
+    <Border Canvas.Left="0"
+            Canvas.Top="0"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Top"
+            Background="#CC161B22"
+            CornerRadius="6"
+            Padding="12,6"
+            Margin="0,24,0,0">
+      <TextBlock Text="拖拽选择区域，Esc 取消"
+                 FontSize="13"
+                 Foreground="#E6EDF3" />
+    </Border>
+
+  </Canvas>
+</Window>
