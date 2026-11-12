@@ -5,7 +5,12 @@
     <AssemblyName>Sparrow.Ocr.Worker</AssemblyName>
     <RootNamespace>Sparrow.Ocr.Worker</RootNamespace>
     <Description>OCR 子进程：PP-OCRv5 文字识别</Description>
-    <Platforms>x64</Platforms>
+    <!--
+      不声明 <Platforms>x64</Platforms>：
+      它会让项目只暴露 Debug|x64 / Release|x64，而解决方案默认是 Any CPU，
+      VS 会报「解决方案包含未知的项目配置映射」。
+      输出架构由 PlatformTarget + RuntimeIdentifier 决定，与 Platforms 无关。
+    -->
     <PlatformTarget>x64</PlatformTarget>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
