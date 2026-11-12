@@ -5,6 +5,7 @@ using Sdcb.PaddleInference;
 using Sdcb.PaddleOCR;
 using Sdcb.PaddleOCR.Models;
 using Sdcb.PaddleOCR.Models.Local;
+using Sparrow.Ocr.Worker;
 
 // OCR worker：PP-OCRv5 文字识别。
 //
@@ -131,13 +132,3 @@ static FullOcrModel SelectModel(string language) => language switch
     // ch（简体/繁体/拼音/英日）是默认，ja 也走这一套
     _ => LocalFullModels.ChineseV5
 };
-
-internal sealed record OcrResultDto(string Text, OcrRegionDto[] Regions);
-
-internal sealed record OcrRegionDto(
-    string Text,
-    int X,
-    int Y,
-    int Width,
-    int Height,
-    float Score);
