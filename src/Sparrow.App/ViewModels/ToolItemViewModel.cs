@@ -10,11 +10,18 @@ namespace Sparrow.App.ViewModels;
 /// </summary>
 public sealed partial class ToolItemViewModel : ObservableObject
 {
-    public ToolItemViewModel(ToolEntry entry) => Entry = entry;
+    public ToolItemViewModel(ToolEntry entry, string? highlightTerm = null)
+    {
+        Entry = entry;
+        HighlightTerm = highlightTerm;
+    }
 
     public ToolEntry Entry { get; }
 
     public ITool Tool => Entry.Tool;
+
+    /// <summary>面板搜索词，用于列表里的命中高亮；工作区为 null。</summary>
+    public string? HighlightTerm { get; }
 
     public string Name => Entry.Descriptor.Name;
 

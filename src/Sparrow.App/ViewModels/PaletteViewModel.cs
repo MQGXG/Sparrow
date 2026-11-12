@@ -93,7 +93,7 @@ public partial class PaletteViewModel : ObservableObject
 
         Items.Clear();
         foreach (var entry in entries)
-            Items.Add(new ToolItemViewModel(entry));
+            Items.Add(new ToolItemViewModel(entry, Query));
 
         Selected = Items.FirstOrDefault();
         IsEmpty = Items.Count == 0;

@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Sparrow.App.ViewModels"
+        xmlns:controls="using:Sparrow.App.Controls"
         x:Class="Sparrow.App.Views.PaletteWindow"
         x:DataType="vm:PaletteViewModel"
         Title="Sparrow"
@@ -90,14 +91,16 @@
             <DataTemplate x:DataType="vm:ToolItemViewModel">
               <Grid ColumnDefinitions="*,Auto" Margin="12,9">
                 <StackPanel Spacing="3">
-                  <TextBlock Text="{Binding Name}"
-                             FontSize="14"
-                             FontWeight="SemiBold"
-                             Foreground="{StaticResource TextPrimaryBrush}" />
-                  <TextBlock Text="{Binding Description}"
-                             FontSize="11"
-                             Foreground="{StaticResource TextSecondaryBrush}"
-                             TextWrapping="Wrap" />
+                  <controls:HighlightTextBlock SourceText="{Binding Name}"
+                                               Term="{Binding HighlightTerm}"
+                                               FontSize="14"
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextPrimaryBrush}" />
+                  <controls:HighlightTextBlock SourceText="{Binding Description}"
+                                               Term="{Binding HighlightTerm}"
+                                               FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               TextWrapping="Wrap" />
                 </StackPanel>
 
                 <Border Grid.Column="1"
