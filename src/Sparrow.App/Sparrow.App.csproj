@@ -7,7 +7,14 @@
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <!-- 编译绑定：绑定错误在编译期暴露，而不是运行时静默失败 -->
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- exe 图标（任务栏 / 资源管理器）。托盘和窗口共用 Assets 里的 PNG -->
+    <ApplicationIcon>Assets\sparrow.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 图标资源：托盘加载 avares://Sparrow.App/Assets/sparrow-32.png -->
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" />

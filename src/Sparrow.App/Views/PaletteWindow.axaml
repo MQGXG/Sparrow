@@ -8,6 +8,7 @@
         Title="Sparrow"
         Width="660"
         MaxHeight="560"
+        Icon="avares://Sparrow.App/Assets/sparrow-32.png"
         SizeToContent="Height"
         WindowDecorations="None"
         CanResize="False"

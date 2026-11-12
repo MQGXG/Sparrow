@@ -8,6 +8,7 @@
         Title="Sparrow · 工作区"
         Width="1120"
         Height="730"
+        Icon="avares://Sparrow.App/Assets/sparrow-32.png"
         MinWidth="920"
         MinHeight="580"
         WindowStartupLocation="CenterScreen"
