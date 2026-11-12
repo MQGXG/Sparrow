@@ -13,11 +13,42 @@ namespace Sparrow.App.Views;
 public partial class CaptureWindow : Window
 {
     private Point? _start;
+    private PixelPoint _origin;
+    private double _scaling = 1;
 
     public CaptureWindow() => InitializeComponent();
 
     /// <summary>选区的 PNG 结果；取消或选区过小时为 null。</summary>
     public byte[]? Result { get; private set; }
+
+    protected override void OnOpened(EventArgs e)
+    {
+        base.OnOpened(e);
+        ApplyVirtualScreenBounds();
+    }
+
+    /// <summary>
+    /// 覆盖所有显示器的并集，而不是只覆盖主屏。
+    /// 多屏缩放不同时，以主屏缩放为基准（M1 已知限制）。
+    /// </summary>
+    private void ApplyVirtualScreenBounds()
+    {
+        var screens = Screens.All;
+        if (screens.Count == 0)
+            return;
+
+        var left = screens.Min(screen => screen.Bounds.X);
+        var top = screens.Min(screen => screen.Bounds.Y);
+        var right = screens.Max(screen => screen.Bounds.X + screen.Bounds.Width);
+        var bottom = screens.Max(screen => screen.Bounds.Y + screen.Bounds.Height);
+
+        _origin = new PixelPoint(left, top);
+        _scaling = Screens.Primary?.Scaling ?? RenderScaling;
+
+        Position = _origin;
+        Width = (right - left) / _scaling;
+        Height = (bottom - top) / _scaling;
+    }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
@@ -64,8 +95,8 @@ public partial class CaptureWindow : Window
             return;
         }
 
-        var scaling = RenderScaling;
-        var origin = Screens.Primary?.Bounds.Position ?? new PixelPoint(0, 0);
+        var scaling = _scaling;
+        var origin = _origin;
 
         var x = origin.X + (int)(rect.X * scaling);
         var y = origin.Y + (int)(rect.Y * scaling);
