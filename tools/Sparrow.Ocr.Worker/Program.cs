@@ -113,6 +113,8 @@ static FullOcrModel SelectModel(string language) => language switch
     "en" => LocalFullModels.EnglishV5,
     "ko" => LocalFullModels.KoreanV5,
     "ru" or "uk" or "be" => LocalFullModels.EastSlavicV5,
+    "bg" or "sr" or "mk" or "kk" or "ky" or "tg" or "mn" or "tt" or "ba" or "cv" or "udm" or "kv" or "os" or "bua" or "xal" or "tyv" or "sah" or "kaa"
+        => LocalFullModels.CyrillicV5,
     "ar" or "fa" or "ur" or "ug" or "ps" or "sd" => LocalFullModels.ArabicV5,
     "th" => LocalFullModels.ThaiV5,
     "el" => LocalFullModels.GreekV5,

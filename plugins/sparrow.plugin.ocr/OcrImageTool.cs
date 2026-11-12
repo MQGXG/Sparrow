@@ -38,7 +38,7 @@ public sealed class OcrImageTool : ITool
                 Key = "language",
                 Label = "语言",
                 Kind = ParameterKind.Choice,
-                Choices = ["ch", "en", "ja", "ko", "ru", "ar", "th", "el", "hi", "fr"],
+                Choices = ["ch", "en", "ja", "ko", "ru", "uk", "ar", "fa", "bg", "sr", "hi", "th", "el", "fr", "de", "es"],
                 Default = "ch",
                 Hint = "ch 包含简体、繁体、拼音、英日；ru 覆盖俄语/乌克兰/白俄"
             }
