@@ -174,6 +174,83 @@ public sealed class Win32Clipboard : IClipboardAccess
         }
     }
 
+    /// <summary>把 PNG 写入剪贴板（转成 CF_DIB）。返回 false 表示失败。</summary>
+    public bool SetImagePng(byte[] png)
+    {
+        if (png.Length == 0)
+            return false;
+
+        using var bitmap = SKBitmap.Decode(png);
+        if (bitmap is null)
+            return false;
+
+        try
+        {
+            var width = bitmap.Width;
+            var height = bitmap.Height;
+            var stride = width * 4;
+            var pixelBytes = stride * height;
+
+            // CF_DIB：40 字节 BITMAPINFOHEADER + 32bpp 像素（top-down）
+            var dib = new byte[40 + pixelBytes];
+            BitConverter.TryWriteBytes(dib.AsSpan(0, 4), 40);
+            BitConverter.TryWriteBytes(dib.AsSpan(4, 4), width);
+            BitConverter.TryWriteBytes(dib.AsSpan(8, 4), -height);
+            BitConverter.TryWriteBytes(dib.AsSpan(12, 2), (short)1);
+            BitConverter.TryWriteBytes(dib.AsSpan(14, 2), (short)32);
+            BitConverter.TryWriteBytes(dib.AsSpan(20, 4), pixelBytes);
+
+            var pixels = bitmap.GetPixelSpan();
+            var copyLength = Math.Min(pixels.Length, pixelBytes);
+            pixels[..copyLength].CopyTo(dib.AsSpan(40));
+
+            if (!OpenClipboard(IntPtr.Zero))
+                return false;
+
+            try
+            {
+                if (!EmptyClipboard())
+                    return false;
+
+                var handle = GlobalAlloc(GmemMoveable, (nuint)dib.Length);
+                if (handle == IntPtr.Zero)
+                    return false;
+
+                var pointer = GlobalLock(handle);
+                if (pointer == IntPtr.Zero)
+                {
+                    GlobalFree(handle);
+                    return false;
+                }
+
+                try
+                {
+                    Marshal.Copy(dib, 0, pointer, dib.Length);
+                }
+                finally
+                {
+                    GlobalUnlock(handle);
+                }
+
+                if (SetClipboardData(CfDib, handle) == IntPtr.Zero)
+                {
+                    GlobalFree(handle);
+                    return false;
+                }
+
+                return true;
+            }
+            finally
+            {
+                CloseClipboard();
+            }
+        }
+        finally
+        {
+            bitmap.Dispose();
+        }
+    }
+
     public bool SetText(string text)
     {
         if (!OpenClipboard(IntPtr.Zero))

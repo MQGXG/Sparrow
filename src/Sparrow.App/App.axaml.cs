@@ -159,6 +159,16 @@ public partial class App : Application
         if (capture.Result is not { Length: > 0 } png)
             return;
 
+        if (capture.Action == CaptureAction.CopyImage)
+        {
+            var clipboardForImage = new Win32Clipboard();
+            clipboardForImage.SetImagePng(png);
+            return;
+        }
+
+        if (capture.Action != CaptureAction.Recognize)
+            return;
+
         Log.Info($"截图完成：{png.Length} 字节");
 
         var entry = _catalog.GetRegistry()

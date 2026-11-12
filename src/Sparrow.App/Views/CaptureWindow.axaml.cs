@@ -1,14 +1,23 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Sparrow.App.Services;
 
 namespace Sparrow.App.Views;
 
+/// <summary>截图完成后用户选择的动作。</summary>
+public enum CaptureAction
+{
+    None,
+    Recognize,
+    CopyImage
+}
+
 /// <summary>
 /// 全屏选区窗口。
-/// 用鼠标拖出矩形，松开后截取该区域（物理像素），关窗并返回 PNG。
+/// 用鼠标拖出矩形，松开后截取该区域（物理像素），然后显示动作栏。
 /// </summary>
 public partial class CaptureWindow : Window
 {
@@ -20,6 +29,9 @@ public partial class CaptureWindow : Window
 
     /// <summary>选区的 PNG 结果；取消或选区过小时为 null。</summary>
     public byte[]? Result { get; private set; }
+
+    /// <summary>用户选择的动作。</summary>
+    public CaptureAction Action { get; private set; }
 
     protected override void OnOpened(EventArgs e)
     {
@@ -103,11 +115,53 @@ public partial class CaptureWindow : Window
         var width = (int)(rect.Width * scaling);
         var height = (int)(rect.Height * scaling);
 
-        // 先隐藏遮罩，再截图，否则截到的是自己
-        Hide();
+        // 先让遮罩透明，再截图，否则截到的是自己
+        Opacity = 0;
         await Task.Delay(80);
 
         Result = ScreenCapture.Capture(x, y, width, height);
+        Opacity = 1;
+
+        if (Result is null)
+        {
+            Close();
+            return;
+        }
+
+        ShowActionBar(rect);
+    }
+
+    private void ShowActionBar(Rect selection)
+    {
+        ActionBar.IsVisible = true;
+
+        const double estimatedWidth = 280;
+        var left = Math.Max(8, Math.Min(selection.X, Width - estimatedWidth - 8));
+        var top = selection.Bottom + 12;
+
+        // 选区贴近底部时，动作栏放到选区上方
+        if (top + 56 > Height)
+            top = Math.Max(8, selection.Y - 56);
+
+        Canvas.SetLeft(ActionBar, left);
+        Canvas.SetTop(ActionBar, top);
+    }
+
+    private void OnRecognizeClick(object? sender, RoutedEventArgs e)
+    {
+        Action = CaptureAction.Recognize;
+        Close();
+    }
+
+    private void OnCopyImageClick(object? sender, RoutedEventArgs e)
+    {
+        Action = CaptureAction.CopyImage;
+        Close();
+    }
+
+    private void OnCancelClick(object? sender, RoutedEventArgs e)
+    {
+        Action = CaptureAction.None;
         Close();
     }
 
