@@ -25,7 +25,11 @@ public sealed class PaletteWindowTests
     {
         public string? Text { get; set; }
 
+        public byte[]? ImagePng { get; set; }
+
         public string? GetText() => Text;
+
+        public byte[]? GetImagePng() => ImagePng;
 
         public bool SetText(string text)
         {

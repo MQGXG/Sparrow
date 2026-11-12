@@ -26,7 +26,11 @@ public sealed class ToolHostTests
     {
         public string? Text { get; set; } = "probe";
 
+        public byte[]? ImagePng { get; set; }
+
         public string? GetText() => Text;
+
+        public byte[]? GetImagePng() => ImagePng;
 
         public bool SetText(string text)
         {

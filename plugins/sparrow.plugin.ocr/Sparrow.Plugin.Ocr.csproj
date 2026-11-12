@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>Sparrow.Plugin.Ocr</AssemblyName>
+    <RootNamespace>Sparrow.Plugin.Ocr</RootNamespace>
+    <Version>0.1.0</Version>
+    <Description>OCR 文字识别（M1 假 worker 验证 IPC）</Description>
+    <!-- 必须等于 plugin.json 的 id 与目录名 -->
+    <PluginId>sparrow.plugin.ocr</PluginId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Sparrow.Plugin.Sdk\Sparrow.Plugin.Sdk.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 只用来保证「先构建 worker、再复制」，不把 worker 当库引用 -->
+    <ProjectReference Include="..\..\tools\Sparrow.Ocr.Worker\Sparrow.Ocr.Worker.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <Private>false</Private>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!--
+    worker 是独立进程，必须落在插件目录的 worker/ 子目录里。
+    BeforeTargets 保证它先于 CopyPluginToHost 执行，否则 worker 会被漏掉。
+  -->
+  <Target Name="CopyOcrWorker" BeforeTargets="CopyPluginToHost">
+    <ItemGroup>
+      <_OcrWorkerFiles Include="..\..\tools\Sparrow.Ocr.Worker\bin\$(Configuration)\$(TargetFramework)\**\*" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(_OcrWorkerFiles)"
+          DestinationFiles="@(_OcrWorkerFiles->'$(TargetDir)worker\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

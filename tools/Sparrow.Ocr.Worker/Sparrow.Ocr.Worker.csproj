@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>Sparrow.Ocr.Worker</AssemblyName>
+    <RootNamespace>Sparrow.Ocr.Worker</RootNamespace>
+    <Description>OCR 子进程（M1 为假 worker，只验证 IPC 协议）</Description>
+  </PropertyGroup>
+
+</Project>

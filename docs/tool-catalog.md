@@ -145,7 +145,7 @@ Tool : InputShape × Params → OutputShape
 | ID | 名称 | 输入 | 输出 | 阶段 | 状态 | 备注 |
 |---|---|---|:--:|:--:|---|---|
 | `sparrow.ocr.region` | 区域识别 | Nothing | Text | **P0** | ⬜ | 圈选 → 识别 → 可接力 |
-| `sparrow.ocr.image` | 图片识别 | Image | Text | **P0** | ⬜ | 与 region 共用引擎，只是输入不同 |
+| `sparrow.ocr.image` | 图片识别 | Image | Text | **P0** | ✅ M1 假 worker | 与 region 共用引擎，只是输入不同 |
 | `sparrow.ocr.table` | 表格识别 | Image | Table | P2 | ⬜ | 引擎支持有限，先不承诺 |
 
 > **OCR 是唯一进独立进程的工具**（Paddle 原生约 78MB + OpenCV 38MB）。主进程不加载它，首次使用时启动子进程，用完退出。见 [`architecture.md`](architecture.md#ocr-为什么独立进程)。

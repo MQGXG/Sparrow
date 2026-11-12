@@ -14,10 +14,16 @@
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="SkiaSharp" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Sparrow.Plugin.Sdk\Sparrow.Plugin.Sdk.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 让测试能直接验证 DIB→PNG 这类内部转换，不用把实现细节暴露成 public -->
+    <InternalsVisibleTo Include="Sparrow.Tests" />
   </ItemGroup>
 
   <!--

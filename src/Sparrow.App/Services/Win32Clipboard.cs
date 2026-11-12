@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using SkiaSharp;
 
 namespace Sparrow.App.Services;
 
@@ -13,6 +14,7 @@ namespace Sparrow.App.Services;
 public sealed class Win32Clipboard : IClipboardAccess
 {
     private const uint CfUnicodeText = 13;
+    private const uint CfDib = 8;
     private const uint GmemMoveable = 0x0002;
 
     public string? GetText()
@@ -42,6 +44,86 @@ public sealed class Win32Clipboard : IClipboardAccess
         finally
         {
             CloseClipboard();
+        }
+    }
+
+    public byte[]? GetImagePng()
+    {
+        if (!OpenClipboard(IntPtr.Zero))
+            return null;
+
+        try
+        {
+            var handle = GetClipboardData(CfDib);
+            if (handle == IntPtr.Zero)
+                return null;
+
+            var pointer = GlobalLock(handle);
+            if (pointer == IntPtr.Zero)
+                return null;
+
+            try
+            {
+                var size = (int)GlobalSize(handle);
+                if (size <= 0)
+                    return null;
+
+                var dib = new byte[size];
+                Marshal.Copy(pointer, dib, 0, size);
+                return DibToPng(dib);
+            }
+            finally
+            {
+                GlobalUnlock(handle);
+            }
+        }
+        finally
+        {
+            CloseClipboard();
+        }
+    }
+
+    /// <summary>
+    /// CF_DIB → PNG。
+    /// 剪贴板里的 DIB 没有 BMP 文件头（那 14 字节只在 .bmp 文件里存在），
+    /// 补上之后 SkiaSharp 才能解码。
+    /// </summary>
+    internal static byte[]? DibToPng(byte[] dib)
+    {
+        if (dib.Length < 40)
+            return null;
+
+        try
+        {
+            var headerSize = BitConverter.ToInt32(dib, 0);
+            if (headerSize < 40 || headerSize > dib.Length)
+                return null;
+
+            var bitCount = BitConverter.ToInt16(dib, 14);
+            var colorsUsed = BitConverter.ToInt32(dib, 32);
+            var paletteEntries = colorsUsed != 0
+                ? colorsUsed
+                : bitCount <= 8 ? 1 << bitCount : 0;
+            var pixelOffset = 14 + headerSize + paletteEntries * 4;
+
+            var bmp = new byte[14 + dib.Length];
+            bmp[0] = (byte)'B';
+            bmp[1] = (byte)'M';
+            BitConverter.TryWriteBytes(bmp.AsSpan(2, 4), bmp.Length);
+            BitConverter.TryWriteBytes(bmp.AsSpan(10, 4), pixelOffset);
+            Buffer.BlockCopy(dib, 0, bmp, 14, dib.Length);
+
+            using var bitmap = SKBitmap.Decode(bmp);
+            if (bitmap is null)
+                return null;
+
+            using var data = bitmap.Encode(SKEncodedImageFormat.Png, 90);
+            return data.ToArray();
+        }
+        catch
+        {
+            // 剪贴板图片格式五花八门，解不了就当没有图片，不抛给调用方
+            return null;
         }
     }
 
@@ -110,6 +192,9 @@ public sealed class Win32Clipboard : IClipboardAccess
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr GlobalAlloc(uint flags, nuint bytes);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern nuint GlobalSize(IntPtr handle);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr GlobalLock(IntPtr handle);

@@ -96,14 +96,24 @@ public partial class PaletteViewModel : ObservableObject
     public async Task ExecuteAsync()
     {
         if (Selected is null)
+        {
+            _log.Warn("执行被忽略：没有选中的工具");
             return;
+        }
 
         var entry = Selected.Entry;
         var tool = entry.Tool;
 
         try
         {
-            var context = BuildContext(entry);
+            var (context, inputError) = BuildContext(entry);
+            if (context is null)
+            {
+                _log.Warn($"无法构造输入：{inputError}");
+                ShowError(inputError ?? "无法构造输入");
+                return;
+            }
+
             var startedAt = Stopwatch.GetTimestamp();
 
             _log.Info($"执行工具 {tool.Descriptor.Id}，输入类型 {context.Input.GetType().Name}");
@@ -153,14 +163,34 @@ public partial class PaletteViewModel : ObservableObject
         }
     }
 
-    private ToolContext BuildContext(ToolEntry entry)
+    private (ToolContext? Context, string? Error) BuildContext(ToolEntry entry)
     {
         var descriptor = entry.Descriptor;
 
-        // 生成类工具（Accepts = None）不需要输入；其余按文本处理，M0 只有文本工具
-        IToolInput input = descriptor.Accepts == InputShape.None
-            ? EmptyInput.Instance
-            : new TextInput(_clipboard.GetText() ?? string.Empty);
+        IToolInput input;
+        ToolSource source;
+
+        switch (descriptor.Accepts)
+        {
+            case InputShape.None:
+                input = EmptyInput.Instance;
+                source = ToolSource.Manual;
+                break;
+
+            case InputShape.Image:
+                var png = _clipboard.GetImagePng();
+                if (png is null)
+                    return (null, "剪贴板里没有图片");
+
+                input = new ImageInput(png, ImageFormat.Png);
+                source = ToolSource.Clipboard;
+                break;
+
+            default:
+                input = new TextInput(_clipboard.GetText() ?? string.Empty);
+                source = ToolSource.Clipboard;
+                break;
+        }
 
         // 参数先全部取默认值；M0 不提供参数编辑 UI
         var parameters = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -170,13 +200,13 @@ public partial class PaletteViewModel : ObservableObject
                 parameters[parameter.Key] = parameter.Default;
         }
 
-        return new ToolContext
+        return (new ToolContext
         {
             Input = input,
-            Source = input is EmptyInput ? ToolSource.Manual : ToolSource.Clipboard,
+            Source = source,
             Parameters = parameters,
             Host = entry.Host
-        };
+        }, null);
     }
 
     private static string FormatPayload(IToolPayload payload)

@@ -45,6 +45,20 @@
 
 **结论：默认 B；OCR 因为原生库体积（Paddle 78MB + OpenCV 38MB）和无 arm64 支持，额外套一层 C（子进程）。**
 
+**M1 的实现形态**：`plugins/sparrow.plugin.ocr/` 里是「B 档薄壳 + C 档 worker」：
+
+```text
+plugins/sparrow.plugin.ocr/
+├─ plugin.json
+├─ Sparrow.Plugin.Ocr.dll        ← 实现 ITool，宿主只看到这个
+└─ worker/
+   └─ Sparrow.Ocr.Worker.exe     ← 子进程，将来装 Paddle
+```
+
+宿主侧代码完全不知道子进程存在。插件通过 `IToolHost.PluginDirectory`
+定位 worker，用 `stdin/stdout` 传图与文本。M1 的 worker 是假的，只验证 IPC；
+换成真模型时，宿主与协议都不用改。
+
 C 档不推广的原因：进程间传图片的成本比想象中高（4K 截图 ≈ 25MB，序列化 + 拷贝 + 反序列化 ≈ 100ms+），而大部分工具是纯计算，进程隔离的收益为负。
 
 ---

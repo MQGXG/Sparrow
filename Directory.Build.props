@@ -14,6 +14,12 @@
     <AnalysisLevel>none</AnalysisLevel>
     <Deterministic>true</Deterministic>
     <InvariantGlobalization>true</InvariantGlobalization>
+
+    <!--
+      NuGet 漏洞审计要联网查服务索引；受限网络下会抛 NU1900。
+      本地构建不阻塞、不产生噪音；真正的审计放到 CI 的漏洞检查任务。
+    -->
+    <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
 
 </Project>
