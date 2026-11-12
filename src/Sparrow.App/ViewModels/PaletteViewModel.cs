@@ -77,11 +77,11 @@ public partial class PaletteViewModel : ObservableObject
 
     private void Refresh()
     {
-        var tools = Registry.Search(Query);
+        var entries = Registry.Search(Query);
 
         Items.Clear();
-        foreach (var tool in tools)
-            Items.Add(new ToolItemViewModel(tool));
+        foreach (var entry in entries)
+            Items.Add(new ToolItemViewModel(entry));
 
         Selected = Items.FirstOrDefault();
         IsEmpty = Items.Count == 0;
@@ -98,11 +98,12 @@ public partial class PaletteViewModel : ObservableObject
         if (Selected is null)
             return;
 
-        var tool = Selected.Tool;
+        var entry = Selected.Entry;
+        var tool = entry.Tool;
 
         try
         {
-            var context = BuildContext(tool);
+            var context = BuildContext(entry);
             var startedAt = Stopwatch.GetTimestamp();
 
             _log.Info($"执行工具 {tool.Descriptor.Id}，输入类型 {context.Input.GetType().Name}");
@@ -152,9 +153,9 @@ public partial class PaletteViewModel : ObservableObject
         }
     }
 
-    private ToolContext BuildContext(ITool tool)
+    private ToolContext BuildContext(ToolEntry entry)
     {
-        var descriptor = tool.Descriptor;
+        var descriptor = entry.Descriptor;
 
         // 生成类工具（Accepts = None）不需要输入；其余按文本处理，M0 只有文本工具
         IToolInput input = descriptor.Accepts == InputShape.None
@@ -173,7 +174,8 @@ public partial class PaletteViewModel : ObservableObject
         {
             Input = input,
             Source = input is EmptyInput ? ToolSource.Manual : ToolSource.Clipboard,
-            Parameters = parameters
+            Parameters = parameters,
+            Host = entry.Host
         };
     }
 

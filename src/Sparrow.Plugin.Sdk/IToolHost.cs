@@ -19,6 +19,15 @@ public interface IToolHost
 
     /// <summary>受用户策略控制的网络访问。禁用时 IsAvailable 为 false。</summary>
     IHttpClientAccess Http { get; }
+
+    /// <summary>
+    /// 插件自己的安装目录（只读）。
+    ///
+    /// 用于定位随插件分发的资源，比如 OCR 的 worker exe 与模型文件。
+    /// 插件不得用它读写用户文件——那是宿主的事。
+    /// 这是「进程插件」唯一需要宿主额外提供的东西：它得知道自己在哪。
+    /// </summary>
+    string PluginDirectory { get; }
 }
 
 /// <summary>

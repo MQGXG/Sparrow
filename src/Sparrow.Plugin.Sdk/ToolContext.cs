@@ -26,6 +26,15 @@ public sealed record ToolContext
     /// <summary>进度上报，可为 null（工具必须判空）。</summary>
     public IProgress<ToolProgress>? Progress { get; init; }
 
+    /// <summary>
+    /// 宿主注入的能力（日志、设置、受限网络、插件目录）。
+    ///
+    /// 可能为 null：测试宿主或早期调用方没有注入时，插件必须判空。
+    /// 放在这里而不是 <c>ITool.Initialize</c>，是为了保持
+    /// 「ITool 只有两个成员、实现必须无状态」这条约束。
+    /// </summary>
+    public IToolHost? Host { get; init; }
+
     private static readonly IReadOnlyDictionary<string, string> EmptyParameters =
         new Dictionary<string, string>(0);
 

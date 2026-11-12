@@ -18,6 +18,9 @@ public sealed class LoadedPlugin
 
     public required IReadOnlyList<ITool> Tools { get; init; }
 
+    /// <summary>宿主注入给这个插件的能力（日志前缀、设置、插件目录）。</summary>
+    public required IToolHost Host { get; init; }
+
     // 不标 required：Context 类型是 internal，不能出现在 public 的 required 成员上
     internal PluginLoadContext Context { get; init; } = null!;
 }

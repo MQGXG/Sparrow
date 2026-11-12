@@ -1,3 +1,4 @@
+using Sparrow.App.Services;
 using Sparrow.Plugin.Sdk;
 
 namespace Sparrow.App.ViewModels;
@@ -8,13 +9,15 @@ namespace Sparrow.App.ViewModels;
 /// </summary>
 public sealed class ToolItemViewModel
 {
-    public ToolItemViewModel(ITool tool) => Tool = tool;
+    public ToolItemViewModel(ToolEntry entry) => Entry = entry;
 
-    public ITool Tool { get; }
+    public ToolEntry Entry { get; }
 
-    public string Name => Tool.Descriptor.Name;
+    public ITool Tool => Entry.Tool;
 
-    public string Description => Tool.Descriptor.Description;
+    public string Name => Entry.Descriptor.Name;
 
-    public string CategoryLabel => Tool.Descriptor.Category;
+    public string Description => Entry.Descriptor.Description;
+
+    public string CategoryLabel => Entry.Descriptor.Category;
 }

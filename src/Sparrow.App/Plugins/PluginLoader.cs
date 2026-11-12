@@ -66,6 +66,7 @@ public sealed class PluginLoader : IDisposable
                 Manifest = manifest,
                 Directory = candidate.Directory,
                 Tools = tools,
+                Host = new ToolHost(manifest.Id, candidate.Directory, _log),
                 Context = context
             };
 

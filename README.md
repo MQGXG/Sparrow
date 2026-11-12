@@ -79,7 +79,8 @@ plugins/
 | 最小可运行壳 | ✅ 完成：托盘 + `Ctrl+Alt+S` + 命令面板 + 剪贴板闭环 |
 | 插件扫描 + ALC 隔离 | ✅ 完成：`plugins/` 目录发现、懒加载、独立加载上下文 |
 | 设置 / 禁用 / 卸载 | ✅ 完成：`settings.json`、`disabledPlugins`、ALC 回收断言 |
-| 测试 | ✅ 50 个通过（含 headless 键盘路由、真实剪贴板、ALC 回收） |
+| 宿主能力注入 | ✅ 完成：`ToolContext.Host`、`PluginDirectory`、网络默认关闭 |
+| 测试 | ✅ 54 个通过（含 headless 键盘路由、真实剪贴板、ALC 回收） |
 | M1（剪贴板历史 / OCR / 设置界面） | ⬜ 未开始 |
 
 当前阶段：**M1 插件基础设施完成**——加插件不改宿主、能禁用、能卸载且内存真的回收。

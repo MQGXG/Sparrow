@@ -146,10 +146,18 @@ public interface IToolHost
     ILogger Logger { get; }
     IToolSettings Settings { get; }           // 按 toolId 隔离的键值存储
     IHttpClientAccess Http { get; }           // 受策略控制，可被禁用
+    string PluginDirectory { get; }           // 插件自己的目录，用于定位随包资源
 }
 ```
 
 进度上报不在这里，而在 `ToolContext.Progress`——因为它是「这一次执行」的状态，不是插件的长期能力。
+
+**`ToolContext.Host` 是注入入口。** 放在 Context 而不是 `ITool.Initialize`，是为了守住
+「`ITool` 只有两个成员、实现必须无状态」这条约束。插件每次执行都能拿到 Host，
+但不得把它缓存到字段里（那会让卸载后的对象继续存活，违反铁律 4）。
+
+`PluginDirectory` 是「进程插件」（OCR）唯一需要宿主额外提供的东西：
+它得知道自己的 worker exe 和模型在哪。插件不得用它读写用户文件。
 
 **没有文件系统、没有剪贴板、没有数据库、没有窗口。** 需要产出文件时，返回 `FileSetPayload`，由宿主决定怎么落盘。
 

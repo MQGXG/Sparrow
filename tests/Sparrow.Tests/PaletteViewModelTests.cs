@@ -39,7 +39,7 @@ public sealed class PaletteViewModelTests
         var clipboard = new FakeClipboard { Text = clipboardText };
         // 用工厂模拟宿主：ViewModel 首次搜索时才创建注册表
         return (new PaletteViewModel(
-            () => new ToolRegistry([new JsonFormatTool()]),
+            () => ToolRegistry.FromTools([new JsonFormatTool()]),
             clipboard,
             new NullLog()), clipboard);
     }

@@ -109,11 +109,18 @@ public sealed class ToolCatalog : IDisposable
 
     private ToolRegistry BuildRegistry()
     {
-        var tools = _loader is null
-            ? Array.Empty<ITool>()
-            : _loader.LoadedPlugins.SelectMany(p => p.Tools).ToArray();
+        if (_loader is null)
+            return new ToolRegistry([]);
 
-        return new ToolRegistry(tools);
+        var entries = _loader.LoadedPlugins
+            .SelectMany(plugin => plugin.Tools.Select(tool => new ToolEntry
+            {
+                Tool = tool,
+                Host = plugin.Host
+            }))
+            .ToArray();
+
+        return new ToolRegistry(entries);
     }
 
     public void Dispose()

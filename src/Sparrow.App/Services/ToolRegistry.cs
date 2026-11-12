@@ -1,3 +1,4 @@
+using Sparrow.App.Plugins;
 using Sparrow.Plugin.Sdk;
 
 namespace Sparrow.App.Services;
@@ -6,41 +7,48 @@ namespace Sparrow.App.Services;
 /// 内存工具注册表。
 ///
 /// M0 只做「搜索 + 排序」，不做加载、不做卸载、不做健康检查——
-/// 那些属于 M1 的 plugins/ 目录扫描。接口形状按 M1 需要设计，
+/// 那些属于 <see cref="Plugins.ToolCatalog"/>。接口形状按需要设计，
 /// 这样换实现时上层代码不用动。
 /// </summary>
 public sealed class ToolRegistry
 {
-    private readonly IReadOnlyList<ITool> _tools;
+    private readonly IReadOnlyList<ToolEntry> _entries;
 
-    public ToolRegistry(IEnumerable<ITool> tools) => _tools = tools.ToArray();
+    public ToolRegistry(IEnumerable<ToolEntry> entries) => _entries = entries.ToArray();
 
-    public int Count => _tools.Count;
+    /// <summary>
+    /// 便捷构造：给单元测试和「没有宿主能力」的场景用。
+    /// 生产路径永远走 <see cref="ToolCatalog"/>，那里每个插件都有自己的 ToolHost。
+    /// </summary>
+    public static ToolRegistry FromTools(IEnumerable<ITool> tools) =>
+        new(tools.Select(tool => new ToolEntry { Tool = tool, Host = NullToolHost.Instance }));
+
+    public int Count => _entries.Count;
 
     /// <summary>
     /// 按查询串搜索工具。空查询返回默认排序（按 Order 降序）。
     /// 评分刻意做得很直白：用户预期是「名字优先」，模糊匹配会把分类词顶上去。
     /// </summary>
-    public IReadOnlyList<ITool> Search(string? query, int limit = 8)
+    public IReadOnlyList<ToolEntry> Search(string? query, int limit = 8)
     {
         if (string.IsNullOrWhiteSpace(query))
         {
-            return _tools
-                .OrderByDescending(t => t.Descriptor.Order)
-                .ThenBy(t => t.Descriptor.Name, StringComparer.Ordinal)
+            return _entries
+                .OrderByDescending(e => e.Descriptor.Order)
+                .ThenBy(e => e.Descriptor.Name, StringComparer.Ordinal)
                 .Take(limit)
                 .ToArray();
         }
 
         var trimmed = query.Trim();
 
-        return _tools
-            .Select(tool => (Tool: tool, Score: Score(tool.Descriptor, trimmed)))
+        return _entries
+            .Select(entry => (Entry: entry, Score: Score(entry.Descriptor, trimmed)))
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score)
-            .ThenByDescending(x => x.Tool.Descriptor.Order)
+            .ThenByDescending(x => x.Entry.Descriptor.Order)
             .Take(limit)
-            .Select(x => x.Tool)
+            .Select(x => x.Entry)
             .ToArray();
     }
 

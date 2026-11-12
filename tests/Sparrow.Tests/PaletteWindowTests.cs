@@ -45,7 +45,7 @@ public sealed class PaletteWindowTests
     {
         var clipboard = new FakeClipboard { Text = """{"a":1}""" };
         var viewModel = new PaletteViewModel(
-            () => new ToolRegistry([new JsonFormatTool()]),
+            () => ToolRegistry.FromTools([new JsonFormatTool()]),
             clipboard,
             new NullLog());
 
@@ -95,7 +95,7 @@ public sealed class PaletteWindowTests
     {
         var clipboard = new FakeClipboard { Text = "{}" };
         var viewModel = new PaletteViewModel(
-            () => new ToolRegistry([]),
+            () => ToolRegistry.FromTools([]),
             clipboard,
             new NullLog());
 

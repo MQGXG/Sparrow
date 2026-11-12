@@ -248,6 +248,20 @@ public sealed class PluginLoadingTests
     }
 
     [Fact]
+    public void 加载后_每个工具都拿到自己插件的宿主能力()
+    {
+        using var root = new TempPluginRoot();
+        var pluginDirectory = root.CreatePlugin("sparrow.plugin.json-format", ValidManifest);
+
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+
+        var entry = catalog.GetRegistry().Search("json").ShouldHaveSingleItem();
+
+        // OCR 就是靠这个路径找 worker exe 的
+        entry.Host.PluginDirectory.ShouldBe(pluginDirectory);
+    }
+
+    [Fact]
     public void 工具目录_空目录_注册表为空但可正常构建()
     {
         using var root = new TempPluginRoot();
