@@ -59,7 +59,9 @@ plugins/sparrow.plugin.ocr/
 定位 worker，用 `stdin/stdout` 传图与文本。
 
 M1 已经接入真实模型：**PP-OCRv5（本地模型，Apache 2.0）**，
-中英文 + 数字识别，单张截图约 2.7 秒（含模型初始化）。
+按 `language` 参数切换 12 组识别模型（中英日、俄语/乌克兰、韩语、阿拉伯语、泰语、希腊语、
+印地语、泰米尔语、泰卢固语、拉丁语系），检测与方向分类共用。
+单张截图约 2.1–2.7 秒（含模型初始化）。
 worker 目录约 500 MB（PaddleInference + MKL + OpenCV + 模型）。
 换成 PaddleOCR-VL 或别的模型时，宿主与本协议都不用改。
 

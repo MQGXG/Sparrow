@@ -3,17 +3,21 @@ using System.Text.Json;
 using OpenCvSharp;
 using Sdcb.PaddleInference;
 using Sdcb.PaddleOCR;
+using Sdcb.PaddleOCR.Models;
 using Sdcb.PaddleOCR.Models.Local;
 
 // OCR worker：PP-OCRv5 文字识别。
 //
 // 协议（宿主与 worker 的唯一契约）：
+//   args   = --language <code>（可选，默认 ch）
 //   stdin  = [4 字节小端长度][PNG/JPEG 图片字节]
-//   stdout = UTF-8 识别文本
+//   stdout = JSON：{ text, regions[{ text, x, y, width, height, score }] }
 //   exit 0 = 成功；非 0 = 失败，stderr 带原因
 //
 // 之所以保持这个极简协议：换成 PaddleOCR-VL 或别的模型时，
 // 宿主侧一行都不用改。
+
+var language = ParseLanguage(args);
 
 using var stdin = Console.OpenStandardInput();
 
@@ -33,7 +37,7 @@ ReadExactly(stdin, imageBytes);
 try
 {
     // 本地模型，不联网；首次初始化约 1-3 秒
-    using var engine = new PaddleOcrAll(LocalFullModels.ChineseV5, PaddleDevice.Mkldnn())
+    using var engine = new PaddleOcrAll(SelectModel(language), PaddleDevice.Mkldnn())
     {
         AllowRotateDetection = true,
         Enable180Classification = false
@@ -92,6 +96,33 @@ static void ReadExactly(Stream stream, byte[] buffer)
         offset += read;
     }
 }
+
+static string ParseLanguage(string[] args)
+{
+    for (var i = 0; i < args.Length - 1; i++)
+    {
+        if (args[i] == "--language")
+            return args[i + 1];
+    }
+
+    return "ch";
+}
+
+static FullOcrModel SelectModel(string language) => language switch
+{
+    "en" => LocalFullModels.EnglishV5,
+    "ko" => LocalFullModels.KoreanV5,
+    "ru" or "uk" or "be" => LocalFullModels.EastSlavicV5,
+    "ar" or "fa" or "ur" or "ug" or "ps" or "sd" => LocalFullModels.ArabicV5,
+    "th" => LocalFullModels.ThaiV5,
+    "el" => LocalFullModels.GreekV5,
+    "hi" or "mr" or "ne" => LocalFullModels.DevanagariV5,
+    "te" => LocalFullModels.TeluguV5,
+    "ta" => LocalFullModels.TamilV5,
+    "fr" or "de" or "es" or "it" or "pt" or "nl" or "pl" or "tr" or "vi" => LocalFullModels.LatinV5,
+    // ch（简体/繁体/拼音/英日）是默认，ja 也走这一套
+    _ => LocalFullModels.ChineseV5
+};
 
 internal sealed record OcrResultDto(string Text, OcrRegionDto[] Regions);
 

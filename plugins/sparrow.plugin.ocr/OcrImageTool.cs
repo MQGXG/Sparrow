@@ -30,7 +30,19 @@ public sealed class OcrImageTool : ITool
         Accepts = InputShape.Image,
         Produces = OutputShape.Text,
         Requires = PlatformCapability.Ocr,
-        Order = 30
+        Order = 30,
+        Parameters =
+        [
+            new ToolParameter
+            {
+                Key = "language",
+                Label = "语言",
+                Kind = ParameterKind.Choice,
+                Choices = ["ch", "en", "ja", "ko", "ru", "ar", "th", "el", "hi", "fr"],
+                Default = "ch",
+                Hint = "ch 包含简体、繁体、拼音、英日；ru 覆盖俄语/乌克兰/白俄"
+            }
+        ]
     };
 
     public async Task<ToolResult> ExecuteAsync(ToolContext context, CancellationToken cancellationToken)
@@ -53,7 +65,8 @@ public sealed class OcrImageTool : ITool
 
         try
         {
-            var output = await RunWorkerAsync(workerPath, image.Data, cancellationToken);
+            var language = context.GetParameter("language", "ch");
+            var output = await RunWorkerAsync(workerPath, image.Data, language, cancellationToken);
             return ToolResult.Ok(new TextPayload(ComposeOutput(output)));
         }
         catch (OperationCanceledException)
@@ -104,23 +117,26 @@ public sealed class OcrImageTool : ITool
     private static async Task<string> RunWorkerAsync(
         string workerPath,
         ReadOnlyMemory<byte> image,
+        string language,
         CancellationToken cancellationToken)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(WorkerTimeout);
 
-        using var process = new Process
+        var startInfo = new ProcessStartInfo
         {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = workerPath,
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            }
+            FileName = workerPath,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
         };
+
+        startInfo.ArgumentList.Add("--language");
+        startInfo.ArgumentList.Add(language);
+
+        using var process = new Process { StartInfo = startInfo };
 
         if (!process.Start())
             throw new InvalidOperationException("无法启动 OCR worker");

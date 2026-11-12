@@ -81,6 +81,7 @@ public sealed class OcrImageToolTests
         descriptor.Accepts.ShouldBe(InputShape.Image);
         descriptor.Produces.ShouldBe(OutputShape.Text);
         descriptor.Requires.ShouldBe(PlatformCapability.Ocr);
+        descriptor.Parameters.ShouldContain(p => p.Key == "language");
     }
 
     /// <summary>

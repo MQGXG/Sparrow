@@ -12,12 +12,17 @@ namespace Sparrow.Plugin.Ocr;
 /// </summary>
 public static class OcrTextComposer
 {
-    public static string Compose(IReadOnlyList<OcrRegion> regions)
+    public static string Compose(IReadOnlyList<OcrRegion> regions, float minimumScore = 0.5f)
     {
-        if (regions.Count == 0)
+        // 低分块通常是标点碎片或噪点（实测俄语图会多出一个 "_"，score 0.36）
+        var valid = regions
+            .Where(r => r.Score >= minimumScore && !string.IsNullOrWhiteSpace(r.Text))
+            .ToList();
+
+        if (valid.Count == 0)
             return string.Empty;
 
-        var lines = GroupByLine(regions);
+        var lines = GroupByLine(valid);
 
         return string.Join(
             Environment.NewLine,

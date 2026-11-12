@@ -60,4 +60,28 @@ public sealed class OcrTextComposerTests
     {
         OcrTextComposer.Compose([]).ShouldBe(string.Empty);
     }
+
+    [Fact]
+    public void 低置信度块_被过滤()
+    {
+        var regions = new[]
+        {
+            new OcrRegion("Привет", 0, 0, 100, 30, 0.93f),
+            new OcrRegion("_", 120, 10, 5, 14, 0.36f)
+        };
+
+        OcrTextComposer.Compose(regions).ShouldBe("Привет");
+    }
+
+    [Fact]
+    public void 空白文本块_被过滤()
+    {
+        var regions = new[]
+        {
+            new OcrRegion("HELLO", 0, 0, 60, 20, 0.9f),
+            new OcrRegion("   ", 70, 0, 20, 20, 0.9f)
+        };
+
+        OcrTextComposer.Compose(regions).ShouldBe("HELLO");
+    }
 }

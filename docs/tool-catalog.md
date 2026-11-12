@@ -148,6 +148,10 @@ Tool : InputShape × Params → OutputShape
 | `sparrow.ocr.image` | 图片识别 | Image | Text | **P0** | ✅ M1 真实识别（PP-OCRv5） | 与 region 共用引擎，只是输入不同 |
 | `sparrow.ocr.table` | 表格识别 | Image | Table | P2 | ⬜ | 引擎支持有限，先不承诺 |
 
+> **多语言**：OCR 插件按 `language` 参数切换 PP-OCRv5 的 12 组识别模型
+> （`ch`/`en`/`ja`、`ru`/`uk`/`be`、`ko`、`ar`/`fa`/`ur`、`th`、`el`、`hi`、`ta`、`te`、`fr`/`de`/`es` 等），
+> 检测与方向分类模型共用。
+
 > **OCR 是唯一进独立进程的工具**（Paddle 原生约 78MB + OpenCV 38MB）。主进程不加载它，首次使用时启动子进程，用完退出。见 [`architecture.md`](architecture.md#ocr-为什么独立进程)。
 
 > **已知限制（M1）**：PP-OCRv5 对**文本块内部**的空格识别不稳定，
