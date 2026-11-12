@@ -10,17 +10,14 @@
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BgBrush}">
 
-  <Grid RowDefinitions="Auto,*,Auto" Margin="18">
+  <Grid RowDefinitions="Auto,*,Auto" Margin="16"> 
 
     <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
       <StackPanel Spacing="3">
-        <TextBlock Text="滚动截图"
-                   FontFamily="{StaticResource DisplayFont}"
-                   FontSize="15"
-                   FontWeight="SemiBold" />
+        <TextBlock Classes="subtitle"
+                   Text="滚动截图" />
         <TextBlock x:Name="SizeText"
-                   FontSize="11"
-                   Foreground="{StaticResource TextMutedBrush}" />
+                   Classes="num" />
       </StackPanel>
 
       <Button Grid.Column="1"

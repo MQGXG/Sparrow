@@ -5,23 +5,22 @@
         xmlns:converters="using:Sparrow.App.Converters"
         x:Class="Sparrow.App.Views.WorkspaceWindow"
         x:DataType="vm:WorkspaceViewModel"
-        Title="Sparrow · 工作区"
+        Title="Sparrow · 工具台"
         Width="1120"
         Height="730"
         Icon="avares://Sparrow.App/Assets/sparrow-32.png"
         MinWidth="920"
-        MinHeight="580"
-        WindowStartupLocation="CenterScreen"
-        Background="{StaticResource BgBrush}">
+        MinHeight="600"
+        WindowStartupLocation="CenterScreen">
 
   <Grid>
 
-    <!-- 工作区主视图 -->
+    <!-- 工作区主视图：顶栏 / 主体（分类导航 + 工具墙·工具台）/ 状态栏 -->
     <Grid IsVisible="{Binding !IsSettingsVisible}" RowDefinitions="Auto,Auto,*,Auto">
 
-      <!-- 顶栏 -->
-      <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="22,18,22,14">
-        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+      <!-- 顶栏：品牌 + 搜索 + 设置 -->
+      <Grid Grid.Column="0" ColumnDefinitions="Auto,*,Auto,Auto" Margin="24,16,24,12">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
           <Image Source="avares://Sparrow.App/Assets/sparrow-32.png"
                  Width="22"
                  Height="22"
@@ -32,73 +31,227 @@
                      FontWeight="SemiBold"
                      Foreground="{StaticResource TextPrimaryBrush}"
                      VerticalAlignment="Center" />
-          <TextBlock Text="Sparrow"
-                     FontSize="11"
-                     Foreground="{StaticResource TextMutedBrush}"
+          <TextBlock Classes="num"
+                     Text="工作台"
                      VerticalAlignment="Center"
-                     Margin="0,2,0,0" />
+                     Margin="6,2,0,0" />
         </StackPanel>
 
-        <Button Grid.Column="1"
+        <!-- 全局工具搜索：直接过滤工具墙 -->
+        <TextBox Grid.Column="2"
+                 Width="260"
+                 Text="{Binding ToolQuery, Mode=TwoWay}"
+                 PlaceholderText="搜索工具…"
+                 FontSize="12"
+                 Padding="10,6"
+                 VerticalAlignment="Center" />
+
+        <Button Grid.Column="3"
                 Classes="small"
+                Margin="12,0,0,0"
                 Content="设置"
                 Click="OnSettingsClick" />
       </Grid>
 
       <!-- 顶栏分隔线 -->
-      <Border Grid.Row="1" Height="1" Margin="22,0,22,0" Background="{StaticResource LineBrush}" />
+      <Border Grid.Row="1" Height="1" Margin="24,0,24,0" Background="{StaticResource LineBrush}" />
 
-      <Grid Grid.Row="2"
-            ColumnDefinitions="240,*,320"
-            ColumnSpacing="16"
-            Margin="22,16,22,18">
+      <!-- 主体：分类侧栏 + 主区 -->
+      <Grid Grid.Row="2" ColumnDefinitions="220,16,*" Margin="24,16,24,16">
 
-        <!-- 左：工具列表 -->
-        <Border Grid.Column="0" Classes="panel" Padding="10,12">
-          <Grid RowDefinitions="Auto,*">
-            <TextBlock Grid.Row="0"
-                       Classes="section"
-                       Text="工具"
-                       Margin="8,2,8,8" />
+        <!-- 左：分类导航 + 最近执行 -->
+        <Border Grid.Column="0" Classes="panel" Padding="8">
+          <Grid RowDefinitions="Auto,*,Auto">
 
-            <ScrollViewer Grid.Row="1">
-              <ItemsControl ItemsSource="{Binding Groups}">
+            <!-- 分类导航：图吧式的一列分类，选中带琥珀书签条 -->
+            <ScrollViewer Grid.Row="0" MaxHeight="360">
+              <ItemsControl ItemsSource="{Binding Categories}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:CategoryViewModel">
+                    <Button Tag="{Binding}"
+                            Click="OnCategoryClick"
+                            Classes="ghost"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Left"
+                            Padding="8,6"
+                            Margin="0,1">
+                      <Grid ColumnDefinitions="Auto,*,Auto">
+                        <!-- 琥珀书签条：分类导航的选中指示 -->
+                        <Border Grid.Column="0"
+                                Width="2"
+                                Height="14"
+                                CornerRadius="1"
+                                Background="{StaticResource AccentBrush}"
+                                IsVisible="{Binding IsSelected}" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding Name}"
+                                   FontSize="12"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   IsVisible="{Binding IsSelected}"
+                                   Margin="9,0,0,0"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding Name}"
+                                   FontSize="12"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   IsVisible="{Binding !IsSelected}"
+                                   Margin="11,0,0,0"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="2"
+                                   Classes="num"
+                                   Text="{Binding Count}"
+                                   Margin="12,0,2,0"
+                                   VerticalAlignment="Center" />
+                      </Grid>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+
+            <!-- 最近执行：侧栏底部 -->
+            <StackPanel Grid.Row="2">
+              <Border Height="1" Background="{StaticResource LineBrush}" Margin="0,4,0,12" />
+
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="section"
+                           Text="最近"
+                           VerticalAlignment="Center"
+                           Margin="8,0,0,0" />
+                <Button Grid.Column="1"
+                        Classes="ghost small"
+                        Content="清空"
+                        Click="OnClearHistoryClick" />
+              </Grid>
+
+              <TextBlock Text="还没有执行记录"
+                         IsVisible="{Binding !HasHistory}"
+                         FontSize="11"
+                         Foreground="{StaticResource TextMutedBrush}"
+                         Margin="8,8,0,0" />
+
+              <ScrollViewer MaxHeight="230" Margin="0,4,0,0">
+                <ItemsControl ItemsSource="{Binding Recent}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:HistoryEntryViewModel">
+                      <Button Tag="{Binding}"
+                              Click="OnHistoryClick"
+                              Classes="ghost"
+                              HorizontalAlignment="Stretch"
+                              HorizontalContentAlignment="Stretch"
+                              Padding="8,5"
+                              Margin="0,1">
+                        <Grid ColumnDefinitions="*,Auto">
+                          <StackPanel Spacing="3">
+                            <TextBlock Text="{Binding ToolName}"
+                                       FontSize="12"
+                                       Foreground="{StaticResource TextPrimaryBrush}" />
+                            <TextBlock Text="{Binding Preview}"
+                                       FontSize="10"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+                          <TextBlock Grid.Column="1"
+                                     Classes="num"
+                                     Text="{Binding TimeLabel}"
+                                     Margin="12,0,0,0"
+                                     VerticalAlignment="Top" />
+                        </Grid>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <!-- 右：主区（工具墙 / 工具台 双态） -->
+        <Grid Grid.Column="2">
+
+          <!-- 墙态：最近使用 + 分类工具网格 -->
+          <ScrollViewer IsVisible="{Binding !IsDetailOpen}">
+            <StackPanel>
+
+              <!-- 最近使用：比「最近执行」更轻的一层，一键回到常用工具 -->
+              <StackPanel IsVisible="{Binding HasRecentTools}" Margin="0,0,0,8">
+                <TextBlock Classes="section" Text="最近使用" Margin="0,0,0,12" />
+
+                <ItemsControl ItemsSource="{Binding RecentTools}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:RecentToolViewModel">
+                      <Button Tag="{Binding}"
+                              Click="OnRecentToolClick"
+                              Classes="tool-card"
+                              Width="112"
+                              Margin="0,0,12,0">
+                        <StackPanel Spacing="7" Margin="0,12">
+                          <Path Classes="icon"
+                                Width="20"
+                                Height="20"
+                                HorizontalAlignment="Center"
+                                Data="{Binding Tool.CategoryLabel, Converter={x:Static converters:IconGeometryConverter.Instance}}" />
+                          <TextBlock Text="{Binding Tool.Name}"
+                                     FontSize="11"
+                                     Foreground="{StaticResource TextPrimaryBrush}"
+                                     TextAlignment="Center"
+                                     TextWrapping="Wrap"
+                                     MaxWidth="96" />
+                          <TextBlock Classes="num"
+                                     Text="{Binding TimeLabel}"
+                                     HorizontalAlignment="Center" />
+                        </StackPanel>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+
+              <!-- 分类工具网格 -->
+              <ItemsControl ItemsSource="{Binding Groups}" Margin="0,8,0,0">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:ToolGroupViewModel">
-                    <StackPanel Margin="0,2,0,10">
-                      <!-- 分类用文字标签，不再用 Expander：
-                           Fluent 的 Expander 头自带深色底，和面板打架 -->
-                      <TextBlock Text="{Binding Category}"
-                                 FontSize="10"
-                                 Foreground="{StaticResource TextMutedBrush}"
-                                 Margin="8,0,8,4" />
+                    <StackPanel Margin="0,4,0,20">
+                      <TextBlock Classes="section"
+                                 Margin="0,0,0,12">
+                        <TextBlock.Text>
+                          <MultiBinding StringFormat="{}{0} · {1}">
+                            <Binding Path="Category" />
+                            <Binding Path="Tools.Count" />
+                          </MultiBinding>
+                        </TextBlock.Text>
+                      </TextBlock>
 
                       <ItemsControl ItemsSource="{Binding Tools}">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal" />
+                          </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                           <DataTemplate x:DataType="vm:ToolItemViewModel">
                             <Button Tag="{Binding}"
                                     Click="OnToolClick"
-                                    Classes="ghost"
-                                    Classes.selected="{Binding IsSelected}"
-                                    HorizontalAlignment="Stretch"
-                                    HorizontalContentAlignment="Left"
-                                    Padding="8,6"
-                                    Margin="0,1">
-                              <StackPanel Orientation="Horizontal" Spacing="8">
-                                <!-- 选中指示条：比整块高亮更克制 -->
-                                <Border Width="2"
-                                        Height="14"
-                                        CornerRadius="1"
-                                        Background="{StaticResource AccentBrush}"
-                                        IsVisible="{Binding IsSelected}" />
+                                    Classes="tool-card"
+                                    Width="112"
+                                    Margin="0,0,12,12">
+                              <StackPanel Spacing="7" Margin="0,12">
                                 <Path Classes="icon"
-                                      Width="15"
-                                      Height="15"
-                                      VerticalAlignment="Center"
+                                      Width="22"
+                                      Height="22"
+                                      HorizontalAlignment="Center"
                                       Data="{Binding CategoryLabel, Converter={x:Static converters:IconGeometryConverter.Instance}}" />
                                 <TextBlock Text="{Binding Name}"
-                                           FontSize="12"
-                                           VerticalAlignment="Center" />
+                                           FontSize="11"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           TextAlignment="Center"
+                                           TextWrapping="Wrap"
+                                           MaxWidth="96" />
                               </StackPanel>
                             </Button>
                           </DataTemplate>
@@ -108,192 +261,230 @@
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
-            </ScrollViewer>
 
-            <TextBlock Grid.Row="1"
-                       Text="正在加载插件…"
-                       IsVisible="{Binding IsLoading}"
-                       Foreground="{StaticResource TextMutedBrush}"
-                       FontSize="12"
-                       Margin="8,6" />
-          </Grid>
-        </Border>
-
-        <!-- 中：输入 + 结果 -->
-        <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*,Auto">
-          <TextBlock Grid.Row="0"
-                     Classes="section"
-                     Text="输入"
-                     Margin="2,0,0,8" />
-
-          <TextBox Grid.Row="1"
-                   Text="{Binding InputText, Mode=TwoWay}"
-                   AcceptsReturn="True"
-                   MinHeight="96"
-                   MaxHeight="190"
-                   PlaceholderText="{Binding InputHint}"
-                   IsEnabled="{Binding IsTextInput}" />
-
-          <Border Grid.Row="2"
-                  Classes="panel"
-                  Margin="0,14,0,0"
-                  Padding="14">
-            <Grid RowDefinitions="Auto,*">
-              <TextBlock Grid.Row="0"
-                         Classes="section"
-                         Text="结果"
-                         Margin="0,0,0,10" />
-
-              <ScrollViewer Grid.Row="1">
-                <SelectableTextBlock Text="{Binding ResultText}"
-                                     FontFamily="{StaticResource MonoFont}"
-                                     FontSize="12.5"
-                                     LineHeight="20"
-                                     Foreground="{StaticResource TextPrimaryBrush}"
-                                     TextWrapping="Wrap" />
-              </ScrollViewer>
-
-              <!-- 空状态：不给一块纯黑 -->
-              <TextBlock Grid.Row="1"
-                         IsVisible="{Binding !HasResult}"
-                         Text="执行后结果显示在这里"
+              <!-- 墙空态 -->
+              <TextBlock Text="没有匹配的工具"
+                         IsVisible="{Binding IsToolListEmpty}"
                          FontSize="12"
                          Foreground="{StaticResource TextMutedBrush}"
                          HorizontalAlignment="Center"
+                         Margin="0,40,0,0" />
+            </StackPanel>
+          </ScrollViewer>
+
+          <!-- 台态：单个工具的工作区 -->
+          <Grid IsVisible="{Binding IsDetailOpen}" RowDefinitions="Auto,Auto,Auto,Auto,*">
+
+            <!-- 面包屑 + 工具头 -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10">
+              <Button Classes="ghost small"
+                      Content="‹ 返回"
+                      Click="OnBackToWallClick"
+                      VerticalAlignment="Center" />
+
+              <Path Classes="icon"
+                    Width="18"
+                    Height="18"
+                    VerticalAlignment="Center"
+                    Stroke="{StaticResource AccentBrush}"
+                    Data="{Binding SelectedTool.CategoryLabel, Converter={x:Static converters:IconGeometryConverter.Instance}}" />
+
+              <TextBlock Classes="title"
+                         Text="{Binding SelectedTool.Name}"
                          VerticalAlignment="Center" />
-            </Grid>
-          </Border>
 
-          <TextBlock Grid.Row="3"
-                     Text="{Binding ErrorText}"
-                     IsVisible="{Binding HasError}"
-                     Foreground="{StaticResource DangerBrush}"
-                     FontSize="12"
-                     TextWrapping="Wrap"
-                     Margin="2,10,0,0" />
-        </Grid>
+              <Border Classes="chip" VerticalAlignment="Center">
+                <TextBlock Text="{Binding SelectedTool.CategoryLabel}"
+                           Classes="num" />
+              </Border>
+            </StackPanel>
 
-        <!-- 右：参数 + 历史 -->
-        <Border Grid.Column="2" Classes="panel" Padding="14">
-          <ScrollViewer>
-            <StackPanel Spacing="12">
-              <TextBlock Classes="section" Text="参数" />
+            <TextBlock Grid.Row="1"
+                       Classes="caption"
+                       Text="{Binding SelectedTool.Description}"
+                       TextWrapping="Wrap"
+                       Margin="0,4,0,0" />
+
+            <!-- 参数：行内控件，不占整栏 -->
+            <StackPanel Grid.Row="2" IsVisible="{Binding HasParameters}" Margin="0,14,0,0">
+              <TextBlock Classes="section" Text="参数" Margin="0,0,0,8" />
 
               <ItemsControl ItemsSource="{Binding Parameters}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel Orientation="Horizontal" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:ParameterViewModel">
-                    <StackPanel Spacing="5" Margin="0,0,0,10">
-                      <TextBlock Text="{Binding Label}"
-                                 FontSize="12"
-                                 Foreground="{StaticResource TextSecondaryBrush}" />
+                    <StackPanel Spacing="5" Margin="0,0,22,8">
 
-                      <ComboBox ItemsSource="{Binding Choices}"
-                                SelectedItem="{Binding Value, Mode=TwoWay}"
-                                IsVisible="{Binding IsChoice}"
-                                HorizontalAlignment="Stretch" />
+                      <!-- 开关型：label 跟在开关后面 -->
+                      <StackPanel Orientation="Horizontal"
+                                  Spacing="8"
+                                  IsVisible="{Binding IsToggle}">
+                        <CheckBox IsChecked="{Binding BoolValue, Mode=TwoWay}"
+                                  VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Label}"
+                                   FontSize="12"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center" />
+                      </StackPanel>
 
-                      <CheckBox IsChecked="{Binding BoolValue, Mode=TwoWay}"
-                                IsVisible="{Binding IsToggle}" />
-
-                      <TextBox Text="{Binding Value, Mode=TwoWay}"
-                               IsVisible="{Binding IsText}" />
+                      <!-- 下拉 / 文本：label 在上 -->
+                      <StackPanel Spacing="5" IsVisible="{Binding !IsToggle}">
+                        <TextBlock Text="{Binding Label}"
+                                   FontSize="11"
+                                   Foreground="{StaticResource TextMutedBrush}" />
+                        <ComboBox ItemsSource="{Binding Choices}"
+                                  SelectedItem="{Binding Value, Mode=TwoWay}"
+                                  IsVisible="{Binding IsChoice}"
+                                  MinWidth="160"
+                                  HorizontalAlignment="Left" />
+                        <TextBox Text="{Binding Value, Mode=TwoWay}"
+                                 IsVisible="{Binding IsText}"
+                                 MinWidth="220"
+                                 HorizontalAlignment="Left" />
+                      </StackPanel>
                     </StackPanel>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
-
-              <Border Height="1"
-                      Background="{StaticResource LineBrush}"
-                      Margin="0,4" />
-
-              <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Classes="section"
-                           Text="最近结果"
-                           VerticalAlignment="Center" />
-                <Button Grid.Column="1"
-                        Classes="ghost small"
-                        Content="清空"
-                        Click="OnClearHistoryClick" />
-              </Grid>
-
-              <TextBox Text="{Binding HistoryQuery, Mode=TwoWay}"
-                       PlaceholderText="搜索历史…"
-                       FontSize="12" />
-
-              <TextBlock Text="还没有执行记录"
-                         IsVisible="{Binding !HasHistory}"
-                         FontSize="11"
-                         Foreground="{StaticResource TextMutedBrush}"
-                         Margin="8,2" />
-
-              <ItemsControl ItemsSource="{Binding Recent}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="vm:HistoryEntryViewModel">
-                    <Button Tag="{Binding}"
-                            Click="OnHistoryClick"
-                            Classes="ghost"
-                            HorizontalAlignment="Stretch"
-                            HorizontalContentAlignment="Stretch"
-                            Padding="8,6"
-                            Margin="0,1">
-                      <StackPanel Spacing="3">
-                        <Grid ColumnDefinitions="*,Auto">
-                          <TextBlock Text="{Binding ToolName}"
-                                     FontSize="12"
-                                     Foreground="{StaticResource TextPrimaryBrush}" />
-                          <TextBlock Grid.Column="1"
-                                     Text="{Binding TimeLabel}"
-                                     FontSize="10"
-                                     Foreground="{StaticResource TextMutedBrush}"
-                                     Margin="8,0,0,0" />
-                        </Grid>
-                        <TextBlock Text="{Binding Preview}"
-                                   FontSize="11"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                   TextWrapping="Wrap" />
-                      </StackPanel>
-                    </Button>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
             </StackPanel>
-          </ScrollViewer>
-        </Border>
 
+            <!-- 输入：文本工具给编辑框，图片/无输入工具给一条提示 -->
+            <TextBox Grid.Row="3"
+                     Text="{Binding InputText, Mode=TwoWay}"
+                     AcceptsReturn="True"
+                     MinHeight="64"
+                     MaxHeight="170"
+                     IsVisible="{Binding IsTextInput}"
+                     PlaceholderText="{Binding InputHint}"
+                     Margin="0,12,0,0"
+                     VerticalContentAlignment="Top" />
+
+            <Border Grid.Row="3"
+                    IsVisible="{Binding !IsTextInput}"
+                    Background="{StaticResource SurfaceRaisedBrush}"
+                    BorderBrush="{StaticResource LineBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="12,9"
+                    Margin="0,12,0,0"
+                    HorizontalAlignment="Stretch">
+              <TextBlock Text="{Binding InputHint}"
+                         FontSize="12"
+                         Foreground="{StaticResource TextMutedBrush}" />
+            </Border>
+
+            <!-- 结果：占满剩余高度 -->
+            <Border Grid.Row="4"
+                    Classes="panel"
+                    Margin="0,14,0,0"
+                    Padding="14">
+              <Grid RowDefinitions="Auto,Auto,*">
+                <TextBlock Grid.Row="0"
+                           Classes="section"
+                           Text="结果"
+                           Margin="0,0,0,10" />
+
+                <!-- 错误：红色左边条 + 一行人话 -->
+                <Border Grid.Row="1"
+                        IsVisible="{Binding HasError}"
+                        Background="{StaticResource SurfaceRaisedBrush}"
+                        BorderBrush="{StaticResource LineBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="10,8"
+                        Margin="0,0,0,8">
+                  <Grid ColumnDefinitions="Auto,*">
+                    <Border Width="3"
+                            Margin="0,2"
+                            CornerRadius="1.5"
+                            Background="{StaticResource DangerBrush}" />
+                    <TextBlock Grid.Column="1"
+                               Margin="10,0,0,0"
+                               Text="{Binding ErrorText}"
+                               Foreground="{StaticResource DangerBrush}"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               TextWrapping="Wrap" />
+                  </Grid>
+                </Border>
+
+                <!-- 结果内容 -->
+                <ScrollViewer Grid.Row="2">
+                  <SelectableTextBlock Text="{Binding ResultText}"
+                                       FontFamily="{StaticResource MonoFont}"
+                                       FontSize="13"
+                                       LineHeight="20"
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       TextWrapping="Wrap" />
+                </ScrollViewer>
+
+                <!-- 空态：既没结果也没错误时才显示 -->
+                <TextBlock Grid.Row="2"
+                           IsVisible="{Binding IsResultEmpty}"
+                           Text="执行后结果显示在这里"
+                           FontSize="12"
+                           Foreground="{StaticResource TextMutedBrush}"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center" />
+              </Grid>
+            </Border>
+          </Grid>
+
+        </Grid>
       </Grid>
 
-      <!-- 底部动作条：整屏只允许一个主按钮，上方一道分隔线 -->
-      <Border Grid.Row="3" Height="1" Margin="22,0,22,0" Background="{StaticResource LineBrush}" />
+      <!-- 状态栏：左状态右动作 -->
+      <Border Grid.Row="3" Height="1" Margin="24,0,24,0" Background="{StaticResource LineBrush}" />
 
-      <StackPanel Grid.Row="3"
-                  Orientation="Horizontal"
-                  HorizontalAlignment="Right"
-                  Spacing="8"
-                  Margin="22,12,22,14">
-        <Button Content="复制"
-                IsEnabled="{Binding !IsExecuting}"
-                Click="OnCopyClick" />
-        <Button Classes="accent"
-                Content="{Binding ExecuteLabel}"
-                IsEnabled="{Binding !IsExecuting}"
-                Click="OnExecuteClick" />
-      </StackPanel>
+      <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="24,10,24,12">
+        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <Ellipse Width="6"
+                   Height="6"
+                   Fill="{StaticResource AccentBrush}"
+                   VerticalAlignment="Center" />
+          <TextBlock Text="就绪 · 本地引擎"
+                     FontSize="11"
+                     Foreground="{StaticResource TextMutedBrush}"
+                     IsVisible="{Binding !IsExecuting}"
+                     VerticalAlignment="Center" />
+          <TextBlock Text="执行中…"
+                     FontSize="11"
+                     Foreground="{StaticResource AccentBrush}"
+                     IsVisible="{Binding IsExecuting}"
+                     VerticalAlignment="Center" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="1"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    VerticalAlignment="Center">
+          <Button Content="复制"
+                  IsEnabled="{Binding !IsExecuting}"
+                  Click="OnCopyClick" />
+          <Button Classes="accent"
+                  Content="{Binding ExecuteLabel}"
+                  IsEnabled="{Binding !IsExecuting}"
+                  Click="OnExecuteClick" />
+        </StackPanel>
+      </Grid>
     </Grid>
 
     <!-- 设置视图 -->
     <Grid IsVisible="{Binding IsSettingsVisible}" RowDefinitions="Auto,*">
-      <Grid Grid.Row="0" ColumnDefinitions="Auto,*" Margin="22,18,22,10">
+      <Grid Grid.Row="0" ColumnDefinitions="Auto,*" Margin="24,16,24,8">
         <Button Grid.Column="0"
                 Classes="ghost"
                 Content="← 返回"
                 Click="OnBackClick" />
         <TextBlock Grid.Column="1"
+                   Classes="title"
                    Text="设置"
-                   FontFamily="{StaticResource DisplayFont}"
-                   FontSize="16"
-                   FontWeight="SemiBold"
                    VerticalAlignment="Center"
-                   Margin="14,0,0,0" />
+                   Margin="12,0,0,0" />
       </Grid>
 
       <views:SettingsView Grid.Row="1" DataContext="{Binding Settings}" />

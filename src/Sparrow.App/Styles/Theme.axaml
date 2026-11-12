@@ -162,6 +162,24 @@
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
 
+  <!-- 工具卡片：工具墙上的大图标入口，hover 时描边泛琥珀 -->
+  <Style Selector="Button.tool-card">
+    <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="Button.tool-card:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
+  </Style>
+
+  <Style Selector="Button.tool-card:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+  </Style>
+
   <!-- 小按钮 -->
   <Style Selector="Button.small">
     <Setter Property="Padding" Value="10,4" />
@@ -213,7 +231,7 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="0" />
-    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontSize" Value="15" />
   </Style>
 
   <Style Selector="TextBox.bare /template/ Border#PART_BorderElement">
@@ -333,6 +351,45 @@
     <Setter Property="FontSize" Value="11" />
     <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
     <Setter Property="LetterSpacing" Value="0.8" />
+  </Style>
+
+  <!--
+    字阶（模数）：10 micro / 11 caption / 12 secondary / 13 body /
+    15 subtitle / 17 title / 20 brand。界面里不再写中间值。
+  -->
+  <Style Selector="TextBlock.title">
+    <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
+    <Setter Property="FontSize" Value="17" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.subtitle">
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.body">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.caption">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.micro">
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+  </Style>
+
+  <!-- 数据感：计数、时间、尺寸等数字用等宽字体（Developer Mono 气质） -->
+  <Style Selector="TextBlock.num">
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
   </Style>
 
   <!-- Expander 头部去掉 Fluent 的粗体灰底 -->

@@ -47,7 +47,7 @@
     <StackPanel>
 
       <!-- 搜索行：图标 + 无边框输入框 -->
-      <Grid ColumnDefinitions="Auto,*,Auto" Margin="18,16,18,14">
+      <Grid ColumnDefinitions="Auto,*,Auto" Margin="16,14,16,12">
         <Path Grid.Column="0"
               Width="16"
               Height="16"
@@ -91,7 +91,7 @@
                  BorderThickness="0">
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="vm:ToolItemViewModel">
-              <Grid ColumnDefinitions="Auto,*,Auto" Margin="12,9">
+              <Grid ColumnDefinitions="Auto,*,Auto" Margin="12,8">
                 <Path Grid.Column="0"
                       Classes="icon"
                       Width="18"
@@ -103,7 +103,7 @@
                 <StackPanel Grid.Column="1" Spacing="3">
                   <controls:HighlightTextBlock SourceText="{Binding Name}"
                                                Term="{Binding HighlightTerm}"
-                                               FontSize="14"
+                                               FontSize="13"
                                                FontWeight="SemiBold"
                                                Foreground="{StaticResource TextPrimaryBrush}" />
                   <controls:HighlightTextBlock SourceText="{Binding Description}"
@@ -115,7 +115,7 @@
 
                 <Border Grid.Column="2"
                         Classes="chip"
-                        Margin="14,0,0,0">
+                        Margin="12,0,0,0">
                   <TextBlock Text="{Binding CategoryLabel}"
                              FontSize="10"
                              Foreground="{StaticResource TextMutedBrush}" />
@@ -127,7 +127,7 @@
 
         <!-- 空状态 -->
         <StackPanel IsVisible="{Binding IsEmpty}"
-                    Margin="0,22,0,26"
+                    Margin="0,24,0,24"
                     Spacing="8"
                     HorizontalAlignment="Center">
           <Path Width="26"
@@ -151,8 +151,8 @@
 
       <!-- 成功结果 -->
       <Border IsVisible="{Binding HasResult}"
-              Margin="14,2,14,0"
-              Padding="12,10"
+              Margin="12,2,12,0"
+              Padding="12,8"
               CornerRadius="10"
               Background="{StaticResource SurfaceRaisedBrush}"
               BorderBrush="{StaticResource LineBrush}"
@@ -182,7 +182,7 @@
           <ScrollViewer Grid.Row="1" MaxHeight="190" Margin="0,8,0,0">
             <SelectableTextBlock Text="{Binding ResultText}"
                                  FontFamily="{StaticResource MonoFont}"
-                                 FontSize="12"
+                                 FontSize="13"
                                  Foreground="{StaticResource TextPrimaryBrush}"
                                  TextWrapping="Wrap" />
           </ScrollViewer>
@@ -191,8 +191,8 @@
 
       <!-- 失败结果：红色左边条 + 一行人话（ui-spec 2.2） -->
       <Border IsVisible="{Binding HasError}"
-              Margin="14,2,14,0"
-              Padding="12,10"
+              Margin="12,2,12,0"
+              Padding="12,8"
               CornerRadius="10"
               Background="{StaticResource SurfaceRaisedBrush}"
               BorderBrush="{StaticResource LineBrush}"
@@ -217,7 +217,7 @@
       <!-- 键盘提示 -->
       <StackPanel Orientation="Horizontal"
                   Spacing="6"
-                  Margin="18,12,18,14">
+                  Margin="16,12,16,12">
         <Border Classes="kbd"><TextBlock Text="↑ ↓" /></Border>
         <TextBlock Text="选择" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" />
 

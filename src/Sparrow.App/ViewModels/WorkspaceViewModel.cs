@@ -40,14 +40,52 @@ public partial class WorkspaceViewModel : ObservableObject
 
     public ObservableCollection<ToolGroupViewModel> Groups { get; } = [];
 
+    public ObservableCollection<CategoryViewModel> Categories { get; } = [];
+
+    public ObservableCollection<RecentToolViewModel> RecentTools { get; } = [];
+
     public ObservableCollection<ParameterViewModel> Parameters { get; } = [];
 
     public ObservableCollection<HistoryEntryViewModel> Recent { get; } = [];
 
     private List<HistoryEntryViewModel> _allHistory = [];
 
+    /// <summary>工具全集缓存，侧栏搜索在这上面过滤，不重新扫插件。</summary>
+    private List<ToolEntry> _allTools = [];
+
     [ObservableProperty]
     private string _historyQuery = string.Empty;
+
+    /// <summary>顶部的工具搜索框：在工具墙上过滤。</summary>
+    [ObservableProperty]
+    private string _toolQuery = string.Empty;
+
+    /// <summary>侧栏选中的分类；null = 全部。</summary>
+    [ObservableProperty]
+    private string? _selectedCategory;
+
+    /// <summary>工作区双态：false = 工具墙（启动器），true = 工具台（输入/结果详情）。</summary>
+    [ObservableProperty]
+    private bool _isDetailOpen;
+
+    partial void OnToolQueryChanged(string value) => RefilterTools();
+
+    partial void OnSelectedCategoryChanged(string? value) => RefilterTools();
+
+    /// <summary>打开一个工具：进入工具台。</summary>
+    public void OpenTool(ToolItemViewModel tool)
+    {
+        SelectedTool = tool;
+        IsDetailOpen = true;
+    }
+
+    /// <summary>返回工具墙。保留选中项，方便「返回再进来」。</summary>
+    public void CloseDetail() => IsDetailOpen = false;
+
+    /// <summary>侧栏点分类；name 为 null 表示「全部」。</summary>
+    public void SelectCategory(string? name) => SelectedCategory = name;
+
+    public bool HasRecentTools => RecentTools.Count > 0;
 
     /// <summary>输入框提示：图片工具用剪贴板图片，生成类工具不需要输入。</summary>
     public string InputHint => SelectedTool?.Entry.Descriptor.Accepts switch
@@ -104,6 +142,27 @@ public partial class WorkspaceViewModel : ObservableObject
     [ObservableProperty]
     private bool _isLoading;
 
+    /// <summary>工具搜索无命中时侧栏显示空态。</summary>
+    [ObservableProperty]
+    private bool _hasTools;
+
+    /// <summary>当前工具没有参数时，主区不渲染参数行。</summary>
+    public bool HasParameters => Parameters.Count > 0;
+
+    /// <summary>侧栏空态：加载完且搜索无命中。</summary>
+    public bool IsToolListEmpty => !IsLoading && !HasTools;
+
+    /// <summary>结果区空态：既没有结果也没有错误（错误会以红条显示）。</summary>
+    public bool IsResultEmpty => !HasResult && !HasError;
+
+    partial void OnHasToolsChanged(bool value) => OnPropertyChanged(nameof(IsToolListEmpty));
+
+    partial void OnIsLoadingChanged(bool value) => OnPropertyChanged(nameof(IsToolListEmpty));
+
+    partial void OnHasResultChanged(bool value) => OnPropertyChanged(nameof(IsResultEmpty));
+
+    partial void OnHasErrorChanged(bool value) => OnPropertyChanged(nameof(IsResultEmpty));
+
     /// <summary>工具正在执行：按钮置灰、文案切换，避免重复点击。</summary>
     [ObservableProperty]
     private bool _isExecuting;
@@ -133,15 +192,13 @@ public partial class WorkspaceViewModel : ObservableObject
             var entries = await Task.Run(() =>
                 _catalog.GetRegistry().Search(null, int.MaxValue));
 
-            Groups.Clear();
-            foreach (var group in entries
-                         .GroupBy(entry => entry.Descriptor.Category)
-                         .OrderBy(group => group.Key, StringComparer.Ordinal))
-            {
-                Groups.Add(new ToolGroupViewModel(group.Key, group));
-            }
+            _allTools = [.. entries];
+            RebuildCategories();
+            RefilterTools();
+            RebuildRecentTools();
 
             SelectedTool = Groups.SelectMany(group => group.Tools).FirstOrDefault();
+            IsDetailOpen = false;
             InputText = _clipboard.GetText() ?? string.Empty;
 
             _allHistory = _history.Recent(200)
@@ -174,6 +231,87 @@ public partial class WorkspaceViewModel : ObservableObject
         OnPropertyChanged(nameof(IsTextInput));
     }
 
+    /// <summary>工具墙：先按侧栏分类，再按搜索词过滤，保持分组结构。</summary>
+    private void RefilterTools()
+    {
+        IEnumerable<ToolEntry> items = SelectedCategory is null
+            ? _allTools
+            : _allTools.Where(entry => entry.Descriptor.Category == SelectedCategory);
+
+        var query = ToolQuery.Trim();
+        if (query.Length > 0)
+        {
+            items = items.Where(entry =>
+                entry.Descriptor.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                entry.Descriptor.Description.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                entry.Descriptor.Category.Contains(query, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var list = items.ToList();
+
+        Groups.Clear();
+        foreach (var group in list
+                     .GroupBy(entry => entry.Descriptor.Category)
+                     .OrderBy(group => group.Key, StringComparer.Ordinal))
+        {
+            Groups.Add(new ToolGroupViewModel(group.Key, group));
+        }
+
+        HasTools = list.Count > 0;
+    }
+
+    /// <summary>侧栏分类导航：全部 + 各分类（含工具数）。</summary>
+    private void RebuildCategories()
+    {
+        Categories.Clear();
+        Categories.Add(new CategoryViewModel("全部", _allTools.Count));
+
+        foreach (var group in _allTools
+                     .GroupBy(entry => entry.Descriptor.Category)
+                     .OrderBy(group => group.Key, StringComparer.Ordinal))
+        {
+            Categories.Add(new CategoryViewModel(group.Key, group.Count()));
+        }
+
+        UpdateCategorySelection();
+    }
+
+    private void UpdateCategorySelection()
+    {
+        foreach (var category in Categories)
+            category.IsSelected = SelectedCategory is null
+                ? category.Name == "全部"
+                : category.Name == SelectedCategory;
+    }
+
+    /// <summary>
+    /// 工具墙顶部的「最近使用」：按执行历史去重取前 5 个还存在的工具。
+    /// </summary>
+    private void RebuildRecentTools()
+    {
+        RecentTools.Clear();
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var history in _allHistory)
+        {
+            if (!seen.Add(history.ToolName))
+                continue;
+
+            var entry = _allTools.Find(tool =>
+                tool.Descriptor.Name == history.ToolName);
+
+            if (entry is null)
+                continue;
+
+            RecentTools.Add(new RecentToolViewModel(new ToolItemViewModel(entry), history.TimeLabel));
+
+            if (RecentTools.Count >= 5)
+                break;
+        }
+
+        OnPropertyChanged(nameof(HasRecentTools));
+    }
+
     partial void OnIsExecutingChanged(bool value) => OnPropertyChanged(nameof(ExecuteLabel));
 
     private void LoadParameters(ToolItemViewModel? tool)
@@ -181,11 +319,16 @@ public partial class WorkspaceViewModel : ObservableObject
         Parameters.Clear();
 
         if (tool is null)
+        {
+            OnPropertyChanged(nameof(HasParameters));
             return;
+        }
 
         // 参数控件完全由声明生成，插件不提供任何 UI
         foreach (var parameter in tool.Entry.Descriptor.Parameters)
             Parameters.Add(new ParameterViewModel(parameter));
+
+        OnPropertyChanged(nameof(HasParameters));
     }
 
     public async Task ExecuteAsync()
@@ -239,6 +382,7 @@ public partial class WorkspaceViewModel : ObservableObject
                 _history.Add(historyEntry);
                 _allHistory.Insert(0, new HistoryEntryViewModel(historyEntry));
                 FilterHistory();
+                RebuildRecentTools();
                 return;
             }
 
@@ -277,6 +421,8 @@ public partial class WorkspaceViewModel : ObservableObject
         _history.Clear();
         _allHistory.Clear();
         Recent.Clear();
+        RecentTools.Clear();
+        OnPropertyChanged(nameof(HasRecentTools));
     }
 
     public void ShowSettings() => IsSettingsVisible = true;

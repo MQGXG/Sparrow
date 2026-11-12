@@ -21,7 +21,25 @@ public partial class WorkspaceWindow : Window
     private void OnToolClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: ToolItemViewModel tool } && DataContext is WorkspaceViewModel viewModel)
-            viewModel.SelectedTool = tool;
+            viewModel.OpenTool(tool);
+    }
+
+    private void OnCategoryClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: CategoryViewModel category } && DataContext is WorkspaceViewModel viewModel)
+            viewModel.SelectCategory(category.Name == "全部" ? null : category.Name);
+    }
+
+    private void OnRecentToolClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: RecentToolViewModel recent } && DataContext is WorkspaceViewModel viewModel)
+            viewModel.OpenTool(recent.Tool);
+    }
+
+    private void OnBackToWallClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel viewModel)
+            viewModel.CloseDetail();
     }
 
     private async void OnExecuteClick(object? sender, RoutedEventArgs e)

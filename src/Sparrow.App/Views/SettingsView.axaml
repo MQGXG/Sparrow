@@ -5,15 +5,14 @@
              x:DataType="vm:SettingsViewModel">
 
   <ScrollViewer>
-    <StackPanel Margin="22,6,22,26" Spacing="14">
+    <StackPanel Margin="24,8,24,24" Spacing="12">
 
       <!-- 插件 -->
       <Border Classes="panel" Padding="16">
         <StackPanel Spacing="12">
           <StackPanel Spacing="4">
-            <TextBlock Text="插件"
-                       FontSize="14"
-                       FontWeight="SemiBold" />
+            <TextBlock Classes="subtitle"
+                       Text="插件" />
             <TextBlock Text="工具都是插件。切换后需要重启应用生效。"
                        FontSize="11"
                        Foreground="{StaticResource TextSecondaryBrush}" />
@@ -81,9 +80,8 @@
       <Border Classes="panel" Padding="16">
         <StackPanel Spacing="12">
           <StackPanel Spacing="4">
-            <TextBlock Text="热键"
-                       FontSize="14"
-                       FontWeight="SemiBold" />
+            <TextBlock Classes="subtitle"
+                       Text="热键" />
             <TextBlock Text="格式示例：Ctrl+Alt+S、Ctrl+Shift+D、F9。保存后重启应用生效。"
                        FontSize="11"
                        Foreground="{StaticResource TextSecondaryBrush}" />
@@ -114,9 +112,8 @@
       <!-- 通用 -->
       <Border Classes="panel" Padding="16">
         <StackPanel Spacing="12">
-          <TextBlock Text="通用"
-                     FontSize="14"
-                     FontWeight="SemiBold" />
+          <TextBlock Classes="subtitle"
+                     Text="通用" />
 
           <ToggleSwitch Content="开机自启（只启动到托盘）"
                         OnContent="开"
@@ -128,9 +125,8 @@
       <!-- 关于 -->
       <Border Classes="panel" Padding="16">
         <StackPanel Spacing="12">
-          <TextBlock Text="关于"
-                     FontSize="14"
-                     FontWeight="SemiBold" />
+          <TextBlock Classes="subtitle"
+                     Text="关于" />
 
           <TextBlock Text="{Binding VersionText}"
                      FontSize="11"
