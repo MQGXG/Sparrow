@@ -48,6 +48,7 @@
         <Button Content="复制图片" Click="OnCopyImageClick" ToolTip.Tip="C" />
         <Button Content="保存" Click="OnSaveClick" ToolTip.Tip="S" />
         <Button Content="固定" Click="OnPinClick" ToolTip.Tip="P" />
+        <Button Content="滚动" Click="OnScrollClick" ToolTip.Tip="G" />
         <Button Classes="ghost" Content="取消" Click="OnCancelClick" ToolTip.Tip="Esc" />
       </StackPanel>
     </Border>

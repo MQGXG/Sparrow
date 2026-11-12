@@ -1,0 +1,57 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Sparrow.App.Views.ScrollResultWindow"
+        Title="Sparrow · 滚动截图"
+        Width="820"
+        Height="660"
+        MinWidth="480"
+        MinHeight="400"
+        Icon="avares://Sparrow.App/Assets/sparrow-32.png"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource BgBrush}">
+
+  <Grid RowDefinitions="Auto,*,Auto" Margin="18">
+
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+      <StackPanel Spacing="3">
+        <TextBlock Text="滚动截图"
+                   FontFamily="{StaticResource DisplayFont}"
+                   FontSize="15"
+                   FontWeight="SemiBold" />
+        <TextBlock x:Name="SizeText"
+                   FontSize="11"
+                   Foreground="{StaticResource TextMutedBrush}" />
+      </StackPanel>
+
+      <Button Grid.Column="1"
+              Classes="ghost small"
+              Content="关闭"
+              Click="OnCloseClick" />
+    </Grid>
+
+    <Border Grid.Row="1"
+            Classes="panel"
+            Margin="0,12,0,0"
+            Padding="8">
+      <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                    VerticalScrollBarVisibility="Auto">
+        <Image x:Name="Preview"
+               Stretch="Uniform"
+               HorizontalAlignment="Stretch" />
+      </ScrollViewer>
+    </Border>
+
+    <!-- 和普通截图共用同一组结果动作 -->
+    <StackPanel Grid.Row="2"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="8"
+                Margin="0,12,0,0">
+      <Button Content="复制图片" Click="OnCopyImageClick" />
+      <Button Content="保存" Click="OnSaveClick" />
+      <Button Content="固定" Click="OnPinClick" />
+      <Button Classes="accent" Content="识别文字" Click="OnRecognizeClick" />
+    </StackPanel>
+
+  </Grid>
+</Window>

@@ -14,7 +14,10 @@ public enum CaptureAction
     Recognize,
     CopyImage,
     Save,
-    Pin
+    Pin,
+
+    /// <summary>进入滚动截图；结果由 ScrollResultWindow 再选择动作。</summary>
+    Scroll
 }
 
 /// <summary>
@@ -34,6 +37,9 @@ public partial class CaptureWindow : Window
 
     /// <summary>用户选择的动作。</summary>
     public CaptureAction Action { get; private set; }
+
+    /// <summary>选区的物理像素矩形（滚动截图要按这个区域循环抓帧）。</summary>
+    public PixelRect SelectionRect { get; private set; }
 
     protected override void OnOpened(EventArgs e)
     {
@@ -117,6 +123,8 @@ public partial class CaptureWindow : Window
         var width = (int)(rect.Width * scaling);
         var height = (int)(rect.Height * scaling);
 
+        SelectionRect = new PixelRect(x, y, width, height);
+
         // 先让遮罩透明，再截图，否则截到的是自己
         Opacity = 0;
         await Task.Delay(80);
@@ -137,7 +145,7 @@ public partial class CaptureWindow : Window
     {
         ActionBar.IsVisible = true;
 
-        const double estimatedWidth = 280;
+        const double estimatedWidth = 430;
         var left = Math.Max(8, Math.Min(selection.X, Width - estimatedWidth - 8));
         var top = selection.Bottom + 12;
 
@@ -170,6 +178,12 @@ public partial class CaptureWindow : Window
     private void OnPinClick(object? sender, RoutedEventArgs e)
     {
         Action = CaptureAction.Pin;
+        Close();
+    }
+
+    private void OnScrollClick(object? sender, RoutedEventArgs e)
+    {
+        Action = CaptureAction.Scroll;
         Close();
     }
 
@@ -212,6 +226,7 @@ public partial class CaptureWindow : Window
         PhysicalKey.C => Key.C,
         PhysicalKey.S => Key.S,
         PhysicalKey.P => Key.P,
+        PhysicalKey.G => Key.G,
         _ => Key.None
     };
 
@@ -231,6 +246,9 @@ public partial class CaptureWindow : Window
                 return true;
             case Key.P:
                 action = CaptureAction.Pin;
+                return true;
+            case Key.G:
+                action = CaptureAction.Scroll;
                 return true;
             default:
                 action = CaptureAction.None;

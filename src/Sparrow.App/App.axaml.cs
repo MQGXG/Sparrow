@@ -157,7 +157,7 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// 截图 → OCR → 结果写回面板。
+    /// 截图入口：选区 → 动作（识别 / 复制 / 保存 / 固定 / 滚动）。
     /// 截图是宿主能力，OCR 仍然是普通插件——宿主只是替它准备 ImageInput。
     /// </summary>
     private async void CaptureAndRecognize()
@@ -175,38 +175,57 @@ public partial class App : Application
         if (capture.Result is not { Length: > 0 } png)
             return;
 
-        if (capture.Action == CaptureAction.CopyImage)
+        if (capture.Action == CaptureAction.Scroll)
         {
-            try
-            {
-                var clipboardForImage = new Win32Clipboard(Log);
-                if (clipboardForImage.SetImagePng(png))
-                    Log.Info("截图已复制到剪贴板");
-                else
-                    Log.Warn("复制图片到剪贴板失败");
-
-                return;
-            }
-            catch (Exception ex)
-            {
-                Log.Error("复制图片到剪贴板失败", ex);
-                return;
-            }
-        }
-
-        if (capture.Action == CaptureAction.Save)
-        {
-            await SaveImageAsync(png);
+            await RunScrollCaptureAsync(capture.SelectionRect);
             return;
         }
 
-        if (capture.Action == CaptureAction.Pin)
-        {
-            PinImage(png);
-            return;
-        }
+        await HandleCaptureActionAsync(png, capture.Action);
+    }
 
-        if (capture.Action != CaptureAction.Recognize)
+    /// <summary>截图结果的动作分发：普通截图和滚动截图共用。</summary>
+    private async Task HandleCaptureActionAsync(byte[] png, CaptureAction action)
+    {
+        switch (action)
+        {
+            case CaptureAction.CopyImage:
+                CopyImageToClipboard(png);
+                return;
+
+            case CaptureAction.Save:
+                await SaveImageAsync(png);
+                return;
+
+            case CaptureAction.Pin:
+                PinImage(png);
+                return;
+
+            case CaptureAction.Recognize:
+                await RecognizeImageAsync(png);
+                return;
+        }
+    }
+
+    private void CopyImageToClipboard(byte[] png)
+    {
+        try
+        {
+            var clipboardForImage = new Win32Clipboard(Log);
+            if (clipboardForImage.SetImagePng(png))
+                Log.Info("截图已复制到剪贴板");
+            else
+                Log.Warn("复制图片到剪贴板失败");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("复制图片到剪贴板失败", ex);
+        }
+    }
+
+    private async Task RecognizeImageAsync(byte[] png)
+    {
+        if (_palette is null || _paletteViewModel is null || _catalog is null)
             return;
 
         Log.Info($"截图完成：{png.Length} 字节");
@@ -257,6 +276,101 @@ public partial class App : Application
             Log.Error("截图识别失败", ex);
             _paletteViewModel.ShowExternalError($"截图识别失败：{ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// 滚动截图：循环抓帧 → 拼接 → 预览 → 复用普通截图的结果动作。
+    ///
+    /// 拼接全部发生在宿主，插件仍然只收到一张 ImageInput，
+    /// 所以这条功能不需要改 SDK 契约。
+    /// </summary>
+    private async Task RunScrollCaptureAsync(PixelRect rect)
+    {
+        if (rect.Width < 8 || rect.Height < 8)
+            return;
+
+        using var cts = new CancellationTokenSource();
+        var cancelled = false;
+
+        var overlay = new ScrollCaptureWindow();
+        overlay.Finished += (_, _) => cts.Cancel();
+        overlay.Cancelled += (_, _) =>
+        {
+            cancelled = true;
+            cts.Cancel();
+        };
+
+        PositionScrollOverlay(overlay, rect);
+        overlay.Show();
+
+        byte[]? png;
+        try
+        {
+            png = await Task.Run(
+                () => ScrollCaptureService.CaptureAsync(
+                    rect.X,
+                    rect.Y,
+                    rect.Width,
+                    rect.Height,
+                    rows => Avalonia.Threading.Dispatcher.UIThread.Post(
+                        () => overlay.SetCaptured(rows, rect.Height)),
+                    cts.Token),
+                cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            png = null;
+        }
+        finally
+        {
+            overlay.Close();
+        }
+
+        if (cancelled || png is null)
+            return;
+
+        Log.Info($"滚动截图完成：{png.Length} 字节，区域 {rect.Width}×{rect.Height}");
+
+        var result = new ScrollResultWindow(png);
+        result.Show();
+        result.Activate();
+        await WaitForClosedAsync(result);
+
+        if (result.Action == CaptureAction.None)
+            return;
+
+        await HandleCaptureActionAsync(png, result.Action);
+    }
+
+    /// <summary>把提示条放在选区外（下方放不下就放上方），避免被自己截进去。</summary>
+    private static void PositionScrollOverlay(Window overlay, PixelRect selection)
+    {
+        var center = new PixelPoint(
+            selection.X + selection.Width / 2,
+            selection.Y + selection.Height / 2);
+
+        var screen = overlay.Screens.ScreenFromPoint(center) ?? overlay.Screens.Primary;
+        var scaling = screen?.Scaling ?? 1;
+        var area = screen?.WorkingArea ?? new PixelRect(0, 0, 1920, 1080);
+
+        var width = (int)(320 * scaling);
+        var height = (int)(96 * scaling);
+
+        var areaRight = area.X + area.Width;
+        var areaBottom = area.Y + area.Height;
+
+        var x = Math.Clamp(
+            selection.X + selection.Width - width,
+            area.X + 8,
+            Math.Max(area.X + 8, areaRight - width - 8));
+
+        var y = selection.Y + selection.Height + 12;
+        if (y + height > areaBottom)
+            y = selection.Y - height - 12;
+        if (y < area.Y + 8)
+            y = area.Y + 8;
+
+        overlay.Position = new PixelPoint(x, y);
     }
 
     /// <summary>弹保存对话框，把截图写成 PNG。</summary>

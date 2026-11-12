@@ -17,6 +17,16 @@ public static class ScreenCapture
     /// <summary>截取屏幕物理像素区域，返回 PNG 字节。失败返回 null。</summary>
     public static byte[]? Capture(int x, int y, int width, int height)
     {
+        var pixels = CaptureRaw(x, y, width, height);
+        return pixels is null ? null : EncodePng(pixels, width, height);
+    }
+
+    /// <summary>
+    /// 截取原始 BGRA 像素（top-down，stride = width*4）。
+    /// 滚动截图每 200ms 抓一帧，跳过 PNG 编解码。
+    /// </summary>
+    public static byte[]? CaptureRaw(int x, int y, int width, int height)
+    {
         if (width <= 0 || height <= 0)
             return null;
 
@@ -46,7 +56,7 @@ public static class ScreenCapture
             if (!BitBlt(memoryDc, 0, 0, width, height, screenDc, x, y, SrcCopy))
                 return null;
 
-            return ToPng(memoryDc, bitmap, width, height);
+            return ReadPixels(memoryDc, bitmap, width, height);
         }
         finally
         {
@@ -57,7 +67,7 @@ public static class ScreenCapture
         }
     }
 
-    private static byte[]? ToPng(IntPtr memoryDc, IntPtr bitmap, int width, int height)
+    private static byte[]? ReadPixels(IntPtr memoryDc, IntPtr bitmap, int width, int height)
     {
         var stride = width * 4;
         var pixels = new byte[stride * height];
@@ -78,9 +88,13 @@ public static class ScreenCapture
         };
 
         var lines = GetDIBits(memoryDc, bitmap, 0, (uint)height, pixels, ref info, DibRgbColors);
-        if (lines == 0)
-            return null;
+        return lines == 0 ? null : pixels;
+    }
 
+    /// <summary>BGRA 像素转 PNG（alpha 固定不透明）。</summary>
+    private static byte[]? EncodePng(byte[] pixels, int width, int height)
+    {
+        var stride = width * 4;
         var imageInfo = new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque);
         using var skBitmap = new SKBitmap(imageInfo);
         Marshal.Copy(pixels, 0, skBitmap.GetPixels(), pixels.Length);

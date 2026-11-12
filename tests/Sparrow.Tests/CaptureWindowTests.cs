@@ -28,6 +28,7 @@ public sealed class CaptureWindowTests
     [InlineData(Key.C, CaptureAction.CopyImage)]
     [InlineData(Key.S, CaptureAction.Save)]
     [InlineData(Key.P, CaptureAction.Pin)]
+    [InlineData(Key.G, CaptureAction.Scroll)]
     public void 动作栏快捷键_选中对应动作并关闭窗口(Key key, CaptureAction expected)
     {
         var window = CreateWithActionBar();
@@ -70,6 +71,7 @@ public sealed class CaptureWindowTests
     [InlineData(PhysicalKey.C, CaptureAction.CopyImage)]
     [InlineData(PhysicalKey.S, CaptureAction.Save)]
     [InlineData(PhysicalKey.P, CaptureAction.Pin)]
+    [InlineData(PhysicalKey.G, CaptureAction.Scroll)]
     public void 输入法处理过的按键_仍按物理键触发动作(PhysicalKey physicalKey, CaptureAction expected)
     {
         var window = CreateWithActionBar();
