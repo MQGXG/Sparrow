@@ -1,6 +1,8 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Threading;
 using Sparrow.App.ViewModels;
 
 namespace Sparrow.App.Views;
@@ -53,8 +55,21 @@ public partial class PaletteWindow : Window
             viewModel.Reset();
 
         _shownAt = DateTime.UtcNow;
+
+        // 先摆到「低 8px + 透明」，Show 后再过渡到正常位置
+        Shell.Opacity = 0;
+        if (Shell.RenderTransform is TranslateTransform transform)
+            transform.Y = 8;
+
         Show();
         Activate();
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            Shell.Opacity = 1;
+            if (Shell.RenderTransform is TranslateTransform shown)
+                shown.Y = 0;
+        }, DispatcherPriority.Render);
 
         // 焦点必须落在搜索框上，否则用户要先点一下才能打字
         SearchBox.Focus();

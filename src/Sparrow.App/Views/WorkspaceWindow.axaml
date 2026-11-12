@@ -67,14 +67,26 @@
                       <ItemsControl ItemsSource="{Binding Tools}">
                         <ItemsControl.ItemTemplate>
                           <DataTemplate x:DataType="vm:ToolItemViewModel">
-                            <Button Content="{Binding Name}"
-                                    Tag="{Binding}"
+                            <Button Tag="{Binding}"
                                     Click="OnToolClick"
                                     Classes="ghost"
+                                    Classes.selected="{Binding IsSelected}"
                                     HorizontalAlignment="Stretch"
                                     HorizontalContentAlignment="Left"
                                     Padding="8,6"
-                                    Margin="0,1" />
+                                    Margin="0,1">
+                              <StackPanel Orientation="Horizontal" Spacing="8">
+                                <!-- 选中指示条：比整块高亮更克制 -->
+                                <Border Width="2"
+                                        Height="14"
+                                        CornerRadius="1"
+                                        Background="{StaticResource AccentBrush}"
+                                        IsVisible="{Binding IsSelected}" />
+                                <TextBlock Text="{Binding Name}"
+                                           FontSize="12"
+                                           VerticalAlignment="Center" />
+                              </StackPanel>
+                            </Button>
                           </DataTemplate>
                         </ItemsControl.ItemTemplate>
                       </ItemsControl>
@@ -194,6 +206,12 @@
                        PlaceholderText="搜索历史…"
                        FontSize="12" />
 
+              <TextBlock Text="还没有执行记录"
+                         IsVisible="{Binding !HasHistory}"
+                         FontSize="11"
+                         Foreground="{StaticResource TextMutedBrush}"
+                         Margin="8,2" />
+
               <ItemsControl ItemsSource="{Binding Recent}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:HistoryEntryViewModel">
@@ -237,9 +255,11 @@
                   Spacing="8"
                   Margin="22,0,22,16">
         <Button Content="复制"
+                IsEnabled="{Binding !IsExecuting}"
                 Click="OnCopyClick" />
         <Button Classes="accent"
-                Content="执行"
+                Content="{Binding ExecuteLabel}"
+                IsEnabled="{Binding !IsExecuting}"
                 Click="OnExecuteClick" />
       </StackPanel>
     </Grid>

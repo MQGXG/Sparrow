@@ -74,6 +74,8 @@ public partial class WorkspaceViewModel : ObservableObject
                     item.Entry.Output.Contains(query, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
+        HasHistory = items.Count > 0;
+
         foreach (var item in items)
             Recent.Add(item);
     }
@@ -101,6 +103,16 @@ public partial class WorkspaceViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _isLoading;
+
+    /// <summary>工具正在执行：按钮置灰、文案切换，避免重复点击。</summary>
+    [ObservableProperty]
+    private bool _isExecuting;
+
+    /// <summary>过滤后的历史是否为空，用于空状态提示。</summary>
+    [ObservableProperty]
+    private bool _hasHistory;
+
+    public string ExecuteLabel => IsExecuting ? "执行中…" : "执行";
 
     /// <summary>
     /// 每次打开工作区时刷新工具列表与剪贴板输入。
@@ -149,12 +161,20 @@ public partial class WorkspaceViewModel : ObservableObject
         }
     }
 
-    partial void OnSelectedToolChanged(ToolItemViewModel? value)
+    partial void OnSelectedToolChanged(ToolItemViewModel? oldValue, ToolItemViewModel? newValue)
     {
-        LoadParameters(value);
+        if (oldValue is not null)
+            oldValue.IsSelected = false;
+
+        if (newValue is not null)
+            newValue.IsSelected = true;
+
+        LoadParameters(newValue);
         OnPropertyChanged(nameof(InputHint));
         OnPropertyChanged(nameof(IsTextInput));
     }
+
+    partial void OnIsExecutingChanged(bool value) => OnPropertyChanged(nameof(ExecuteLabel));
 
     private void LoadParameters(ToolItemViewModel? tool)
     {
@@ -170,7 +190,7 @@ public partial class WorkspaceViewModel : ObservableObject
 
     public async Task ExecuteAsync()
     {
-        if (SelectedTool is null)
+        if (IsExecuting || SelectedTool is null)
             return;
 
         var entry = SelectedTool.Entry;
@@ -185,6 +205,8 @@ public partial class WorkspaceViewModel : ObservableObject
         var parameters = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var parameter in Parameters)
             parameters[parameter.Key] = parameter.Value;
+
+        IsExecuting = true;
 
         try
         {
@@ -227,6 +249,10 @@ public partial class WorkspaceViewModel : ObservableObject
             // 插件异常不能带走工作区
             _log.Error("工作区执行失败", ex);
             ShowError($"工具执行异常：{ex.Message}");
+        }
+        finally
+        {
+            IsExecuting = false;
         }
     }
 

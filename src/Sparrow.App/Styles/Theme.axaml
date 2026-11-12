@@ -134,6 +134,28 @@
     <Setter Property="CornerRadius" Value="6" />
   </Style>
 
+  <!-- 选中的工具（工作区左栏） -->
+  <Style Selector="Button.selected">
+    <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
+  </Style>
+
+  <Style Selector="Button.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
+  </Style>
+
+  <!-- 键盘焦点环：只在键盘导航时出现，鼠标点击不闪 -->
+  <Style Selector="Button:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <Style Selector="ListBoxItem:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
   <!-- 输入框 -->
   <Style Selector="TextBox">
     <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
@@ -205,6 +227,11 @@
 
   <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
   </Style>
 
   <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">

@@ -51,6 +51,10 @@ public partial class PaletteViewModel : ObservableObject
     [ObservableProperty]
     private bool _isEmpty;
 
+    /// <summary>工具正在执行：显示顶部进度条，并阻止重复回车。</summary>
+    [ObservableProperty]
+    private bool _isExecuting;
+
     public ObservableCollection<ToolItemViewModel> Items { get; } = [];
 
     public PaletteViewModel(
@@ -113,8 +117,16 @@ public partial class PaletteViewModel : ObservableObject
             return;
         }
 
+        if (IsExecuting)
+        {
+            _log.Warn("执行被忽略：上一个工具还在执行");
+            return;
+        }
+
         var entry = Selected.Entry;
         var tool = entry.Tool;
+
+        IsExecuting = true;
 
         try
         {
@@ -164,6 +176,10 @@ public partial class PaletteViewModel : ObservableObject
             // 插件理论上不该抛异常，但宿主必须假设它会——这是「插件崩了壳不崩」的兜底
             _log.Error($"工具 {tool.Descriptor.Id} 执行异常", ex);
             ShowError($"工具执行异常：{ex.Message}");
+        }
+        finally
+        {
+            IsExecuting = false;
         }
     }
 

@@ -16,12 +16,30 @@
         TransparencyLevelHint="Transparent">
 
   <!-- 抬起的浮层：阴影比描边更能表达层级 -->
-  <Border Background="{StaticResource SurfaceBrush}"
+  <Border x:Name="Shell"
+          Background="{StaticResource SurfaceBrush}"
           BorderBrush="{StaticResource LineStrongBrush}"
           BorderThickness="1"
           CornerRadius="14"
           BoxShadow="0 24 64 0 #99000000"
           ClipToBounds="True">
+
+    <!-- 出现时轻微上移 + 淡入，避免「啪」地弹出来 -->
+    <Border.RenderTransform>
+      <TranslateTransform Y="0">
+        <TranslateTransform.Transitions>
+          <Transitions>
+            <DoubleTransition Property="Y" Duration="0:0:0.16" Easing="CubicEaseOut" />
+          </Transitions>
+        </TranslateTransform.Transitions>
+      </TranslateTransform>
+    </Border.RenderTransform>
+
+    <Border.Transitions>
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+      </Transitions>
+    </Border.Transitions>
 
     <StackPanel>
 
@@ -50,6 +68,14 @@
       </Grid>
 
       <Border Height="1" Background="{StaticResource LineBrush}" />
+
+      <!-- 执行中的进度条：OCR 这类工具要 2 秒以上，没有反馈会以为没反应 -->
+      <ProgressBar IsIndeterminate="True"
+                   IsVisible="{Binding IsExecuting}"
+                   Height="2"
+                   MinHeight="2"
+                   Background="Transparent"
+                   Foreground="{StaticResource AccentBrush}" />
 
       <!-- 工具列表 -->
       <Panel>
