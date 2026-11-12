@@ -44,6 +44,40 @@ public partial class WorkspaceViewModel : ObservableObject
 
     public ObservableCollection<HistoryEntryViewModel> Recent { get; } = [];
 
+    private List<HistoryEntryViewModel> _allHistory = [];
+
+    [ObservableProperty]
+    private string _historyQuery = string.Empty;
+
+    /// <summary>输入框提示：图片工具用剪贴板图片，生成类工具不需要输入。</summary>
+    public string InputHint => SelectedTool?.Entry.Descriptor.Accepts switch
+    {
+        InputShape.Image => "将使用剪贴板里的图片",
+        InputShape.None => "此工具不需要输入",
+        _ => "输入内容…"
+    };
+
+    public bool IsTextInput => SelectedTool?.Entry.Descriptor.Accepts is InputShape.Text or InputShape.RichText;
+
+    partial void OnHistoryQueryChanged(string value) => FilterHistory();
+
+    private void FilterHistory()
+    {
+        Recent.Clear();
+
+        var query = HistoryQuery.Trim();
+        var items = string.IsNullOrEmpty(query)
+            ? _allHistory
+            : _allHistory
+                .Where(item =>
+                    item.ToolName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    item.Entry.Output.Contains(query, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+        foreach (var item in items)
+            Recent.Add(item);
+    }
+
     [ObservableProperty]
     private ToolItemViewModel? _selectedTool;
 
@@ -98,9 +132,11 @@ public partial class WorkspaceViewModel : ObservableObject
             SelectedTool = Groups.SelectMany(group => group.Tools).FirstOrDefault();
             InputText = _clipboard.GetText() ?? string.Empty;
 
-            Recent.Clear();
-            foreach (var entry in _history.Recent(20))
-                Recent.Add(new HistoryEntryViewModel(entry));
+            _allHistory = _history.Recent(200)
+                .Select(entry => new HistoryEntryViewModel(entry))
+                .ToList();
+
+            FilterHistory();
         }
         catch (Exception ex)
         {
@@ -113,7 +149,12 @@ public partial class WorkspaceViewModel : ObservableObject
         }
     }
 
-    partial void OnSelectedToolChanged(ToolItemViewModel? value) => LoadParameters(value);
+    partial void OnSelectedToolChanged(ToolItemViewModel? value)
+    {
+        LoadParameters(value);
+        OnPropertyChanged(nameof(InputHint));
+        OnPropertyChanged(nameof(IsTextInput));
+    }
 
     private void LoadParameters(ToolItemViewModel? tool)
     {
@@ -174,7 +215,8 @@ public partial class WorkspaceViewModel : ObservableObject
                     0);
 
                 _history.Add(historyEntry);
-                Recent.Insert(0, new HistoryEntryViewModel(historyEntry));
+                _allHistory.Insert(0, new HistoryEntryViewModel(historyEntry));
+                FilterHistory();
                 return;
             }
 
@@ -207,6 +249,7 @@ public partial class WorkspaceViewModel : ObservableObject
     public void ClearHistory()
     {
         _history.Clear();
+        _allHistory.Clear();
         Recent.Clear();
     }
 

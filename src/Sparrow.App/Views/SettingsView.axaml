@@ -76,6 +76,18 @@
                       IsChecked="{Binding StartWithWindows, Mode=TwoWay}" />
       </StackPanel>
 
+      <!-- 关于 -->
+      <StackPanel Spacing="8">
+        <TextBlock Text="关于" FontSize="20" Foreground="#E6EDF3" />
+        <TextBlock Text="{Binding VersionText}"
+                   FontSize="12"
+                   Foreground="#8B98A8" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="打开日志目录" Click="OnOpenLogsClick" />
+          <Button Content="打开数据目录" Click="OnOpenDataClick" />
+        </StackPanel>
+      </StackPanel>
+
       <TextBlock Text="{Binding StatusMessage}"
                  Foreground="#D97706"
                  FontSize="12"

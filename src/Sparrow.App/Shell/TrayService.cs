@@ -11,12 +11,14 @@ public sealed class TrayService
 {
     private readonly PaletteWindow _palette;
     private readonly Action _showWorkspace;
+    private readonly Action _capture;
     private TrayIcon? _icon;
 
-    public TrayService(PaletteWindow palette, Action showWorkspace)
+    public TrayService(PaletteWindow palette, Action showWorkspace, Action capture)
     {
         _palette = palette;
         _showWorkspace = showWorkspace;
+        _capture = capture;
     }
 
     public void Initialize()
@@ -26,6 +28,10 @@ public sealed class TrayService
         var search = new NativeMenuItem("搜索工具…    Ctrl+Alt+S");
         search.Click += (_, _) => _palette.Toggle();
         menu.Add(search);
+
+        var capture = new NativeMenuItem("截图识别…    Ctrl+Alt+C");
+        capture.Click += (_, _) => _capture();
+        menu.Add(capture);
 
         var workspace = new NativeMenuItem("工作区…");
         workspace.Click += (_, _) => _showWorkspace();

@@ -78,7 +78,7 @@ public partial class App : Application
         _workspaceViewModel = new WorkspaceViewModel(_catalog, clipboard, log, history, settingsViewModel);
         _workspace = new WorkspaceWindow { DataContext = _workspaceViewModel };
 
-        _tray = new TrayService(_palette, ShowWorkspace);
+        _tray = new TrayService(_palette, ShowWorkspace, CaptureAndRecognize);
         _tray.Initialize();
 
         var (searchModifiers, searchKey) = ResolveHotkey(settings.SearchHotkey, "Ctrl+Alt+S");

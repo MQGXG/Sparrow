@@ -38,6 +38,9 @@ public partial class SettingsViewModel : ObservableObject
 
     public ObservableCollection<PluginItemViewModel> Plugins { get; } = [];
 
+    public string VersionText { get; } =
+        typeof(SettingsViewModel).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
+
     [ObservableProperty]
     private string _searchHotkey = "Ctrl+Alt+S";
 

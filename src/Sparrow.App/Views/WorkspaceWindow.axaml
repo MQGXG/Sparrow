@@ -63,7 +63,8 @@
                    AcceptsReturn="True"
                    MinHeight="80"
                    MaxHeight="200"
-                   PlaceholderText="输入内容…" />
+                   PlaceholderText="{Binding InputHint}"
+                   IsEnabled="{Binding IsTextInput}" />
 
           <Border Grid.Row="1"
                   Margin="0,12"
@@ -122,6 +123,10 @@
                       Padding="8,2"
                       Click="OnClearHistoryClick" />
             </Grid>
+
+            <TextBox Text="{Binding HistoryQuery, Mode=TwoWay}"
+                     PlaceholderText="搜索历史…"
+                     FontSize="12" />
 
             <ItemsControl ItemsSource="{Binding Recent}">
               <ItemsControl.ItemTemplate>
