@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <AssemblyName>Sparrow.Tests</AssemblyName>
+    <RootNamespace>Sparrow.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 测试项目是「宿主侧」的模拟，所以它需要 SDK、插件、以及壳层三个引用 -->
+    <ProjectReference Include="..\..\src\Sparrow.Plugin.Sdk\Sparrow.Plugin.Sdk.csproj" />
+    <ProjectReference Include="..\..\plugins\sparrow.plugin.json-format\Sparrow.Plugin.Json.Format.csproj" />
+    <!-- 只为测 ToolRegistry / PaletteViewModel，不启动 Avalonia -->
+    <ProjectReference Include="..\..\src\Sparrow.App\Sparrow.App.csproj" />
+  </ItemGroup>
+
+</Project>

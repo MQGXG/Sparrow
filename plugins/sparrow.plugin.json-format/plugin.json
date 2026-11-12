@@ -1,0 +1,11 @@
+{
+  "id": "sparrow.plugin.json-format",
+  "name": "JSON 格式化",
+  "version": "1.0.0",
+  "sdkVersion": "1.0",
+  "entryAssembly": "Sparrow.Plugin.Json.Format.dll",
+  "author": "sparrow",
+  "description": "格式化、压缩、校验 JSON，出错时定位到行列",
+  "capabilities": [],
+  "tools": ["sparrow.json.format"]
+}

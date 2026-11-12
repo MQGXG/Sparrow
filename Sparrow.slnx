@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/plugins/">
+    <Project Path="plugins/sparrow.plugin.json-format/Sparrow.Plugin.Json.Format.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Sparrow.App/Sparrow.App.csproj" />
+    <Project Path="src/Sparrow.Plugin.Sdk/Sparrow.Plugin.Sdk.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Sparrow.Tests/Sparrow.Tests.csproj" />
+  </Folder>
+</Solution>

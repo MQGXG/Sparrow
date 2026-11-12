@@ -1,0 +1,130 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sparrow.App.ViewModels"
+        x:Class="Sparrow.App.Views.PaletteWindow"
+        x:DataType="vm:PaletteViewModel"
+        Title="Sparrow"
+        Width="640"
+        Height="440"
+        WindowDecorations="None"
+        CanResize="False"
+        ShowInTaskbar="False"
+        Topmost="True"
+        WindowStartupLocation="CenterScreen"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent">
+
+  <Border Background="#161B22"
+          BorderBrush="#2A333F"
+          BorderThickness="1"
+          CornerRadius="12"
+          ClipToBounds="True">
+
+    <Grid RowDefinitions="Auto,*,Auto,Auto,Auto">
+
+      <!-- 搜索框：只负责筛选工具，输入内容本身取自剪贴板 -->
+      <TextBox x:Name="SearchBox"
+               Grid.Row="0"
+               Margin="18,16,18,10"
+               FontSize="16"
+               PlaceholderText="搜索工具…（Enter 执行，输入取自剪贴板）"
+               Text="{Binding Query, Mode=TwoWay}"
+               Background="Transparent"
+               BorderThickness="0" />
+
+      <!-- 工具列表 -->
+      <ListBox x:Name="ResultList"
+               Grid.Row="1"
+               Margin="10,0"
+               ItemsSource="{Binding Items}"
+               SelectedItem="{Binding Selected, Mode=TwoWay}"
+               Background="Transparent"
+               BorderThickness="0">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:ToolItemViewModel">
+            <Grid ColumnDefinitions="*,Auto" Margin="10,8">
+              <StackPanel Spacing="3">
+                <TextBlock Text="{Binding Name}"
+                           FontSize="14"
+                           Foreground="#E6EDF3" />
+                <TextBlock Text="{Binding Description}"
+                           FontSize="11"
+                           Foreground="#8B98A8"
+                           TextWrapping="Wrap" />
+              </StackPanel>
+              <TextBlock Grid.Column="1"
+                         Text="{Binding CategoryLabel}"
+                         FontSize="11"
+                         Foreground="#D97706"
+                         VerticalAlignment="Center"
+                         Margin="12,0,0,0" />
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+
+      <!-- 空结果提示，与列表重叠但只在列表为空时出现 -->
+      <TextBlock Grid.Row="1"
+                 IsVisible="{Binding IsEmpty}"
+                 Text="没有匹配的工具"
+                 Foreground="#8B98A8"
+                 FontSize="13"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Center" />
+
+      <!-- 成功结果：只读 + 复制 -->
+      <Border Grid.Row="2"
+              IsVisible="{Binding HasResult}"
+              Margin="18,8,18,0"
+              Padding="12"
+              CornerRadius="8"
+              Background="#0E1116"
+              BorderBrush="#232B36"
+              BorderThickness="1">
+        <Grid RowDefinitions="Auto,Auto">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="{Binding ResultTitle}"
+                       FontSize="11"
+                       Foreground="#8B98A8"
+                       VerticalAlignment="Center" />
+            <Button Grid.Column="1"
+                    Content="复制"
+                    Padding="12,2"
+                    FontSize="11"
+                    Click="OnCopyClick" />
+          </Grid>
+          <ScrollViewer Grid.Row="1" MaxHeight="170" Margin="0,8,0,0">
+            <SelectableTextBlock Text="{Binding ResultText}"
+                                 FontFamily="Cascadia Mono, Consolas"
+                                 FontSize="12"
+                                 Foreground="#E6EDF3"
+                                 TextWrapping="Wrap" />
+          </ScrollViewer>
+        </Grid>
+      </Border>
+
+      <!-- 失败结果：只显示可读信息，detail 进日志 -->
+      <Border Grid.Row="3"
+              IsVisible="{Binding HasError}"
+              Margin="18,8,18,0"
+              Padding="12"
+              CornerRadius="8"
+              Background="#2A1416"
+              BorderBrush="#5C2A2E"
+              BorderThickness="1">
+        <TextBlock Text="{Binding ErrorText}"
+                   Foreground="#FF7B72"
+                   FontSize="12"
+                   TextWrapping="Wrap" />
+      </Border>
+
+      <!-- 键盘提示 -->
+      <TextBlock Grid.Row="4"
+                 Margin="18,10,18,14"
+                 Text="↑↓ 选择    Enter 执行    Ctrl+C 复制结果    Esc 关闭"
+                 FontSize="11"
+                 Foreground="#6E7B8B" />
+
+    </Grid>
+  </Border>
+</Window>

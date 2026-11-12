@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>Sparrow.Plugin.Json.Format</AssemblyName>
+    <RootNamespace>Sparrow.Plugin.Json.Format</RootNamespace>
+    <Version>1.0.0</Version>
+    <Description>JSON 格式化 / 压缩 / 校验</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      ★ 插件产物的铁律：SDK 不能被拷进插件目录。
+      否则 M1 接入 ALC 后，ITool 会变成两个不同 ALC 里的两个类型，
+      `tool is ITool` 返回 false，插件静默不注册（见 docs/plugin-model.md 铁律 1）。
+    -->
+    <ProjectReference Include="..\..\src\Sparrow.Plugin.Sdk\Sparrow.Plugin.Sdk.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

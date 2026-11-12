@@ -1,0 +1,210 @@
+using System.Collections.ObjectModel;
+using System.Diagnostics;
+using CommunityToolkit.Mvvm.ComponentModel;
+using Sparrow.App.Services;
+using Sparrow.Plugin.Sdk;
+using Sparrow.Plugin.Sdk.Inputs;
+using Sparrow.Plugin.Sdk.Payloads;
+
+namespace Sparrow.App.ViewModels;
+
+/// <summary>
+/// 命令面板的视图模型。
+///
+/// 只做三件事：搜索、执行、把结果整理成可展示的文本。
+/// 不做的事：不碰窗口、不碰键盘、不碰插件加载——那些在 View 和 Registry 里。
+/// </summary>
+public partial class PaletteViewModel : ObservableObject
+{
+    // 结果区是只读展示，超长文本直接截断，避免 TextBlock 排版卡住 UI 线程
+    private const int MaxDisplayLength = 20_000;
+
+    private readonly Func<ToolRegistry> _registryFactory;
+    private readonly IClipboardAccess _clipboard;
+    private readonly IAppLog _log;
+
+    private ToolRegistry? _registry;
+
+    [ObservableProperty]
+    private string _query = string.Empty;
+
+    [ObservableProperty]
+    private ToolItemViewModel? _selected;
+
+    [ObservableProperty]
+    private string? _resultText;
+
+    [ObservableProperty]
+    private string? _resultTitle;
+
+    [ObservableProperty]
+    private string? _errorText;
+
+    [ObservableProperty]
+    private bool _hasResult;
+
+    [ObservableProperty]
+    private bool _hasError;
+
+    [ObservableProperty]
+    private bool _isEmpty;
+
+    public ObservableCollection<ToolItemViewModel> Items { get; } = [];
+
+    public PaletteViewModel(Func<ToolRegistry> registryFactory, IClipboardAccess clipboard, IAppLog log)
+    {
+        _registryFactory = registryFactory;
+        _clipboard = clipboard;
+        _log = log;
+
+        // 刻意不在这里 Refresh：构造函数运行在启动路径上，
+        // 而 Refresh 会触发插件扫描 + ALC 加载。首次搜索或 Reset 时才加载。
+    }
+
+    /// <summary>工具注册表。首次访问时构建，之后缓存。</summary>
+    private ToolRegistry Registry => _registry ??= _registryFactory();
+
+    partial void OnQueryChanged(string value) => Refresh();
+
+    /// <summary>每次面板弹出时调用：清掉上一次的结果，保留查询词方便重复执行。</summary>
+    public void Reset()
+    {
+        ClearResult();
+        Refresh();
+    }
+
+    private void Refresh()
+    {
+        var tools = Registry.Search(Query);
+
+        Items.Clear();
+        foreach (var tool in tools)
+            Items.Add(new ToolItemViewModel(tool));
+
+        Selected = Items.FirstOrDefault();
+        IsEmpty = Items.Count == 0;
+        ClearResult();
+    }
+
+    /// <summary>
+    /// 执行当前选中的工具。
+    /// 输入统一取自剪贴板——M0 的面板没有独立输入区，
+    /// 「复制内容 → 热键 → 回车」是这个阶段唯一的工作流。
+    /// </summary>
+    public async Task ExecuteAsync()
+    {
+        if (Selected is null)
+            return;
+
+        var tool = Selected.Tool;
+
+        try
+        {
+            var context = BuildContext(tool);
+            var startedAt = Stopwatch.GetTimestamp();
+
+            _log.Info($"执行工具 {tool.Descriptor.Id}，输入类型 {context.Input.GetType().Name}");
+
+            var result = await tool.ExecuteAsync(context, CancellationToken.None);
+
+            var elapsed = Stopwatch.GetElapsedTime(startedAt);
+            _log.Info($"工具 {tool.Descriptor.Id} 执行完成：成功={result.Success}，耗时={elapsed.TotalMilliseconds:F0}ms");
+
+            if (result.Success && result.Payload is not null)
+            {
+                ShowResult(FormatPayload(result.Payload), $"{tool.Descriptor.Name} · {elapsed.TotalMilliseconds:F0} ms");
+                return;
+            }
+
+            // Error.Detail 只进日志，界面上只显示 Message
+            ShowError(result.Error?.Message ?? "执行失败，但没有返回错误信息");
+        }
+        catch (OperationCanceledException)
+        {
+            ShowError("已取消");
+        }
+        catch (Exception ex)
+        {
+            // 插件理论上不该抛异常，但宿主必须假设它会——这是「插件崩了壳不崩」的兜底
+            _log.Error($"工具 {tool.Descriptor.Id} 执行异常", ex);
+            ShowError($"工具执行异常：{ex.Message}");
+        }
+    }
+
+    /// <summary>复制当前结果。没有结果时静默忽略。</summary>
+    public void CopyResult()
+    {
+        if (string.IsNullOrEmpty(ResultText))
+            return;
+
+        _clipboard.SetText(ResultText);
+        ResultTitle = "已复制到剪贴板";
+        _log.Info($"复制结果到剪贴板，长度 {ResultText.Length}");
+    }
+
+    private ToolContext BuildContext(ITool tool)
+    {
+        var descriptor = tool.Descriptor;
+
+        // 生成类工具（Accepts = None）不需要输入；其余按文本处理，M0 只有文本工具
+        IToolInput input = descriptor.Accepts == InputShape.None
+            ? EmptyInput.Instance
+            : new TextInput(_clipboard.GetText() ?? string.Empty);
+
+        // 参数先全部取默认值；M0 不提供参数编辑 UI
+        var parameters = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var parameter in descriptor.Parameters)
+        {
+            if (parameter.Default is not null)
+                parameters[parameter.Key] = parameter.Default;
+        }
+
+        return new ToolContext
+        {
+            Input = input,
+            Source = input is EmptyInput ? ToolSource.Manual : ToolSource.Clipboard,
+            Parameters = parameters
+        };
+    }
+
+    private static string FormatPayload(IToolPayload payload)
+    {
+        var text = payload switch
+        {
+            TextPayload textPayload => textPayload.Text,
+            SvgPayload svgPayload => svgPayload.Svg,
+            _ => $"（{payload.GetType().Name} 结果，面板暂不支持展示）"
+        };
+
+        return text.Length <= MaxDisplayLength
+            ? text
+            : text[..MaxDisplayLength] + Environment.NewLine + $"…… 已截断，仅显示前 {MaxDisplayLength} 个字符";
+    }
+
+    private void ShowResult(string text, string title)
+    {
+        ResultText = text;
+        ResultTitle = title;
+        HasResult = true;
+        HasError = false;
+        ErrorText = null;
+    }
+
+    private void ShowError(string message)
+    {
+        ErrorText = message;
+        HasError = true;
+        HasResult = false;
+        ResultText = null;
+        ResultTitle = null;
+    }
+
+    private void ClearResult()
+    {
+        ResultText = null;
+        ResultTitle = null;
+        ErrorText = null;
+        HasResult = false;
+        HasError = false;
+    }
+}

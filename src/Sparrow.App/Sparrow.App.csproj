@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>Sparrow.App</AssemblyName>
+    <RootNamespace>Sparrow.App</RootNamespace>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <!-- 编译绑定：绑定错误在编译期暴露，而不是运行时静默失败 -->
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Sparrow.Plugin.Sdk\Sparrow.Plugin.Sdk.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      M1：插件不再被编译进宿主，只作为构建依赖保证「先有插件、再有壳」。
+      ReferenceOutputAssembly=false 让插件 dll 不进 App 的引用列表，
+      运行时由 PluginLoadContext 从 plugins/ 目录加载（见 docs/plugin-model.md）。
+    -->
+    <ProjectReference Include="..\..\plugins\sparrow.plugin.json-format\Sparrow.Plugin.Json.Format.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <Private>false</Private>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!--
+    把插件构建产物复制到 <output>/plugins/<插件ID>/。
+    目录名等于 plugin.json 的 id —— 这是扫描器发现插件的唯一依据。
+  -->
+  <Target Name="CopyPluginsToOutput" AfterTargets="Build">
+    <PropertyGroup>
+      <_JsonPluginDir>$(MSBuildThisFileDirectory)..\..\plugins\sparrow.plugin.json-format</_JsonPluginDir>
+      <_JsonPluginOutput>$(_JsonPluginDir)\bin\$(Configuration)\$(TargetFramework)</_JsonPluginOutput>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_PluginFiles Include="$(_JsonPluginOutput)\**\*" />
+      <!-- 铁律 1：SDK 由宿主解析，插件目录里绝不能出现它的副本 -->
+      <_PluginFiles Remove="$(_JsonPluginOutput)\Sparrow.Plugin.Sdk.*" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(_PluginFiles)"
+          DestinationFiles="@(_PluginFiles->'$(OutDir)plugins\sparrow.plugin.json-format\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

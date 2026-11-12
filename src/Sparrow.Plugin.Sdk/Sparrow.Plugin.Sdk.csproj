@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>Sparrow.Plugin.Sdk</AssemblyName>
+    <RootNamespace>Sparrow.Plugin.Sdk</RootNamespace>
+    <!--
+      SDK 版本规则（docs/plugin-model.md 第九节）：
+      minor 向后兼容，major 不兼容。1.0 一旦发布，只能加成员，不能改签名或删除。
+    -->
+    <Version>1.0.0</Version>
+    <Description>Sparrow 工具插件的唯一契约包。插件只能引用本包，不得引用宿主。</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 唯一的外部依赖：日志抽象。不引入任何具体实现。 -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+</Project>

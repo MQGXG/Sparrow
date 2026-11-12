@@ -1,0 +1,19 @@
+<Project>
+
+  <!--
+    全局编译设置。
+    注意：AnalysisLevel 先设为 none，等契约稳定后再逐步收紧，
+    否则首轮会出现大量 CA 规则噪音，掩盖真正的设计问题。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>none</AnalysisLevel>
+    <Deterministic>true</Deterministic>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,54 @@
+# ===== .NET 构建产物 =====
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+[Pp]ublish/
+*.dll
+*.exe
+*.pdb
+*.deps.json
+*.runtimeconfig.json
+*.nuget.dgspec.json
+project.assets.json
+project.nuget.cache
+*.AssemblyInfo.cs
+*.AssemblyInfoInputs.cache
+*.GeneratedMSBuildEditorConfig.editorconfig
+*.GlobalUsings.g.cs
+*.FileListAbsolute.txt
+*.assets.cache
+*.AssemblyReference.cache
+*.CoreCompileInputs.cache
+*.genruntimeconfig.cache
+
+# ===== IDE / 编辑器 =====
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.swp
+
+# ===== 测试与覆盖率 =====
+TestResults/
+*.trx
+*.coverage
+coverage/
+
+# ===== 日志与临时文件 =====
+*.log
+logs/
+*.tmp
+*.bak
+*.cache
+
+# ===== 本地工具索引 =====
+.codegraph/
+
+# ===== 操作系统 =====
+Thumbs.db
+Desktop.ini
+.DS_Store
