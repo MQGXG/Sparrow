@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>RapidOcrProbe</AssemblyName>
+    <RootNamespace>RapidOcrProbe</RootNamespace>
+    <Description>RapidOcrNet 与 PaddleOCR 的对比探针（临时验证项目）</Description>
+    <!-- 只带 Windows x64 的 native，否则会复制 iOS/Android/Linux/macOS 的全部运行时 -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="RapidOcrNet" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 中文识别模型 + 词表（det/cls 由 RapidOcrNet 包提供） -->
+    <None Include="models/**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
