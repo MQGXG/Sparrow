@@ -1,0 +1,281 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Styles.Resources>
+
+    <!-- ============================================================
+         设计 token：只有一套灰阶 + 一个强调色。
+         界面里不再出现散落的十六进制颜色，统一从这里取。
+         ============================================================ -->
+
+    <!-- 背景层级：窗口 < 面板 < 抬起元素 < 悬停 -->
+    <SolidColorBrush x:Key="BgBrush" Color="#0B0E13" />
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#10141B" />
+    <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#151A23" />
+    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#1B212B" />
+
+    <!-- 描边：常态 / 强调 / 分隔 -->
+    <SolidColorBrush x:Key="LineBrush" Color="#222A36" />
+    <SolidColorBrush x:Key="LineStrongBrush" Color="#2E3846" />
+    <SolidColorBrush x:Key="OverlayBrush" Color="#CC0B0E13" />
+
+    <!-- 文字三级 -->
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#E9EEF6" />
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#9BA8BA" />
+    <SolidColorBrush x:Key="TextMutedBrush" Color="#6C7A8C" />
+
+    <!-- 唯一强调色：琥珀。文字用 AmberText，底色用 AccentSoft -->
+    <SolidColorBrush x:Key="AccentBrush" Color="#E5A44C" />
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="#F0B463" />
+    <SolidColorBrush x:Key="AccentSoftBrush" Color="#251D12" />
+    <SolidColorBrush x:Key="AccentBorderBrush" Color="#4A3A20" />
+
+    <!-- 语义色 -->
+    <SolidColorBrush x:Key="DangerBrush" Color="#F87171" />
+    <SolidColorBrush x:Key="DangerBgBrush" Color="#2A1517" />
+    <SolidColorBrush x:Key="DangerLineBrush" Color="#5C2A2E" />
+
+    <!--
+      覆盖 Fluent 的系统强调色（默认是紫/蓝）。
+      列表选中、开关、ComboBox 高亮都由它派生，改这一个就不用逐个控件改。
+    -->
+    <Color x:Key="SystemAccentColor">#E5A44C</Color>
+    <Color x:Key="SystemAccentColorLight1">#F0B463</Color>
+    <Color x:Key="SystemAccentColorLight2">#F7CE94</Color>
+    <Color x:Key="SystemAccentColorLight3">#FBE6C6</Color>
+    <Color x:Key="SystemAccentColorDark1">#C98C3A</Color>
+    <Color x:Key="SystemAccentColorDark2">#A9712A</Color>
+    <Color x:Key="SystemAccentColorDark3">#86561C</Color>
+
+    <!-- 字体：标题用 Display，正文用 Text；等宽给结果区 -->
+    <FontFamily x:Key="UiFont">Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI</FontFamily>
+    <FontFamily x:Key="DisplayFont">Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI</FontFamily>
+    <FontFamily x:Key="MonoFont">Cascadia Code, Cascadia Mono, Consolas, Microsoft YaHei UI</FontFamily>
+
+  </Styles.Resources>
+
+  <!-- ============================================================
+     基础控件
+     ============================================================ -->
+
+  <Style Selector="Window">
+    <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
+    <Setter Property="Background" Value="{StaticResource BgBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+  </Style>
+
+  <!-- 按钮：默认是「描边次级按钮」，不再用 Fluent 的灰底 -->
+  <Style Selector="Button">
+    <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="12,6" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource LineStrongBrush}" />
+  </Style>
+
+  <Style Selector="Button:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+  </Style>
+
+  <Style Selector="Button:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Opacity" Value="0.45" />
+  </Style>
+
+  <!-- 主按钮：整屏只允许一个 -->
+  <Style Selector="Button.accent">
+    <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Foreground" Value="#1A1206" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <Style Selector="Button.accent:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource AccentHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource AccentHoverBrush}" />
+  </Style>
+
+  <Style Selector="Button.accent:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+  </Style>
+
+  <!-- 幽灵按钮：无底色，用于工具栏和结果卡片 -->
+  <Style Selector="Button.ghost">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+  </Style>
+
+  <Style Selector="Button.ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <!-- 小按钮 -->
+  <Style Selector="Button.small">
+    <Setter Property="Padding" Value="10,4" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="CornerRadius" Value="6" />
+  </Style>
+
+  <!-- 输入框 -->
+  <Style Selector="TextBox">
+    <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="10,8" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="CaretBrush" Value="{StaticResource AccentBrush}" />
+    <Setter Property="SelectionBrush" Value="{StaticResource AccentBorderBrush}" />
+  </Style>
+
+  <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+    <Setter Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
+  </Style>
+
+  <!-- 无边框输入框：命令面板的搜索行 -->
+  <Style Selector="TextBox.bare">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontSize" Value="16" />
+  </Style>
+
+  <Style Selector="TextBox.bare /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="TextBox.bare:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <!-- 下拉框：默认模板带一圈深色底，统一成和输入框一致 -->
+  <Style Selector="ComboBox">
+    <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+  </Style>
+
+  <Style Selector="ComboBox:pointerover /template/ Border#Background">
+    <Setter Property="BorderBrush" Value="{StaticResource LineStrongBrush}" />
+  </Style>
+
+  <!-- 复选框 -->
+  <Style Selector="CheckBox">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+  </Style>
+
+  <Style Selector="CheckBox /template/ Border#PART_CheckBackground">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{StaticResource LineStrongBrush}" />
+    <Setter Property="CornerRadius" Value="4" />
+  </Style>
+
+  <!-- 列表：选中态用琥珀底，不再用系统紫 -->
+  <Style Selector="ListBoxItem">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="4,1" />
+    <Setter Property="CornerRadius" Value="8" />
+  </Style>
+
+  <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+  </Style>
+
+  <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <Style Selector="ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+  </Style>
+
+  <!-- 分类标签：小、方、低对比 -->
+  <Style Selector="Border.chip">
+    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="6,2" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- 键盘提示：kbd 小方块 -->
+  <Style Selector="Border.kbd">
+    <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="5,1" />
+  </Style>
+
+  <Style Selector="Border.kbd TextBlock">
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+  </Style>
+
+  <!-- 面板：工作区 / 设置里的分组容器 -->
+  <Style Selector="Border.panel">
+    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+  </Style>
+
+  <!-- 小标题：正片里的分区标签 -->
+  <Style Selector="TextBlock.section">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+  </Style>
+
+  <!-- Expander 头部去掉 Fluent 的粗体灰底 -->
+  <Style Selector="Expander">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="Expander /template/ ToggleButton#PART_toggle">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="2,4" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+  </Style>
+
+  <!-- 滚动条收细 -->
+  <Style Selector="ScrollBar:vertical">
+    <Setter Property="Width" Value="8" />
+  </Style>
+
+  <Style Selector="ScrollBar:horizontal">
+    <Setter Property="Height" Value="8" />
+  </Style>
+
+</Styles>

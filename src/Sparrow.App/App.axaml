@@ -5,6 +5,8 @@
 
   <Application.Styles>
     <FluentTheme />
+    <!-- 放在 Fluent 之后：同优先级下后加载的样式覆盖默认外观 -->
+    <StyleInclude Source="avares://Sparrow.App/Styles/Theme.axaml" />
   </Application.Styles>
 
 </Application>
