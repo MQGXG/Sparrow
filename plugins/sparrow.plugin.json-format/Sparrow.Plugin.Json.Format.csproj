@@ -5,6 +5,8 @@
     <RootNamespace>Sparrow.Plugin.Json.Format</RootNamespace>
     <Version>1.0.0</Version>
     <Description>JSON 格式化 / 压缩 / 校验</Description>
+    <!-- 插件 ID：目录名与 plugin.json 的 id 必须一致，构建时据此决定复制到 plugins/ 下的哪个目录 -->
+    <PluginId>sparrow.plugin.json-format</PluginId>
   </PropertyGroup>
 
   <ItemGroup>

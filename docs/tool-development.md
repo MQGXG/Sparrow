@@ -18,33 +18,20 @@
 
 ---
 
-## 二、一条命令生成骨架
+## 二、手工骨架（三步）
 
-```bash
-dotnet new sparrow-tool -n Json.Format -c json --id sparrow.json.format
-```
+`dotnet new sparrow-tool` 模板还没做（排在 M2）。现在手工建，三步。
 
 产出：
 
 ```text
-plugins/Sparrow.Plugin.Json.Format/
-├─ Sparrow.Plugin.Json.Format.csproj
+plugins/sparrow.plugin.<分类>-<动作>/
+├─ Sparrow.Plugin.<分类>.<动作>.csproj
 ├─ plugin.json
-├─ Plugin.cs
-└─ README.md
+└─ <Tool>.cs
 ```
 
-模板会做好这些事，你不需要碰：
-
-```text
-✅ csproj 里 SDK 引用带 <Private>false</Private>（防 ALC 类型不匹配）
-✅ plugin.json 的 id / name / version / sdkVersion 预填
-✅ 类实现 ITool，Descriptor 骨架就位
-✅ 目录名 = 插件 ID
-✅ 加入 Sparrow.slnx
-```
-
-**如果模板还没做出来**，手工照第三节建，四步。
+**目录名必须等于 `plugin.json` 的 `id`。** 扫描器只认这个。
 
 ---
 
@@ -55,15 +42,15 @@ plugins/Sparrow.Plugin.Json.Format/
 ```xml
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
     <AssemblyName>Sparrow.Plugin.Json.Format</AssemblyName>
     <RootNamespace>Sparrow.Plugin.Json.Format</RootNamespace>
+    <!-- ★ 等于目录名，也等于 plugin.json 的 id；构建时据此决定复制到 plugins/ 下哪个目录 -->
+    <PluginId>sparrow.plugin.json-format</PluginId>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- ★ 关键：不能把 SDK 拷进插件目录，否则 ITool 类型会对不上 -->
-    <ProjectReference Include="..\..\Sparrow.Plugin.Sdk\Sparrow.Plugin.Sdk.csproj">
+    <ProjectReference Include="..\..\src\Sparrow.Plugin.Sdk\Sparrow.Plugin.Sdk.csproj">
       <Private>false</Private>
       <ExcludeAssets>runtime</ExcludeAssets>
     </ProjectReference>
@@ -74,6 +61,8 @@ plugins/Sparrow.Plugin.Json.Format/
   </ItemGroup>
 </Project>
 ```
+
+`TargetFramework` / `Nullable` / `ImplicitUsings` 全部由根目录 `Directory.Build.props` 提供，插件不要重复声明。
 
 ### 3.2 plugin.json
 
@@ -302,27 +291,32 @@ public async Task 非法输入_返回InvalidInput而不是抛异常()
 ## 九、构建与产出
 
 ```bash
-dotnet build plugins/Sparrow.Plugin.Json.Format
-dotnet test  tests/Sparrow.Tests --filter "FullyQualifiedName~JsonFormat"
+dotnet build                                              # 构建整个解决方案
+dotnet test --filter "FullyQualifiedName~Base64"          # 只跑某个插件的测试
 ```
 
-产出目录应该是这样（**注意没有 SDK dll**）：
+**必须构建整个解决方案**：插件不通过 App 的 `ProjectReference` 构建（那样加插件就得改宿主）。插件构建完会由 `plugins/Directory.Build.targets` 自动同步到宿主输出目录：
 
 ```text
-bin/Debug/net10.0/
-├─ Sparrow.Plugin.Json.Format.dll
-├─ plugin.json
-└─ (插件自己的依赖)
+src/Sparrow.App/bin/Debug/net10.0/plugins/
+├─ sparrow.plugin.json-format/
+│  ├─ Sparrow.Plugin.Json.Format.dll
+│  ├─ plugin.json
+│  └─ .deps.json / .pdb
+└─ sparrow.plugin.dev-base64/
+   └─ ...
 ```
 
-如果这里出现了 `Sparrow.Plugin.Sdk.dll`，说明 `<Private>false</Private>` 没生效。后果：插件会被扫到，但一个工具都不注册（`is ITool` 为 false），**且没有任何错误日志**。
+插件项目只需要声明 `<PluginId>`，不写任何路径，也不碰宿主 csproj。
 
-检查命令：
+检查 SDK 是否混入：
 
 ```bash
-dir plugins/*/bin/Debug/net10.0/Sparrow.Plugin.Sdk.dll
+dir /s src\Sparrow.App\bin\Debug\net10.0\plugins\Sparrow.Plugin.Sdk.dll
 # 应该没有输出
 ```
+
+如果出现了 `Sparrow.Plugin.Sdk.dll`：后果是插件被扫到但一个工具都不注册（`is ITool` 为 false），**且没有任何错误日志**。加载器的 `Load()` 会兜底拦截，但构建产物本身不该有它。
 
 ---
 

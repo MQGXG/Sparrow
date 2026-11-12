@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/plugins/">
     <Project Path="plugins/sparrow.plugin.json-format/Sparrow.Plugin.Json.Format.csproj" />
+    <Project Path="plugins/sparrow.plugin.dev-base64/Sparrow.Plugin.Dev.Base64.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Sparrow.App/Sparrow.App.csproj" />

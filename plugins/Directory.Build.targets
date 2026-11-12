@@ -1,0 +1,33 @@
+<Project>
+
+  <!--
+    所有插件共享的构建行为：把产物复制到宿主输出目录的 plugins/<PluginId>/。
+
+    插件项目只需声明 <PluginId>，不需要知道宿主在哪，也不需要改宿主 csproj。
+    这是「加一个目录就能加一个工具」在构建期的保障。
+
+    注意：插件不通过 App 的 ProjectReference 构建，所以开发时需要
+    `dotnet build`（整个解决方案）而不是只 build App。
+  -->
+  <Target Name="CopyPluginToHost"
+          AfterTargets="Build"
+          Condition="'$(PluginId)' != ''">
+
+    <PropertyGroup>
+      <_PluginHostDir>$(MSBuildThisFileDirectory)..\src\Sparrow.App\bin\$(Configuration)\$(TargetFramework)\plugins\$(PluginId)</_PluginHostDir>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_PluginArtifacts Include="$(TargetDir)**\*" />
+      <!-- 铁律 1：SDK 由宿主解析，插件目录里绝不能出现它的副本 -->
+      <_PluginArtifacts Remove="$(TargetDir)Sparrow.Plugin.Sdk.*" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(_PluginArtifacts)"
+          DestinationFiles="@(_PluginArtifacts->'$(_PluginHostDir)\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+
+    <Message Importance="normal" Text="插件 $(PluginId) 已同步到 $(_PluginHostDir)" />
+  </Target>
+
+</Project>

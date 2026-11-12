@@ -24,6 +24,7 @@
     <!-- 测试项目是「宿主侧」的模拟，所以它需要 SDK、插件、以及壳层三个引用 -->
     <ProjectReference Include="..\..\src\Sparrow.Plugin.Sdk\Sparrow.Plugin.Sdk.csproj" />
     <ProjectReference Include="..\..\plugins\sparrow.plugin.json-format\Sparrow.Plugin.Json.Format.csproj" />
+    <ProjectReference Include="..\..\plugins\sparrow.plugin.dev-base64\Sparrow.Plugin.Dev.Base64.csproj" />
     <!-- 只为测 ToolRegistry / PaletteViewModel，不启动 Avalonia -->
     <ProjectReference Include="..\..\src\Sparrow.App\Sparrow.App.csproj" />
   </ItemGroup>

@@ -74,13 +74,15 @@ plugins/
 |---|---|
 | 设计文档 | ✅ 完成（本目录 `docs/`） |
 | 契约 `Sparrow.Plugin.Sdk` | ✅ 完成，编译 0 警告 |
-| 第一个插件 `JsonFormat` | ✅ 完成，9 个测试通过 |
+| 插件 `JsonFormat` | ✅ 完成 |
+| 插件 `Base64` | ✅ 完成（第二个插件，验证「加插件不改宿主」） |
 | 最小可运行壳 | ✅ 完成：托盘 + `Ctrl+Alt+S` + 命令面板 + 剪贴板闭环 |
-| 壳层链路测试 | ✅ 8 个测试通过（搜索 / 执行 / 错误 / 复制） |
-| M1（剪贴板 / OCR / 历史库） | ⬜ 未开始 |
+| 插件扫描 + ALC 隔离 | ✅ 完成：`plugins/` 目录发现、懒加载、独立加载上下文 |
+| 测试 | ✅ 44 个通过（含 headless 键盘路由、真实剪贴板） |
+| M1（剪贴板历史 / OCR / 设置） | ⬜ 未开始 |
 
-当前阶段：**M0 闭环已跑通**——`Ctrl+Alt+S` → 搜「json」→ 回车 → 结果出来 → 复制走。
-插件加载仍是编译期引用，`plugins/` 目录扫描与 ALC 隔离在 M1 接。见 [`docs/roadmap.md`](docs/roadmap.md)。
+当前阶段：**M1 第二块**——插件边界已成立：`plugins/` 下加一个目录就能加一个工具，宿主代码零改动。
+下一步是 Settings（`disabledPlugins`）与插件禁用/卸载，然后 OCR。见 [`docs/roadmap.md`](docs/roadmap.md)。
 
 ---
 
@@ -120,9 +122,12 @@ Velopack               安装与增量更新
 ## 跑起来
 
 ```bash
-dotnet build
+dotnet build                              # 构建解决方案（含所有插件）
 dotnet run --project src/Sparrow.App
 ```
+
+插件产物会被自动同步到 `src/Sparrow.App/bin/<配置>/net10.0/plugins/`，
+每个插件一个目录，目录名等于它的 `plugin.json` 里的 `id`。
 
 启动后没有主窗口，托盘出现麻雀图标：
 

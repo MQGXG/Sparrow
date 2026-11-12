@@ -165,7 +165,7 @@ Tool : InputShape × Params → OutputShape
 
 | ID | 名称 | 输入 | 输出 | 阶段 | 状态 |
 |---|---|---|:--:|:--:|---|
-| `sparrow.dev.base64` | Base64 编解码 | Text | Text | P1 | ⬜ |
+| `sparrow.dev.base64` | Base64 编解码 | Text | Text | P1 | ✅ |
 | `sparrow.dev.url` | URL 编解码 | Text | Text | P1 | ⬜ |
 | `sparrow.dev.timestamp` | 时间戳转换 | Text | Text | P1 | ⬜ |
 | `sparrow.dev.guid` | GUID 生成/解析 | Nothing | Text | P1 | ⬜ |

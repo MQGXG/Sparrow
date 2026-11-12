@@ -1,0 +1,11 @@
+{
+  "id": "sparrow.plugin.dev-base64",
+  "name": "Base64 编解码",
+  "version": "1.0.0",
+  "sdkVersion": "1.0",
+  "entryAssembly": "Sparrow.Plugin.Dev.Base64.dll",
+  "author": "sparrow",
+  "description": "Base64 编码与解码，支持 URL-safe 变体",
+  "capabilities": [],
+  "tools": ["sparrow.dev.base64"]
+}
