@@ -4,7 +4,19 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>Sparrow.Ocr.Worker</AssemblyName>
     <RootNamespace>Sparrow.Ocr.Worker</RootNamespace>
-    <Description>OCR 子进程（M1 为假 worker，只验证 IPC 协议）</Description>
+    <Description>OCR 子进程：PP-OCRv5 文字识别</Description>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Sdcb.PaddleOCR" />
+    <PackageReference Include="Sdcb.PaddleOCR.Models.Local" />
+    <PackageReference Include="Sdcb.PaddleOCR.Models.LocalV5" />
+    <PackageReference Include="Sdcb.PaddleInference.runtime.win64.mkl" />
+    <PackageReference Include="OpenCvSharp4" />
+    <PackageReference Include="OpenCvSharp4.runtime.win" />
+  </ItemGroup>
 
 </Project>

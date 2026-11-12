@@ -98,7 +98,7 @@ public sealed class OcrToolTests
             $"OCR 插件没有构建：{pluginDirectory}");
 
         var host = new ToolHost("sparrow.plugin.ocr", pluginDirectory, new NullLog());
-        var png = CreatePng(8, 8);
+        var png = CreatePng(400, 100);
 
         var result = await new OcrTool().ExecuteAsync(
             new ToolContext
@@ -109,7 +109,7 @@ public sealed class OcrToolTests
             CancellationToken.None);
 
         result.Success.ShouldBeTrue();
-        result.Payload.ShouldBeOfType<TextPayload>().Text.ShouldContain("收到");
+        result.Payload.ShouldBeOfType<TextPayload>().Text.ShouldContain("HELL");
     }
 
     private static string FindRepoRoot()
@@ -131,6 +131,11 @@ public sealed class OcrToolTests
         using var bitmap = new SkiaSharp.SKBitmap(width, height);
         using var canvas = new SkiaSharp.SKCanvas(bitmap);
         canvas.Clear(SkiaSharp.SKColors.White);
+
+        // 写一行文字，确保测的是「识别」而不是「处理空白图」
+        using var font = new SkiaSharp.SKFont(SkiaSharp.SKTypeface.Default, 36);
+        using var paint = new SkiaSharp.SKPaint { Color = SkiaSharp.SKColors.Black };
+        canvas.DrawText("HELLO", 20, height - 30, font, paint);
 
         using var image = SkiaSharp.SKImage.FromBitmap(bitmap);
         using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 90);

@@ -1,13 +1,18 @@
 using System.Text;
+using OpenCvSharp;
+using Sdcb.PaddleInference;
+using Sdcb.PaddleOCR;
+using Sdcb.PaddleOCR.Models.Local;
 
-// 假 worker：不接真实 OCR 模型，只验证「宿主 → 子进程 → 宿主」这条管道。
+// OCR worker：PP-OCRv5 文字识别。
 //
-// 协议（M1，最小）：
-//   stdin  = [4 字节小端长度][PNG 图片字节]
+// 协议（宿主与 worker 的唯一契约）：
+//   stdin  = [4 字节小端长度][PNG/JPEG 图片字节]
 //   stdout = UTF-8 识别文本
 //   exit 0 = 成功；非 0 = 失败，stderr 带原因
 //
-// 将来换成 Paddle 时，协议不用变：把「假识别」换成模型推理即可。
+// 之所以保持这个极简协议：换成 PaddleOCR-VL 或别的模型时，
+// 宿主侧一行都不用改。
 
 using var stdin = Console.OpenStandardInput();
 
@@ -21,16 +26,39 @@ if (length <= 0)
     return 2;
 }
 
-var image = new byte[length];
-ReadExactly(stdin, image);
+var imageBytes = new byte[length];
+ReadExactly(stdin, imageBytes);
 
-// 假识别：报告收到的字节数，证明图片确实跨进程传过来了
-var result = $"OCR 假 worker：收到 {image.Length} 字节图片（M1 仅验证 IPC）";
-var resultBytes = Encoding.UTF8.GetBytes(result);
+try
+{
+    // 本地模型，不联网；首次初始化约 1-3 秒
+    using var engine = new PaddleOcrAll(LocalFullModels.ChineseV5, PaddleDevice.Mkldnn())
+    {
+        AllowRotateDetection = true,
+        Enable180Classification = false
+    };
 
-using var stdout = Console.OpenStandardOutput();
-stdout.Write(resultBytes, 0, resultBytes.Length);
-return 0;
+    using var mat = Cv2.ImDecode(imageBytes, ImreadModes.Color);
+    if (mat.Empty())
+    {
+        Console.Error.Write("无法解码图片");
+        return 3;
+    }
+
+    var result = engine.Run(mat);
+    var text = result.Text ?? string.Empty;
+
+    var output = Encoding.UTF8.GetBytes(text);
+    using var stdout = Console.OpenStandardOutput();
+    stdout.Write(output, 0, output.Length);
+    return 0;
+}
+catch (Exception ex)
+{
+    // 模型/原生库出错时把原因带回宿主，而不是静默退出
+    Console.Error.Write(ex.ToString());
+    return 4;
+}
 
 static void ReadExactly(Stream stream, byte[] buffer)
 {

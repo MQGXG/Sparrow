@@ -17,6 +17,10 @@ public sealed class Win32Clipboard : IClipboardAccess
     private const uint CfDib = 8;
     private const uint GmemMoveable = 0x0002;
 
+    private readonly IAppLog? _log;
+
+    public Win32Clipboard(IAppLog? log = null) => _log = log;
+
     public string? GetText()
     {
         if (!OpenClipboard(IntPtr.Zero))
@@ -50,27 +54,44 @@ public sealed class Win32Clipboard : IClipboardAccess
     public byte[]? GetImagePng()
     {
         if (!OpenClipboard(IntPtr.Zero))
+        {
+            _log?.Warn($"打开剪贴板失败，Win32 错误码 {Marshal.GetLastWin32Error()}");
             return null;
+        }
 
         try
         {
             var handle = GetClipboardData(CfDib);
             if (handle == IntPtr.Zero)
+            {
+                _log?.Warn("剪贴板里没有 CF_DIB 格式");
                 return null;
+            }
 
             var pointer = GlobalLock(handle);
             if (pointer == IntPtr.Zero)
+            {
+                _log?.Warn("GlobalLock 剪贴板图像失败");
                 return null;
+            }
 
             try
             {
                 var size = (int)GlobalSize(handle);
                 if (size <= 0)
+                {
+                    _log?.Warn("GlobalSize 返回 0");
                     return null;
+                }
 
                 var dib = new byte[size];
                 Marshal.Copy(pointer, dib, 0, size);
-                return DibToPng(dib);
+
+                var png = DibToPng(dib);
+                if (png is null)
+                    _log?.Warn($"DIB 转 PNG 失败（DIB {size} 字节）");
+
+                return png;
             }
             finally
             {
@@ -100,18 +121,44 @@ public sealed class Win32Clipboard : IClipboardAccess
                 return null;
 
             var bitCount = BitConverter.ToInt16(dib, 14);
+            var width = BitConverter.ToInt32(dib, 4);
+            var height = Math.Abs(BitConverter.ToInt32(dib, 8));
+            var compression = BitConverter.ToInt32(dib, 16);
             var colorsUsed = BitConverter.ToInt32(dib, 32);
             var paletteEntries = colorsUsed != 0
                 ? colorsUsed
                 : bitCount <= 8 ? 1 << bitCount : 0;
-            var pixelOffset = 14 + headerSize + paletteEntries * 4;
 
-            var bmp = new byte[14 + dib.Length];
+            // BITMAPINFOHEADER（40 字节）+ BI_BITFIELDS 时，header 后面还有
+            // 3 个 DWORD 的 RGB masks；漏掉这 12 字节会把 masks 当成像素数据
+            var bitfieldMasks = compression == 3 && headerSize == 40 ? 12 : 0;
+            var pixelOffset = 14 + headerSize + bitfieldMasks + paletteEntries * 4;
+
+            // CF_DIB 的内存块可能比实际像素数据多几个字节填充；
+            // bfSize 必须按位图真实大小算，否则解码器会拒绝
+            var stride = ((width * bitCount + 31) / 32) * 4;
+            var pixelBytes = stride * height;
+            var fileSize = pixelOffset + pixelBytes;
+
+            var bmp = new byte[fileSize];
             bmp[0] = (byte)'B';
             bmp[1] = (byte)'M';
-            BitConverter.TryWriteBytes(bmp.AsSpan(2, 4), bmp.Length);
+            BitConverter.TryWriteBytes(bmp.AsSpan(2, 4), fileSize);
             BitConverter.TryWriteBytes(bmp.AsSpan(10, 4), pixelOffset);
-            Buffer.BlockCopy(dib, 0, bmp, 14, dib.Length);
+
+            var copyLength = Math.Min(dib.Length, fileSize - 14);
+            Buffer.BlockCopy(dib, 0, bmp, 14, copyLength);
+
+            // 32bpp 的 DIB 常带 alpha=0；不修正的话转成 PNG 会整张透明，
+            // OCR 读到的是空白图
+            if (bitCount == 32)
+            {
+                for (var offset = pixelOffset + 3; offset < bmp.Length; offset += 4)
+                {
+                    if (bmp[offset] == 0)
+                        bmp[offset] = 0xFF;
+                }
+            }
 
             using var bitmap = SKBitmap.Decode(bmp);
             if (bitmap is null)

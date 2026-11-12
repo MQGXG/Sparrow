@@ -51,7 +51,7 @@ public partial class App : Application
 
         _catalog = new ToolCatalog(pluginsRoot, log, settings);
 
-        var clipboard = new Win32Clipboard();
+        var clipboard = new Win32Clipboard(log);
 
         // 传方法组而不是实例：第一次搜索时才真正扫描 + 加载插件，
         // 保证冷启动路径上不加载任何插件程序集（docs/plugin-model.md 第六节）

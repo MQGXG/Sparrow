@@ -21,6 +21,14 @@
     <!-- 图像编解码：版本跟随 Avalonia，勿升 4.x（见 docs/architecture.md） -->
     <PackageVersion Include="SkiaSharp" Version="3.119.4" />
 
+    <!-- OCR：PP-OCRv5 本地模型 + PaddleInference（见 docs/plugin-model.md 的 C 档） -->
+    <PackageVersion Include="Sdcb.PaddleOCR" Version="3.3.1" />
+    <PackageVersion Include="Sdcb.PaddleOCR.Models.Local" Version="3.3.1" />
+    <PackageVersion Include="Sdcb.PaddleOCR.Models.LocalV5" Version="3.3.1" />
+    <PackageVersion Include="Sdcb.PaddleInference.runtime.win64.mkl" Version="3.3.1.70" />
+    <PackageVersion Include="OpenCvSharp4" Version="4.11.0.20250507" />
+    <PackageVersion Include="OpenCvSharp4.runtime.win" Version="4.11.0.20250507" />
+
     <!-- 测试栈：xunit v3（Avalonia.Headless.XUnit 12.1.6 依赖 extensibility.core 3.2.2） -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
     <PackageVersion Include="xunit.v3" Version="3.2.2" />

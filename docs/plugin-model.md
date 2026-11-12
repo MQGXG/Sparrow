@@ -56,8 +56,12 @@ plugins/sparrow.plugin.ocr/
 ```
 
 宿主侧代码完全不知道子进程存在。插件通过 `IToolHost.PluginDirectory`
-定位 worker，用 `stdin/stdout` 传图与文本。M1 的 worker 是假的，只验证 IPC；
-换成真模型时，宿主与协议都不用改。
+定位 worker，用 `stdin/stdout` 传图与文本。
+
+M1 已经接入真实模型：**PP-OCRv5（本地模型，Apache 2.0）**，
+中英文 + 数字识别，单张截图约 2.7 秒（含模型初始化）。
+worker 目录约 500 MB（PaddleInference + MKL + OpenCV + 模型）。
+换成 PaddleOCR-VL 或别的模型时，宿主与本协议都不用改。
 
 C 档不推广的原因：进程间传图片的成本比想象中高（4K 截图 ≈ 25MB，序列化 + 拷贝 + 反序列化 ≈ 100ms+），而大部分工具是纯计算，进程隔离的收益为负。
 

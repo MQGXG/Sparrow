@@ -34,7 +34,7 @@
   -->
   <Target Name="CopyOcrWorker" BeforeTargets="CopyPluginToHost">
     <ItemGroup>
-      <_OcrWorkerFiles Include="..\..\tools\Sparrow.Ocr.Worker\bin\$(Configuration)\$(TargetFramework)\**\*" />
+      <_OcrWorkerFiles Include="..\..\tools\Sparrow.Ocr.Worker\bin\$(Configuration)\$(TargetFramework)\win-x64\**\*" />
     </ItemGroup>
 
     <Copy SourceFiles="@(_OcrWorkerFiles)"
