@@ -17,11 +17,15 @@
   <Grid>
 
     <!-- 工作区主视图 -->
-    <Grid IsVisible="{Binding !IsSettingsVisible}" RowDefinitions="Auto,*,Auto">
+    <Grid IsVisible="{Binding !IsSettingsVisible}" RowDefinitions="Auto,Auto,*,Auto">
 
       <!-- 顶栏 -->
       <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="22,18,22,14">
         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <Image Source="avares://Sparrow.App/Assets/sparrow-32.png"
+                 Width="22"
+                 Height="22"
+                 VerticalAlignment="Center" />
           <TextBlock Text="麻雀"
                      FontFamily="{StaticResource DisplayFont}"
                      FontSize="20"
@@ -41,10 +45,13 @@
                 Click="OnSettingsClick" />
       </Grid>
 
-      <Grid Grid.Row="1"
+      <!-- 顶栏分隔线 -->
+      <Border Grid.Row="1" Height="1" Margin="22,0,22,0" Background="{StaticResource LineBrush}" />
+
+      <Grid Grid.Row="2"
             ColumnDefinitions="240,*,320"
             ColumnSpacing="16"
-            Margin="22,0,22,18">
+            Margin="22,16,22,18">
 
         <!-- 左：工具列表 -->
         <Border Grid.Column="0" Classes="panel" Padding="10,12">
@@ -255,12 +262,14 @@
 
       </Grid>
 
-      <!-- 底部动作条：整屏只允许一个主按钮 -->
-      <StackPanel Grid.Row="2"
+      <!-- 底部动作条：整屏只允许一个主按钮，上方一道分隔线 -->
+      <Border Grid.Row="3" Height="1" Margin="22,0,22,0" Background="{StaticResource LineBrush}" />
+
+      <StackPanel Grid.Row="3"
                   Orientation="Horizontal"
                   HorizontalAlignment="Right"
                   Spacing="8"
-                  Margin="22,0,22,16">
+                  Margin="22,12,22,14">
         <Button Content="复制"
                 IsEnabled="{Binding !IsExecuting}"
                 Click="OnCopyClick" />

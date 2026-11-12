@@ -10,10 +10,11 @@
         TransparencyLevelHint="Transparent"
         WindowStartupLocation="CenterScreen">
 
-  <Border BorderBrush="#D97706"
+  <Border BorderBrush="{StaticResource AccentBorderBrush}"
           BorderThickness="1"
-          Background="#0E1116"
-          Cursor="SizeAll">
+          Background="{StaticResource BgBrush}"
+          Cursor="SizeAll"
+          BoxShadow="0 8 24 0 #99000000">
     <Image x:Name="Preview" Stretch="Uniform" />
   </Border>
 </Window>

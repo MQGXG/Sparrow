@@ -35,6 +35,40 @@
     <SolidColorBrush x:Key="DangerBgBrush" Color="#2A1517" />
     <SolidColorBrush x:Key="DangerLineBrush" Color="#5C2A2E" />
 
+    <!-- 强调色的衍生态 -->
+    <SolidColorBrush x:Key="AccentPressedBrush" Color="#C98C3A" />
+    <!-- 12% 透明琥珀：截图选区填充、可选文本选区 -->
+    <SolidColorBrush x:Key="AccentSelectionBrush" Color="#20E5A44C" />
+
+    <!--
+      渐变（质感层）：克制到几乎察觉不到，只允许用在三处——
+      窗口底、面板/浮层底、主按钮。渐变色差全部压在 ±5% 明度以内。
+    -->
+    <LinearGradientBrush x:Key="WindowBgGradientBrush" StartPoint="0%,0%" EndPoint="0%,100%">
+      <GradientStop Color="#0D1118" Offset="0" />
+      <GradientStop Color="#0A0D12" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="SurfaceGradientBrush" StartPoint="0%,0%" EndPoint="0%,100%">
+      <GradientStop Color="#12161F" Offset="0" />
+      <GradientStop Color="#0F131A" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="PanelGradientBrush" StartPoint="0%,0%" EndPoint="0%,100%">
+      <GradientStop Color="#121721" Offset="0" />
+      <GradientStop Color="#0F131A" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="AccentGradientBrush" StartPoint="0%,0%" EndPoint="0%,100%">
+      <GradientStop Color="#F0B463" Offset="0" />
+      <GradientStop Color="#DEA142" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="AccentGradientHoverBrush" StartPoint="0%,0%" EndPoint="0%,100%">
+      <GradientStop Color="#F5BF76" Offset="0" />
+      <GradientStop Color="#E5A94D" Offset="1" />
+    </LinearGradientBrush>
+
     <!--
       覆盖 Fluent 的系统强调色（默认是紫/蓝）。
       列表选中、开关、ComboBox 高亮都由它派生，改这一个就不用逐个控件改。
@@ -60,7 +94,7 @@
 
   <Style Selector="Window">
     <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
-    <Setter Property="Background" Value="{StaticResource BgBrush}" />
+    <Setter Property="Background" Value="{StaticResource WindowBgGradientBrush}" />
   </Style>
 
   <Style Selector="TextBlock">
@@ -98,21 +132,22 @@
     <Setter Property="Opacity" Value="0.45" />
   </Style>
 
-  <!-- 主按钮：整屏只允许一个 -->
+  <!-- 主按钮：整屏只允许一个。琥珀渐变从上到下压暗，按下再沉一档 -->
   <Style Selector="Button.accent">
-    <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Background" Value="{StaticResource AccentGradientBrush}" />
     <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
     <Setter Property="Foreground" Value="#1A1206" />
     <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
 
   <Style Selector="Button.accent:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource AccentHoverBrush}" />
+    <Setter Property="Background" Value="{StaticResource AccentGradientHoverBrush}" />
     <Setter Property="BorderBrush" Value="{StaticResource AccentHoverBrush}" />
   </Style>
 
   <Style Selector="Button.accent:pressed /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Background" Value="{StaticResource AccentPressedBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource AccentPressedBrush}" />
   </Style>
 
   <!-- 幽灵按钮：无底色，用于工具栏和结果卡片 -->
@@ -285,9 +320,9 @@
     <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
   </Style>
 
-  <!-- 面板：工作区 / 设置里的分组容器 -->
+  <!-- 面板：工作区 / 设置里的分组容器。渐变给一点顶光 -->
   <Style Selector="Border.panel">
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    <Setter Property="Background" Value="{StaticResource PanelGradientBrush}" />
     <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="12" />
@@ -297,6 +332,7 @@
   <Style Selector="TextBlock.section">
     <Setter Property="FontSize" Value="11" />
     <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+    <Setter Property="LetterSpacing" Value="0.8" />
   </Style>
 
   <!-- Expander 头部去掉 Fluent 的粗体灰底 -->
@@ -320,6 +356,105 @@
 
   <Style Selector="ScrollBar:horizontal">
     <Setter Property="Height" Value="8" />
+  </Style>
+
+  <!-- 滚动条：去轨道底色，thumb 收成圆头短条，hover 才提亮 -->
+  <Style Selector="ScrollBar /template/ Thumb">
+    <Setter Property="Background" Value="#333D4C" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="ScrollBar /template/ Thumb:pointerover /template/ Border">
+    <Setter Property="Background" Value="#465263" />
+  </Style>
+
+  <Style Selector="ScrollBar:vertical /template/ Border#VerticalRoot">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <Style Selector="ScrollBar:horizontal /template/ Border#HorizontalRoot">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <!-- 开关：琥珀为开，线框为关，去掉 Fluent 自带的灰蓝底和半透明容器 -->
+  <Style Selector="ToggleSwitch">
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+
+  <Style Selector="ToggleSwitch /template/ Grid#SwitchAreaGrid">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="ToggleSwitch /template/ Border#OuterBorder">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{StaticResource LineStrongBrush}" />
+  </Style>
+
+  <Style Selector="ToggleSwitch:pointerover /template/ Border#OuterBorder">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{StaticResource TextMutedBrush}" />
+  </Style>
+
+  <Style Selector="ToggleSwitch /template/ Border#SwitchKnobBounds">
+    <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+  </Style>
+
+  <Style Selector="ToggleSwitch:pointerover /template/ Border#SwitchKnobBounds">
+    <Setter Property="Background" Value="{StaticResource AccentHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource AccentHoverBrush}" />
+  </Style>
+
+  <Style Selector="ToggleSwitch:pressed /template/ Border#SwitchKnobBounds">
+    <Setter Property="Background" Value="{StaticResource AccentPressedBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource AccentPressedBrush}" />
+  </Style>
+
+  <!-- 旋钮圆点：开时深色嵌在琥珀里，关时是灰点 -->
+  <Style Selector="ToggleSwitch /template/ Ellipse#SwitchKnobOn">
+    <Setter Property="Fill" Value="#1A1206" />
+  </Style>
+
+  <Style Selector="ToggleSwitch /template/ Ellipse#SwitchKnobOff">
+    <Setter Property="Fill" Value="{StaticResource TextMutedBrush}" />
+  </Style>
+
+  <!-- 下拉项：圆角 + 琥珀选中，和列表选中态一致 -->
+  <Style Selector="ComboBoxItem">
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+
+  <Style Selector="ComboBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+  </Style>
+
+  <Style Selector="ComboBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+  </Style>
+
+  <!-- ToolTip：深底描边小字 -->
+  <Style Selector="ToolTip">
+    <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource LineStrongBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="8,5" />
+    <Setter Property="FontSize" Value="11" />
+  </Style>
+
+  <!-- 可选中文本：选区用淡琥珀，不用系统蓝 -->
+  <Style Selector="SelectableTextBlock">
+    <Setter Property="SelectionBrush" Value="{StaticResource AccentBorderBrush}" />
   </Style>
 
 </Styles>

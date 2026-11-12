@@ -8,7 +8,7 @@
     <StackPanel Margin="22,6,22,26" Spacing="14">
 
       <!-- 插件 -->
-      <Border Classes="panel" Padding="18">
+      <Border Classes="panel" Padding="16">
         <StackPanel Spacing="12">
           <StackPanel Spacing="4">
             <TextBlock Text="插件"
@@ -71,14 +71,14 @@
           </ItemsControl>
 
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="打开插件目录" Click="OnOpenPluginsClick" />
+            <Button Classes="ghost" Content="打开插件目录" Click="OnOpenPluginsClick" />
             <Button Content="重新扫描" Click="OnRescanClick" />
           </StackPanel>
         </StackPanel>
       </Border>
 
       <!-- 热键 -->
-      <Border Classes="panel" Padding="18">
+      <Border Classes="panel" Padding="16">
         <StackPanel Spacing="12">
           <StackPanel Spacing="4">
             <TextBlock Text="热键"
@@ -105,13 +105,14 @@
           </Grid>
 
           <Button Content="保存热键"
+                  Classes="accent small"
                   Click="OnSaveHotkeysClick"
                   HorizontalAlignment="Left" />
         </StackPanel>
       </Border>
 
       <!-- 通用 -->
-      <Border Classes="panel" Padding="18">
+      <Border Classes="panel" Padding="16">
         <StackPanel Spacing="12">
           <TextBlock Text="通用"
                      FontSize="14"
@@ -125,7 +126,7 @@
       </Border>
 
       <!-- 关于 -->
-      <Border Classes="panel" Padding="18">
+      <Border Classes="panel" Padding="16">
         <StackPanel Spacing="12">
           <TextBlock Text="关于"
                      FontSize="14"

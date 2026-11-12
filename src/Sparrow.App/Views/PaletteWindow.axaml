@@ -18,9 +18,9 @@
         Background="Transparent"
         TransparencyLevelHint="Transparent">
 
-  <!-- 抬起的浮层：阴影比描边更能表达层级 -->
+  <!-- 抬起的浮层：渐变底 + 阴影，比描边更能表达层级 -->
   <Border x:Name="Shell"
-          Background="{StaticResource SurfaceBrush}"
+          Background="{StaticResource SurfaceGradientBrush}"
           BorderBrush="{StaticResource LineStrongBrush}"
           BorderThickness="1"
           CornerRadius="14"
@@ -127,9 +127,17 @@
 
         <!-- 空状态 -->
         <StackPanel IsVisible="{Binding IsEmpty}"
-                    Margin="0,26,0,30"
-                    Spacing="6"
+                    Margin="0,22,0,26"
+                    Spacing="8"
                     HorizontalAlignment="Center">
+          <Path Width="26"
+                Height="26"
+                HorizontalAlignment="Center"
+                Opacity="0.55"
+                Stroke="{StaticResource TextMutedBrush}"
+                StrokeThickness="1.4"
+                StrokeLineCap="Round"
+                Data="M9 3a6 6 0 1 0 0 12 6 6 0 0 0 0-12 M13.2 13.2 L17 17" />
           <TextBlock Text="没有匹配的工具"
                      FontSize="13"
                      Foreground="{StaticResource TextSecondaryBrush}"
@@ -150,13 +158,22 @@
               BorderBrush="{StaticResource LineBrush}"
               BorderThickness="1">
         <Grid RowDefinitions="Auto,Auto">
-          <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Text="{Binding ResultTitle}"
+          <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto">
+            <!-- 状态点：一眼区分成功/失败 -->
+            <Ellipse Grid.Column="0"
+                     Width="6"
+                     Height="6"
+                     Margin="0,0,8,0"
+                     VerticalAlignment="Center"
+                     Fill="{StaticResource AccentBrush}" />
+
+            <TextBlock Grid.Column="1"
+                       Text="{Binding ResultTitle}"
                        FontSize="11"
                        Foreground="{StaticResource TextMutedBrush}"
                        VerticalAlignment="Center" />
 
-            <Button Grid.Column="1"
+            <Button Grid.Column="2"
                     Classes="ghost small"
                     Content="复制"
                     Click="OnCopyClick" />
@@ -172,18 +189,29 @@
         </Grid>
       </Border>
 
-      <!-- 失败结果 -->
+      <!-- 失败结果：红色左边条 + 一行人话（ui-spec 2.2） -->
       <Border IsVisible="{Binding HasError}"
               Margin="14,2,14,0"
               Padding="12,10"
               CornerRadius="10"
-              Background="{StaticResource DangerBgBrush}"
-              BorderBrush="{StaticResource DangerLineBrush}"
+              Background="{StaticResource SurfaceRaisedBrush}"
+              BorderBrush="{StaticResource LineBrush}"
               BorderThickness="1">
-        <TextBlock Text="{Binding ErrorText}"
-                   Foreground="{StaticResource DangerBrush}"
-                   FontSize="12"
-                   TextWrapping="Wrap" />
+        <Grid ColumnDefinitions="Auto,*">
+          <Border Grid.Column="0"
+                  Width="3"
+                  Margin="0,2"
+                  CornerRadius="1.5"
+                  Background="{StaticResource DangerBrush}" />
+
+          <TextBlock Grid.Column="1"
+                     Margin="10,0,0,0"
+                     Text="{Binding ErrorText}"
+                     Foreground="{StaticResource DangerBrush}"
+                     FontSize="12"
+                     VerticalAlignment="Center"
+                     TextWrapping="Wrap" />
+        </Grid>
       </Border>
 
       <!-- 键盘提示 -->

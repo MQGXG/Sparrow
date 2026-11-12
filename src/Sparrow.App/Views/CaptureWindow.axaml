@@ -13,8 +13,8 @@
 
     <Rectangle x:Name="Selection"
                IsVisible="False"
-               Fill="#20E5A44C"
-               Stroke="#E5A44C"
+               Fill="{StaticResource AccentSelectionBrush}"
+               Stroke="{StaticResource AccentBrush}"
                StrokeThickness="2" />
 
     <Border Canvas.Left="0"
