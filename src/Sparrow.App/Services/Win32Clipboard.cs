@@ -45,26 +45,27 @@ public sealed class Win32Clipboard : IClipboardAccess
         }
     }
 
-    public void SetText(string text)
+    public bool SetText(string text)
     {
         if (!OpenClipboard(IntPtr.Zero))
-            return;
+            return false;
 
         try
         {
-            EmptyClipboard();
+            if (!EmptyClipboard())
+                return false;
 
             // +1 是结尾的 UTF-16 空字符
             var byteCount = (text.Length + 1) * sizeof(char);
             var handle = GlobalAlloc(GmemMoveable, (nuint)byteCount);
             if (handle == IntPtr.Zero)
-                return;
+                return false;
 
             var pointer = GlobalLock(handle);
             if (pointer == IntPtr.Zero)
             {
                 GlobalFree(handle);
-                return;
+                return false;
             }
 
             try
@@ -77,8 +78,14 @@ public sealed class Win32Clipboard : IClipboardAccess
                 GlobalUnlock(handle);
             }
 
-            // 成功后所有权移交给系统，不能自己 GlobalFree
-            SetClipboardData(CfUnicodeText, handle);
+            // 成功后所有权移交给系统，不能自己 GlobalFree；失败则自己释放
+            if (SetClipboardData(CfUnicodeText, handle) == IntPtr.Zero)
+            {
+                GlobalFree(handle);
+                return false;
+            }
+
+            return true;
         }
         finally
         {

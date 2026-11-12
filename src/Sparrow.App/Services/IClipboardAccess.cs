@@ -10,6 +10,6 @@ public interface IClipboardAccess
     /// <summary>读取文本；剪贴板为空或不是文本时返回 null。</summary>
     string? GetText();
 
-    /// <summary>写入文本。失败时静默返回，调用方可自行决定是否提示。</summary>
-    void SetText(string text);
+    /// <summary>写入文本。返回 false 表示剪贴板被占用或系统拒绝。</summary>
+    bool SetText(string text);
 }

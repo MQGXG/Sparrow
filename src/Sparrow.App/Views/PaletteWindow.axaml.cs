@@ -78,6 +78,13 @@ public partial class PaletteWindow : Window
     /// </summary>
     private void OnPreviewKeyDown(object? sender, KeyEventArgs e)
     {
+        // IME 正在处理这个键：绝不抢。
+        // 中文输入法会把字母和第一次 Enter 都标记成 ImeProcessed——
+        // 那次 Enter 的职责是「把组合串上屏」，不是「执行工具」。
+        // 抢了它就会先执行、再被上屏触发的搜索刷新清空结果。
+        if (e.Key == Key.ImeProcessed)
+            return;
+
         switch (e.Key)
         {
             case Key.Escape:

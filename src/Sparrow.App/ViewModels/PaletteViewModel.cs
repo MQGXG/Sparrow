@@ -137,9 +137,17 @@ public partial class PaletteViewModel : ObservableObject
         if (string.IsNullOrEmpty(ResultText))
             return;
 
-        _clipboard.SetText(ResultText);
-        ResultTitle = "已复制到剪贴板";
-        _log.Info($"复制结果到剪贴板，长度 {ResultText.Length}");
+        if (_clipboard.SetText(ResultText))
+        {
+            ResultTitle = "已复制到剪贴板";
+            _log.Info($"复制结果到剪贴板，长度 {ResultText.Length}");
+        }
+        else
+        {
+            // 复制失败必须让用户看见：多半是剪贴板被别的程序占着
+            ResultTitle = "复制失败：剪贴板被占用，请重试";
+            _log.Warn($"写入剪贴板失败，结果长度 {ResultText.Length}");
+        }
     }
 
     private ToolContext BuildContext(ITool tool)

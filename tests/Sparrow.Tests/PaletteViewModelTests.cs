@@ -20,7 +20,11 @@ public sealed class PaletteViewModelTests
 
         public string? GetText() => Text;
 
-        public void SetText(string text) => Text = text;
+        public bool SetText(string text)
+        {
+            Text = text;
+            return true;
+        }
     }
 
     private sealed class NullLog : IAppLog
