@@ -14,4 +14,10 @@ public sealed record AppSettings
 
     /// <summary>被禁用的插件 ID（等于插件目录名）。命中的插件不扫描、不加载、不进搜索结果。</summary>
     public string[] DisabledPlugins { get; init; } = [];
+
+    /// <summary>搜索面板热键，格式 "Ctrl+Alt+S"。</summary>
+    public string SearchHotkey { get; init; } = "Ctrl+Alt+S";
+
+    /// <summary>截图识别热键，格式 "Ctrl+Alt+C"。</summary>
+    public string CaptureHotkey { get; init; } = "Ctrl+Alt+C";
 }

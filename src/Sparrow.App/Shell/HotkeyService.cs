@@ -18,6 +18,8 @@ public sealed class HotkeyService : IDisposable
 {
     public const uint ModAlt = 0x0001;
     public const uint ModControl = 0x0002;
+    public const uint ModShift = 0x0004;
+    public const uint ModWin = 0x0008;
     /// <summary>按住不放时不重复触发。</summary>
     public const uint ModNoRepeat = 0x4000;
 

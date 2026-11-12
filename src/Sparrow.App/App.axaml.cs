@@ -73,25 +73,29 @@ public partial class App : Application
         _palette = new PaletteWindow { DataContext = _paletteViewModel };
 
         // 工作区与面板共用同一个 ToolCatalog：插件只加载一次
-        var settingsViewModel = new SettingsViewModel(_catalog, settingsStore, settings);
+        var startup = new StartupService(log);
+        var settingsViewModel = new SettingsViewModel(_catalog, settingsStore, startup, settings);
         _workspaceViewModel = new WorkspaceViewModel(_catalog, clipboard, log, history, settingsViewModel);
         _workspace = new WorkspaceWindow { DataContext = _workspaceViewModel };
 
         _tray = new TrayService(_palette, ShowWorkspace);
         _tray.Initialize();
 
+        var (searchModifiers, searchKey) = ResolveHotkey(settings.SearchHotkey, "Ctrl+Alt+S");
+        var (captureModifiers, captureKey) = ResolveHotkey(settings.CaptureHotkey, "Ctrl+Alt+C");
+
         _hotkey = new HotkeyService(
         [
             new HotkeyBinding(
                 0x5A5A,
-                HotkeyService.ModControl | HotkeyService.ModAlt | HotkeyService.ModNoRepeat,
-                0x53, // S
+                searchModifiers | HotkeyService.ModNoRepeat,
+                searchKey,
                 () => Avalonia.Threading.Dispatcher.UIThread.Post(() => _palette?.Toggle())),
 
             new HotkeyBinding(
                 0x5A5B,
-                HotkeyService.ModControl | HotkeyService.ModAlt | HotkeyService.ModNoRepeat,
-                0x43, // C
+                captureModifiers | HotkeyService.ModNoRepeat,
+                captureKey,
                 () => Avalonia.Threading.Dispatcher.UIThread.Post(CaptureAndRecognize))
         ]);
 
@@ -189,6 +193,16 @@ public partial class App : Application
             Log.Error("截图识别失败", ex);
             _paletteViewModel.ShowExternalError($"截图识别失败：{ex.Message}");
         }
+    }
+
+    private static (uint Modifiers, uint VirtualKey) ResolveHotkey(string? text, string fallback)
+    {
+        if (HotkeyText.TryParse(text, out var modifiers, out var virtualKey))
+            return (modifiers, virtualKey);
+
+        // 配置坏了就退回默认，不让应用因为一个手误的热键起不来
+        HotkeyText.TryParse(fallback, out modifiers, out virtualKey);
+        return (modifiers, virtualKey);
     }
 
     private static Task WaitForClosedAsync(Window window)

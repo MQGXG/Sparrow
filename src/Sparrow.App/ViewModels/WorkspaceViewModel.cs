@@ -204,6 +204,12 @@ public partial class WorkspaceViewModel : ObservableObject
         _clipboard.SetText(history.Entry.Output);
     }
 
+    public void ClearHistory()
+    {
+        _history.Clear();
+        Recent.Clear();
+    }
+
     public void ShowSettings() => IsSettingsVisible = true;
 
     public void HideSettings() => IsSettingsVisible = false;

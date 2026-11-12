@@ -42,6 +42,12 @@ public partial class WorkspaceWindow : Window
             viewModel.CopyHistory(history);
     }
 
+    private void OnClearHistoryClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel viewModel)
+            viewModel.ClearHistory();
+    }
+
     private void OnSettingsClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is WorkspaceViewModel viewModel)
