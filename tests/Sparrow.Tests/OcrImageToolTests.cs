@@ -9,7 +9,7 @@ using Xunit;
 
 namespace Sparrow.Tests;
 
-public sealed class OcrToolTests
+public sealed class OcrImageToolTests
 {
     private sealed class NullLog : IAppLog
     {
@@ -21,7 +21,7 @@ public sealed class OcrToolTests
     [Fact]
     public async Task 非图片输入_返回InvalidInput()
     {
-        var result = await new OcrTool().ExecuteAsync(
+        var result = await new OcrImageTool().ExecuteAsync(
             new ToolContext { Input = new TextInput("not an image"), Host = NullToolHost.Instance },
             CancellationToken.None);
 
@@ -32,7 +32,7 @@ public sealed class OcrToolTests
     [Fact]
     public async Task 空图片_返回InvalidInput()
     {
-        var result = await new OcrTool().ExecuteAsync(
+        var result = await new OcrImageTool().ExecuteAsync(
             new ToolContext
             {
                 Input = new ImageInput(ReadOnlyMemory<byte>.Empty, ImageFormat.Png),
@@ -47,7 +47,7 @@ public sealed class OcrToolTests
     [Fact]
     public async Task 没有宿主_返回Failed而不是抛异常()
     {
-        var result = await new OcrTool().ExecuteAsync(
+        var result = await new OcrImageTool().ExecuteAsync(
             new ToolContext { Input = new ImageInput(new byte[] { 1, 2, 3 }, ImageFormat.Png) },
             CancellationToken.None);
 
@@ -60,7 +60,7 @@ public sealed class OcrToolTests
     {
         var host = new ToolHost("sparrow.plugin.ocr", Path.GetTempPath(), new NullLog());
 
-        var result = await new OcrTool().ExecuteAsync(
+        var result = await new OcrImageTool().ExecuteAsync(
             new ToolContext
             {
                 Input = new ImageInput(new byte[] { 1, 2, 3 }, ImageFormat.Png),
@@ -75,7 +75,7 @@ public sealed class OcrToolTests
     [Fact]
     public void 描述符_声明图片输入与Ocr能力()
     {
-        var descriptor = new OcrTool().Descriptor;
+        var descriptor = new OcrImageTool().Descriptor;
 
         descriptor.Id.ShouldBe("sparrow.ocr.image");
         descriptor.Accepts.ShouldBe(InputShape.Image);
@@ -100,7 +100,7 @@ public sealed class OcrToolTests
         var host = new ToolHost("sparrow.plugin.ocr", pluginDirectory, new NullLog());
         var png = CreatePng(400, 100);
 
-        var result = await new OcrTool().ExecuteAsync(
+        var result = await new OcrImageTool().ExecuteAsync(
             new ToolContext
             {
                 Input = new ImageInput(png, ImageFormat.Png),

@@ -15,14 +15,14 @@ namespace Sparrow.Plugin.Ocr;
 ///
 /// M1 的 worker 是假的：只验证 IPC。换成真模型时，协议与宿主侧代码都不用改。
 /// </summary>
-public sealed class OcrTool : ITool
+public sealed class OcrImageTool : ITool
 {
     private static readonly TimeSpan WorkerTimeout = TimeSpan.FromSeconds(30);
 
     public ToolDescriptor Descriptor { get; } = new()
     {
         Id = "sparrow.ocr.image",
-        Name = "OCR 文字识别",
+        Name = "图片文字识别",
         Category = "ocr",
         Description = "识别剪贴板图片里的文字",
         Keywords = ["ocr", "识别", "文字", "图片", "提取"],

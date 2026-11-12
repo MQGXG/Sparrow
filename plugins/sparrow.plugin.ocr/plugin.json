@@ -1,11 +1,11 @@
 {
   "id": "sparrow.plugin.ocr",
-  "name": "OCR 文字识别",
+  "name": "OCR",
   "version": "0.1.0",
   "sdkVersion": "1.0",
   "entryAssembly": "Sparrow.Plugin.Ocr.dll",
   "author": "sparrow",
-  "description": "从剪贴板图片识别文字（M1 使用假 worker 验证 IPC）",
+  "description": "从剪贴板图片识别文字（PP-OCRv5）",
   "capabilities": ["Ocr"],
   "tools": ["sparrow.ocr.image"]
 }

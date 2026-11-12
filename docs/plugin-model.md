@@ -402,6 +402,12 @@ M0 的 3 个工具同样以插件形式存在，随安装包分发到 `plugins/`
   程序集    Sparrow.Plugin.<分类>.<动作>.dll
   命名空间  Sparrow.Plugin.<分类>.<动作>
 
+多工具插件（共享不可分割的重资源，见 4.2）：
+  插件 ID   sparrow.plugin.<分类>             例：sparrow.plugin.ocr
+  程序集    Sparrow.Plugin.<分类>.dll
+  命名空间  Sparrow.Plugin.<分类>
+  工具 ID   各自 sparrow.<分类>.<动作>         例：sparrow.ocr.image / sparrow.ocr.region
+
 文件：
   plugin.json          必须 UTF-8 无 BOM
   <entry>.dll          必须与清单 entryAssembly 一致
