@@ -58,13 +58,19 @@ try
         .Select(region =>
         {
             var rect = region.Rect.BoundingRect();
+
+            // Paddle 偶尔给出 NaN/Infinity 分数（空框、异常角度）。
+            // System.Text.Json 无法写这种值，会让整个 worker 以 exit 4 失败；
+            // 分数只用于置信度过滤，非法值按 0 处理。
+            var score = float.IsFinite(region.Score) ? region.Score : 0f;
+
             return new OcrRegionDto(
                 region.Text ?? string.Empty,
                 rect.X,
                 rect.Y,
                 rect.Width,
                 rect.Height,
-                region.Score);
+                score);
         })
         .ToArray();
 

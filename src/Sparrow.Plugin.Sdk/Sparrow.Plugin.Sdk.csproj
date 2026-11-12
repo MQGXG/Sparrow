@@ -8,6 +8,15 @@
       minor 向后兼容，major 不兼容。1.0 一旦发布，只能加成员，不能改签名或删除。
     -->
     <Version>1.0.0</Version>
+    <!--
+      契约程序集的 AssemblyVersion 必须钉死 1.0.0.0。
+      它默认跟随 Version，而 dotnet publish -p:Version=x 是全局属性，
+      会把 SDK 的版本一起改掉；插件编译时引用的是 1.0.0.0，
+      发布版里却变成 x.0.0.0，结果插件在发布目录里加载不到 SDK，
+      三个插件全部静默失效（M1 打包时真实踩到）。
+      产品版本走 FileVersion / InformationalVersion，不参与绑定。
+    -->
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <Description>Sparrow 工具插件的唯一契约包。插件只能引用本包，不得引用宿主。</Description>
   </PropertyGroup>
 
