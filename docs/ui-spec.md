@@ -151,6 +151,23 @@
 
 **只支持深色主题（M1）**。浅色主题 M2 再做——它需要一整套新 token，不是换个背景色。
 
+### 4.1 图标
+
+分类 → 线性图标，映射在 `src/Sparrow.App/Converters/IconGeometryConverter.cs`。
+
+```text
+画布      24×24，使用时缩到 18px（面板）/ 15px（工作区）
+线宽      1.5，圆头圆角，只用 stroke 不填充
+颜色      常态 TextSecondary；选中变 Accent
+映射      json → {}    dev → <>    ocr → 扫描框+文本行
+          text → 文本行    format → 层叠方块
+未知分类  退回默认方块，新插件不改宿主也有图标
+```
+
+图标是视觉标识，不属于业务数据，所以**不放进 ViewModel**；ViewModel 只提供
+插件声明的 `Category`。XAML 用 `{x:Static IconGeometryConverter.Instance}` 引用转换器——
+放在 `Styles.Resources` 里的 `StaticResource` 在 DataTemplate 里解析不到。
+
 ---
 
 ## 五、状态设计

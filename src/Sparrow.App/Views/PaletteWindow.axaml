@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Sparrow.App.ViewModels"
         xmlns:controls="using:Sparrow.App.Controls"
+        xmlns:converters="using:Sparrow.App.Converters"
         x:Class="Sparrow.App.Views.PaletteWindow"
         x:DataType="vm:PaletteViewModel"
         Title="Sparrow"
@@ -89,8 +90,16 @@
                  BorderThickness="0">
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="vm:ToolItemViewModel">
-              <Grid ColumnDefinitions="*,Auto" Margin="12,9">
-                <StackPanel Spacing="3">
+              <Grid ColumnDefinitions="Auto,*,Auto" Margin="12,9">
+                <Path Grid.Column="0"
+                      Classes="icon"
+                      Width="18"
+                      Height="18"
+                      Margin="0,1,10,0"
+                      VerticalAlignment="Top"
+                      Data="{Binding CategoryLabel, Converter={x:Static converters:IconGeometryConverter.Instance}}" />
+
+                <StackPanel Grid.Column="1" Spacing="3">
                   <controls:HighlightTextBlock SourceText="{Binding Name}"
                                                Term="{Binding HighlightTerm}"
                                                FontSize="14"
@@ -103,7 +112,7 @@
                                                TextWrapping="Wrap" />
                 </StackPanel>
 
-                <Border Grid.Column="1"
+                <Border Grid.Column="2"
                         Classes="chip"
                         Margin="14,0,0,0">
                   <TextBlock Text="{Binding CategoryLabel}"

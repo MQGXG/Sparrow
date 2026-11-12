@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Sparrow.App.ViewModels"
         xmlns:views="using:Sparrow.App.Views"
+        xmlns:converters="using:Sparrow.App.Converters"
         x:Class="Sparrow.App.Views.WorkspaceWindow"
         x:DataType="vm:WorkspaceViewModel"
         Title="Sparrow · 工作区"
@@ -82,6 +83,11 @@
                                         CornerRadius="1"
                                         Background="{StaticResource AccentBrush}"
                                         IsVisible="{Binding IsSelected}" />
+                                <Path Classes="icon"
+                                      Width="15"
+                                      Height="15"
+                                      VerticalAlignment="Center"
+                                      Data="{Binding CategoryLabel, Converter={x:Static converters:IconGeometryConverter.Instance}}" />
                                 <TextBlock Text="{Binding Name}"
                                            FontSize="12"
                                            VerticalAlignment="Center" />
