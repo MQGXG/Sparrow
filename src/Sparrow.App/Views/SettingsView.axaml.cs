@@ -21,6 +21,15 @@ public partial class SettingsView : UserControl
     private void OnOpenDataClick(object? sender, RoutedEventArgs e) =>
         OpenFolder(Path.Combine(LocalAppData, "Sparrow"));
 
+    private void OnOpenPluginsClick(object? sender, RoutedEventArgs e) =>
+        OpenFolder(Path.Combine(AppContext.BaseDirectory, "plugins"));
+
+    private async void OnRescanClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is SettingsViewModel viewModel)
+            await viewModel.RescanAsync();
+    }
+
     private static string LocalAppData =>
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 

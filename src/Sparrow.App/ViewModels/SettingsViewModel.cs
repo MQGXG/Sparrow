@@ -105,6 +105,30 @@ public partial class SettingsViewModel : ObservableObject
             : "修改开机自启失败，详情见日志";
     }
 
+    /// <summary>
+    /// 重新扫描插件目录。放在后台线程，避免加载 OCR 时卡住设置页。
+    /// </summary>
+    public async Task RescanAsync()
+    {
+        StatusMessage = "正在重新扫描…";
+
+        try
+        {
+            await Task.Run(() =>
+            {
+                _catalog.Reload();
+                _catalog.GetRegistry();
+            });
+
+            Reload();
+            StatusMessage = $"已重新扫描：{Plugins.Count} 个插件";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"重新扫描失败：{ex.Message}";
+        }
+    }
+
     private void Persist()
     {
         var disabled = Plugins

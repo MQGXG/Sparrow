@@ -137,6 +137,22 @@ public sealed class ToolCatalog : IDisposable
         return new ToolRegistry(entries);
     }
 
+    /// <summary>
+    /// 清空缓存，下次 <see cref="GetRegistry"/> 会重新扫描 + 加载。
+    /// 用于设置页的「重新扫描」：用户手动放入插件后不用重启应用。
+    /// </summary>
+    public void Reload()
+    {
+        lock (_gate)
+        {
+            _loader?.Dispose();
+            _loader = null;
+            _registry = null;
+            _candidates = [];
+            _scannedCandidates = null;
+        }
+    }
+
     public void Dispose()
     {
         lock (_gate)
