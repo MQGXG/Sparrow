@@ -150,6 +150,11 @@ Tool : InputShape × Params → OutputShape
 
 > **OCR 是唯一进独立进程的工具**（Paddle 原生约 78MB + OpenCV 38MB）。主进程不加载它，首次使用时启动子进程，用完退出。见 [`architecture.md`](architecture.md#ocr-为什么独立进程)。
 
+> **已知限制（M1）**：PP-OCRv5 对**文本块内部**的空格识别不稳定，
+> 实测 `HELLO OCR 麻雀 123` 可能输出 `HELLOOCR麻雀123`。
+> 插件已经按坐标重排多块/多行（`OcrTextComposer`），但单块内部的空格无法恢复；
+> 彻底解决需要换 PaddleOCR-VL（输出 Markdown，保留空格），代价是需要 GPU。
+
 ### 3.7 SVG
 
 | ID | 名称 | 输入 | 输出 | 阶段 | 状态 | 备注 |

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using OpenCvSharp;
 using Sdcb.PaddleInference;
 using Sdcb.PaddleOCR;
@@ -46,9 +47,28 @@ try
     }
 
     var result = engine.Run(mat);
-    var text = result.Text ?? string.Empty;
 
-    var output = Encoding.UTF8.GetBytes(text);
+    // 输出结构化结果：纯文本 + 每个文本块的坐标。
+    // 只有坐标才能让插件还原空格/换行/阅读顺序；result.Text 是直接拼接的。
+    var regions = result.Regions
+        .Select(region =>
+        {
+            var rect = region.Rect.BoundingRect();
+            return new OcrRegionDto(
+                region.Text ?? string.Empty,
+                rect.X,
+                rect.Y,
+                rect.Width,
+                rect.Height,
+                region.Score);
+        })
+        .ToArray();
+
+    var payload = new OcrResultDto(result.Text ?? string.Empty, regions);
+    var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    var json = JsonSerializer.Serialize(payload, jsonOptions);
+
+    var output = Encoding.UTF8.GetBytes(json);
     using var stdout = Console.OpenStandardOutput();
     stdout.Write(output, 0, output.Length);
     return 0;
@@ -72,3 +92,13 @@ static void ReadExactly(Stream stream, byte[] buffer)
         offset += read;
     }
 }
+
+internal sealed record OcrResultDto(string Text, OcrRegionDto[] Regions);
+
+internal sealed record OcrRegionDto(
+    string Text,
+    int X,
+    int Y,
+    int Width,
+    int Height,
+    float Score);

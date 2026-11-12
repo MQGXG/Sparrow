@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Sparrow.Plugin.Sdk;
 using Sparrow.Plugin.Sdk.Inputs;
@@ -52,8 +53,8 @@ public sealed class OcrImageTool : ITool
 
         try
         {
-            var text = await RunWorkerAsync(workerPath, image.Data, cancellationToken);
-            return ToolResult.Ok(new TextPayload(text));
+            var output = await RunWorkerAsync(workerPath, image.Data, cancellationToken);
+            return ToolResult.Ok(new TextPayload(ComposeOutput(output)));
         }
         catch (OperationCanceledException)
         {
@@ -64,6 +65,39 @@ public sealed class OcrImageTool : ITool
             // 插件内部出错必须转成 ToolResult，不能把异常抛回宿主
             context.Host.Logger.LogError(ex, "OCR worker 执行失败");
             return ToolResult.Failed("OCR 执行失败", ex.Message);
+        }
+    }
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    /// <summary>
+    /// worker 返回结构化 JSON；按坐标重排文本块。
+    /// 兼容旧版纯文本输出（不以 { 开头时原样返回）。
+    /// </summary>
+    private static string ComposeOutput(string output)
+    {
+        var trimmed = output.Trim();
+
+        if (!trimmed.StartsWith('{'))
+            return trimmed;
+
+        try
+        {
+            var payload = JsonSerializer.Deserialize<OcrWorkerResult>(trimmed, JsonOptions);
+            if (payload is null)
+                return trimmed;
+
+            var composed = OcrTextComposer.Compose(payload.Regions);
+
+            // 坐标拼不出来时回退到 worker 的原始全文
+            return string.IsNullOrWhiteSpace(composed) ? payload.Text : composed;
+        }
+        catch (JsonException)
+        {
+            return trimmed;
         }
     }
 
