@@ -21,6 +21,7 @@ public sealed class ToolCatalog : IDisposable
 
     private PluginLoader? _loader;
     private ToolRegistry? _registry;
+    private IReadOnlyList<PluginCandidate>? _scannedCandidates;
     private IReadOnlyList<PluginCandidate> _candidates = [];
 
     public ToolCatalog(string pluginsRoot, IAppLog log, AppSettings settings)
@@ -41,6 +42,20 @@ public sealed class ToolCatalog : IDisposable
             EnsureBuilt();
             return _candidates;
         }
+    }
+
+    /// <summary>
+    /// 只扫描清单，不加载程序集。
+    /// 设置页只需要「有哪些插件」，不应该为了显示列表去加载 500 MB 的 OCR 引擎。
+    /// </summary>
+    public IReadOnlyList<PluginCandidate> ScanCandidates()
+    {
+        if (_scannedCandidates is not null)
+            return _scannedCandidates;
+
+        var scanner = new PluginScanner(_pluginsRoot, _log);
+        _scannedCandidates = scanner.Scan();
+        return _scannedCandidates;
     }
 
     /// <summary>取工具注册表。首次调用触发扫描 + 加载，之后走缓存。</summary>
@@ -82,8 +97,7 @@ public sealed class ToolCatalog : IDisposable
             if (_registry is not null)
                 return;
 
-            var scanner = new PluginScanner(_pluginsRoot, _log);
-            _candidates = scanner.Scan();
+            _candidates = ScanCandidates();
 
             var disabled = new HashSet<string>(_settings.DisabledPlugins, StringComparer.Ordinal);
             _loader = new PluginLoader(_log);
@@ -131,6 +145,7 @@ public sealed class ToolCatalog : IDisposable
             _loader = null;
             _registry = null;
             _candidates = [];
+            _scannedCandidates = null;
         }
     }
 }

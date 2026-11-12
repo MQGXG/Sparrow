@@ -81,9 +81,10 @@ plugins/
 | 设置 / 禁用 / 卸载 | ✅ 完成：`settings.json`、`disabledPlugins`、ALC 回收断言 |
 | 宿主能力注入 | ✅ 完成：`ToolContext.Host`、`PluginDirectory`、网络默认关闭 |
 | 剪贴板图片 | ✅ 完成：`CF_DIB` → PNG（SkiaSharp） |
-| 插件 `OCR` | ✅ 完成：进程插件 + PP-OCRv5 真实识别（中英日，~2.7s/张） |
-| 测试 | ✅ 62 个通过（含 headless 键盘路由、真实剪贴板取图、真实子进程 OCR） |
-| M1（剪贴板历史 / 截图 / 设置界面） | ⬜ 未开始 |
+| 插件 `OCR` | ✅ 完成：进程插件 + PP-OCRv5 真实识别（12 组语言，~2.1–2.7s/张） |
+| 工作区窗口 | ✅ 完成：工具列表 + 输入/结果 + 自动参数 + 设置页（插件开关） |
+| 测试 | ✅ 69 个通过（含 headless 键盘路由、真实剪贴板取图、真实子进程 OCR） |
+| M1（剪贴板历史 / 截图 / PaddleOCR-VL） | ⬜ 未开始 |
 
 当前阶段：**M1 插件基础设施完成**——加插件不改宿主、能禁用、能卸载且内存真的回收。
 下一步是剪贴板历史插件与 OCR。见 [`docs/roadmap.md`](docs/roadmap.md)。

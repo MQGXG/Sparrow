@@ -10,9 +10,14 @@ namespace Sparrow.App.Shell;
 public sealed class TrayService
 {
     private readonly PaletteWindow _palette;
+    private readonly Action _showWorkspace;
     private TrayIcon? _icon;
 
-    public TrayService(PaletteWindow palette) => _palette = palette;
+    public TrayService(PaletteWindow palette, Action showWorkspace)
+    {
+        _palette = palette;
+        _showWorkspace = showWorkspace;
+    }
 
     public void Initialize()
     {
@@ -21,6 +26,10 @@ public sealed class TrayService
         var search = new NativeMenuItem("搜索工具…    Ctrl+Alt+S");
         search.Click += (_, _) => _palette.Toggle();
         menu.Add(search);
+
+        var workspace = new NativeMenuItem("工作区…");
+        workspace.Click += (_, _) => _showWorkspace();
+        menu.Add(workspace);
 
         menu.Add(new NativeMenuItemSeparator());
 

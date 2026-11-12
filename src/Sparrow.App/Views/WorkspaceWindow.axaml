@@ -1,0 +1,138 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sparrow.App.ViewModels"
+        xmlns:views="using:Sparrow.App.Views"
+        x:Class="Sparrow.App.Views.WorkspaceWindow"
+        x:DataType="vm:WorkspaceViewModel"
+        Title="Sparrow · 工作区"
+        Width="1100"
+        Height="720"
+        MinWidth="900"
+        MinHeight="560"
+        WindowStartupLocation="CenterScreen"
+        Background="#0E1116">
+
+  <Grid>
+
+    <!-- 工作区主视图 -->
+    <Grid IsVisible="{Binding !IsSettingsVisible}" RowDefinitions="Auto,*,Auto">
+
+      <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="20,16">
+        <TextBlock Text="Sparrow" FontSize="20" Foreground="#E6EDF3" VerticalAlignment="Center" />
+        <Button Grid.Column="1" Content="设置" Click="OnSettingsClick" />
+      </Grid>
+
+      <Grid Grid.Row="1" ColumnDefinitions="220,*,300" Margin="20,0,20,12">
+
+        <!-- 左：工具列表（按分类） -->
+        <ScrollViewer Grid.Column="0">
+          <ItemsControl ItemsSource="{Binding Groups}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ToolGroupViewModel">
+                <Expander Header="{Binding Category}" IsExpanded="True" Margin="0,0,0,8">
+                  <ItemsControl ItemsSource="{Binding Tools}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ToolItemViewModel">
+                        <Button Content="{Binding Name}"
+                                Tag="{Binding}"
+                                Click="OnToolClick"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Left"
+                                Margin="0,2"
+                                Background="Transparent" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </Expander>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+
+        <!-- 中：输入 + 结果 -->
+        <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto" Margin="16,0">
+          <TextBox Grid.Row="0"
+                   Text="{Binding InputText, Mode=TwoWay}"
+                   AcceptsReturn="True"
+                   MinHeight="80"
+                   MaxHeight="200"
+                   PlaceholderText="输入内容…" />
+
+          <Border Grid.Row="1"
+                  Margin="0,12"
+                  Padding="12"
+                  Background="#161B22"
+                  CornerRadius="8"
+                  BorderBrush="#232B36"
+                  BorderThickness="1">
+            <ScrollViewer>
+              <SelectableTextBlock Text="{Binding ResultText}"
+                                   FontFamily="Cascadia Mono, Consolas"
+                                   FontSize="12"
+                                   Foreground="#E6EDF3"
+                                   TextWrapping="Wrap" />
+            </ScrollViewer>
+          </Border>
+
+          <TextBlock Grid.Row="2"
+                     Text="{Binding ErrorText}"
+                     IsVisible="{Binding HasError}"
+                     Foreground="#FF7B72"
+                     TextWrapping="Wrap" />
+        </Grid>
+
+        <!-- 右：参数（由 Descriptor.Parameters 自动生成） -->
+        <ScrollViewer Grid.Column="2">
+          <StackPanel Spacing="12">
+            <TextBlock Text="参数" FontSize="13" Foreground="#8B98A8" />
+
+            <ItemsControl ItemsSource="{Binding Parameters}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ParameterViewModel">
+                  <StackPanel Spacing="4" Margin="0,0,0,10">
+                    <TextBlock Text="{Binding Label}" FontSize="12" Foreground="#E6EDF3" />
+
+                    <ComboBox ItemsSource="{Binding Choices}"
+                              SelectedItem="{Binding Value, Mode=TwoWay}"
+                              IsVisible="{Binding IsChoice}"
+                              HorizontalAlignment="Stretch" />
+
+                    <CheckBox IsChecked="{Binding BoolValue, Mode=TwoWay}"
+                              IsVisible="{Binding IsToggle}" />
+
+                    <TextBox Text="{Binding Value, Mode=TwoWay}"
+                             IsVisible="{Binding IsText}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </ScrollViewer>
+
+      </Grid>
+
+      <!-- 动作条 -->
+      <StackPanel Grid.Row="2"
+                  Orientation="Horizontal"
+                  HorizontalAlignment="Right"
+                  Spacing="8"
+                  Margin="20,0,20,16">
+        <Button Content="执行" Click="OnExecuteClick" />
+        <Button Content="复制" Click="OnCopyClick" />
+      </StackPanel>
+
+    </Grid>
+
+    <!-- 设置视图 -->
+    <Grid IsVisible="{Binding IsSettingsVisible}" RowDefinitions="Auto,*">
+      <Button Grid.Row="0"
+              Content="← 返回"
+              HorizontalAlignment="Left"
+              Margin="20,16"
+              Click="OnBackClick" />
+
+      <views:SettingsView Grid.Row="1" DataContext="{Binding Settings}" />
+    </Grid>
+
+  </Grid>
+</Window>

@@ -22,6 +22,8 @@ public partial class App : Application
     private TrayService? _tray;
     private HotkeyService? _hotkey;
     private ToolCatalog? _catalog;
+    private WorkspaceWindow? _workspace;
+    private WorkspaceViewModel? _workspaceViewModel;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -47,7 +49,8 @@ public partial class App : Application
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Sparrow",
             "settings.json");
-        var settings = new SettingsStore(settingsPath, log).Load();
+        var settingsStore = new SettingsStore(settingsPath, log);
+        var settings = settingsStore.Load();
 
         _catalog = new ToolCatalog(pluginsRoot, log, settings);
 
@@ -58,7 +61,13 @@ public partial class App : Application
         var viewModel = new PaletteViewModel(_catalog.GetRegistry, clipboard, log);
 
         var palette = new PaletteWindow { DataContext = viewModel };
-        _tray = new TrayService(palette);
+
+        // 工作区与面板共用同一个 ToolCatalog：插件只加载一次
+        var settingsViewModel = new SettingsViewModel(_catalog, settingsStore, settings);
+        _workspaceViewModel = new WorkspaceViewModel(_catalog, clipboard, log, settingsViewModel);
+        _workspace = new WorkspaceWindow { DataContext = _workspaceViewModel };
+
+        _tray = new TrayService(palette, ShowWorkspace);
         _tray.Initialize();
 
         // 热键在独立线程的消息循环里触发，必须切回 UI 线程再操作窗口
@@ -78,6 +87,21 @@ public partial class App : Application
             _catalog?.Dispose();
         };
 
+        // --workspace：启动后直接打开工作区（快捷方式/开机自启可用）
+        if (desktop.Args?.Contains("--workspace") == true)
+            Avalonia.Threading.Dispatcher.UIThread.Post(ShowWorkspace);
+
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>从托盘打开工作区。首次打开会触发插件加载（懒加载）。</summary>
+    private void ShowWorkspace()
+    {
+        if (_workspace is null)
+            return;
+
+        _workspaceViewModel?.Reload();
+        _workspace.Show();
+        _workspace.Activate();
     }
 }
