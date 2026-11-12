@@ -94,14 +94,14 @@ public partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    /// <summary>从托盘打开工作区。首次打开会触发插件加载（懒加载）。</summary>
+    /// <summary>从托盘打开工作区。窗口先显示，插件在后台加载。</summary>
     private void ShowWorkspace()
     {
         if (_workspace is null)
             return;
 
-        _workspaceViewModel?.Reload();
         _workspace.Show();
         _workspace.Activate();
+        _ = _workspaceViewModel?.ReloadAsync();
     }
 }

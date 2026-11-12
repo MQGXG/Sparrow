@@ -25,29 +25,36 @@
       <Grid Grid.Row="1" ColumnDefinitions="220,*,300" Margin="20,0,20,12">
 
         <!-- 左：工具列表（按分类） -->
-        <ScrollViewer Grid.Column="0">
-          <ItemsControl ItemsSource="{Binding Groups}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:ToolGroupViewModel">
-                <Expander Header="{Binding Category}" IsExpanded="True" Margin="0,0,0,8">
-                  <ItemsControl ItemsSource="{Binding Tools}">
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate x:DataType="vm:ToolItemViewModel">
-                        <Button Content="{Binding Name}"
-                                Tag="{Binding}"
-                                Click="OnToolClick"
-                                HorizontalAlignment="Stretch"
-                                HorizontalContentAlignment="Left"
-                                Margin="0,2"
-                                Background="Transparent" />
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
-                </Expander>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </ScrollViewer>
+        <Grid Grid.Column="0">
+          <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding Groups}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ToolGroupViewModel">
+                  <Expander Header="{Binding Category}" IsExpanded="True" Margin="0,0,0,8">
+                    <ItemsControl ItemsSource="{Binding Tools}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ToolItemViewModel">
+                          <Button Content="{Binding Name}"
+                                  Tag="{Binding}"
+                                  Click="OnToolClick"
+                                  HorizontalAlignment="Stretch"
+                                  HorizontalContentAlignment="Left"
+                                  Margin="0,2"
+                                  Background="Transparent" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </Expander>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+
+          <TextBlock Text="正在加载插件…"
+                     IsVisible="{Binding IsLoading}"
+                     Foreground="#8B98A8"
+                     Margin="4,8" />
+        </Grid>
 
         <!-- 中：输入 + 结果 -->
         <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto" Margin="16,0">

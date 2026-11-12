@@ -59,22 +59,48 @@ public partial class WorkspaceViewModel : ObservableObject
     [ObservableProperty]
     private bool _isSettingsVisible;
 
-    /// <summary>每次打开工作区时刷新工具列表与剪贴板输入。</summary>
-    public void Reload()
+    [ObservableProperty]
+    private bool _isLoading;
+
+    /// <summary>
+    /// 每次打开工作区时刷新工具列表与剪贴板输入。
+    ///
+    /// 插件加载（首次可能是 500 MB 的 OCR）放在后台线程，
+    /// 窗口先显示、工具列表后填充，避免打开工作区时 UI 卡 2–3 秒。
+    /// </summary>
+    public async Task ReloadAsync()
     {
-        var registry = _catalog.GetRegistry();
+        if (IsLoading)
+            return;
 
-        Groups.Clear();
-        foreach (var group in registry.Search(null, int.MaxValue)
-                     .GroupBy(entry => entry.Descriptor.Category)
-                     .OrderBy(group => group.Key, StringComparer.Ordinal))
-        {
-            Groups.Add(new ToolGroupViewModel(group.Key, group));
-        }
-
-        SelectedTool = Groups.SelectMany(group => group.Tools).FirstOrDefault();
-        InputText = _clipboard.GetText() ?? string.Empty;
+        IsLoading = true;
         ClearResult();
+
+        try
+        {
+            var entries = await Task.Run(() =>
+                _catalog.GetRegistry().Search(null, int.MaxValue));
+
+            Groups.Clear();
+            foreach (var group in entries
+                         .GroupBy(entry => entry.Descriptor.Category)
+                         .OrderBy(group => group.Key, StringComparer.Ordinal))
+            {
+                Groups.Add(new ToolGroupViewModel(group.Key, group));
+            }
+
+            SelectedTool = Groups.SelectMany(group => group.Tools).FirstOrDefault();
+            InputText = _clipboard.GetText() ?? string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _log.Error("加载工具失败", ex);
+            ShowError($"加载工具失败：{ex.Message}");
+        }
+        finally
+        {
+            IsLoading = false;
+        }
     }
 
     partial void OnSelectedToolChanged(ToolItemViewModel? value) => LoadParameters(value);
