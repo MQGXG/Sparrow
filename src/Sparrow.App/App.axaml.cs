@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -90,7 +91,15 @@ public partial class App : Application
                 0x5A5A,
                 searchModifiers | HotkeyService.ModNoRepeat,
                 searchKey,
-                () => Avalonia.Threading.Dispatcher.UIThread.Post(() => _palette?.Toggle())),
+                () =>
+                {
+                    var pressedAt = Stopwatch.GetTimestamp();
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        _palette?.Toggle();
+                        Log.Info($"热键唤起：{Stopwatch.GetElapsedTime(pressedAt).TotalMilliseconds:F0} ms");
+                    });
+                }),
 
             new HotkeyBinding(
                 0x5A5B,
@@ -114,6 +123,8 @@ public partial class App : Application
         // --workspace：启动后直接打开工作区（快捷方式/开机自启可用）
         if (desktop.Args?.Contains("--workspace") == true)
             Avalonia.Threading.Dispatcher.UIThread.Post(ShowWorkspace);
+
+        Log.Info($"启动完成：{Program.Startup.ElapsedMilliseconds} ms，托盘就绪");
 
         base.OnFrameworkInitializationCompleted();
     }

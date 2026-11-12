@@ -87,6 +87,7 @@ plugins/
 | 执行历史 | ✅ 完成：JSONL 落盘，工作区右栏显示最近 20 条 + 清空 |
 | 热键设置 | ✅ 完成：`settings.json` 可改，格式 `Ctrl+Alt+S`，重启生效 |
 | 开机自启 | ✅ 完成：HKCU Run 项，只启动到托盘 |
+| M1 验收 | ✅ 完成：9 条出口条件全部达标（见 `docs/acceptance.md`） |
 | 测试 | ✅ 83 个通过（含 headless 键盘路由、真实剪贴板取图、真实子进程 OCR） |
 | M1（剪贴板历史 / 截图 / PaddleOCR-VL） | ⬜ 未开始 |
 

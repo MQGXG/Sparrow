@@ -84,6 +84,7 @@ public partial class PaletteViewModel : ObservableObject
 
     private void Refresh()
     {
+        var startedAt = Stopwatch.GetTimestamp();
         var entries = Registry.Search(Query);
 
         Items.Clear();
@@ -93,6 +94,10 @@ public partial class PaletteViewModel : ObservableObject
         Selected = Items.FirstOrDefault();
         IsEmpty = Items.Count == 0;
         ClearResult();
+
+        // 只记录有查询词的搜索；首次搜索包含插件加载，耗时会明显偏大
+        if (!string.IsNullOrWhiteSpace(Query))
+            _log.Info($"搜索「{Query}」：{entries.Count} 个结果，{Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds:F1} ms");
     }
 
     /// <summary>
