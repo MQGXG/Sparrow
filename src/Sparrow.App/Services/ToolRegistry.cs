@@ -26,6 +26,24 @@ public sealed class ToolRegistry
     public int Count => _entries.Count;
 
     /// <summary>
+    /// 找出所有接受指定输入形态的工具。
+    /// 截图入口用它决定「谁能接这张图」，宿主因此不需要写死具体工具 id
+    /// （见 docs/plugin-model.md 的自检第 4 条：加工具不能改宿主）。
+    /// 排序固定为 Order 降序 + 名称兜底，保证插件增减时按钮顺序可预期。
+    /// </summary>
+    public IReadOnlyList<ToolEntry> FindAccepting(InputShape shape)
+    {
+        if (shape == InputShape.None)
+            return [];
+
+        return _entries
+            .Where(entry => entry.Descriptor.Accepts == shape)
+            .OrderByDescending(entry => entry.Descriptor.Order)
+            .ThenBy(entry => entry.Descriptor.Name, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    /// <summary>
     /// 按查询串搜索工具。空查询返回默认排序（按 Order 降序）。
     /// 评分刻意做得很直白：用户预期是「名字优先」，模糊匹配会把分类词顶上去。
     /// </summary>

@@ -60,4 +60,8 @@
 1. **中文输入法下字母快捷键失效**：`Key.ImeProcessed` 按物理键还原后再匹配（动作栏没有文本输入，不需要放行给 IME）。
 2. **`CF_DIB` 用 top-down 负高度**：写入成功但 `System.Drawing.Clipboard.GetImage` 读不出来。改成 bottom-up 正高度 + 强制 `Bgra8888`。
 
-测试从 83 个增加到 96 个，新增 13 个：截图动作栏键盘路由、输入法物理键、PNG→DIB 方向与像素顺序、剪贴板 PNG 往返。
+另外顺手修掉一处自检违规：截图入口原先写死 `sparrow.ocr.image`，
+现在改为 `ToolRegistry.FindAccepting(InputShape.Image)` 取第一个。
+以后加「截图翻译」「表格识别」这类插件，不需要改宿主（对应 `docs/plugin-model.md` 自检第 4 条）。
+
+测试从 83 个增加到 100 个，新增 17 个：截图动作栏键盘路由、输入法物理键、PNG→DIB 方向与像素顺序、剪贴板 PNG 往返、按输入形态查工具。

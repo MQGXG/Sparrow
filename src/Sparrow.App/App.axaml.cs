@@ -199,17 +199,20 @@ public partial class App : Application
 
         Log.Info($"截图完成：{png.Length} 字节");
 
+        // 按输入形态找工具，而不是写死 id：加一个「截图翻译」插件就能直接出现在这里
         var entry = _catalog.GetRegistry()
-            .Search("ocr", 20)
-            .FirstOrDefault(candidate => candidate.Descriptor.Id == "sparrow.ocr.image");
+            .FindAccepting(InputShape.Image)
+            .FirstOrDefault();
 
         if (entry is null)
         {
-            _paletteViewModel.ShowExternalError("没有可用的 OCR 工具");
+            _paletteViewModel.ShowExternalError("没有能识别图片的工具");
             _palette.Show();
             _palette.Activate();
             return;
         }
+
+        Log.Info($"截图交给工具：{entry.Descriptor.Id}");
 
         _paletteViewModel.ShowPending("正在识别截图…");
         _palette.Show();

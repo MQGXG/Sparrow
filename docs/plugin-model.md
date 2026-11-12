@@ -436,3 +436,8 @@ M0 的 3 个工具同样以插件形式存在，随安装包分发到 `plugins/`
 | 7 | 插件 A 和插件 B 引用同一个库的不同版本，会冲突吗？ | 不会，各自 ALC |
 
 第 1 条是**最重要的自检**：如果删掉一个插件会让宿主起不来，说明边界已经破了。
+
+第 4 条曾经在截图入口破过：`App` 里写死了 `Descriptor.Id == "sparrow.ocr.image"`，
+加第二个图像工具就得改宿主。现在改为按 `Descriptor.Accepts` 查表
+（`ToolRegistry.FindAccepting`），并由 `tests/Sparrow.Tests/ToolRegistryTests.cs` 守住。
+截图动作栏目前只取第一个匹配项；等真的出现第二个图像工具，再把它扩成动态按钮 + 分组 + 溢出菜单。
