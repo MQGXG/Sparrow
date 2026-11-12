@@ -12,7 +12,9 @@ public enum CaptureAction
 {
     None,
     Recognize,
-    CopyImage
+    CopyImage,
+    Save,
+    Pin
 }
 
 /// <summary>
@@ -159,6 +161,18 @@ public partial class CaptureWindow : Window
         Close();
     }
 
+    private void OnSaveClick(object? sender, RoutedEventArgs e)
+    {
+        Action = CaptureAction.Save;
+        Close();
+    }
+
+    private void OnPinClick(object? sender, RoutedEventArgs e)
+    {
+        Action = CaptureAction.Pin;
+        Close();
+    }
+
     private void OnCancelClick(object? sender, RoutedEventArgs e)
     {
         Action = CaptureAction.None;
@@ -167,14 +181,61 @@ public partial class CaptureWindow : Window
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
-        if (e.Key == Key.Escape)
+        // 中文输入法会把字母键标记成 ImeProcessed；
+        // 截图窗口没有文本输入，按物理键还原即可，不需要放行给输入法。
+        var key = e.Key == Key.ImeProcessed ? MapPhysicalKey(e.PhysicalKey) : e.Key;
+
+        if (key == Key.Escape)
         {
+            Action = CaptureAction.None;
+            Close();
+            e.Handled = true;
+            return;
+        }
+
+        // 动作栏出现后，整条流程都可以只用键盘完成
+        if (ActionBar.IsVisible && TryResolveShortcut(key, out var action))
+        {
+            Action = action;
             Close();
             e.Handled = true;
             return;
         }
 
         base.OnKeyDown(e);
+    }
+
+    private static Key MapPhysicalKey(PhysicalKey physicalKey) => physicalKey switch
+    {
+        PhysicalKey.Enter => Key.Enter,
+        PhysicalKey.R => Key.R,
+        PhysicalKey.C => Key.C,
+        PhysicalKey.S => Key.S,
+        PhysicalKey.P => Key.P,
+        _ => Key.None
+    };
+
+    private static bool TryResolveShortcut(Key key, out CaptureAction action)
+    {
+        switch (key)
+        {
+            case Key.Enter:
+            case Key.R:
+                action = CaptureAction.Recognize;
+                return true;
+            case Key.C:
+                action = CaptureAction.CopyImage;
+                return true;
+            case Key.S:
+                action = CaptureAction.Save;
+                return true;
+            case Key.P:
+                action = CaptureAction.Pin;
+                return true;
+            default:
+                action = CaptureAction.None;
+                return false;
+        }
     }
 
     private void UpdateSelection(Point current)

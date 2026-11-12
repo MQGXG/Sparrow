@@ -39,6 +39,25 @@
 
 **M1 可以收尾**，下一阶段优先级：
 
-1. OCR 换轻量模型（RapidOCR）——当前 500 MB 体积和 369 MB 峰值内存是最大负担
-2. 截图动作栏（OCR / 复制图片 / 保存）
+1. OCR 换轻量模型（RapidOCR）——已验证，结论是**保持 PaddleOCR**，见 `docs/ocr-engine-comparison.md`
+2. ~~截图动作栏（OCR / 复制图片 / 保存）~~ ✅ 已完成
 3. 滚动截图（`ImageSetInput` + 宿主捕获）
+
+---
+
+## M1.1 截图动作栏（2026-11-12）
+
+| 动作 | 验证方式 | 结果 |
+|---|---|---|
+| 识别文字 | 真机 `Enter` + headless 键盘路由 | ✅ |
+| 复制图片 | 真机 `C` → 独立进程读剪贴板 | ✅ 560×220 `Format32bppRgb` |
+| 保存 | 真机 `S` → Unicode 注入路径 → 回车 | ✅ 22.1 KB，PNG 魔数正确 |
+| 固定 | 真机 `P` → `FindWindow("SparrowPin")` | ✅ 出现，`Esc` 关闭 |
+| 取消 | 真机 `Esc` | ✅ |
+
+两个真机问题在这轮修掉：
+
+1. **中文输入法下字母快捷键失效**：`Key.ImeProcessed` 按物理键还原后再匹配（动作栏没有文本输入，不需要放行给 IME）。
+2. **`CF_DIB` 用 top-down 负高度**：写入成功但 `System.Drawing.Clipboard.GetImage` 读不出来。改成 bottom-up 正高度 + 强制 `Bgra8888`。
+
+测试从 83 个增加到 96 个，新增 13 个：截图动作栏键盘路由、输入法物理键、PNG→DIB 方向与像素顺序、剪贴板 PNG 往返。

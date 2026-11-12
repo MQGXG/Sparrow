@@ -180,75 +180,97 @@ public sealed class Win32Clipboard : IClipboardAccess
         if (png.Length == 0)
             return false;
 
-        using var bitmap = SKBitmap.Decode(png);
+        using var decoded = SKBitmap.Decode(png);
+        if (decoded is null)
+            return false;
+
+        // CF_DIB 的像素顺序是 BGRA，颜色类型不对时要先转换
+        using var converted = decoded.ColorType == SKColorType.Bgra8888
+            ? null
+            : decoded.Copy(SKColorType.Bgra8888);
+
+        var bitmap = converted ?? decoded;
         if (bitmap is null)
+            return false;
+
+        var dib = BuildDib(bitmap);
+
+        if (!OpenClipboard(IntPtr.Zero))
             return false;
 
         try
         {
-            var width = bitmap.Width;
-            var height = bitmap.Height;
-            var stride = width * 4;
-            var pixelBytes = stride * height;
-
-            // CF_DIB：40 字节 BITMAPINFOHEADER + 32bpp 像素（top-down）
-            var dib = new byte[40 + pixelBytes];
-            BitConverter.TryWriteBytes(dib.AsSpan(0, 4), 40);
-            BitConverter.TryWriteBytes(dib.AsSpan(4, 4), width);
-            BitConverter.TryWriteBytes(dib.AsSpan(8, 4), -height);
-            BitConverter.TryWriteBytes(dib.AsSpan(12, 2), (short)1);
-            BitConverter.TryWriteBytes(dib.AsSpan(14, 2), (short)32);
-            BitConverter.TryWriteBytes(dib.AsSpan(20, 4), pixelBytes);
-
-            var pixels = bitmap.GetPixelSpan();
-            var copyLength = Math.Min(pixels.Length, pixelBytes);
-            pixels[..copyLength].CopyTo(dib.AsSpan(40));
-
-            if (!OpenClipboard(IntPtr.Zero))
+            if (!EmptyClipboard())
                 return false;
+
+            var handle = GlobalAlloc(GmemMoveable, (nuint)dib.Length);
+            if (handle == IntPtr.Zero)
+                return false;
+
+            var pointer = GlobalLock(handle);
+            if (pointer == IntPtr.Zero)
+            {
+                GlobalFree(handle);
+                return false;
+            }
 
             try
             {
-                if (!EmptyClipboard())
-                    return false;
-
-                var handle = GlobalAlloc(GmemMoveable, (nuint)dib.Length);
-                if (handle == IntPtr.Zero)
-                    return false;
-
-                var pointer = GlobalLock(handle);
-                if (pointer == IntPtr.Zero)
-                {
-                    GlobalFree(handle);
-                    return false;
-                }
-
-                try
-                {
-                    Marshal.Copy(dib, 0, pointer, dib.Length);
-                }
-                finally
-                {
-                    GlobalUnlock(handle);
-                }
-
-                if (SetClipboardData(CfDib, handle) == IntPtr.Zero)
-                {
-                    GlobalFree(handle);
-                    return false;
-                }
-
-                return true;
+                Marshal.Copy(dib, 0, pointer, dib.Length);
             }
             finally
             {
-                CloseClipboard();
+                GlobalUnlock(handle);
             }
+
+            if (SetClipboardData(CfDib, handle) == IntPtr.Zero)
+            {
+                GlobalFree(handle);
+                return false;
+            }
+
+            return true;
         }
         finally
         {
-            bitmap.Dispose();
+            CloseClipboard();
         }
+    }
+
+    /// <summary>
+    /// SKBitmap 转 CF_DIB（40 字节 BITMAPINFOHEADER + 32bpp 像素）。
+    /// 高度为正（bottom-up）：负高度虽然合法，但不少老程序读不出来。
+    /// </summary>
+    internal static byte[] BuildDib(SKBitmap bitmap)
+    {
+        var width = bitmap.Width;
+        var height = bitmap.Height;
+        var stride = width * 4;
+        var pixelBytes = stride * height;
+
+        var dib = new byte[40 + pixelBytes];
+        BitConverter.TryWriteBytes(dib.AsSpan(0, 4), 40);
+        BitConverter.TryWriteBytes(dib.AsSpan(4, 4), width);
+        BitConverter.TryWriteBytes(dib.AsSpan(8, 4), height);
+        BitConverter.TryWriteBytes(dib.AsSpan(12, 2), (short)1);
+        BitConverter.TryWriteBytes(dib.AsSpan(14, 2), (short)32);
+        BitConverter.TryWriteBytes(dib.AsSpan(20, 4), pixelBytes);
+
+        var pixels = bitmap.GetPixelSpan();
+        var rowBytes = bitmap.RowBytes;
+        if (rowBytes <= 0)
+            return dib;
+
+        var copyStride = Math.Min(stride, rowBytes);
+        var copyHeight = Math.Min(height, pixels.Length / rowBytes);
+        for (var row = 0; row < copyHeight; row++)
+        {
+            // 源是 top-down，DIB 是 bottom-up，逐行翻转
+            var source = pixels.Slice((copyHeight - 1 - row) * rowBytes, copyStride);
+            source.CopyTo(dib.AsSpan(40 + row * stride));
+        }
+
+        return dib;
     }
 
     public bool SetText(string text)

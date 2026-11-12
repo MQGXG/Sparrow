@@ -105,6 +105,73 @@ public sealed class Win32ClipboardTests
         }
     }
 
+    [Fact]
+    public void 写入PNG后能读回图像()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var clipboard = new Win32Clipboard();
+        var originalText = clipboard.GetText();
+
+        try
+        {
+            var png = CreatePng(16, 8);
+
+            clipboard.SetImagePng(png).ShouldBeTrue();
+
+            var roundTrip = clipboard.GetImagePng();
+            roundTrip.ShouldNotBeNull();
+            roundTrip![0].ShouldBe((byte)0x89);
+        }
+        finally
+        {
+            if (originalText is not null)
+                clipboard.SetText(originalText);
+        }
+    }
+
+    /// <summary>
+    /// CF_DIB 必须是 bottom-up 且 BGRA：
+    /// top-down 的负高度会让 System.Drawing 的 Clipboard.GetImage 直接读不出图。
+    /// </summary>
+    [Fact]
+    public void PNG转DIB_高度为正且像素上下翻转()
+    {
+        using var bitmap = new SkiaSharp.SKBitmap(1, 2, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Premul);
+        bitmap.SetPixel(0, 0, SkiaSharp.SKColors.Red);   // 顶部：红
+        bitmap.SetPixel(0, 1, SkiaSharp.SKColors.Blue);  // 底部：蓝
+
+        var dib = Win32Clipboard.BuildDib(bitmap);
+
+        BitConverter.ToInt32(dib, 4).ShouldBe(1);   // biWidth
+        BitConverter.ToInt32(dib, 8).ShouldBe(2);   // biHeight 为正 = bottom-up
+
+        // DIB 第一行像素来自图片最后一行：蓝 = B255 G0 R0
+        dib[40].ShouldBe((byte)0xFF);
+        dib[41].ShouldBe((byte)0x00);
+        dib[42].ShouldBe((byte)0x00);
+
+        // 第二行才是红 = B0 G0 R255
+        dib[44].ShouldBe((byte)0x00);
+        dib[45].ShouldBe((byte)0x00);
+        dib[46].ShouldBe((byte)0xFF);
+    }
+
+    /// <summary>生成一张纯白 PNG。</summary>
+    private static byte[] CreatePng(int width, int height)
+    {
+        using var bitmap = new SkiaSharp.SKBitmap(width, height, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Premul);
+        using (var canvas = new SkiaSharp.SKCanvas(bitmap))
+        {
+            canvas.Clear(SkiaSharp.SKColors.White);
+        }
+
+        using var image = SkiaSharp.SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
+    }
+
     /// <summary>构造一张全白 32bpp 的 CF_DIB（没有 BMP 文件头）。</summary>
     private static byte[] CreateDib(int width, int height)
     {

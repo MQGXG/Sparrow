@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Platform.Storage;
 using Sparrow.App.History;
 using Sparrow.App.Plugins;
 using Sparrow.App.Services;
@@ -31,6 +32,9 @@ public partial class App : Application
     private PaletteViewModel? _paletteViewModel;
     private WorkspaceWindow? _workspace;
     private WorkspaceViewModel? _workspaceViewModel;
+
+    // 贴图窗口需要宿主一直持有引用，否则会被 GC 回收
+    private readonly List<PinnedImageWindow> _pins = [];
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -161,8 +165,32 @@ public partial class App : Application
 
         if (capture.Action == CaptureAction.CopyImage)
         {
-            var clipboardForImage = new Win32Clipboard();
-            clipboardForImage.SetImagePng(png);
+            try
+            {
+                var clipboardForImage = new Win32Clipboard(Log);
+                if (clipboardForImage.SetImagePng(png))
+                    Log.Info("截图已复制到剪贴板");
+                else
+                    Log.Warn("复制图片到剪贴板失败");
+
+                return;
+            }
+            catch (Exception ex)
+            {
+                Log.Error("复制图片到剪贴板失败", ex);
+                return;
+            }
+        }
+
+        if (capture.Action == CaptureAction.Save)
+        {
+            await SaveImageAsync(png);
+            return;
+        }
+
+        if (capture.Action == CaptureAction.Pin)
+        {
+            PinImage(png);
             return;
         }
 
@@ -213,6 +241,56 @@ public partial class App : Application
         {
             Log.Error("截图识别失败", ex);
             _paletteViewModel.ShowExternalError($"截图识别失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>弹保存对话框，把截图写成 PNG。</summary>
+    private async Task SaveImageAsync(byte[] png)
+    {
+        var owner = (Window?)_palette ?? _workspace;
+        if (owner is null)
+            return;
+
+        try
+        {
+            var file = await owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "保存截图",
+                SuggestedFileName = $"Sparrow-{DateTime.Now:yyyyMMdd-HHmmss}.png",
+                DefaultExtension = "png",
+                FileTypeChoices =
+                [
+                    new FilePickerFileType("PNG 图片") { Patterns = ["*.png"] }
+                ]
+            });
+
+            if (file is null)
+                return;
+
+            await using var stream = await file.OpenWriteAsync();
+            await stream.WriteAsync(png);
+            Log.Info($"截图已保存：{file.Path}");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("保存截图失败", ex);
+        }
+    }
+
+    /// <summary>把截图钉到屏幕上，可同时存在多张。</summary>
+    private void PinImage(byte[] png)
+    {
+        try
+        {
+            var pin = new PinnedImageWindow(png);
+            pin.Closed += (_, _) => _pins.Remove(pin);
+            _pins.Add(pin);
+            pin.Show();
+            Log.Info("贴图已显示");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("显示贴图失败", ex);
         }
     }
 
