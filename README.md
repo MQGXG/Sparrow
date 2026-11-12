@@ -78,11 +78,12 @@ plugins/
 | 插件 `Base64` | ✅ 完成（第二个插件，验证「加插件不改宿主」） |
 | 最小可运行壳 | ✅ 完成：托盘 + `Ctrl+Alt+S` + 命令面板 + 剪贴板闭环 |
 | 插件扫描 + ALC 隔离 | ✅ 完成：`plugins/` 目录发现、懒加载、独立加载上下文 |
-| 测试 | ✅ 44 个通过（含 headless 键盘路由、真实剪贴板） |
-| M1（剪贴板历史 / OCR / 设置） | ⬜ 未开始 |
+| 设置 / 禁用 / 卸载 | ✅ 完成：`settings.json`、`disabledPlugins`、ALC 回收断言 |
+| 测试 | ✅ 50 个通过（含 headless 键盘路由、真实剪贴板、ALC 回收） |
+| M1（剪贴板历史 / OCR / 设置界面） | ⬜ 未开始 |
 
-当前阶段：**M1 第二块**——插件边界已成立：`plugins/` 下加一个目录就能加一个工具，宿主代码零改动。
-下一步是 Settings（`disabledPlugins`）与插件禁用/卸载，然后 OCR。见 [`docs/roadmap.md`](docs/roadmap.md)。
+当前阶段：**M1 插件基础设施完成**——加插件不改宿主、能禁用、能卸载且内存真的回收。
+下一步是剪贴板历史插件与 OCR。见 [`docs/roadmap.md`](docs/roadmap.md)。
 
 ---
 

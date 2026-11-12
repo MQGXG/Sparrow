@@ -279,6 +279,19 @@ ALC 卸载的条件是「该上下文中没有任何存活的引用」。以下�
 | Faulted | 灰显 + 「插件异常」 | 不能，除非手动重试 |
 | 能力不满足 | 灰显 + 原因文案 | 不能 |
 
+**实现状态（M1）**：
+
+| 状态 | 状态 |
+|---|---|
+| Discovered → Loaded → Active | ✅ 已实现（懒加载，首次搜索触发） |
+| Disabled | ✅ 已实现（启动时读 `settings.json` 的 `disabledPlugins`） |
+| Unloaded | ✅ 已实现（`ToolCatalog.UnloadPlugin`，GC 后断言 ALC 回收） |
+| Faulted（连续失败 3 次） | ⬜ 未实现 |
+
+卸载的回收断言在 `tests/Sparrow.Tests/PluginLoadingTests.cs` 的 `卸载插件_ALC能被回收`：
+`Unload()` 后多轮 `GC.Collect`，弱引用必须变成 `IsAlive == false`。
+如果这个测试红了，说明宿主某处还持有插件对象——这是铁律 4 唯一的自动化防线。
+
 ---
 
 ## 九、版本兼容

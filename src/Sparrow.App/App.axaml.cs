@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Sparrow.App.Plugins;
 using Sparrow.App.Services;
+using Sparrow.App.Settings;
 using Sparrow.App.Shell;
 using Sparrow.App.ViewModels;
 using Sparrow.App.Views;
@@ -40,7 +41,15 @@ public partial class App : Application
 
         // plugins/ 与 Sparrow.App.exe 同级；目录不存在时按「零插件」启动，不报错
         var pluginsRoot = Path.Combine(AppContext.BaseDirectory, "plugins");
-        _catalog = new ToolCatalog(pluginsRoot, log);
+
+        // 设置文件损坏时回退默认值，不影响启动
+        var settingsPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Sparrow",
+            "settings.json");
+        var settings = new SettingsStore(settingsPath, log).Load();
+
+        _catalog = new ToolCatalog(pluginsRoot, log, settings);
 
         var clipboard = new Win32Clipboard();
 

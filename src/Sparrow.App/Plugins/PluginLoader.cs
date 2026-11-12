@@ -17,6 +17,29 @@ public sealed class PluginLoader : IDisposable
 
     public PluginLoader(IAppLog log) => _log = log;
 
+    /// <summary>当前已加载的插件。注册表重建与卸载都基于它。</summary>
+    public IReadOnlyList<LoadedPlugin> LoadedPlugins => _loaded;
+
+    /// <summary>
+    /// 卸载一个插件。返回指向其加载上下文的弱引用，
+    /// 调用方可以据此断言「GC 后 ALC 真的被回收了」（铁律 4）。
+    /// </summary>
+    public WeakReference? Unload(string pluginId)
+    {
+        var plugin = _loaded.FirstOrDefault(p => p.Manifest.Id == pluginId);
+        if (plugin is null)
+            return null;
+
+        // 先从列表移除，断开宿主对插件对象的强引用
+        _loaded.Remove(plugin);
+
+        var weak = new WeakReference(plugin.Context);
+        plugin.Context.Unload();
+
+        _log.Info($"已卸载插件 {pluginId}");
+        return weak;
+    }
+
     /// <summary>加载一个插件。失败返回 null 并记日志，绝不抛给调用方。</summary>
     public LoadedPlugin? Load(PluginCandidate candidate)
     {
@@ -125,7 +148,11 @@ public sealed class PluginLoader : IDisposable
 
         _disposed = true;
 
-        // 先断开宿主对插件对象的引用，再卸载上下文，否则 ALC 无法回收
+        // 真正卸载每个 ALC，而不是只清空列表——
+        // 只清列表会让加载上下文一直存活到进程退出
+        foreach (var plugin in _loaded)
+            plugin.Context.Unload();
+
         _loaded.Clear();
         _log.Info("插件加载器已释放");
     }

@@ -1,4 +1,5 @@
 using Sparrow.App.Services;
+using Sparrow.App.Settings;
 using Sparrow.Plugin.Sdk;
 
 namespace Sparrow.App.Plugins;
@@ -16,15 +17,17 @@ public sealed class ToolCatalog : IDisposable
     private readonly object _gate = new();
     private readonly string _pluginsRoot;
     private readonly IAppLog _log;
+    private readonly AppSettings _settings;
 
     private PluginLoader? _loader;
     private ToolRegistry? _registry;
     private IReadOnlyList<PluginCandidate> _candidates = [];
 
-    public ToolCatalog(string pluginsRoot, IAppLog log)
+    public ToolCatalog(string pluginsRoot, IAppLog log, AppSettings settings)
     {
         _pluginsRoot = pluginsRoot;
         _log = log;
+        _settings = settings;
     }
 
     /// <summary>是否已经完成扫描 + 加载。用于验证懒加载是结构性成立的。</summary>
@@ -47,6 +50,28 @@ public sealed class ToolCatalog : IDisposable
         return _registry!;
     }
 
+    /// <summary>
+    /// 卸载一个插件并重建注册表。
+    /// 返回指向其 ALC 的弱引用，调用方可以 GC 后断言 <c>IsAlive == false</c>
+    /// （docs/plugin-model.md 铁律 4 的验收方式）。
+    /// </summary>
+    public WeakReference? UnloadPlugin(string pluginId)
+    {
+        lock (_gate)
+        {
+            if (_loader is null)
+                return null;
+
+            var weak = _loader.Unload(pluginId);
+            if (weak is null)
+                return null;
+
+            // 重建注册表，断开对已卸载工具的强引用；否则 ALC 永远回收不了
+            _registry = BuildRegistry();
+            return weak;
+        }
+    }
+
     private void EnsureBuilt()
     {
         if (_registry is not null)
@@ -60,21 +85,35 @@ public sealed class ToolCatalog : IDisposable
             var scanner = new PluginScanner(_pluginsRoot, _log);
             _candidates = scanner.Scan();
 
+            var disabled = new HashSet<string>(_settings.DisabledPlugins, StringComparer.Ordinal);
             _loader = new PluginLoader(_log);
-            var tools = new List<ITool>();
 
             foreach (var candidate in _candidates)
             {
-                var plugin = _loader.Load(candidate);
-                if (plugin is not null)
-                    tools.AddRange(plugin.Tools);
+                if (disabled.Contains(candidate.Id))
+                {
+                    // 禁用 = 不加载程序集、不占内存、不进搜索结果
+                    _log.Info($"跳过已禁用的插件 {candidate.Id}");
+                    continue;
+                }
+
+                _loader.Load(candidate);
             }
 
-            _registry = new ToolRegistry(tools);
+            _registry = BuildRegistry();
 
             var valid = _candidates.Count(c => c.IsValid);
-            _log.Info($"工具注册表构建完成：{tools.Count} 个工具 / {valid} 个有效插件 / {_candidates.Count} 个目录");
+            _log.Info($"工具注册表构建完成：{_registry.Count} 个工具 / {valid} 个有效插件 / {_candidates.Count} 个目录 / {disabled.Count} 个禁用");
         }
+    }
+
+    private ToolRegistry BuildRegistry()
+    {
+        var tools = _loader is null
+            ? Array.Empty<ITool>()
+            : _loader.LoadedPlugins.SelectMany(p => p.Tools).ToArray();
+
+        return new ToolRegistry(tools);
     }
 
     public void Dispose()

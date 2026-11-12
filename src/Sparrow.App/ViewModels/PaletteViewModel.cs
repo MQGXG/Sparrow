@@ -69,6 +69,8 @@ public partial class PaletteViewModel : ObservableObject
     /// <summary>每次面板弹出时调用：清掉上一次的结果，保留查询词方便重复执行。</summary>
     public void Reset()
     {
+        // 重新取一次注册表：插件可能在这期间被禁用或卸载
+        _registry = _registryFactory();
         ClearResult();
         Refresh();
     }

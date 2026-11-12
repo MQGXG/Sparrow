@@ -1,6 +1,8 @@
+using System.Runtime.CompilerServices;
 using Shouldly;
 using Sparrow.App;
 using Sparrow.App.Plugins;
+using Sparrow.App.Settings;
 using Sparrow.Plugin.Sdk;
 using Xunit;
 
@@ -234,7 +236,7 @@ public sealed class PluginLoadingTests
         using var root = new TempPluginRoot();
         root.CreatePlugin("sparrow.plugin.json-format", ValidManifest);
 
-        using var catalog = new ToolCatalog(root.Path, new NullLog());
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
 
         // 懒加载是结构性的：构造完不应该已经扫描/加载
         catalog.IsBuilt.ShouldBeFalse();
@@ -249,11 +251,67 @@ public sealed class PluginLoadingTests
     public void 工具目录_空目录_注册表为空但可正常构建()
     {
         using var root = new TempPluginRoot();
-        using var catalog = new ToolCatalog(root.Path, new NullLog());
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
 
         var registry = catalog.GetRegistry();
 
         registry.Count.ShouldBe(0);
         registry.Search("json").ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void 禁用的插件_不加载也不进注册表()
+    {
+        using var root = new TempPluginRoot();
+        root.CreatePlugin("sparrow.plugin.json-format", ValidManifest);
+
+        var settings = new AppSettings { DisabledPlugins = ["sparrow.plugin.json-format"] };
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), settings);
+
+        var registry = catalog.GetRegistry();
+
+        registry.Count.ShouldBe(0);
+        registry.Search("json").ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void 卸载插件_ALC能被回收()
+    {
+        using var root = new TempPluginRoot();
+        root.CreatePlugin("sparrow.plugin.json-format", ValidManifest);
+
+        var weak = LoadThenUnload(root.Path);
+
+        // ALC 卸载是异步的，需要多轮 GC 把终结器队列也排空
+        for (var i = 0; i < 5 && weak.IsAlive; i++)
+        {
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true);
+            GC.WaitForPendingFinalizers();
+        }
+
+        // 铁律 4：卸载后加载上下文必须真的被回收
+        weak.IsAlive.ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// 刻意 NoInlining：如果加载/卸载写在测试方法体内，
+    /// Debug 构建的 JIT 会让局部变量（尤其是注册表）活到方法结束之后，
+    /// ALC 就永远回收不了，测试会假失败。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference LoadThenUnload(string pluginsRoot)
+    {
+        using var catalog = new ToolCatalog(pluginsRoot, new NullLog(), new AppSettings());
+
+        // 不保存注册表引用：它会持有 ITool 实例，阻止 ALC 回收
+        catalog.GetRegistry().Count.ShouldBe(1);
+
+        var weak = catalog.UnloadPlugin("sparrow.plugin.json-format");
+        weak.ShouldNotBeNull();
+
+        // 注册表同步移除
+        catalog.GetRegistry().Count.ShouldBe(0);
+
+        return weak!;
     }
 }
