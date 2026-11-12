@@ -61,6 +61,7 @@ public partial class App : Application
             "Sparrow",
             "settings.json");
         var settingsStore = new SettingsStore(settingsPath, log);
+        var isFirstRun = !File.Exists(settingsPath);
         var settings = settingsStore.Load();
 
         _catalog = new ToolCatalog(pluginsRoot, log, settings);
@@ -126,7 +127,18 @@ public partial class App : Application
 
         // --workspace：启动后直接打开工作区（快捷方式/开机自启可用）
         if (desktop.Args?.Contains("--workspace") == true)
+        {
             Avalonia.Threading.Dispatcher.UIThread.Post(ShowWorkspace);
+        }
+        else if (isFirstRun)
+        {
+            // 首次运行：应用只启动到托盘，用户会以为「没启动」。
+            // 主动展示一次主界面，之后恢复纯托盘行为。
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => _palette?.Toggle(),
+                Avalonia.Threading.DispatcherPriority.Background);
+            log.Info("首次运行：显示一次命令面板");
+        }
 
         Log.Info($"启动完成：{Program.Startup.ElapsedMilliseconds} ms，托盘就绪");
 

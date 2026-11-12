@@ -56,6 +56,16 @@ public sealed class TrayService
 
         // 左键单击唤出面板（Windows 上 Clicked 即左键）
         _icon.Clicked += (_, _) => _palette.Toggle();
+
+        // Avalonia 12：new TrayIcon 不会自动挂到应用上。
+        // 必须放进 Application 的 TrayIcons 集合，Attach() 才会创建原生图标。
+        // 少了这一步：进程正常、日志正常，但托盘里什么都没有。
+        if (Avalonia.Application.Current is { } app)
+        {
+            var icons = TrayIcon.GetIcons(app) ?? new TrayIcons();
+            icons.Add(_icon);
+            TrayIcon.SetIcons(app, icons);
+        }
     }
 
     /// <summary>热键注册失败等异常状态，直接反映到托盘提示上。</summary>
