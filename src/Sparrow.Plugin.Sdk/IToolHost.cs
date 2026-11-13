@@ -5,10 +5,11 @@ namespace Sparrow.Plugin.Sdk;
 /// <summary>
 /// 宿主注入给插件的全部外部能力。
 ///
-/// 只有四样：日志、设置、受控的网络、模型。
-/// **没有文件系统、没有剪贴板、没有数据库、没有窗口**——
+/// 只有五样：日志、设置、受控的网络、模型、剪贴板历史。
+/// **没有文件系统、没有实时剪贴板、没有数据库、没有窗口**——
 /// 需要产出文件时返回 FileSetPayload，由宿主落盘；
-/// 需要读取剪贴板时，输入已经在 <see cref="ToolContext.Input"/> 里了。
+/// 需要读取剪贴板时，输入已经在 <see cref="ToolContext.Input"/> 里了；
+/// 需要历史剪贴板时走 <see cref="ClipboardHistory"/>（宿主监听 + 落盘，插件只读）。
 /// </summary>
 public interface IToolHost
 {
@@ -16,6 +17,12 @@ public interface IToolHost
 
     /// <summary>按 toolId 隔离的键值存储，写入 settings.json 的 plugins 节点下。</summary>
     IToolSettings Settings { get; }
+
+    /// <summary>
+    /// 宿主记录的剪贴板历史。用户关闭记录（隐私）或测试场景下为 null，
+    /// 插件必须 null 检查并给出「先在设置里开启」之类的提示。
+    /// </summary>
+    IClipboardHistory? ClipboardHistory { get; }
 
     /// <summary>受用户策略控制的网络访问。禁用时 IsAvailable 为 false。</summary>
     IHttpClientAccess Http { get; }

@@ -27,6 +27,12 @@ public sealed record AppSettings
     /// <summary>历史保留天数；0 表示不按天数清理。</summary>
     public int HistoryRetentionDays { get; init; }
 
+    /// <summary>是否记录剪贴板历史；默认开启，可随时关闭（隐私）。</summary>
+    public bool ClipboardHistoryEnabled { get; init; } = true;
+
+    /// <summary>剪贴板历史最多保留多少条；图片另存为 PNG 文件。</summary>
+    public int ClipboardHistoryMaxEntries { get; init; } = 200;
+
     /// <summary>AI 是否启用；默认关闭，用户显式配置后才可用。</summary>
     public bool AiEnabled { get; init; }
 

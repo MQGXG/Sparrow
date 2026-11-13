@@ -19,18 +19,25 @@ public sealed class ToolCatalog : IDisposable
     private readonly IAppLog _log;
     private readonly AppSettings _settings;
     private readonly IAiClient? _ai;
+    private readonly IClipboardHistory? _clipboardHistory;
 
     private PluginLoader? _loader;
     private ToolRegistry? _registry;
     private IReadOnlyList<PluginCandidate>? _scannedCandidates;
     private IReadOnlyList<PluginCandidate> _candidates = [];
 
-    public ToolCatalog(string pluginsRoot, IAppLog log, AppSettings settings, IAiClient? ai = null)
+    public ToolCatalog(
+        string pluginsRoot,
+        IAppLog log,
+        AppSettings settings,
+        IAiClient? ai = null,
+        IClipboardHistory? clipboardHistory = null)
     {
         _pluginsRoot = pluginsRoot;
         _log = log;
         _settings = settings;
         _ai = ai;
+        _clipboardHistory = clipboardHistory;
     }
 
     /// <summary>是否已经完成扫描 + 加载。用于验证懒加载是结构性成立的。</summary>
@@ -102,7 +109,7 @@ public sealed class ToolCatalog : IDisposable
             _candidates = ScanCandidates();
 
             var disabled = new HashSet<string>(_settings.DisabledPlugins, StringComparer.Ordinal);
-            _loader = new PluginLoader(_log, _ai);
+            _loader = new PluginLoader(_log, _ai, _clipboardHistory);
 
             foreach (var candidate in _candidates)
             {

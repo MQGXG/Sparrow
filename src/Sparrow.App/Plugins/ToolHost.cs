@@ -13,13 +13,19 @@ namespace Sparrow.App.Plugins;
 /// </summary>
 public sealed class ToolHost : IToolHost
 {
-    public ToolHost(string pluginId, string pluginDirectory, IAppLog log, IAiClient? ai = null)
+    public ToolHost(
+        string pluginId,
+        string pluginDirectory,
+        IAppLog log,
+        IAiClient? ai = null,
+        IClipboardHistory? clipboardHistory = null)
     {
         PluginDirectory = pluginDirectory;
         Logger = new PluginLogger(pluginId, log);
         Settings = new InMemoryToolSettings();
         Http = DisabledHttpAccess.Instance;
         Ai = ai ?? NullAiClient.Instance;
+        ClipboardHistory = clipboardHistory;
     }
 
     public ILogger Logger { get; }
@@ -31,6 +37,9 @@ public sealed class ToolHost : IToolHost
     public IAiClient Ai { get; }
 
     public string PluginDirectory { get; }
+
+    /// <summary>宿主的剪贴板历史；未开启记录或测试场景为 null，插件必须 null 检查。</summary>
+    public IClipboardHistory? ClipboardHistory { get; }
 }
 
 /// <summary>
@@ -50,6 +59,8 @@ public sealed class NullToolHost : IToolHost
     public IAiClient Ai => NullAiClient.Instance;
 
     public string PluginDirectory => AppContext.BaseDirectory;
+
+    public IClipboardHistory? ClipboardHistory => null;
 }
 
 /// <summary>把插件的 ILogger 调用转发到应用日志，并带上插件 ID 前缀。</summary>

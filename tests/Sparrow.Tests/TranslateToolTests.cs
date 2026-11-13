@@ -67,6 +67,8 @@ public sealed class TranslateToolTests
 
         public string PluginDirectory => AppContext.BaseDirectory;
 
+        public IClipboardHistory? ClipboardHistory { get; init; }
+
         private sealed class NoHttp : IHttpClientAccess
         {
             public bool IsAvailable => false;

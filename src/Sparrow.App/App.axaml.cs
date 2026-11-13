@@ -75,7 +75,22 @@ public partial class App : Application
         var ai = new AiClient(aiSecrets, log);
         ai.Configure(settings);
 
-        _catalog = new ToolCatalog(pluginsRoot, log, settings, ai);
+        // 剪贴板历史：监听 + 落盘都是宿主能力，插件经 IToolHost.ClipboardHistory 只读
+        var clipboardHistoryPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Sparrow",
+            "clipboard-history.jsonl");
+        var clipboardHistory = new ClipboardHistoryStore(
+            clipboardHistoryPath,
+            log,
+            settings.ClipboardHistoryMaxEntries);
+        var clipboardMonitor = new ClipboardMonitor(clipboardHistory, log)
+        {
+            Paused = !settings.ClipboardHistoryEnabled
+        };
+        clipboardMonitor.Start();
+
+        _catalog = new ToolCatalog(pluginsRoot, log, settings, ai, clipboardHistory);
 
         var historyPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -107,6 +122,7 @@ public partial class App : Application
 
         // 设置页改完保留策略后，历史存储立即按新规则清理一次
         settingsViewModel.HistoryRetentionChanged += history.Configure;
+        settingsViewModel.ClipboardHistoryEnabledChanged += enabled => clipboardMonitor.Paused = !enabled;
         _workspaceViewModel = new WorkspaceViewModel(_catalog, clipboard, log, history, settingsViewModel, _parameterStore);
         _workspace = new WorkspaceWindow { DataContext = _workspaceViewModel };
 
@@ -149,6 +165,7 @@ public partial class App : Application
         {
             _hotkey?.Dispose();
             _catalog?.Dispose();
+            clipboardMonitor.Dispose();
         };
 
         // --workspace：启动后直接打开工作区（快捷方式/开机自启可用）

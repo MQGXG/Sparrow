@@ -185,6 +185,11 @@
                         OffContent="关"
                         IsChecked="{Binding StartWithWindows, Mode=TwoWay}" />
 
+          <ToggleSwitch Content="记录剪贴板历史（本机本地存储）"
+                        OnContent="开"
+                        OffContent="关"
+                        IsChecked="{Binding ClipboardHistoryEnabled, Mode=TwoWay}" />
+
           <Grid ColumnDefinitions="*,140"
                 RowDefinitions="Auto,Auto"
                 RowSpacing="10"

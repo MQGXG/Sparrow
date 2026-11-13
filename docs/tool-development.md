@@ -186,11 +186,12 @@ public interface IToolHost
     ILogger Logger { get; }
     IToolSettings Settings { get; }           // 按 toolId 隔离
     IHttpClientAccess Http { get; }           // 可被用户策略禁用
+    IClipboardHistory? ClipboardHistory { get; } // 剪贴板历史；关闭记录时为 null
 }
 // 进度用 context.Progress，不是 Host 的能力
 ```
 
-就这三样。**没有文件系统、没有数据库、没有剪贴板、没有窗口。**
+就这四样。**没有文件系统、没有实时剪贴板、没有数据库、没有窗口。**
 
 | 需求 | 正确做法 | 错误做法 |
 |---|---|---|

@@ -13,13 +13,18 @@ public sealed class PluginLoader : IDisposable
 {
     private readonly IAppLog _log;
     private readonly IAiClient? _ai;
+    private readonly IClipboardHistory? _clipboardHistory;
     private readonly List<LoadedPlugin> _loaded = [];
     private bool _disposed;
 
-    public PluginLoader(IAppLog log, IAiClient? ai = null)
+    public PluginLoader(
+        IAppLog log,
+        IAiClient? ai = null,
+        IClipboardHistory? clipboardHistory = null)
     {
         _log = log;
         _ai = ai;
+        _clipboardHistory = clipboardHistory;
     }
 
     /// <summary>当前已加载的插件。注册表重建与卸载都基于它。</summary>
@@ -71,7 +76,7 @@ public sealed class PluginLoader : IDisposable
                 Manifest = manifest,
                 Directory = candidate.Directory,
                 Tools = tools,
-                Host = new ToolHost(manifest.Id, candidate.Directory, _log, _ai),
+                Host = new ToolHost(manifest.Id, candidate.Directory, _log, _ai, _clipboardHistory),
                 Context = context
             };
 

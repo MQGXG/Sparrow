@@ -1,0 +1,11 @@
+{
+  "id": "sparrow.plugin.clipboard-history",
+  "name": "剪贴板历史",
+  "version": "0.1.0",
+  "sdkVersion": "1.0",
+  "entryAssembly": "Sparrow.Plugin.Clipboard.History.dll",
+  "author": "sparrow",
+  "description": "浏览本机剪贴板记录，按序号还原文本 / 图片 / 文件",
+  "capabilities": ["ClipboardMonitor"],
+  "tools": ["sparrow.clipboard.history"]
+}

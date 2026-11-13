@@ -171,11 +171,17 @@ public interface IToolHost
     IHttpClientAccess Http { get; }           // 受策略控制，可被禁用
     IAiClient Ai { get; }                     // 模型能力；未配置时 IsAvailable=false
     string PluginDirectory { get; }           // 插件自己的目录，用于定位随包资源
+    IClipboardHistory? ClipboardHistory { get; } // 剪贴板历史；用户关闭记录或测试场景为 null
 }
 ```
 
 **`Ai` 只暴露「发消息、拿回复」。** provider、Base URL、模型名、API Key 全部留在宿主：
 插件不知道请求发往哪里，也不能读取密钥。需要视觉模型时传 `AiRequest.Image`，宿主负责编码成 data URL。
+
+**`ClipboardHistory` 是唯一的剪贴板入口，且是历史、不是实时。** 监听 Win32 剪贴板、
+落盘、图片转 PNG 全部由宿主完成（`ClipboardMonitor` + `ClipboardHistoryStore`），
+插件只读整理好的条目；需要内容时文本在 `ClipboardHistoryEntry.Text`，
+图片经 `LoadImage` 取回字节，插件仍然不碰文件系统。
 
 进度上报不在这里，而在 `ToolContext.Progress`——因为它是「这一次执行」的状态，不是插件的长期能力。
 

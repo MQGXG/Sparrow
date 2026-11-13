@@ -10,6 +10,7 @@ public static class ToolCategories
     private static readonly Dictionary<string, string> DisplayNames = new(StringComparer.OrdinalIgnoreCase)
     {
         ["all"] = "全部",
+        ["clipboard"] = "剪贴板",
         ["dev"] = "开发",
         ["json"] = "JSON",
         ["ocr"] = "文字识别",

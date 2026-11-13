@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>Sparrow.Plugin.Clipboard.History</AssemblyName>
+    <RootNamespace>Sparrow.Plugin.Clipboard.History</RootNamespace>
+    <Version>1.0.0</Version>
+    <Description>浏览与还原本机剪贴板历史（文本 / 图片 / 文件）</Description>
+    <!-- 必须等于 plugin.json 的 id 与目录名 -->
+    <PluginId>sparrow.plugin.clipboard-history</PluginId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ★ 不能把 SDK 拷进插件目录，否则 ALC 里的 ITool 会和宿主的不一致 -->
+    <ProjectReference Include="..\..\src\Sparrow.Plugin.Sdk\Sparrow.Plugin.Sdk.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

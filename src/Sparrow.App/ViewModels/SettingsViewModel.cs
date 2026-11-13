@@ -41,6 +41,7 @@ public partial class SettingsViewModel : ObservableObject
         _startWithWindows = startup.IsEnabled;
         _historyMaxEntries = settings.HistoryMaxEntries;
         _historyRetentionDays = settings.HistoryRetentionDays;
+        _clipboardHistoryEnabled = settings.ClipboardHistoryEnabled;
 
         _selectedAiProvider = AiProviders.Find(settings.AiProvider) ?? AiProviders.All[^1];
         _aiEnabled = settings.AiEnabled;
@@ -56,6 +57,9 @@ public partial class SettingsViewModel : ObservableObject
 
     /// <summary>历史保留策略变化时通知宿主，让存储立即清理一次。</summary>
     public event Action<int, int>? HistoryRetentionChanged;
+
+    /// <summary>剪贴板历史开关变化时通知宿主，让监听立即暂停 / 恢复。</summary>
+    public event Action<bool>? ClipboardHistoryEnabledChanged;
 
     public ObservableCollection<PluginItemViewModel> Plugins { get; } = [];
 
@@ -78,6 +82,10 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>历史保留天数；0 表示不按天数清理。</summary>
     [ObservableProperty]
     private int _historyRetentionDays;
+
+    /// <summary>是否记录剪贴板历史。改完立即生效：监听暂停 / 恢复，已记录的内容保留。</summary>
+    [ObservableProperty]
+    private bool _clipboardHistoryEnabled = true;
 
     /// <summary>当前 provider 预设；切换后自动填端点与默认模型。</summary>
     [ObservableProperty]
@@ -188,6 +196,18 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnHistoryMaxEntriesChanged(int value) => PersistHistory();
 
     partial void OnHistoryRetentionDaysChanged(int value) => PersistHistory();
+
+    /// <summary>剪贴板历史开关：立即生效并落盘，已记录的内容不删除。</summary>
+    partial void OnClipboardHistoryEnabledChanged(bool value)
+    {
+        if (value == _settings.ClipboardHistoryEnabled)
+            return;
+
+        _settings = _settings with { ClipboardHistoryEnabled = value };
+        _store.Save(_settings);
+        ClipboardHistoryEnabledChanged?.Invoke(value);
+        StatusMessage = value ? "已恢复记录剪贴板历史" : "已暂停记录剪贴板历史（已记录的内容保留）";
+    }
 
     /// <summary>
     /// 保存历史保留策略。XAML 初始化绑定时可能先写一次默认值，
