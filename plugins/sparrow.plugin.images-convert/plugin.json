@@ -1,0 +1,10 @@
+{
+  "id": "sparrow.plugin.images-convert",
+  "name": "图片格式转换",
+  "version": "0.1.0",
+  "sdkVersion": "1.0",
+  "entryAssembly": "Sparrow.Plugin.Images.Convert.dll",
+  "author": "sparrow",
+  "description": "把图片转成 PNG / JPEG / WebP，保存动作由宿主完成",
+  "tools": ["sparrow.images.convert"]
+}

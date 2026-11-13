@@ -18,4 +18,10 @@ public interface IClipboardAccess
 
     /// <summary>写入文本。返回 false 表示剪贴板被占用或系统拒绝。</summary>
     bool SetText(string text);
+
+    /// <summary>
+    /// 写入 PNG 图片（内部转 CF_DIB）。返回 false 表示失败。
+    /// 图片工具的结果要能「复制走」，与写文本同一条接口约定。
+    /// </summary>
+    bool SetImagePng(byte[] png);
 }

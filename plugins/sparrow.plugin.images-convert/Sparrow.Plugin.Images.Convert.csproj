@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>Sparrow.Plugin.Images.Convert</AssemblyName>
+    <RootNamespace>Sparrow.Plugin.Images.Convert</RootNamespace>
+    <Version>1.0.0</Version>
+    <Description>图片格式转换（PNG / JPEG / WebP）</Description>
+    <!-- 必须等于 plugin.json 的 id 与目录名 -->
+    <PluginId>sparrow.plugin.images-convert</PluginId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ★ 不能把 SDK 拷进插件目录，否则 ALC 里的 ITool 会和宿主的不一致 -->
+    <ProjectReference Include="..\..\src\Sparrow.Plugin.Sdk\Sparrow.Plugin.Sdk.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 插件自带图像编解码：宿主渲染预览用 Svg.Skia，这里是本插件自己的依赖 -->
+    <PackageReference Include="SkiaSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

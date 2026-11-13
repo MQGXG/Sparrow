@@ -121,6 +121,49 @@ public partial class WorkspaceWindow : Window
             viewModel.CopyResult();
     }
 
+    /// <summary>
+    /// 保存图片结果（缩放 / 格式转换的产物）。
+    /// 落盘是宿主的事——插件按契约不写盘，只在结果里带字节。
+    /// </summary>
+    private async void OnSaveResultClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not WorkspaceViewModel { HasImageResult: true } viewModel
+            || viewModel.ImageResultPng is not { Length: > 0 } bytes)
+            return;
+
+        var (extension, description) = viewModel.ImageResultFormat switch
+        {
+            Sparrow.Plugin.Sdk.ImageFormat.Jpeg => ("jpg", "JPEG 图片"),
+            Sparrow.Plugin.Sdk.ImageFormat.Webp => ("webp", "WebP 图片"),
+            _ => ("png", "PNG 图片")
+        };
+
+        try
+        {
+            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "保存图片",
+                SuggestedFileName = $"Sparrow-{DateTime.Now:yyyyMMdd-HHmmss}",
+                DefaultExtension = extension,
+                FileTypeChoices =
+                [
+                    new FilePickerFileType(description) { Patterns = [$"*.{extension}"] }
+                ]
+            });
+
+            if (file is null)
+                return;
+
+            await using var stream = await file.OpenWriteAsync();
+            await stream.WriteAsync(bytes);
+        }
+        catch (Exception ex)
+        {
+            // 保存失败不打断工作区：结果还在，可以再试或改用复制
+            App.Log.Error("保存图片结果失败", ex);
+        }
+    }
+
     private void OnSvgPreviewClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is WorkspaceViewModel viewModel)

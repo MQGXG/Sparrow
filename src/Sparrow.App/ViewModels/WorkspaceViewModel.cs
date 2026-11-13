@@ -250,7 +250,17 @@ public partial class WorkspaceViewModel : ObservableObject
 
     public bool IsSvgSourceVisible => HasSvgResult && ShowSvgSource;
 
-    public bool IsTextResultVisible => !HasSvgResult;
+    public bool IsTextResultVisible => !HasSvgResult && !HasImageResult;
+
+    /// <summary>图片结果（缩放 / 格式转换）；非空时结果区显示位图预览。</summary>
+    [ObservableProperty]
+    private byte[]? _imageResultPng;
+
+    [ObservableProperty]
+    private ImageFormat _imageResultFormat = ImageFormat.Png;
+
+    [ObservableProperty]
+    private bool _hasImageResult;
 
     partial void OnSvgSourceChanged(string? value)
     {
@@ -265,6 +275,12 @@ public partial class WorkspaceViewModel : ObservableObject
         OnPropertyChanged(nameof(IsSvgPreviewVisible));
         OnPropertyChanged(nameof(IsSvgSourceVisible));
     }
+
+    partial void OnHasImageResultChanged(bool value) => OnPropertyChanged(nameof(IsTextResultVisible));
+
+    /// <summary>图片结果的规格摘要，用作历史记录与复制提示。</summary>
+    public static string SummarizeImage(ImagePayload payload) =>
+        $"{payload.Width}×{payload.Height} · {payload.Format.ToString().ToLowerInvariant()} · {payload.ByteSize / 1024.0:F1} KB";
 
     public void ShowSvgPreview() => ShowSvgSource = false;
 
@@ -584,6 +600,10 @@ public partial class WorkspaceViewModel : ObservableObject
 
                         ShowTextResult(entry, context, text, elapsed);
                         return;
+
+                    case ImagePayload imagePayload:
+                        ShowImageResult(entry, context, imagePayload, elapsed);
+                        return;
                 }
             }
 
@@ -604,6 +624,8 @@ public partial class WorkspaceViewModel : ObservableObject
     private void ShowTextResult(ToolEntry entry, ToolContext context, string text, long elapsed)
     {
         ClearSvgResult();
+        HasImageResult = false;
+        ImageResultPng = null;
 
         ResultText = text;
         HasResult = true;
@@ -611,6 +633,27 @@ public partial class WorkspaceViewModel : ObservableObject
         ErrorText = null;
 
         AddHistory(entry, context, text, elapsed);
+    }
+
+    /// <summary>
+    /// 图片结果：预览位图，历史只记摘要（不把字节灌进 JSONL）。
+    /// 点「复制」回到剪贴板，点「保存」由视图层弹文件对话框落盘。
+    /// </summary>
+    private void ShowImageResult(ToolEntry entry, ToolContext context, ImagePayload payload, long elapsed)
+    {
+        ClearSvgResult();
+
+        ImageResultPng = payload.Data.ToArray();
+        ImageResultFormat = payload.Format;
+        HasImageResult = true;
+
+        var summary = SummarizeImage(payload);
+        ResultText = summary;
+        HasResult = true;
+        HasError = false;
+        ErrorText = null;
+
+        AddHistory(entry, context, summary, elapsed);
     }
 
     private async Task ShowSvgResultAsync(
@@ -667,6 +710,24 @@ public partial class WorkspaceViewModel : ObservableObject
 
     public void CopyResult()
     {
+        // 图片结果复制回剪贴板（JPEG/WebP 先转 PNG，写剪贴板只认 PNG）
+        if (HasImageResult && ImageResultPng is { Length: > 0 } bytes)
+        {
+            var png = ImageResultFormat == ImageFormat.Png ? bytes : ImageBytes.ToPng(bytes);
+            if (png is null)
+            {
+                _log.Warn("图片结果转 PNG 失败，无法复制");
+                return;
+            }
+
+            if (_clipboard.SetImagePng(png))
+                _log.Info($"图片结果已复制：{png.Length} 字节");
+            else
+                _log.Warn("图片结果写入剪贴板失败");
+
+            return;
+        }
+
         if (!string.IsNullOrEmpty(ResultText))
             _clipboard.SetText(ResultText);
     }
@@ -822,6 +883,8 @@ public partial class WorkspaceViewModel : ObservableObject
     private void ShowError(string message)
     {
         ClearSvgResult();
+        HasImageResult = false;
+        ImageResultPng = null;
         ErrorText = message;
         HasError = true;
         HasResult = false;
@@ -831,6 +894,8 @@ public partial class WorkspaceViewModel : ObservableObject
     private void ClearResult()
     {
         ClearSvgResult();
+        HasImageResult = false;
+        ImageResultPng = null;
         ResultText = null;
         ErrorText = null;
         HasResult = false;

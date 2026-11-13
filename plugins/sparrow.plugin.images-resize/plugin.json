@@ -1,0 +1,10 @@
+{
+  "id": "sparrow.plugin.images-resize",
+  "name": "图片缩放",
+  "version": "0.1.0",
+  "sdkVersion": "1.0",
+  "entryAssembly": "Sparrow.Plugin.Images.Resize.dll",
+  "author": "sparrow",
+  "description": "按最长边或百分比缩放图片，输出 PNG",
+  "tools": ["sparrow.images.resize"]
+}

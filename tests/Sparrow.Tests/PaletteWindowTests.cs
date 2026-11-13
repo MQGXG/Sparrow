@@ -36,6 +36,12 @@ public sealed class PaletteWindowTests
             Text = text;
             return true;
         }
+
+        public bool SetImagePng(byte[] png)
+        {
+            ImagePng = png;
+            return true;
+        }
     }
 
     private sealed class NullLog : IAppLog

@@ -297,6 +297,8 @@ public partial class PaletteViewModel : ObservableObject
             TextPayload textPayload => textPayload.Text,
             OcrResultPayload ocrPayload => ocrPayload.Text,
             SvgPayload svgPayload => svgPayload.Svg,
+            // 面板是只读文本结果；图片类工具去工作区用（预览 / 保存）
+            ImagePayload imagePayload => WorkspaceViewModel.SummarizeImage(imagePayload),
             _ => $"（{payload.GetType().Name} 结果，面板暂不支持展示）"
         };
 

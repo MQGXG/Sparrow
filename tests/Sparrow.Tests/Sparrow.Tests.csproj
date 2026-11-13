@@ -29,6 +29,8 @@
     <ProjectReference Include="..\..\plugins\sparrow.plugin.translate\Sparrow.Plugin.Translate.csproj" />
     <ProjectReference Include="..\..\plugins\sparrow.plugin.svg-prompt\Sparrow.Plugin.Svg.Prompt.csproj" />
     <ProjectReference Include="..\..\plugins\sparrow.plugin.clipboard-history\Sparrow.Plugin.Clipboard.History.csproj" />
+    <ProjectReference Include="..\..\plugins\sparrow.plugin.images-convert\Sparrow.Plugin.Images.Convert.csproj" />
+    <ProjectReference Include="..\..\plugins\sparrow.plugin.images-resize\Sparrow.Plugin.Images.Resize.csproj" />
     <!-- 只为测 ToolRegistry / PaletteViewModel，不启动 Avalonia -->
     <ProjectReference Include="..\..\src\Sparrow.App\Sparrow.App.csproj" />
   </ItemGroup>

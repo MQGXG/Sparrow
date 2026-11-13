@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>Sparrow.Plugin.Images.Resize</AssemblyName>
+    <RootNamespace>Sparrow.Plugin.Images.Resize</RootNamespace>
+    <Version>1.0.0</Version>
+    <Description>图片缩放（按最长边 / 按百分比）</Description>
+    <!-- 必须等于 plugin.json 的 id 与目录名 -->
+    <PluginId>sparrow.plugin.images-resize</PluginId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ★ 不能把 SDK 拷进插件目录，否则 ALC 里的 ITool 会和宿主的不一致 -->
+    <ProjectReference Include="..\..\src\Sparrow.Plugin.Sdk\Sparrow.Plugin.Sdk.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

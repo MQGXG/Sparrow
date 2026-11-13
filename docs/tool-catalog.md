@@ -134,8 +134,8 @@ Tool : InputShape × Params → OutputShape
 
 | ID | 名称 | 输入 | 输出 | 阶段 | 状态 | 备注 |
 |---|---|---|:--:|:--:|---|---|
-| `sparrow.images.convert` | 格式转换 | Image | Files | P1 | ⬜ | PNG / JPEG / WebP |
-| `sparrow.images.resize` | 缩放 | Image | Image | P1 | ⬜ | 按边长 / 按比例 / 目标体积 |
+| `sparrow.images.convert` | 格式转换 | Image | Image | P1 | ✅ M2 完成：PNG / JPEG / WebP，落盘由宿主「保存」完成 | 输出 ImagePayload（编码后字节），不是 FileSet——插件不写盘（契约） |
+| `sparrow.images.resize` | 缩放 | Image | Image | P1 | ✅ M2 完成：按最长边 / 按百分比，输出 PNG | 矩阵缺口已补：Image 输出有工具消费了 |
 | `sparrow.images.pickColor` | 取色 | Image | Text | P1 | ⬜ | 拾色器 + HEX / RGB |
 | `sparrow.images.qr` | 二维码 | Text | Image | P2 | ⬜ | 生成 + 识别 |
 | `sparrow.images.batch` | 批量处理 | — | — | ✂ | — | 是另一个产品 |
@@ -205,9 +205,9 @@ Tool : InputShape × Params → OutputShape
 
 | 观察 | 结论 |
 |---|---|
-| `Image` 输出没有工具消费 | **M2 必须补一个 Image 输入工具**（resize 或 convert），否则截图类链路是断头路 |
+| ~~`Image` 输出没有工具消费~~ | **已补**（M2）：`convert` / `resize` 接收 Image；截图 → 缩放 → 转格式 → 复制走成立 |
 | `RichText` 输入无人使用 | 剪贴板历史只存纯文本，是有意的简化；RichText 等真实需求出现再做 |
-| `Table` 只有输出没有输入 | 目前只用于「导出 CSV」；等 Table 输入工具达到 2 个再抽象 |
+| `Table` 只有输出没有输入 | 「表格」整理模式先以 Tab 分隔文本垫上；等 Table 输入工具达到 2 个再抽象 |
 | `Files` 输入侧工具偏少 | 文件域是 P1 洼地，但优先级低于 SVG（SVG 是产品起源） |
 | `Selection` 平台差异大 | 只有 Windows 能稳定拿前台选区；macOS 需要辅助功能授权 |
 

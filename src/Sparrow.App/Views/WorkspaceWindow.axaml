@@ -620,6 +620,21 @@
                          VerticalAlignment="Center" />
                 </Border>
 
+                <!-- 图片结果（缩放 / 格式转换） -->
+                <Border Grid.Row="2"
+                        IsVisible="{Binding HasImageResult}"
+                        Background="{StaticResource SurfaceRaisedBrush}"
+                        BorderBrush="{StaticResource LineBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="10"
+                        ClipToBounds="True">
+                  <Image Source="{Binding ImageResultPng, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
+                         Stretch="Uniform"
+                         HorizontalAlignment="Center"
+                         VerticalAlignment="Center" />
+                </Border>
+
                 <!-- 空态：既没结果也没错误时才显示 -->
                 <TextBlock Grid.Row="2"
                            IsVisible="{Binding IsResultEmpty}"
@@ -662,6 +677,11 @@
                       Spacing="8"
                       VerticalAlignment="Center"
                       IsVisible="{Binding IsDetailOpen}">
+            <Button Content="保存"
+                    ToolTip.Tip="把图片结果保存为文件"
+                    IsVisible="{Binding HasImageResult}"
+                    IsEnabled="{Binding !IsExecuting}"
+                    Click="OnSaveResultClick" />
             <Button Content="复制"
                     ToolTip.Tip="复制结果到剪贴板"
                     IsEnabled="{Binding !IsExecuting}"

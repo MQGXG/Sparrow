@@ -37,6 +37,12 @@ public sealed class ToolHostTests
             Text = text;
             return true;
         }
+
+        public bool SetImagePng(byte[] png)
+        {
+            ImagePng = png;
+            return true;
+        }
     }
 
     /// <summary>记录最后一次执行拿到的 ToolContext。</summary>
