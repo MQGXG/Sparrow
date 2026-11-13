@@ -28,9 +28,9 @@ public partial class PinnedImageWindow : Window
         InitializeComponent();
         PointerPressed += OnPointerPressed;
         PointerWheelChanged += OnPointerWheelChanged;
-        PointerEntered += (_, _) => CloseButton.IsVisible = true;
-        PointerMoved += (_, _) => CloseButton.IsVisible = true;
-        PointerExited += (_, _) => CloseButton.IsVisible = false;
+        PointerEntered += (_, _) => CloseButton.Opacity = 1;
+        PointerMoved += (_, _) => CloseButton.Opacity = 1;
+        PointerExited += (_, _) => CloseButton.Opacity = 0.35;
         DoubleTapped += (_, _) => Close();
     }
 
@@ -59,11 +59,11 @@ public partial class PinnedImageWindow : Window
 
     private async Task ShowCloseHintAsync()
     {
-        CloseButton.IsVisible = true;
+        CloseButton.Opacity = 1;
         await Task.Delay(1500);
 
         if (!IsPointerOver)
-            CloseButton.IsVisible = false;
+            CloseButton.Opacity = 0.35;
     }
 
     private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();

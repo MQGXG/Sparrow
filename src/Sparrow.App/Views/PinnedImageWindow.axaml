@@ -21,7 +21,7 @@
 
     <!-- 悬停时才出现；首次打开短暂显示，避免用户不知道怎么关 -->
     <Button x:Name="CloseButton"
-            IsVisible="False"
+            Opacity="0.35"
             HorizontalAlignment="Right"
             VerticalAlignment="Top"
             Margin="0,6,6,0"
