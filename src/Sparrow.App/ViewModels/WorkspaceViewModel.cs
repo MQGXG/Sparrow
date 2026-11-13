@@ -44,6 +44,9 @@ public partial class WorkspaceViewModel : ObservableObject
 
     public ObservableCollection<ToolGroupViewModel> Groups { get; } = [];
 
+    /// <summary>工具墙的扁平网格：分类只作为卡片上的标签，不再按分类分节。</summary>
+    public ObservableCollection<ToolItemViewModel> VisibleTools { get; } = [];
+
     public ObservableCollection<CategoryViewModel> Categories { get; } = [];
 
     public ObservableCollection<RecentToolViewModel> RecentTools { get; } = [];
@@ -307,6 +310,11 @@ public partial class WorkspaceViewModel : ObservableObject
         var list = items.ToList();
 
         Groups.Clear();
+        VisibleTools.Clear();
+
+        foreach (var entry in list)
+            VisibleTools.Add(new ToolItemViewModel(entry));
+
         foreach (var group in list
                      .GroupBy(entry => entry.Descriptor.Category)
                      .OrderBy(group => group.Key, StringComparer.Ordinal))

@@ -29,6 +29,9 @@ public sealed partial class ToolItemViewModel : ObservableObject
 
     public string CategoryLabel => Entry.Descriptor.Category;
 
+    /// <summary>界面显示的分类名；未知分类原样显示。</summary>
+    public string CategoryDisplay => ToolCategories.Display(CategoryLabel);
+
     /// <summary>工作区左栏的选中态。由 WorkspaceViewModel 在 SelectedTool 变化时维护。</summary>
     [ObservableProperty]
     private bool _isSelected;

@@ -15,6 +15,9 @@ public sealed partial class CategoryViewModel : ObservableObject
 
     public string Name { get; }
 
+    /// <summary>界面显示名；过滤仍然用 <see cref="Name"/> 的原始分类键。</summary>
+    public string DisplayName => ToolCategories.Display(Name);
+
     public int Count { get; }
 
     [ObservableProperty]

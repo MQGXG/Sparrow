@@ -1,7 +1,9 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Sparrow.App.Services;
 using Sparrow.App.ViewModels;
 
 namespace Sparrow.App.Views;
@@ -22,6 +24,14 @@ public partial class WorkspaceWindow : Window
             e.Cancel = true;
             Hide();
         };
+    }
+
+    protected override void OnOpened(EventArgs e)
+    {
+        base.OnOpened(e);
+
+        // 让 Windows 标题栏跟随应用的深色主题
+        WindowChrome.TryApplyDarkTitleBar(this);
     }
 
     private void OnDragOver(object? sender, DragEventArgs e)

@@ -17,5 +17,7 @@ public sealed class ToolGroupViewModel
 
     public string Category { get; }
 
+    public string DisplayName => ToolCategories.Display(Category);
+
     public ObservableCollection<ToolItemViewModel> Tools { get; }
 }
