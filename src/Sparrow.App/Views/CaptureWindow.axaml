@@ -17,6 +17,11 @@
                Stroke="{StaticResource AccentBrush}"
                StrokeThickness="2" />
 
+    <!-- 8 个控制点：只负责显示，命中判定在窗口里做 -->
+    <Canvas x:Name="HandleLayer"
+            IsVisible="False"
+            IsHitTestVisible="False" />
+
     <!-- 选区尺寸：显示物理像素，和最终截图尺寸一致 -->
     <Border x:Name="SizeBadge"
             IsVisible="False"

@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -143,6 +144,113 @@ public sealed class CaptureWindowTests
 
         window.OcrLayer.IsVisible.ShouldBeFalse();
         window.IsVisible.ShouldBeTrue();
+
+        window.Close();
+    }
+
+    /// <summary>拖出选区并松手：窗口不关，进入可编辑态。</summary>
+    private static CaptureWindow CreateWithSelection()
+    {
+        var window = new CaptureWindow();
+        window.Show();
+
+        window.MouseDown(new Point(100, 100), MouseButton.Left);
+        window.MouseMove(new Point(300, 250));
+        window.MouseUp(new Point(300, 250), MouseButton.Left);
+
+        return window;
+    }
+
+    [AvaloniaFact]
+    public void 松手后_选区保留且显示八个控制点()
+    {
+        var window = CreateWithSelection();
+
+        window.IsVisible.ShouldBeTrue();
+        window.ActionBar.IsVisible.ShouldBeTrue();
+        window.HandleLayer.IsVisible.ShouldBeTrue();
+        window.HandleLayer.Children.Count.ShouldBe(8);
+        window.Selection.Width.ShouldBe(200, 0.01);
+        window.Selection.Height.ShouldBe(150, 0.01);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 框内拖动_整体移动且尺寸不变()
+    {
+        var window = CreateWithSelection();
+
+        window.MouseDown(new Point(200, 175), MouseButton.Left);
+        window.MouseMove(new Point(250, 205));
+        window.MouseUp(new Point(250, 205), MouseButton.Left);
+
+        Canvas.GetLeft(window.Selection).ShouldBe(150, 0.01);
+        Canvas.GetTop(window.Selection).ShouldBe(130, 0.01);
+        window.Selection.Width.ShouldBe(200, 0.01);
+        window.Selection.Height.ShouldBe(150, 0.01);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 拖右下角_左上角保持不动()
+    {
+        var window = CreateWithSelection();
+
+        window.MouseDown(new Point(300, 250), MouseButton.Left);
+        window.MouseMove(new Point(350, 300));
+        window.MouseUp(new Point(350, 300), MouseButton.Left);
+
+        Canvas.GetLeft(window.Selection).ShouldBe(100, 0.01);
+        Canvas.GetTop(window.Selection).ShouldBe(100, 0.01);
+        window.Selection.Width.ShouldBe(250, 0.01);
+        window.Selection.Height.ShouldBe(200, 0.01);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 拖左边_右边保持不动()
+    {
+        var window = CreateWithSelection();
+
+        window.MouseDown(new Point(100, 175), MouseButton.Left);
+        window.MouseMove(new Point(50, 175));
+        window.MouseUp(new Point(50, 175), MouseButton.Left);
+
+        Canvas.GetLeft(window.Selection).ShouldBe(50, 0.01);
+        window.Selection.Width.ShouldBe(250, 0.01);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 拖动不小于最小尺寸()
+    {
+        var window = CreateWithSelection();
+
+        window.MouseDown(new Point(300, 250), MouseButton.Left);
+        window.MouseMove(new Point(50, 50));
+        window.MouseUp(new Point(50, 50), MouseButton.Left);
+
+        window.Selection.Width.ShouldBe(4, 0.01);
+        window.Selection.Height.ShouldBe(4, 0.01);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 移动不超出窗口边界()
+    {
+        var window = CreateWithSelection();
+
+        window.MouseDown(new Point(200, 175), MouseButton.Left);
+        window.MouseMove(new Point(-500, -500));
+        window.MouseUp(new Point(-500, -500), MouseButton.Left);
+
+        Canvas.GetLeft(window.Selection).ShouldBe(0, 0.01);
+        Canvas.GetTop(window.Selection).ShouldBe(0, 0.01);
 
         window.Close();
     }

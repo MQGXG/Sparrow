@@ -29,20 +29,86 @@ public enum CaptureAction
 public partial class CaptureWindow : Window
 {
     private const double OcrLinePadding = 2;
+    private const double MinSelectionSize = 4;
+
+    private enum DragMode
+    {
+        None,
+        Create,
+        Move,
+        Resize
+    }
+
+    private enum ResizeHandle
+    {
+        None,
+        NW,
+        N,
+        NE,
+        E,
+        SE,
+        S,
+        SW,
+        W
+    }
 
     private static readonly IBrush LineFill = new SolidColorBrush(Color.Parse("#1FE5A44C"));
     private static readonly IBrush LineHoverFill = new SolidColorBrush(Color.Parse("#40E5A44C"));
     private static readonly IBrush LineStroke = new SolidColorBrush(Color.Parse("#80E5A44C"));
+    private static readonly IBrush HandleFill = Brushes.White;
+    private static readonly IBrush HandleStroke = new SolidColorBrush(Color.Parse("#CCE5A44C"));
 
-    private Point? _start;
+    private static readonly Cursor CrossCursor = new(StandardCursorType.Cross);
+    private static readonly Cursor MoveCursor = new(StandardCursorType.SizeAll);
+    private static readonly Cursor NorthSouthCursor = new(StandardCursorType.SizeNorthSouth);
+    private static readonly Cursor WestEastCursor = new(StandardCursorType.SizeWestEast);
+    private static readonly Cursor NwseCursor = new(StandardCursorType.TopLeftCorner);
+    private static readonly Cursor NeswCursor = new(StandardCursorType.TopRightCorner);
+
+    private readonly Dictionary<ResizeHandle, Ellipse> _handles = [];
+
     private PixelPoint _origin;
     private double _scaling = 1;
     private Rect _selection;
+    private Rect _selectionOrigin;
+    private Point _dragOrigin;
+    private Point _createStart;
+    private DragMode _mode;
+    private ResizeHandle _resizeHandle;
+    private bool _hasSelection;
+    private bool _isActing;
     private CancellationTokenSource? _ocrCancellation;
     private bool _isRecognizing;
     private string? _ocrText;
 
-    public CaptureWindow() => InitializeComponent();
+    public CaptureWindow()
+    {
+        InitializeComponent();
+        CreateHandles();
+    }
+
+    private void CreateHandles()
+    {
+        foreach (var handle in new[]
+                 {
+                     ResizeHandle.NW, ResizeHandle.N, ResizeHandle.NE, ResizeHandle.E,
+                     ResizeHandle.SE, ResizeHandle.S, ResizeHandle.SW, ResizeHandle.W
+                 })
+        {
+            var dot = new Ellipse
+            {
+                Width = 10,
+                Height = 10,
+                Fill = HandleFill,
+                Stroke = HandleStroke,
+                StrokeThickness = 2,
+                IsVisible = false
+            };
+
+            _handles[handle] = dot;
+            HandleLayer.Children.Add(dot);
+        }
+    }
 
     /// <summary>
     /// 宿主注入的 OCR 执行器。为空时「识别文字」保持旧行为：
@@ -104,83 +170,308 @@ public partial class CaptureWindow : Window
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
-        // 已经截完图：不允许再拉新选区，否则 overlay 会被误清掉
-        if (Result is not null)
+        if (_isActing || _isRecognizing)
             return;
 
-        _start = e.GetPosition(this);
+        // 第一次点击先清掉识别结果，不直接开始拉新框
+        if (OcrLayer.IsVisible)
+        {
+            if (e.Source is not Rectangle)
+                ClearOcrOverlay();
 
-        Selection.IsVisible = true;
-        Canvas.SetLeft(Selection, _start.Value.X);
-        Canvas.SetTop(Selection, _start.Value.Y);
-        Selection.Width = 0;
-        Selection.Height = 0;
+            e.Handled = true;
+            return;
+        }
 
+        var point = e.GetPosition(this);
+
+        if (_hasSelection)
+        {
+            var handle = HitHandle(point);
+            if (handle != ResizeHandle.None)
+            {
+                _mode = DragMode.Resize;
+                _resizeHandle = handle;
+                _dragOrigin = point;
+                _selectionOrigin = _selection;
+                e.Handled = true;
+                return;
+            }
+
+            if (_selection.Contains(point))
+            {
+                _mode = DragMode.Move;
+                _dragOrigin = point;
+                _selectionOrigin = _selection;
+                Cursor = MoveCursor;
+                e.Handled = true;
+                return;
+            }
+        }
+
+        // 框外按下：重新拉一个
+        BeginCreate(point);
         e.Handled = true;
     }
 
     protected override void OnPointerMoved(PointerEventArgs e)
     {
-        if (_start is null)
+        var point = e.GetPosition(this);
+
+        switch (_mode)
+        {
+            case DragMode.Create:
+                ApplyCreate(point);
+                e.Handled = true;
+                return;
+            case DragMode.Move:
+                ApplyMove(point);
+                e.Handled = true;
+                return;
+            case DragMode.Resize:
+                ApplyResize(point);
+                e.Handled = true;
+                return;
+        }
+
+        UpdateCursor(point);
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        if (_mode == DragMode.None)
             return;
 
-        UpdateSelection(e.GetPosition(this));
+        var mode = _mode;
+        _mode = DragMode.None;
+
+        if (mode == DragMode.Create)
+        {
+            ApplyCreate(e.GetPosition(this));
+
+            if (_selection.Width < MinSelectionSize || _selection.Height < MinSelectionSize)
+            {
+                ResetSelection();
+                return;
+            }
+
+            _hasSelection = true;
+            ShowActionBar(_selection);
+            UpdateHandles();
+            UpdateSizeBadge(_selection);
+            Cursor = MoveCursor;
+        }
+        else
+        {
+            // 移动/拉伸结束：动作栏跟着新位置走
+            PositionActionBar(_selection);
+            UpdateHandles();
+            UpdateSizeBadge(_selection);
+        }
+
         e.Handled = true;
     }
 
-    protected override async void OnPointerReleased(PointerReleasedEventArgs e)
+    private void BeginCreate(Point point)
     {
-        if (_start is null)
+        _hasSelection = false;
+        _mode = DragMode.Create;
+        _createStart = point;
+        _selection = new Rect(point, new Size());
+        _selectionOrigin = _selection;
+
+        Result = null;
+        FallbackText = null;
+        ActionBar.IsVisible = false;
+        HandleLayer.IsVisible = false;
+        OcrStatus.IsVisible = false;
+        CopyAllButton.IsVisible = false;
+        RecognizeButton.Content = "识别文字";
+        _ocrText = null;
+
+        OcrLayer.Children.Clear();
+        OcrLayer.IsVisible = false;
+
+        Selection.IsVisible = true;
+        ApplyCreate(point);
+        Cursor = CrossCursor;
+    }
+
+    private void ApplyCreate(Point current)
+    {
+        var x = Math.Min(_createStart.X, current.X);
+        var y = Math.Min(_createStart.Y, current.Y);
+        var width = Math.Abs(current.X - _createStart.X);
+        var height = Math.Abs(current.Y - _createStart.Y);
+
+        _selection = new Rect(x, y, width, height);
+        UpdateSelectionVisuals();
+    }
+
+    private void ApplyMove(Point current)
+    {
+        var dx = current.X - _dragOrigin.X;
+        var dy = current.Y - _dragOrigin.Y;
+
+        var left = Math.Clamp(
+            _selectionOrigin.X + dx,
+            0,
+            Math.Max(0, Width - _selectionOrigin.Width));
+        var top = Math.Clamp(
+            _selectionOrigin.Y + dy,
+            0,
+            Math.Max(0, Height - _selectionOrigin.Height));
+
+        _selection = new Rect(left, top, _selectionOrigin.Width, _selectionOrigin.Height);
+        UpdateSelectionVisuals();
+    }
+
+    private void ApplyResize(Point current)
+    {
+        var dx = current.X - _dragOrigin.X;
+        var dy = current.Y - _dragOrigin.Y;
+
+        var left = _selectionOrigin.Left;
+        var top = _selectionOrigin.Top;
+        var right = _selectionOrigin.Right;
+        var bottom = _selectionOrigin.Bottom;
+
+        // 拖哪条边就动哪条边，对边保持不动
+        if (_resizeHandle is ResizeHandle.NW or ResizeHandle.W or ResizeHandle.SW)
+            left = Math.Min(_selectionOrigin.Left + dx, right - MinSelectionSize);
+        if (_resizeHandle is ResizeHandle.NE or ResizeHandle.E or ResizeHandle.SE)
+            right = Math.Max(_selectionOrigin.Right + dx, left + MinSelectionSize);
+        if (_resizeHandle is ResizeHandle.NW or ResizeHandle.N or ResizeHandle.NE)
+            top = Math.Min(_selectionOrigin.Top + dy, bottom - MinSelectionSize);
+        if (_resizeHandle is ResizeHandle.SW or ResizeHandle.S or ResizeHandle.SE)
+            bottom = Math.Max(_selectionOrigin.Bottom + dy, top + MinSelectionSize);
+
+        left = Math.Max(0, left);
+        top = Math.Max(0, top);
+        right = Math.Min(Width, right);
+        bottom = Math.Min(Height, bottom);
+
+        _selection = new Rect(left, top, right - left, bottom - top);
+        UpdateSelectionVisuals();
+    }
+
+    private void UpdateSelectionVisuals()
+    {
+        Selection.IsVisible = _selection.Width > 0 && _selection.Height > 0;
+        Canvas.SetLeft(Selection, _selection.X);
+        Canvas.SetTop(Selection, _selection.Y);
+        Selection.Width = _selection.Width;
+        Selection.Height = _selection.Height;
+
+        UpdateSizeBadge(_selection);
+
+        if (_hasSelection)
+        {
+            UpdateHandles();
+            PositionActionBar(_selection);
+        }
+    }
+
+    private void UpdateHandles()
+    {
+        HandleLayer.IsVisible = _hasSelection && !OcrLayer.IsVisible;
+
+        if (!HandleLayer.IsVisible)
             return;
 
-        var end = e.GetPosition(this);
-        UpdateSelection(end);
-
-        var start = _start.Value;
-        _start = null;
-
-        var rect = new Rect(
-            Math.Min(start.X, end.X),
-            Math.Min(start.Y, end.Y),
-            Math.Abs(end.X - start.X),
-            Math.Abs(end.Y - start.Y));
-
-        if (rect.Width < 4 || rect.Height < 4)
+        foreach (var (handle, dot) in _handles)
         {
-            Close();
+            dot.IsVisible = true;
+            Canvas.SetLeft(dot, HandleX(handle) - dot.Width / 2);
+            Canvas.SetTop(dot, HandleY(handle) - dot.Height / 2);
+        }
+    }
+
+    private double HandleX(ResizeHandle handle) => handle switch
+    {
+        ResizeHandle.NW or ResizeHandle.W or ResizeHandle.SW => _selection.Left,
+        ResizeHandle.NE or ResizeHandle.E or ResizeHandle.SE => _selection.Right,
+        _ => _selection.Center.X
+    };
+
+    private double HandleY(ResizeHandle handle) => handle switch
+    {
+        ResizeHandle.NW or ResizeHandle.N or ResizeHandle.NE => _selection.Top,
+        ResizeHandle.SW or ResizeHandle.S or ResizeHandle.SE => _selection.Bottom,
+        _ => _selection.Center.Y
+    };
+
+    private ResizeHandle HitHandle(Point point)
+    {
+        const double radius = 7;
+        var rect = _selection;
+
+        var nearLeft = Math.Abs(point.X - rect.Left) <= radius;
+        var nearRight = Math.Abs(point.X - rect.Right) <= radius;
+        var nearTop = Math.Abs(point.Y - rect.Top) <= radius;
+        var nearBottom = Math.Abs(point.Y - rect.Bottom) <= radius;
+        var withinX = point.X >= rect.Left - radius && point.X <= rect.Right + radius;
+        var withinY = point.Y >= rect.Top - radius && point.Y <= rect.Bottom + radius;
+
+        if (nearLeft && nearTop)
+            return ResizeHandle.NW;
+        if (nearRight && nearTop)
+            return ResizeHandle.NE;
+        if (nearLeft && nearBottom)
+            return ResizeHandle.SW;
+        if (nearRight && nearBottom)
+            return ResizeHandle.SE;
+        if (nearLeft && withinY)
+            return ResizeHandle.W;
+        if (nearRight && withinY)
+            return ResizeHandle.E;
+        if (nearTop && withinX)
+            return ResizeHandle.N;
+        if (nearBottom && withinX)
+            return ResizeHandle.S;
+
+        return ResizeHandle.None;
+    }
+
+    private void UpdateCursor(Point point)
+    {
+        if (!_hasSelection || OcrLayer.IsVisible)
+        {
+            Cursor = CrossCursor;
             return;
         }
 
-        var scaling = _scaling;
-        var origin = _origin;
-
-        var x = origin.X + (int)(rect.X * scaling);
-        var y = origin.Y + (int)(rect.Y * scaling);
-        var width = (int)(rect.Width * scaling);
-        var height = (int)(rect.Height * scaling);
-
-        SelectionRect = new PixelRect(x, y, width, height);
-        _selection = rect;
-
-        // 先让遮罩透明，再截图，否则截到的是自己
-        Opacity = 0;
-        await Task.Delay(80);
-
-        Result = ScreenCapture.Capture(x, y, width, height);
-        Opacity = 1;
-
-        if (Result is null)
+        Cursor = HitHandle(point) switch
         {
-            Close();
-            return;
-        }
+            ResizeHandle.NW or ResizeHandle.SE => NwseCursor,
+            ResizeHandle.NE or ResizeHandle.SW => NeswCursor,
+            ResizeHandle.N or ResizeHandle.S => NorthSouthCursor,
+            ResizeHandle.E or ResizeHandle.W => WestEastCursor,
+            _ => _selection.Contains(point) ? MoveCursor : CrossCursor
+        };
+    }
 
-        ShowActionBar(rect);
+    private void ResetSelection()
+    {
+        _hasSelection = false;
+        _selection = default;
+        Selection.IsVisible = false;
+        HandleLayer.IsVisible = false;
+        ActionBar.IsVisible = false;
+        SizeBadge.IsVisible = false;
+        Cursor = CrossCursor;
     }
 
     private void ShowActionBar(Rect selection)
     {
         ActionBar.IsVisible = true;
+        PositionActionBar(selection);
+    }
+
+    private void PositionActionBar(Rect selection)
+    {
+        if (!ActionBar.IsVisible)
+            return;
 
         const double estimatedWidth = 620;
         var left = Math.Max(8, Math.Min(selection.X, Width - estimatedWidth - 8));
@@ -194,9 +485,73 @@ public partial class CaptureWindow : Window
         Canvas.SetTop(ActionBar, top);
     }
 
-    private async void OnRecognizeClick(object? sender, RoutedEventArgs e) => await RunOcrAsync();
+    private async void OnRecognizeClick(object? sender, RoutedEventArgs e) => await ActAsync(CaptureAction.Recognize);
 
     private void OnCopyAllClick(object? sender, RoutedEventArgs e) => CopyAllText();
+
+    /// <summary>
+    /// 动作触发时才截图：选区在松手后还可以移动/拉伸，
+    /// 直到用户点识别、复制、保存、固定或滚动。
+    /// </summary>
+    private async Task ActAsync(CaptureAction action)
+    {
+        if (_isActing || _isRecognizing || !_hasSelection)
+            return;
+
+        if (_selection.Width < MinSelectionSize || _selection.Height < MinSelectionSize)
+            return;
+
+        _isActing = true;
+
+        try
+        {
+            var png = await CaptureSelectionAsync();
+            if (png is null)
+            {
+                Action = CaptureAction.None;
+                Close();
+                return;
+            }
+
+            Result = png;
+            Action = action;
+
+            if (action == CaptureAction.Recognize && OcrRunner is not null)
+            {
+                await RunOcrAsync();
+                return;
+            }
+
+            Close();
+        }
+        finally
+        {
+            _isActing = false;
+        }
+    }
+
+    private async Task<byte[]?> CaptureSelectionAsync()
+    {
+        var rect = _selection;
+        var x = _origin.X + (int)Math.Round(rect.X * _scaling);
+        var y = _origin.Y + (int)Math.Round(rect.Y * _scaling);
+        var width = (int)Math.Round(rect.Width * _scaling);
+        var height = (int)Math.Round(rect.Height * _scaling);
+
+        SelectionRect = new PixelRect(x, y, width, height);
+
+        // 先让遮罩透明，再截图，否则截到的是自己
+        Opacity = 0;
+        try
+        {
+            await Task.Delay(80);
+            return ScreenCapture.Capture(x, y, width, height);
+        }
+        finally
+        {
+            Opacity = 1;
+        }
+    }
 
     private async Task RunOcrAsync()
     {
@@ -260,6 +615,7 @@ public partial class CaptureWindow : Window
     {
         _ocrText = result.Text;
         OcrLayer.Children.Clear();
+        HandleLayer.IsVisible = false;
 
         var left = Canvas.GetLeft(Selection);
         var top = Canvas.GetTop(Selection);
@@ -318,6 +674,7 @@ public partial class CaptureWindow : Window
         OcrStatus.IsVisible = false;
         RecognizeButton.Content = "识别文字";
         _ocrText = null;
+        UpdateHandles();
     }
 
     private void CopyAllText()
@@ -354,29 +711,13 @@ public partial class CaptureWindow : Window
     private static string Shorten(string text) =>
         text.Length <= 18 ? text : text[..18] + "…";
 
-    private void OnCopyImageClick(object? sender, RoutedEventArgs e)
-    {
-        Action = CaptureAction.CopyImage;
-        Close();
-    }
+    private async void OnCopyImageClick(object? sender, RoutedEventArgs e) => await ActAsync(CaptureAction.CopyImage);
 
-    private void OnSaveClick(object? sender, RoutedEventArgs e)
-    {
-        Action = CaptureAction.Save;
-        Close();
-    }
+    private async void OnSaveClick(object? sender, RoutedEventArgs e) => await ActAsync(CaptureAction.Save);
 
-    private void OnPinClick(object? sender, RoutedEventArgs e)
-    {
-        Action = CaptureAction.Pin;
-        Close();
-    }
+    private async void OnPinClick(object? sender, RoutedEventArgs e) => await ActAsync(CaptureAction.Pin);
 
-    private void OnScrollClick(object? sender, RoutedEventArgs e)
-    {
-        Action = CaptureAction.Scroll;
-        Close();
-    }
+    private async void OnScrollClick(object? sender, RoutedEventArgs e) => await ActAsync(CaptureAction.Scroll);
 
     private void OnCancelClick(object? sender, RoutedEventArgs e)
     {
@@ -438,8 +779,17 @@ public partial class CaptureWindow : Window
         // 动作栏出现后，整条流程都可以只用键盘完成
         if (ActionBar.IsVisible && TryResolveShortcut(key, out var action))
         {
-            Action = action;
-            Close();
+            if (OcrRunner is null)
+            {
+                // 没有就地 OCR：保持旧行为，关窗交给宿主
+                Action = action;
+                Close();
+            }
+            else
+            {
+                _ = ActAsync(action);
+            }
+
             e.Handled = true;
             return;
         }
@@ -484,51 +834,38 @@ public partial class CaptureWindow : Window
         }
     }
 
-    private void UpdateSelection(Point current)
-    {
-        if (_start is null)
-            return;
-
-        var start = _start.Value;
-        var x = Math.Min(start.X, current.X);
-        var y = Math.Min(start.Y, current.Y);
-
-        Canvas.SetLeft(Selection, x);
-        Canvas.SetTop(Selection, y);
-        Selection.Width = Math.Abs(current.X - start.X);
-        Selection.Height = Math.Abs(current.Y - start.Y);
-
-        UpdateSizeBadge(x, y, Selection.Width, Selection.Height);
-    }
-
     /// <summary>
-    /// 草稿区尺寸提示：按物理像素显示，和最终截图尺寸一致。
-    /// 默认放在选区右下方；贴边时翻到选区内侧，避免被屏幕边缘裁掉。
+    /// 选区读数：左上角物理坐标 + 物理像素尺寸，和最终截图一致。
+    /// 默认放在选区上方；顶到屏幕边缘时放到下方。
     /// </summary>
-    private void UpdateSizeBadge(double x, double y, double width, double height)
+    private void UpdateSizeBadge(Rect rect)
     {
-        if (width < 1 || height < 1)
+        if (rect.Width < 1 || rect.Height < 1)
         {
             SizeBadge.IsVisible = false;
             return;
         }
 
         SizeBadge.IsVisible = true;
-        SizeText.Text = $"{(int)Math.Round(width * _scaling)} × {(int)Math.Round(height * _scaling)}";
 
-        const double badgeWidth = 96;
+        var x = _origin.X + (int)Math.Round(rect.X * _scaling);
+        var y = _origin.Y + (int)Math.Round(rect.Y * _scaling);
+        var width = (int)Math.Round(rect.Width * _scaling);
+        var height = (int)Math.Round(rect.Height * _scaling);
+
+        SizeText.Text = $"{x}, {y}  {width} × {height}";
+
+        const double badgeWidth = 180;
         const double badgeHeight = 26;
         const double gap = 8;
 
-        var left = x + width + gap;
-        if (left + badgeWidth > Width)
-            left = x + width - badgeWidth - gap;
+        var left = Math.Max(4, Math.Min(rect.X, Width - badgeWidth - 4));
+        var top = rect.Y - badgeHeight - gap;
+        if (top < 4)
+            top = rect.Y + 4; // 顶到屏幕边缘时放进选区内侧，避免压住动作栏
+        top = Math.Max(4, Math.Min(top, Height - badgeHeight - 4));
 
-        var top = y + height + gap;
-        if (top + badgeHeight > Height)
-            top = y + height - badgeHeight - gap;
-
-        Canvas.SetLeft(SizeBadge, Math.Max(4, Math.Min(left, Width - badgeWidth - 4)));
-        Canvas.SetTop(SizeBadge, Math.Max(4, Math.Min(top, Height - badgeHeight - 4)));
+        Canvas.SetLeft(SizeBadge, left);
+        Canvas.SetTop(SizeBadge, top);
     }
 }
