@@ -140,6 +140,18 @@ dotnet build                              # 构建解决方案（含所有插件
 dotnet run --project src/Sparrow.App
 ```
 
+或者直接用开发脚本（推荐，首次拉取/切换分支后一定先构建插件）：
+
+```powershell
+./build/run.ps1
+```
+
+> **只执行 `dotnet run --project src/Sparrow.App` 不会构建插件。**
+> 插件不是 App 的 ProjectReference，靠 `plugins/Directory.Build.targets` 复制到
+> `src/Sparrow.App/bin/<配置>/net10.0/plugins/`。
+> 如果工作区里看不到「翻译」「提示词生成 SVG」，先确认这个目录是否存在；
+> 不存在就重新执行 `dotnet build Sparrow.slnx`，不要继续用旧的 `bin`。
+
 插件产物会被自动同步到 `src/Sparrow.App/bin/<配置>/net10.0/plugins/`，
 每个插件一个目录，目录名等于它的 `plugin.json` 里的 `id`。
 

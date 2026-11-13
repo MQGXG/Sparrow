@@ -300,6 +300,11 @@ public partial class WorkspaceViewModel : ObservableObject
     /// <summary>侧栏空态：加载完且搜索无命中。</summary>
     public bool IsToolListEmpty => !IsLoading && !HasTools;
 
+    /// <summary>空态文案：区分「没有插件」和「搜索没命中」，避免新拉仓库时误判为程序坏了。</summary>
+    public string EmptyToolMessage => _allTools.Count == 0
+        ? "没有加载到工具。开发环境请先构建解决方案（dotnet build Sparrow.slnx）。"
+        : "没有匹配的工具";
+
     /// <summary>结果区空态：既没有结果也没有错误（错误会以红条显示）。</summary>
     public bool IsResultEmpty => !HasResult && !HasError;
 
@@ -421,6 +426,7 @@ public partial class WorkspaceViewModel : ObservableObject
         }
 
         HasTools = list.Count > 0;
+        OnPropertyChanged(nameof(EmptyToolMessage));
     }
 
     /// <summary>侧栏分类导航：全部 + 各分类（含工具数）。</summary>

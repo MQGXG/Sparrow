@@ -120,6 +120,19 @@ public sealed class ToolCatalog : IDisposable
 
             var valid = _candidates.Count(c => c.IsValid);
             _log.Info($"工具注册表构建完成：{_registry.Count} 个工具 / {valid} 个有效插件 / {_candidates.Count} 个目录 / {disabled.Count} 个禁用");
+
+            if (_candidates.Count == 0)
+            {
+                _log.Warn(
+                    $"没有发现任何插件目录：{_pluginsRoot}。"
+                    + "开发环境请先执行 dotnet build Sparrow.slnx，或使用 build/run.ps1。");
+            }
+            else if (_registry.Count == 0)
+            {
+                _log.Warn(
+                    $"发现 {_candidates.Count} 个插件目录，但没有加载到有效工具；"
+                    + "检查 plugin.json、SDK 版本和 settings.json 的 disabledPlugins。");
+            }
         }
     }
 

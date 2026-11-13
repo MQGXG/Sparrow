@@ -261,11 +261,14 @@
               </ItemsControl>
 
               <!-- 墙空态 -->
-              <TextBlock Text="没有匹配的工具"
+              <TextBlock Text="{Binding EmptyToolMessage}"
                          IsVisible="{Binding IsToolListEmpty}"
                          FontSize="12"
                          Foreground="{StaticResource TextMutedBrush}"
                          HorizontalAlignment="Center"
+                         TextWrapping="Wrap"
+                         TextAlignment="Center"
+                         MaxWidth="420"
                          Margin="0,40,0,0" />
             </StackPanel>
           </ScrollViewer>
