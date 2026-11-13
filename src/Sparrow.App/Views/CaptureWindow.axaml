@@ -59,6 +59,7 @@
 
     <Border x:Name="ActionBar"
             IsVisible="False"
+            Cursor="Arrow"
             Background="{StaticResource OverlayBrush}"
             BorderBrush="{StaticResource LineStrongBrush}"
             BorderThickness="1"

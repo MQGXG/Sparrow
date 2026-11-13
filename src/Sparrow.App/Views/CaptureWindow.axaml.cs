@@ -59,6 +59,7 @@ public partial class CaptureWindow : Window
     private static readonly IBrush HandleStroke = new SolidColorBrush(Color.Parse("#CCE5A44C"));
 
     private static readonly Cursor CrossCursor = new(StandardCursorType.Cross);
+    private static readonly Cursor ArrowCursor = new(StandardCursorType.Arrow);
     private static readonly Cursor MoveCursor = new(StandardCursorType.SizeAll);
     private static readonly Cursor NorthSouthCursor = new(StandardCursorType.SizeNorthSouth);
     private static readonly Cursor WestEastCursor = new(StandardCursorType.SizeWestEast);
@@ -439,6 +440,13 @@ public partial class CaptureWindow : Window
 
     private void UpdateCursor(Point point)
     {
+        // 动作栏是普通控件，不该显示截图十字
+        if (IsPointInActionBar(point))
+        {
+            Cursor = ArrowCursor;
+            return;
+        }
+
         if (!_hasSelection || OcrLayer.IsVisible)
         {
             Cursor = CrossCursor;
