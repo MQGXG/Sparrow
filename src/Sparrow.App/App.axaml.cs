@@ -33,6 +33,7 @@ public partial class App : Application
     private WorkspaceWindow? _workspace;
     private WorkspaceViewModel? _workspaceViewModel;
     private ToolParameterStore? _parameterStore;
+    private IHistoryStore? _history;
 
     // 贴图窗口需要宿主一直持有引用，否则会被 GC 回收
     private readonly List<PinnedImageWindow> _pins = [];
@@ -76,6 +77,7 @@ public partial class App : Application
             log,
             settings.HistoryMaxEntries,
             settings.HistoryRetentionDays);
+        _history = history;
 
         // 工具参数的「上次选择」：和插件设置分开，属于宿主 UI 状态
         var parameterPath = Path.Combine(
@@ -180,12 +182,24 @@ public partial class App : Application
         if (_palette is null || _paletteViewModel is null || _catalog is null)
             return;
 
-        var capture = new CaptureWindow();
+        var capture = new CaptureWindow
+        {
+            OcrRunner = RunCaptureOcrAsync,
+            CopyText = CopyTextToClipboard
+        };
         capture.Show();
         capture.Activate();
         Log.Info($"截图窗口已显示：visible={capture.IsVisible}，title={capture.Title}");
 
         await WaitForClosedAsync(capture);
+
+        // 旧 OCR 插件只返回文本：窗口已关，直接回退到面板，避免重复识别
+        if (capture.FallbackText is { Length: > 0 } fallback)
+        {
+            _paletteViewModel.ShowExternalResult("截图识别", fallback);
+            _paletteViewModel.CopyResult();
+            return;
+        }
 
         if (capture.Result is not { Length: > 0 } png)
             return;
@@ -238,6 +252,117 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// 截图窗口里的就地 OCR：宿主准备输入，插件仍然只收一张 ImageInput。
+    /// 识别成功写历史；旧插件只返回文本时由窗口回退到面板。
+    /// </summary>
+    private async Task<CaptureOcrResult> RunCaptureOcrAsync(
+        byte[] png,
+        CancellationToken cancellationToken)
+    {
+        if (_catalog is null)
+            return CaptureOcrResult.Failed("工具目录尚未就绪");
+
+        var entry = _catalog.GetRegistry()
+            .FindAccepting(InputShape.Image)
+            .FirstOrDefault();
+
+        if (entry is null)
+            return CaptureOcrResult.Failed("没有能识别图片的工具");
+
+        var startedAt = Stopwatch.GetTimestamp();
+
+        try
+        {
+            var context = new ToolContext
+            {
+                Input = new ImageInput(png, ImageFormat.Png),
+                Source = ToolSource.Screenshot,
+                Parameters = BuildParameters(entry),
+                Host = entry.Host
+            };
+
+            var result = await entry.Tool.ExecuteAsync(context, cancellationToken);
+
+            if (!result.Success)
+                return CaptureOcrResult.Failed(result.Error?.Message ?? "识别失败");
+
+            var elapsed = (long)Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+
+            switch (result.Payload)
+            {
+                case OcrResultPayload ocr:
+                    AddCaptureHistory(entry, png, ocr.Text, elapsed);
+                    return new CaptureOcrResult(ocr.Text, ocr.Lines);
+
+                case TextPayload text:
+                    AddCaptureHistory(entry, png, text.Text, elapsed);
+                    return new CaptureOcrResult(text.Text, Array.Empty<OcrTextLine>());
+
+                default:
+                    return CaptureOcrResult.Failed("识别结果格式不受支持");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return CaptureOcrResult.Failed("已取消");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("截图就地识别失败", ex);
+            return CaptureOcrResult.Failed($"识别失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>窗口只负责发命令，剪贴板仍然是宿主能力。</summary>
+    private void CopyTextToClipboard(string text)
+    {
+        try
+        {
+            var clipboard = new Win32Clipboard(Log);
+            if (clipboard.SetText(text))
+                Log.Info($"复制文本到剪贴板：{text.Length} 字");
+            else
+                Log.Warn($"复制文本到剪贴板失败：{text.Length} 字");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("复制文本失败", ex);
+        }
+    }
+
+    /// <summary>工具默认参数 + 上次保存的参数；面板与截图共用。</summary>
+    private Dictionary<string, string> BuildParameters(ToolEntry entry)
+    {
+        var parameters = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var parameter in entry.Descriptor.Parameters)
+        {
+            if (parameter.Default is not null)
+                parameters[parameter.Key] = parameter.Default;
+        }
+
+        if (_parameterStore is not null)
+        {
+            foreach (var (key, value) in _parameterStore.Get(entry.Descriptor.Id))
+                parameters[key] = value;
+        }
+
+        return parameters;
+    }
+
+    private void AddCaptureHistory(ToolEntry entry, byte[] png, string text, long elapsedMs)
+    {
+        _history?.Add(new HistoryEntry(
+            Guid.NewGuid().ToString("N"),
+            entry.Descriptor.Id,
+            entry.Descriptor.Name,
+            text,
+            $"截图 {png.Length} 字节",
+            DateTimeOffset.Now,
+            elapsedMs));
+    }
+
     private async Task RecognizeImageAsync(byte[] png)
     {
         if (_palette is null || _paletteViewModel is null || _catalog is null)
@@ -266,25 +391,11 @@ public partial class App : Application
 
         try
         {
-            // 截图路径也要用「上次选择的参数」，否则永远走插件默认语言
-            var parameters = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var parameter in entry.Descriptor.Parameters)
-            {
-                if (parameter.Default is not null)
-                    parameters[parameter.Key] = parameter.Default;
-            }
-
-            if (_parameterStore is not null)
-            {
-                foreach (var (key, value) in _parameterStore.Get(entry.Descriptor.Id))
-                    parameters[key] = value;
-            }
-
             var context = new ToolContext
             {
                 Input = new ImageInput(png, ImageFormat.Png),
                 Source = ToolSource.Screenshot,
-                Parameters = parameters,
+                Parameters = BuildParameters(entry),
                 Host = entry.Host
             };
 
