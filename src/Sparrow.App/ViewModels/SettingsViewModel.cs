@@ -32,9 +32,14 @@ public partial class SettingsViewModel : ObservableObject
         _searchHotkey = settings.SearchHotkey;
         _captureHotkey = settings.CaptureHotkey;
         _startWithWindows = startup.IsEnabled;
+        _historyMaxEntries = settings.HistoryMaxEntries;
+        _historyRetentionDays = settings.HistoryRetentionDays;
 
         Reload();
     }
+
+    /// <summary>历史保留策略变化时通知宿主，让存储立即清理一次。</summary>
+    public event Action<int, int>? HistoryRetentionChanged;
 
     public ObservableCollection<PluginItemViewModel> Plugins { get; } = [];
 
@@ -49,6 +54,14 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _startWithWindows;
+
+    /// <summary>历史最多保留条数；改完立即保存并清理。</summary>
+    [ObservableProperty]
+    private int _historyMaxEntries = 500;
+
+    /// <summary>历史保留天数；0 表示不按天数清理。</summary>
+    [ObservableProperty]
+    private int _historyRetentionDays;
 
     [ObservableProperty]
     private string? _statusMessage;
@@ -103,6 +116,31 @@ public partial class SettingsViewModel : ObservableObject
         StatusMessage = ok
             ? (value ? "已启用开机自启" : "已关闭开机自启")
             : "修改开机自启失败，详情见日志";
+    }
+
+    partial void OnHistoryMaxEntriesChanged(int value) => PersistHistory();
+
+    partial void OnHistoryRetentionDaysChanged(int value) => PersistHistory();
+
+    /// <summary>
+    /// 保存历史保留策略。XAML 初始化绑定时可能先写一次默认值，
+    /// 和已保存值相同就直接跳过，避免启动时无谓地重写 settings.json。
+    /// </summary>
+    private void PersistHistory()
+    {
+        if (HistoryMaxEntries == _settings.HistoryMaxEntries
+            && HistoryRetentionDays == _settings.HistoryRetentionDays)
+            return;
+
+        _settings = _settings with
+        {
+            HistoryMaxEntries = HistoryMaxEntries,
+            HistoryRetentionDays = HistoryRetentionDays
+        };
+
+        _store.Save(_settings);
+        HistoryRetentionChanged?.Invoke(HistoryMaxEntries, HistoryRetentionDays);
+        StatusMessage = "历史保留策略已保存";
     }
 
     /// <summary>

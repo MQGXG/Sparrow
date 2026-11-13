@@ -46,13 +46,15 @@ public sealed class JsonlHistoryStoreTests
         }
     }
 
-    private static HistoryEntry Entry(string output) => new(
+    private static HistoryEntry Entry(string output) => Entry(output, DateTimeOffset.Now);
+
+    private static HistoryEntry Entry(string output, DateTimeOffset createdAt) => new(
         Guid.NewGuid().ToString("N"),
         "sparrow.json.format",
         "JSON 格式化",
         output,
         "input-preview",
-        DateTimeOffset.Now,
+        createdAt,
         12);
 
     [Fact]
@@ -109,5 +111,59 @@ public sealed class JsonlHistoryStoreTests
         using var temp = new TempStore();
 
         temp.Store.Recent(10).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void 按天数清理_删除过期记录()
+    {
+        using var temp = new TempStore();
+        temp.Store.Add(Entry("old", DateTimeOffset.Now.AddDays(-60)));
+        temp.Store.Add(Entry("fresh", DateTimeOffset.Now));
+
+        temp.Store.Configure(500, 30);
+
+        var recent = temp.Store.Recent(10);
+        recent.Count.ShouldBe(1);
+        recent[0].Output.ShouldBe("fresh");
+    }
+
+    [Fact]
+    public void 超过条数上限_只保留最近记录()
+    {
+        using var temp = new TempStore();
+        for (var i = 0; i < 5; i++)
+            temp.Store.Add(Entry($"entry-{i}"));
+
+        temp.Store.Configure(3, 0);
+
+        var recent = temp.Store.Recent(10);
+        recent.Count.ShouldBe(3);
+        recent[0].Output.ShouldBe("entry-4");
+        recent[2].Output.ShouldBe("entry-2");
+    }
+
+    [Fact]
+    public void 清理后不保留空文件()
+    {
+        using var temp = new TempStore();
+        temp.Store.Add(Entry("old", DateTimeOffset.Now.AddDays(-60)));
+
+        temp.Store.Configure(500, 30);
+
+        File.Exists(temp.Path).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void 启动时按保留策略清理()
+    {
+        using var temp = new TempStore();
+        temp.Store.Add(Entry("old", DateTimeOffset.Now.AddDays(-60)));
+        temp.Store.Add(Entry("fresh", DateTimeOffset.Now));
+
+        var restarted = new JsonlHistoryStore(temp.Path, new NullLog(), 500, 30);
+
+        var recent = restarted.Recent(10);
+        recent.Count.ShouldBe(1);
+        recent[0].Output.ShouldBe("fresh");
     }
 }

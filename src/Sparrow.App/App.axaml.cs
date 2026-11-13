@@ -70,7 +70,11 @@ public partial class App : Application
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Sparrow",
             "history.jsonl");
-        var history = new JsonlHistoryStore(historyPath, log);
+        var history = new JsonlHistoryStore(
+            historyPath,
+            log,
+            settings.HistoryMaxEntries,
+            settings.HistoryRetentionDays);
 
         var clipboard = new Win32Clipboard(log);
 
@@ -81,6 +85,9 @@ public partial class App : Application
         // 工作区与面板共用同一个 ToolCatalog：插件只加载一次
         var startup = new StartupService(log);
         var settingsViewModel = new SettingsViewModel(_catalog, settingsStore, startup, settings);
+
+        // 设置页改完保留策略后，历史存储立即按新规则清理一次
+        settingsViewModel.HistoryRetentionChanged += history.Configure;
         _workspaceViewModel = new WorkspaceViewModel(_catalog, clipboard, log, history, settingsViewModel);
         _workspace = new WorkspaceWindow { DataContext = _workspaceViewModel };
 

@@ -119,6 +119,44 @@
                         OnContent="开"
                         OffContent="关"
                         IsChecked="{Binding StartWithWindows, Mode=TwoWay}" />
+
+          <Grid ColumnDefinitions="*,140"
+                RowDefinitions="Auto,Auto"
+                RowSpacing="10"
+                ColumnSpacing="12">
+            <StackPanel Spacing="2" VerticalAlignment="Center">
+              <TextBlock Text="历史最多保留（条）"
+                         FontSize="12"
+                         Foreground="{StaticResource TextSecondaryBrush}" />
+              <TextBlock Text="超过后只保留最近的部分"
+                         FontSize="11"
+                         Foreground="{StaticResource TextMutedBrush}" />
+            </StackPanel>
+            <NumericUpDown Grid.Column="1"
+                           Value="{Binding HistoryMaxEntries, Mode=TwoWay}"
+                           Minimum="50"
+                           Maximum="5000"
+                           Increment="50"
+                           FormatString="0"
+                           VerticalAlignment="Center" />
+
+            <StackPanel Grid.Row="1" Spacing="2" VerticalAlignment="Center">
+              <TextBlock Text="历史保留（天）"
+                         FontSize="12"
+                         Foreground="{StaticResource TextSecondaryBrush}" />
+              <TextBlock Text="0 表示不按天数清理"
+                         FontSize="11"
+                         Foreground="{StaticResource TextMutedBrush}" />
+            </StackPanel>
+            <NumericUpDown Grid.Row="1"
+                           Grid.Column="1"
+                           Value="{Binding HistoryRetentionDays, Mode=TwoWay}"
+                           Minimum="0"
+                           Maximum="3650"
+                           Increment="30"
+                           FormatString="0"
+                           VerticalAlignment="Center" />
+          </Grid>
         </StackPanel>
       </Border>
 

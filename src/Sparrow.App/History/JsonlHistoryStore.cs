@@ -10,7 +10,7 @@ namespace Sparrow.App.History;
 /// </summary>
 public sealed class JsonlHistoryStore : IHistoryStore
 {
-    private const int MaxEntries = 500;
+    private const int DefaultMaxEntries = 500;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -21,10 +21,29 @@ public sealed class JsonlHistoryStore : IHistoryStore
     private readonly IAppLog _log;
     private readonly object _gate = new();
 
-    public JsonlHistoryStore(string path, IAppLog log)
+    private int _maxEntries;
+    private int _retentionDays;
+
+    public JsonlHistoryStore(string path, IAppLog log, int maxEntries = DefaultMaxEntries, int retentionDays = 0)
     {
         _path = path;
         _log = log;
+        _maxEntries = Math.Max(1, maxEntries);
+        _retentionDays = Math.Max(0, retentionDays);
+
+        // 启动时先按保留策略清一次，避免过期记录一直躺在文件里
+        TryTrim();
+    }
+
+    /// <summary>更新保留策略并立即清理一次；设置页改完就调用。</summary>
+    public void Configure(int maxEntries, int retentionDays)
+    {
+        lock (_gate)
+        {
+            _maxEntries = Math.Max(1, maxEntries);
+            _retentionDays = Math.Max(0, retentionDays);
+            TryTrim();
+        }
     }
 
     public void Add(HistoryEntry entry)
@@ -38,7 +57,7 @@ public sealed class JsonlHistoryStore : IHistoryStore
                     Directory.CreateDirectory(directory);
 
                 File.AppendAllText(_path, JsonSerializer.Serialize(entry, JsonOptions) + Environment.NewLine);
-                TrimIfNeeded();
+                TryTrim();
             }
             catch (Exception ex)
             {
@@ -103,14 +122,47 @@ public sealed class JsonlHistoryStore : IHistoryStore
         return entries;
     }
 
-    /// <summary>超过上限时只保留最近的部分，避免文件无限增长。</summary>
+    /// <summary>清理失败不影响主流程：历史只是辅助数据。</summary>
+    private void TryTrim()
+    {
+        try
+        {
+            TrimIfNeeded();
+        }
+        catch (Exception ex)
+        {
+            _log.Warn($"清理历史失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 按保留策略清理：先按天数过滤，再按条数截断。
+    /// 只有真的删了记录才重写文件，避免每次 Add 都做无谓的 IO。
+    /// </summary>
     private void TrimIfNeeded()
     {
         var entries = ReadAll();
-        if (entries.Count <= MaxEntries)
+        if (entries.Count == 0)
             return;
 
-        var kept = entries.TakeLast(MaxEntries).ToArray();
-        File.WriteAllLines(_path, kept.Select(entry => JsonSerializer.Serialize(entry, JsonOptions)));
+        var kept = entries.AsEnumerable();
+
+        if (_retentionDays > 0)
+        {
+            var cutoff = DateTimeOffset.Now.AddDays(-_retentionDays);
+            kept = kept.Where(entry => entry.CreatedAt >= cutoff);
+        }
+
+        var trimmed = kept.TakeLast(_maxEntries).ToArray();
+        if (trimmed.Length == entries.Count)
+            return;
+
+        if (trimmed.Length == 0)
+        {
+            File.Delete(_path);
+            return;
+        }
+
+        File.WriteAllLines(_path, trimmed.Select(entry => JsonSerializer.Serialize(entry, JsonOptions)));
     }
 }

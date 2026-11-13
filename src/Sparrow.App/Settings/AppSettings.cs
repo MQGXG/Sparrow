@@ -20,4 +20,10 @@ public sealed record AppSettings
 
     /// <summary>截图识别热键，格式 "Ctrl+Alt+C"。</summary>
     public string CaptureHotkey { get; init; } = "Ctrl+Alt+C";
+
+    /// <summary>历史最多保留多少条；默认 500，和 M1 行为一致。</summary>
+    public int HistoryMaxEntries { get; init; } = 500;
+
+    /// <summary>历史保留天数；0 表示不按天数清理。</summary>
+    public int HistoryRetentionDays { get; init; }
 }
