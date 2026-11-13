@@ -660,10 +660,12 @@
                       VerticalAlignment="Center"
                       IsVisible="{Binding IsDetailOpen}">
             <Button Content="复制"
+                    ToolTip.Tip="复制结果到剪贴板"
                     IsEnabled="{Binding !IsExecuting}"
                     Click="OnCopyClick" />
             <Button Classes="accent"
                     Content="{Binding ExecuteLabel}"
+                    ToolTip.Tip="执行当前工具"
                     IsEnabled="{Binding !IsExecuting}"
                     Click="OnExecuteClick" />
           </StackPanel>

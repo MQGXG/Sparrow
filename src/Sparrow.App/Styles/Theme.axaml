@@ -499,14 +499,16 @@
     <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
   </Style>
 
-  <!-- ToolTip：深底描边小字 -->
+  <!-- ToolTip：深底描边小字；浮层更接近动作栏的质感 -->
   <Style Selector="ToolTip">
-    <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+    <Setter Property="Background" Value="{StaticResource OverlayBrush}" />
     <Setter Property="BorderBrush" Value="{StaticResource LineStrongBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
     <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
-    <Setter Property="CornerRadius" Value="6" />
-    <Setter Property="Padding" Value="8,5" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="10,6" />
     <Setter Property="FontSize" Value="11" />
+    <Setter Property="MaxWidth" Value="280" />
   </Style>
 
   <!-- 可选中文本：选区用淡琥珀，不用系统蓝 -->

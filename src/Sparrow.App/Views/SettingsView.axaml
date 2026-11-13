@@ -40,26 +40,31 @@
                 Classes.selected="{Binding IsPluginsSelected}"
                 Tag="Plugins"
                 Content="插件"
+                ToolTip.Tip="插件开关、目录与重新扫描"
                 Click="OnSectionClick" />
         <Button Classes="settings-tab"
                 Classes.selected="{Binding IsModelSelected}"
                 Tag="Model"
                 Content="模型"
+                ToolTip.Tip="AI 提供方、密钥与连接测试"
                 Click="OnSectionClick" />
         <Button Classes="settings-tab"
                 Classes.selected="{Binding IsHotkeysSelected}"
                 Tag="Hotkeys"
                 Content="热键"
+                ToolTip.Tip="全局快捷键"
                 Click="OnSectionClick" />
         <Button Classes="settings-tab"
                 Classes.selected="{Binding IsGeneralSelected}"
                 Tag="General"
                 Content="通用"
+                ToolTip.Tip="开机自启与历史保留"
                 Click="OnSectionClick" />
         <Button Classes="settings-tab"
                 Classes.selected="{Binding IsAboutSelected}"
                 Tag="About"
                 Content="关于"
+                ToolTip.Tip="版本、日志与数据目录"
                 Click="OnSectionClick" />
       </StackPanel>
     </ScrollViewer>

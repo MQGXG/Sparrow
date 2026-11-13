@@ -52,7 +52,7 @@
             CornerRadius="8"
             Padding="14,8"
             Margin="0,24,0,0">
-      <TextBlock Text="拖拽选择区域    Enter 识别    Esc 取消"
+      <TextBlock Text="拖拽选择区域 · 松手后可移动 / 拉伸 · Enter 识别"
                  FontSize="12"
                  Foreground="{StaticResource TextSecondaryBrush}" />
     </Border>
@@ -78,17 +78,17 @@
                 Classes="accent"
                 Content="识别文字"
                 Click="OnRecognizeClick"
-                ToolTip.Tip="Enter" />
-        <Button Focusable="False" Content="复制图片" Click="OnCopyImageClick" ToolTip.Tip="C" />
-        <Button Focusable="False" Content="保存" Click="OnSaveClick" ToolTip.Tip="S" />
-        <Button Focusable="False" Content="固定" Click="OnPinClick" ToolTip.Tip="P" />
-        <Button Focusable="False" Content="滚动" Click="OnScrollClick" ToolTip.Tip="G" />
+                ToolTip.Tip="识别选区文字（Enter / R）" />
+        <Button Focusable="False" Content="复制图片" Click="OnCopyImageClick" ToolTip.Tip="复制选区图片（C）" />
+        <Button Focusable="False" Content="保存" Click="OnSaveClick" ToolTip.Tip="保存为 PNG（S）" />
+        <Button Focusable="False" Content="固定" Click="OnPinClick" ToolTip.Tip="固定到屏幕，滚轮缩放（P）" />
+        <Button Focusable="False" Content="滚动" Click="OnScrollClick" ToolTip.Tip="进入滚动截图（G）" />
         <Button Focusable="False" x:Name="CopyAllButton"
                 IsVisible="False"
                 Content="复制全文"
                 Click="OnCopyAllClick"
-                ToolTip.Tip="Ctrl+C" />
-        <Button Focusable="False" Classes="ghost" Content="取消" Click="OnCancelClick" ToolTip.Tip="Esc" />
+                ToolTip.Tip="复制全部识别文字（Ctrl+C）" />
+        <Button Focusable="False" Classes="ghost" Content="取消" Click="OnCancelClick" ToolTip.Tip="取消截图（Esc）" />
       </StackPanel>
     </Border>
 
