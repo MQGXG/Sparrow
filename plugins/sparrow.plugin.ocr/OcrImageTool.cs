@@ -20,6 +20,13 @@ public sealed class OcrImageTool : ITool
 {
     private static readonly TimeSpan WorkerTimeout = TimeSpan.FromSeconds(30);
 
+    private const string ParameterLayout = "layout";
+
+    private const string LayoutLine = "按行";
+    private const string LayoutRaw = "原文";
+    private const string LayoutPosition = "按位置";
+    private const string LayoutTable = "表格";
+
     public ToolDescriptor Descriptor { get; } = new()
     {
         Id = "sparrow.ocr.image",
@@ -41,6 +48,15 @@ public sealed class OcrImageTool : ITool
                 Choices = ["ch", "en", "ja", "ko", "ru", "uk", "ar", "fa", "bg", "sr", "hi", "th", "el", "fr", "de", "es"],
                 Default = "ch",
                 Hint = "ch 包含简体、繁体、拼音、英日；ru 覆盖俄语/乌克兰/白俄"
+            },
+            new ToolParameter
+            {
+                Key = ParameterLayout,
+                Label = "整理模式",
+                Kind = ParameterKind.Choice,
+                Choices = [LayoutLine, LayoutRaw, LayoutPosition, LayoutTable],
+                Default = LayoutLine,
+                Hint = "表格：Tab 分隔，可直接粘贴进 Excel；按位置：空格还原排版"
             }
         ]
     };
@@ -67,7 +83,7 @@ public sealed class OcrImageTool : ITool
         {
             var language = context.GetParameter("language", "ch");
             var output = await RunWorkerAsync(workerPath, image.Data, language, cancellationToken);
-            return ToolResult.Ok(ComposeOutput(output));
+            return ToolResult.Ok(ComposeOutput(output, ResolveLayout(context)));
         }
         catch (OperationCanceledException)
         {
@@ -87,10 +103,10 @@ public sealed class OcrImageTool : ITool
     };
 
     /// <summary>
-    /// worker 返回结构化 JSON；按坐标重排文本块，并把行框一起交给宿主。
+    /// worker 返回结构化 JSON；按整理模式合成全文，并把行框一起交给宿主。
     /// 兼容旧版纯文本输出（不以 { 开头时原样返回，行框为空）。
     /// </summary>
-    private static OcrResultPayload ComposeOutput(string output)
+    private static OcrResultPayload ComposeOutput(string output, OcrLayoutMode mode)
     {
         var trimmed = output.Trim();
 
@@ -104,7 +120,7 @@ public sealed class OcrImageTool : ITool
                 return new OcrResultPayload(trimmed, Array.Empty<OcrTextLine>());
 
             var lines = OcrTextComposer.ComposeLines(payload.Regions);
-            var text = string.Join(Environment.NewLine, lines.Select(line => line.Text));
+            var text = OcrTextComposer.ComposeText(payload.Regions, mode, payload.Text);
 
             // 坐标拼不出来时回退到 worker 的原始全文
             if (string.IsNullOrWhiteSpace(text))
@@ -116,6 +132,18 @@ public sealed class OcrImageTool : ITool
         {
             return new OcrResultPayload(trimmed, Array.Empty<OcrTextLine>());
         }
+    }
+
+    /// <summary>整理模式参数 → 枚举；未知值回退默认「按行」。</summary>
+    private static OcrLayoutMode ResolveLayout(ToolContext context)
+    {
+        return context.GetParameter(ParameterLayout, LayoutLine) switch
+        {
+            LayoutRaw => OcrLayoutMode.Raw,
+            LayoutPosition => OcrLayoutMode.Position,
+            LayoutTable => OcrLayoutMode.Table,
+            _ => OcrLayoutMode.Line
+        };
     }
 
     private static async Task<string> RunWorkerAsync(
