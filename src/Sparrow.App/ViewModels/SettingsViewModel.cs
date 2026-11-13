@@ -105,6 +105,31 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private string? _aiStatus;
 
+    /// <summary>当前设置分段；默认插件页，和进入设置的习惯一致。</summary>
+    [ObservableProperty]
+    private SettingsSection _selectedSection = SettingsSection.Plugins;
+
+    public bool IsPluginsSelected => SelectedSection == SettingsSection.Plugins;
+
+    public bool IsModelSelected => SelectedSection == SettingsSection.Model;
+
+    public bool IsHotkeysSelected => SelectedSection == SettingsSection.Hotkeys;
+
+    public bool IsGeneralSelected => SelectedSection == SettingsSection.General;
+
+    public bool IsAboutSelected => SelectedSection == SettingsSection.About;
+
+    partial void OnSelectedSectionChanged(SettingsSection value)
+    {
+        OnPropertyChanged(nameof(IsPluginsSelected));
+        OnPropertyChanged(nameof(IsModelSelected));
+        OnPropertyChanged(nameof(IsHotkeysSelected));
+        OnPropertyChanged(nameof(IsGeneralSelected));
+        OnPropertyChanged(nameof(IsAboutSelected));
+    }
+
+    public void SelectSection(SettingsSection section) => SelectedSection = section;
+
     [ObservableProperty]
     private string? _statusMessage;
 

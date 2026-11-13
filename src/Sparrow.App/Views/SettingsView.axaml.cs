@@ -36,6 +36,16 @@ public partial class SettingsView : UserControl
             await viewModel.TestAiAsync();
     }
 
+    private void OnSectionClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string tag }
+            && DataContext is SettingsViewModel viewModel
+            && Enum.TryParse<SettingsSection>(tag, out var section))
+        {
+            viewModel.SelectSection(section);
+        }
+    }
+
     private void OnClearAiKeyClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is SettingsViewModel viewModel)

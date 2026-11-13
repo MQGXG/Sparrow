@@ -322,4 +322,25 @@ public sealed class WorkspaceViewModelTests
 
         ReferenceEquals(wall, grouped).ShouldBeTrue();
     }
+
+    [Fact]
+    public async Task 设置分段_同一时间只选中一个()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+
+        await viewModel.ReloadAsync();
+
+        var settings = viewModel.Settings;
+        settings.IsPluginsSelected.ShouldBeTrue();
+
+        settings.SelectSection(SettingsSection.Model);
+
+        settings.IsModelSelected.ShouldBeTrue();
+        settings.IsPluginsSelected.ShouldBeFalse();
+        settings.IsHotkeysSelected.ShouldBeFalse();
+        settings.IsGeneralSelected.ShouldBeFalse();
+        settings.IsAboutSelected.ShouldBeFalse();
+    }
 }

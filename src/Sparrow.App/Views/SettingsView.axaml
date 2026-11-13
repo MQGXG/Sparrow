@@ -5,11 +5,70 @@
              x:Class="Sparrow.App.Views.SettingsView"
              x:DataType="vm:SettingsViewModel">
 
-  <ScrollViewer>
-    <StackPanel Margin="24,8,24,24" Spacing="12">
+  <UserControl.Styles>
+    <Style Selector="Button.settings-tab">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+      <Setter Property="Padding" Value="14,7" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
 
-      <!-- 插件 -->
-      <Border Classes="panel" Padding="16">
+    <Style Selector="Button.settings-tab:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+    </Style>
+
+    <Style Selector="Button.settings-tab.selected">
+      <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="Button.settings-tab.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="Auto,*">
+
+    <!-- 分段导航：插件 / 模型 / 热键 / 通用 / 关于 -->
+    <ScrollViewer Grid.Row="0"
+                  HorizontalScrollBarVisibility="Auto"
+                  VerticalScrollBarVisibility="Disabled">
+      <StackPanel Orientation="Horizontal" Spacing="4" Margin="24,8,24,12">
+        <Button Classes="settings-tab"
+                Classes.selected="{Binding IsPluginsSelected}"
+                Tag="Plugins"
+                Content="插件"
+                Click="OnSectionClick" />
+        <Button Classes="settings-tab"
+                Classes.selected="{Binding IsModelSelected}"
+                Tag="Model"
+                Content="模型"
+                Click="OnSectionClick" />
+        <Button Classes="settings-tab"
+                Classes.selected="{Binding IsHotkeysSelected}"
+                Tag="Hotkeys"
+                Content="热键"
+                Click="OnSectionClick" />
+        <Button Classes="settings-tab"
+                Classes.selected="{Binding IsGeneralSelected}"
+                Tag="General"
+                Content="通用"
+                Click="OnSectionClick" />
+        <Button Classes="settings-tab"
+                Classes.selected="{Binding IsAboutSelected}"
+                Tag="About"
+                Content="关于"
+                Click="OnSectionClick" />
+      </StackPanel>
+    </ScrollViewer>
+
+    <ScrollViewer Grid.Row="1">
+      <StackPanel Margin="24,0,24,24" Spacing="12">
+
+        <!-- 插件 -->
+        <Border Classes="panel" Padding="16" IsVisible="{Binding IsPluginsSelected}">
         <StackPanel Spacing="12">
           <StackPanel Spacing="4">
             <TextBlock Classes="subtitle"
@@ -78,7 +137,7 @@
       </Border>
 
       <!-- 热键 -->
-      <Border Classes="panel" Padding="16">
+      <Border Classes="panel" Padding="16" IsVisible="{Binding IsHotkeysSelected}">
         <StackPanel Spacing="12">
           <StackPanel Spacing="4">
             <TextBlock Classes="subtitle"
@@ -111,7 +170,7 @@
       </Border>
 
       <!-- 通用 -->
-      <Border Classes="panel" Padding="16">
+      <Border Classes="panel" Padding="16" IsVisible="{Binding IsGeneralSelected}">
         <StackPanel Spacing="12">
           <TextBlock Classes="subtitle"
                      Text="通用" />
@@ -162,7 +221,7 @@
       </Border>
 
       <!-- 模型 -->
-      <Border Classes="panel" Padding="16">
+      <Border Classes="panel" Padding="16" IsVisible="{Binding IsModelSelected}">
         <StackPanel Spacing="12">
           <StackPanel Spacing="4">
             <TextBlock Classes="subtitle"
@@ -251,7 +310,7 @@
       </Border>
 
       <!-- 关于 -->
-      <Border Classes="panel" Padding="16">
+      <Border Classes="panel" Padding="16" IsVisible="{Binding IsAboutSelected}">
         <StackPanel Spacing="12">
           <TextBlock Classes="subtitle"
                      Text="关于" />
@@ -273,6 +332,7 @@
                  TextWrapping="Wrap"
                  Margin="2,0" />
 
-    </StackPanel>
-  </ScrollViewer>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
 </UserControl>
