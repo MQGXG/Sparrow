@@ -1,7 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
+using Avalonia.VisualTree;
 
 namespace Sparrow.App.Views;
 
@@ -26,6 +28,10 @@ public partial class PinnedImageWindow : Window
         InitializeComponent();
         PointerPressed += OnPointerPressed;
         PointerWheelChanged += OnPointerWheelChanged;
+        PointerEntered += (_, _) => CloseButton.IsVisible = true;
+        PointerMoved += (_, _) => CloseButton.IsVisible = true;
+        PointerExited += (_, _) => CloseButton.IsVisible = false;
+        DoubleTapped += (_, _) => Close();
     }
 
     public PinnedImageWindow(byte[] png) : this()
@@ -46,7 +52,21 @@ public partial class PinnedImageWindow : Window
         // 记住 100% 时的尺寸，滚轮在这个基准上缩放
         _baseWidth = Width;
         _baseHeight = Height;
+
+        // 首次打开短暂露出关闭按钮，之后只在悬停时出现
+        _ = ShowCloseHintAsync();
     }
+
+    private async Task ShowCloseHintAsync()
+    {
+        CloseButton.IsVisible = true;
+        await Task.Delay(1500);
+
+        if (!IsPointerOver)
+            CloseButton.IsVisible = false;
+    }
+
+    private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();
 
     protected override void OnClosed(EventArgs e)
     {
@@ -69,6 +89,11 @@ public partial class PinnedImageWindow : Window
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        // 点关闭按钮时不要触发拖动
+        if (e.Source is Visual source
+            && (source is Button || source.FindAncestorOfType<Button>() is not null))
+            return;
+
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             BeginMoveDrag(e);
     }

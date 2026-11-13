@@ -1,6 +1,8 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Interactivity;
 using Shouldly;
 using Sparrow.App.Views;
 using Xunit;
@@ -47,5 +49,16 @@ public sealed class PinnedImageWindowTests
         window.Width.ShouldBe(width * 0.5, 0.01);
 
         window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 点击关闭按钮_移除贴图()
+    {
+        var window = new PinnedImageWindow(OnePixelPng);
+        window.Show();
+
+        window.CloseButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        window.IsVisible.ShouldBeFalse();
     }
 }
