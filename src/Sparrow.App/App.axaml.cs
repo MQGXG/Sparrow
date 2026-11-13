@@ -32,6 +32,7 @@ public partial class App : Application
     private PaletteViewModel? _paletteViewModel;
     private WorkspaceWindow? _workspace;
     private WorkspaceViewModel? _workspaceViewModel;
+    private ToolParameterStore? _parameterStore;
 
     // 贴图窗口需要宿主一直持有引用，否则会被 GC 回收
     private readonly List<PinnedImageWindow> _pins = [];
@@ -76,10 +77,17 @@ public partial class App : Application
             settings.HistoryMaxEntries,
             settings.HistoryRetentionDays);
 
+        // 工具参数的「上次选择」：和插件设置分开，属于宿主 UI 状态
+        var parameterPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Sparrow",
+            "parameters.json");
+        _parameterStore = new ToolParameterStore(parameterPath, log);
+
         var clipboard = new Win32Clipboard(log);
 
         // 传方法组而不是实例：第一次搜索时才真正扫描 + 加载插件
-        _paletteViewModel = new PaletteViewModel(_catalog.GetRegistry, clipboard, log, history);
+        _paletteViewModel = new PaletteViewModel(_catalog.GetRegistry, clipboard, log, history, _parameterStore);
         _palette = new PaletteWindow { DataContext = _paletteViewModel };
 
         // 工作区与面板共用同一个 ToolCatalog：插件只加载一次
@@ -88,7 +96,7 @@ public partial class App : Application
 
         // 设置页改完保留策略后，历史存储立即按新规则清理一次
         settingsViewModel.HistoryRetentionChanged += history.Configure;
-        _workspaceViewModel = new WorkspaceViewModel(_catalog, clipboard, log, history, settingsViewModel);
+        _workspaceViewModel = new WorkspaceViewModel(_catalog, clipboard, log, history, settingsViewModel, _parameterStore);
         _workspace = new WorkspaceWindow { DataContext = _workspaceViewModel };
 
         _tray = new TrayService(_palette, ShowWorkspace, CaptureAndRecognize);
@@ -258,9 +266,25 @@ public partial class App : Application
 
         try
         {
+            // 截图路径也要用「上次选择的参数」，否则永远走插件默认语言
+            var parameters = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var parameter in entry.Descriptor.Parameters)
+            {
+                if (parameter.Default is not null)
+                    parameters[parameter.Key] = parameter.Default;
+            }
+
+            if (_parameterStore is not null)
+            {
+                foreach (var (key, value) in _parameterStore.Get(entry.Descriptor.Id))
+                    parameters[key] = value;
+            }
+
             var context = new ToolContext
             {
                 Input = new ImageInput(png, ImageFormat.Png),
+                Source = ToolSource.Screenshot,
+                Parameters = parameters,
                 Host = entry.Host
             };
 

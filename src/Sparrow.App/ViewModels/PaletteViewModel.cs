@@ -3,6 +3,7 @@ using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Sparrow.App.History;
 using Sparrow.App.Services;
+using Sparrow.App.Settings;
 using Sparrow.Plugin.Sdk;
 using Sparrow.Plugin.Sdk.Inputs;
 using Sparrow.Plugin.Sdk.Payloads;
@@ -24,6 +25,7 @@ public partial class PaletteViewModel : ObservableObject
     private readonly IClipboardAccess _clipboard;
     private readonly IAppLog _log;
     private readonly IHistoryStore _history;
+    private readonly ToolParameterStore? _parameters;
 
     private ToolRegistry? _registry;
 
@@ -72,12 +74,14 @@ public partial class PaletteViewModel : ObservableObject
         Func<ToolRegistry> registryFactory,
         IClipboardAccess clipboard,
         IAppLog log,
-        IHistoryStore history)
+        IHistoryStore history,
+        ToolParameterStore? parameters = null)
     {
         _registryFactory = registryFactory;
         _clipboard = clipboard;
         _log = log;
         _history = history;
+        _parameters = parameters;
 
         // 刻意不在这里 Refresh：构造函数运行在启动路径上，
         // 而 Refresh 会触发插件扫描 + ALC 加载。首次搜索或 Reset 时才加载。
@@ -259,11 +263,14 @@ public partial class PaletteViewModel : ObservableObject
                 break;
         }
 
-        // 参数先全部取默认值；M0 不提供参数编辑 UI
+        // 先取工具声明默认值，再用上次保存的值覆盖（例如截图常用的语言）
+        var saved = _parameters?.Get(descriptor.Id);
         var parameters = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var parameter in descriptor.Parameters)
         {
-            if (parameter.Default is not null)
+            if (saved is not null && saved.TryGetValue(parameter.Key, out var value))
+                parameters[parameter.Key] = value;
+            else if (parameter.Default is not null)
                 parameters[parameter.Key] = parameter.Default;
         }
 

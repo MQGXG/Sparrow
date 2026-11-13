@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Sparrow.App.History;
 using Sparrow.App.Plugins;
 using Sparrow.App.Services;
+using Sparrow.App.Settings;
 using Sparrow.Plugin.Sdk;
 using Sparrow.Plugin.Sdk.Inputs;
 using Sparrow.Plugin.Sdk.Payloads;
@@ -21,18 +22,21 @@ public partial class WorkspaceViewModel : ObservableObject
     private readonly IClipboardAccess _clipboard;
     private readonly IAppLog _log;
     private readonly IHistoryStore _history;
+    private readonly ToolParameterStore? _parameters;
 
     public WorkspaceViewModel(
         ToolCatalog catalog,
         IClipboardAccess clipboard,
         IAppLog log,
         IHistoryStore history,
-        SettingsViewModel settings)
+        SettingsViewModel settings,
+        ToolParameterStore? parameters = null)
     {
         _catalog = catalog;
         _clipboard = clipboard;
         _log = log;
         _history = history;
+        _parameters = parameters;
         Settings = settings;
     }
 
@@ -232,8 +236,12 @@ public partial class WorkspaceViewModel : ObservableObject
 
     partial void OnSelectedToolChanged(ToolItemViewModel? oldValue, ToolItemViewModel? newValue)
     {
+        // 切走之前把旧工具的参数落盘，用户「选完语言直接返回」也能记住
         if (oldValue is not null)
+        {
+            PersistParameters(oldValue);
             oldValue.IsSelected = false;
+        }
 
         if (newValue is not null)
             newValue.IsSelected = true;
@@ -336,11 +344,39 @@ public partial class WorkspaceViewModel : ObservableObject
             return;
         }
 
+        var saved = _parameters?.Get(tool.Entry.Descriptor.Id);
+
         // 参数控件完全由声明生成，插件不提供任何 UI
         foreach (var parameter in tool.Entry.Descriptor.Parameters)
-            Parameters.Add(new ParameterViewModel(parameter));
+        {
+            var item = new ParameterViewModel(parameter);
+
+            // 上次保存的值优先；Choice 必须仍在候选里，避免插件改选项后带进脏值
+            if (saved is not null
+                && saved.TryGetValue(parameter.Key, out var value)
+                && (parameter.Choices.Length == 0 || parameter.Choices.Contains(value)))
+            {
+                item.Value = value;
+            }
+
+            Parameters.Add(item);
+        }
 
         OnPropertyChanged(nameof(HasParameters));
+    }
+
+    /// <summary>把当前参数写到参数存储；工具没参数或没接入存储时直接跳过。</summary>
+    private void PersistParameters(ToolItemViewModel tool)
+    {
+        if (_parameters is null || Parameters.Count == 0)
+            return;
+
+        var values = Parameters.ToDictionary(
+            parameter => parameter.Key,
+            parameter => parameter.Value,
+            StringComparer.Ordinal);
+
+        _parameters.Save(tool.Entry.Descriptor.Id, values);
     }
 
     public async Task ExecuteAsync()
@@ -360,6 +396,9 @@ public partial class WorkspaceViewModel : ObservableObject
         var parameters = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var parameter in Parameters)
             parameters[parameter.Key] = parameter.Value;
+
+        // 执行即记忆：下次打开这个工具时参数保持上次的值
+        _parameters?.Save(entry.Descriptor.Id, parameters);
 
         IsExecuting = true;
 

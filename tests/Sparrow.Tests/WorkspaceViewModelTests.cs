@@ -114,7 +114,10 @@ public sealed class WorkspaceViewModelTests
         }
     }
 
-    private static WorkspaceViewModel Create(ToolCatalog catalog, IHistoryStore history)
+    private static WorkspaceViewModel Create(
+        ToolCatalog catalog,
+        IHistoryStore history,
+        ToolParameterStore? parameters = null)
     {
         var log = new NullLog();
         var settings = new AppSettings();
@@ -129,7 +132,8 @@ public sealed class WorkspaceViewModelTests
             new FakeClipboard { Text = "clipboard" },
             log,
             history,
-            settingsViewModel);
+            settingsViewModel,
+            parameters);
     }
 
     [Fact]
@@ -177,5 +181,37 @@ public sealed class WorkspaceViewModelTests
 
         viewModel.HasRecentTools.ShouldBeTrue();
         viewModel.RecentTools.ShouldHaveSingleItem().Tool.Name.ShouldBe(json.Descriptor.Name);
+    }
+
+    [Fact]
+    public async Task 打开工具时_恢复上次保存的参数()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+
+        var parameterPath = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(),
+            "sparrow-tests",
+            Guid.NewGuid().ToString("N"),
+            "parameters.json");
+        var parameters = new ToolParameterStore(parameterPath, new NullLog());
+        parameters.Save("sparrow.json.format", new Dictionary<string, string>
+        {
+            ["mode"] = "压缩",
+            ["indent"] = "4"
+        });
+
+        var viewModel = Create(catalog, new FakeHistory(), parameters);
+
+        await viewModel.ReloadAsync();
+
+        var json = viewModel.Groups
+            .SelectMany(group => group.Tools)
+            .First(tool => tool.Entry.Descriptor.Id == "sparrow.json.format");
+
+        viewModel.OpenTool(json);
+
+        viewModel.Parameters.Single(parameter => parameter.Key == "mode").Value.ShouldBe("压缩");
+        viewModel.Parameters.Single(parameter => parameter.Key == "indent").Value.ShouldBe("4");
     }
 }
