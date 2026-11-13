@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Sparrow.App.History;
 using Sparrow.App.Plugins;
@@ -23,6 +24,7 @@ public partial class WorkspaceViewModel : ObservableObject
     private readonly IAppLog _log;
     private readonly IHistoryStore _history;
     private readonly ToolParameterStore? _parameters;
+    private readonly SvgPreviewService _svgPreview;
 
     public WorkspaceViewModel(
         ToolCatalog catalog,
@@ -30,13 +32,15 @@ public partial class WorkspaceViewModel : ObservableObject
         IAppLog log,
         IHistoryStore history,
         SettingsViewModel settings,
-        ToolParameterStore? parameters = null)
+        ToolParameterStore? parameters = null,
+        SvgPreviewService? svgPreview = null)
     {
         _catalog = catalog;
         _clipboard = clipboard;
         _log = log;
         _history = history;
         _parameters = parameters;
+        _svgPreview = svgPreview ?? new SvgPreviewService();
         Settings = settings;
     }
 
@@ -224,6 +228,47 @@ public partial class WorkspaceViewModel : ObservableObject
 
     [ObservableProperty]
     private string? _resultText;
+
+    /// <summary>SVG 源码；非空表示当前结果需要预览/源码双视图。</summary>
+    [ObservableProperty]
+    private string? _svgSource;
+
+    /// <summary>渲染好的 PNG；为空表示渲染失败，界面回退到源码。</summary>
+    [ObservableProperty]
+    private byte[]? _svgPreviewPng;
+
+    [ObservableProperty]
+    private string? _svgPreviewError;
+
+    /// <summary>SVG 结果当前显示源码而不是预览。</summary>
+    [ObservableProperty]
+    private bool _showSvgSource;
+
+    public bool HasSvgResult => SvgSource is not null;
+
+    public bool IsSvgPreviewVisible => HasSvgResult && !ShowSvgSource;
+
+    public bool IsSvgSourceVisible => HasSvgResult && ShowSvgSource;
+
+    public bool IsTextResultVisible => !HasSvgResult;
+
+    partial void OnSvgSourceChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasSvgResult));
+        OnPropertyChanged(nameof(IsSvgPreviewVisible));
+        OnPropertyChanged(nameof(IsSvgSourceVisible));
+        OnPropertyChanged(nameof(IsTextResultVisible));
+    }
+
+    partial void OnShowSvgSourceChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsSvgPreviewVisible));
+        OnPropertyChanged(nameof(IsSvgSourceVisible));
+    }
+
+    public void ShowSvgPreview() => ShowSvgSource = false;
+
+    public void ShowSvgSourceView() => ShowSvgSource = true;
 
     /// <summary>结果区右上角的字数/行数；空结果时为空串。</summary>
     public string ResultSummary => TextMetrics.Summarize(ResultText);
@@ -511,36 +556,29 @@ public partial class WorkspaceViewModel : ObservableObject
                 Host = entry.Host
             };
 
+            var startedAt = Stopwatch.GetTimestamp();
             var result = await entry.Tool.ExecuteAsync(context, CancellationToken.None);
+            var elapsed = (long)Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
 
-            if (result.Success && result.Payload is TextPayload or OcrResultPayload)
+            if (result.Success && result.Payload is not null)
             {
-                var text = result.Payload switch
+                switch (result.Payload)
                 {
-                    TextPayload textPayload => textPayload.Text,
-                    OcrResultPayload ocrPayload => ocrPayload.Text,
-                    _ => string.Empty
-                };
+                    case SvgPayload svgPayload:
+                        await ShowSvgResultAsync(entry, context, svgPayload, elapsed);
+                        return;
 
-                ResultText = text;
-                HasResult = true;
-                HasError = false;
-                ErrorText = null;
+                    case TextPayload or OcrResultPayload:
+                        var text = result.Payload switch
+                        {
+                            TextPayload textPayload => textPayload.Text,
+                            OcrResultPayload ocrPayload => ocrPayload.Text,
+                            _ => string.Empty
+                        };
 
-                var historyEntry = new HistoryEntry(
-                    Guid.NewGuid().ToString("N"),
-                    entry.Descriptor.Id,
-                    entry.Descriptor.Name,
-                    text,
-                    PreviewInput(context.Input),
-                    DateTimeOffset.Now,
-                    0);
-
-                _history.Add(historyEntry);
-                _allHistory.Insert(0, new HistoryEntryViewModel(historyEntry));
-                FilterHistory();
-                RebuildRecentTools();
-                return;
+                        ShowTextResult(entry, context, text, elapsed);
+                        return;
+                }
             }
 
             ShowError(result.Error?.Message ?? "执行失败");
@@ -555,6 +593,70 @@ public partial class WorkspaceViewModel : ObservableObject
         {
             IsExecuting = false;
         }
+    }
+
+    private void ShowTextResult(ToolEntry entry, ToolContext context, string text, long elapsed)
+    {
+        ClearSvgResult();
+
+        ResultText = text;
+        HasResult = true;
+        HasError = false;
+        ErrorText = null;
+
+        AddHistory(entry, context, text, elapsed);
+    }
+
+    private async Task ShowSvgResultAsync(
+        ToolEntry entry,
+        ToolContext context,
+        SvgPayload payload,
+        long elapsed)
+    {
+        var sanitized = SvgSanitizer.Sanitize(payload.Svg);
+        if (!sanitized.Success)
+        {
+            ShowError(sanitized.Error ?? "SVG 无法预览");
+            return;
+        }
+
+        var svg = sanitized.Svg!;
+
+        ResultText = svg;
+        SvgSource = svg;
+        SvgPreviewPng = null;
+        SvgPreviewError = null;
+        ShowSvgSource = false;
+        HasResult = true;
+        HasError = false;
+        ErrorText = null;
+
+        SvgPreviewPng = await _svgPreview.RenderAsync(svg, CancellationToken.None);
+
+        if (SvgPreviewPng is null)
+        {
+            SvgPreviewError = "预览渲染失败，已显示源码";
+            ShowSvgSource = true;
+        }
+
+        AddHistory(entry, context, svg, elapsed);
+    }
+
+    private void AddHistory(ToolEntry entry, ToolContext context, string output, long elapsed)
+    {
+        var historyEntry = new HistoryEntry(
+            Guid.NewGuid().ToString("N"),
+            entry.Descriptor.Id,
+            entry.Descriptor.Name,
+            output,
+            PreviewInput(context.Input),
+            DateTimeOffset.Now,
+            elapsed);
+
+        _history.Add(historyEntry);
+        _allHistory.Insert(0, new HistoryEntryViewModel(historyEntry));
+        FilterHistory();
+        RebuildRecentTools();
     }
 
     public void CopyResult()
@@ -713,6 +815,7 @@ public partial class WorkspaceViewModel : ObservableObject
 
     private void ShowError(string message)
     {
+        ClearSvgResult();
         ErrorText = message;
         HasError = true;
         HasResult = false;
@@ -721,9 +824,18 @@ public partial class WorkspaceViewModel : ObservableObject
 
     private void ClearResult()
     {
+        ClearSvgResult();
         ResultText = null;
         ErrorText = null;
         HasResult = false;
         HasError = false;
+    }
+
+    private void ClearSvgResult()
+    {
+        SvgSource = null;
+        SvgPreviewPng = null;
+        SvgPreviewError = null;
+        ShowSvgSource = false;
     }
 }

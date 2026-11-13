@@ -5,6 +5,7 @@
     <Project Path="plugins/sparrow.plugin.ocr/Sparrow.Plugin.Ocr.csproj" />
     <Project Path="plugins/sparrow.plugin.ocr/worker/Sparrow.Ocr.Worker.csproj" />
     <Project Path="plugins/sparrow.plugin.translate/Sparrow.Plugin.Translate.csproj" />
+    <Project Path="plugins/sparrow.plugin.svg-prompt/Sparrow.Plugin.Svg.Prompt.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Sparrow.App/Sparrow.App.csproj" />

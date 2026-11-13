@@ -532,9 +532,25 @@
                     Margin="0,14,0,0"
                     Padding="14">
               <Grid RowDefinitions="Auto,Auto,*">
-                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,10">
                   <TextBlock Classes="section" Text="结果" />
-                  <TextBlock Grid.Column="1"
+
+                  <StackPanel Grid.Column="1"
+                              Orientation="Horizontal"
+                              Spacing="4"
+                              Margin="0,0,12,0"
+                              IsVisible="{Binding HasSvgResult}">
+                    <Button Classes="ghost small"
+                            Classes.selected="{Binding IsSvgPreviewVisible}"
+                            Content="预览"
+                            Click="OnSvgPreviewClick" />
+                    <Button Classes="ghost small"
+                            Classes.selected="{Binding IsSvgSourceVisible}"
+                            Content="源码"
+                            Click="OnSvgSourceClick" />
+                  </StackPanel>
+
+                  <TextBlock Grid.Column="2"
                              Text="{Binding ResultSummary}"
                              IsVisible="{Binding HasResult}"
                              FontSize="11"
@@ -566,8 +582,8 @@
                   </Grid>
                 </Border>
 
-                <!-- 结果内容 -->
-                <ScrollViewer Grid.Row="2">
+                <!-- 文本 / OCR 结果 -->
+                <ScrollViewer Grid.Row="2" IsVisible="{Binding IsTextResultVisible}">
                   <SelectableTextBlock Text="{Binding ResultText}"
                                        FontFamily="{StaticResource MonoFont}"
                                        FontSize="13"
@@ -575,6 +591,31 @@
                                        Foreground="{StaticResource TextPrimaryBrush}"
                                        TextWrapping="Wrap" />
                 </ScrollViewer>
+
+                <!-- SVG 源码 -->
+                <ScrollViewer Grid.Row="2" IsVisible="{Binding IsSvgSourceVisible}">
+                  <SelectableTextBlock Text="{Binding ResultText}"
+                                       FontFamily="{StaticResource MonoFont}"
+                                       FontSize="13"
+                                       LineHeight="20"
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       TextWrapping="Wrap" />
+                </ScrollViewer>
+
+                <!-- SVG 预览 -->
+                <Border Grid.Row="2"
+                        IsVisible="{Binding IsSvgPreviewVisible}"
+                        Background="{StaticResource SurfaceRaisedBrush}"
+                        BorderBrush="{StaticResource LineBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="10"
+                        ClipToBounds="True">
+                  <Image Source="{Binding SvgPreviewPng, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
+                         Stretch="Uniform"
+                         HorizontalAlignment="Center"
+                         VerticalAlignment="Center" />
+                </Border>
 
                 <!-- 空态：既没结果也没错误时才显示 -->
                 <TextBlock Grid.Row="2"

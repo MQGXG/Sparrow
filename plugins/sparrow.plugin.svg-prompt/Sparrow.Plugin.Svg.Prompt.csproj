@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>Sparrow.Plugin.Svg.Prompt</AssemblyName>
+    <RootNamespace>Sparrow.Plugin.Svg.Prompt</RootNamespace>
+    <Version>0.1.0</Version>
+    <Description>提示词生成 SVG：用宿主配置的模型输出矢量图形</Description>
+    <PluginId>sparrow.plugin.svg-prompt</PluginId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Sparrow.Plugin.Sdk\Sparrow.Plugin.Sdk.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

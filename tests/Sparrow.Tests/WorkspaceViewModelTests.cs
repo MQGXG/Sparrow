@@ -6,6 +6,7 @@ using Sparrow.App.Services;
 using Sparrow.App.Settings;
 using Sparrow.App.ViewModels;
 using Sparrow.Plugin.Sdk;
+using Sparrow.Plugin.Sdk.Payloads;
 using Xunit;
 
 namespace Sparrow.Tests;
@@ -342,5 +343,53 @@ public sealed class WorkspaceViewModelTests
         settings.IsHotkeysSelected.ShouldBeFalse();
         settings.IsGeneralSelected.ShouldBeFalse();
         settings.IsAboutSelected.ShouldBeFalse();
+    }
+
+    private sealed class FakeSvgTool : ITool
+    {
+        public ToolDescriptor Descriptor { get; } = new()
+        {
+            Id = "test.svg",
+            Name = "SVG 测试",
+            Category = "test",
+            Accepts = InputShape.Text,
+            Produces = OutputShape.Svg
+        };
+
+        public Task<ToolResult> ExecuteAsync(ToolContext context, CancellationToken cancellationToken) =>
+            Task.FromResult(ToolResult.Ok(new SvgPayload(
+                """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" fill="#E5A44C"/></svg>""")
+            {
+                Width = 32,
+                Height = 32
+            }));
+    }
+
+    [Fact]
+    public async Task SVG结果_生成预览并可切换源码()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+
+        await viewModel.ReloadAsync();
+
+        var entry = new ToolEntry { Tool = new FakeSvgTool(), Host = NullToolHost.Instance };
+        viewModel.OpenTool(new ToolItemViewModel(entry));
+        viewModel.InputText = "画一个方块";
+
+        await viewModel.ExecuteAsync();
+
+        viewModel.HasSvgResult.ShouldBeTrue();
+        viewModel.IsSvgPreviewVisible.ShouldBeTrue();
+        viewModel.SvgPreviewPng.ShouldNotBeNull();
+        viewModel.ResultText.ShouldNotBeNull().ShouldContain("<svg");
+
+        viewModel.ShowSvgSourceView();
+        viewModel.IsSvgSourceVisible.ShouldBeTrue();
+        viewModel.IsSvgPreviewVisible.ShouldBeFalse();
+
+        viewModel.ShowSvgPreview();
+        viewModel.IsSvgPreviewVisible.ShouldBeTrue();
     }
 }

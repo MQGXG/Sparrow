@@ -77,6 +77,7 @@ plugins/
 | 插件 `JsonFormat` | ✅ 完成 |
 | 插件 `Base64` | ✅ 完成（第二个插件，验证「加插件不改宿主」） |
 | 插件 `Translate` | ✅ 完成：AI 翻译；宿主统一 provider / 密钥，插件只拿 `IAiClient` |
+| 插件 `SVG Prompt` | ✅ 完成：提示词 → SVG；宿主清洗后用 Svg.Skia 渲染预览 |
 | 最小可运行壳 | ✅ 完成：托盘 + `Ctrl+Alt+S` + 命令面板 + 剪贴板闭环 |
 | 插件扫描 + ALC 隔离 | ✅ 完成：`plugins/` 目录发现、懒加载、独立加载上下文 |
 | 设置 / 禁用 / 卸载 | ✅ 完成：`settings.json`、`disabledPlugins`、ALC 回收断言 |
@@ -91,7 +92,7 @@ plugins/
 | 热键设置 | ✅ 完成：`settings.json` 可改，格式 `Ctrl+Alt+S`，重启生效 |
 | 开机自启 | ✅ 完成：HKCU Run 项，只启动到托盘 |
 | M1 验收 | ✅ 完成：9 条出口条件全部达标（见 `docs/acceptance.md`） |
-| 测试 | ✅ 173 个通过（含 headless 键盘路由、真实剪贴板取图/写图、真实子进程 OCR、滚动拼接、工具墙 ViewModel、AI 请求/密钥加密） |
+| 测试 | ✅ 187 个通过（含 headless 键盘路由、真实剪贴板取图/写图、真实子进程 OCR、滚动拼接、工具墙 ViewModel、AI 请求/密钥加密、SVG 清洗/渲染） |
 | M1（剪贴板历史 / 截图 / PaddleOCR-VL） | ⬜ 未开始 |
 
 当前阶段：**M1 插件基础设施完成**——加插件不改宿主、能禁用、能卸载且内存真的回收。

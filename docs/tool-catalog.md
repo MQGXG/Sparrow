@@ -164,9 +164,9 @@ Tool : InputShape × Params → OutputShape
 | ID | 名称 | 输入 | 输出 | 阶段 | 状态 | 备注 |
 |---|---|---|:--:|:--:|---|---|
 | `sparrow.svg.trace` | 图片描摹 | Image | Svg | P1 | ⬜ | 千万色 → 调色板量化 → 路径拟合 |
-| `sparrow.svg.preview` | SVG 预览/导出 | Svg | Image / Files | P1 | ⬜ | 走 Svg.Skia 5.1.1 |
+| `sparrow.svg.preview` | SVG 预览 | Svg | Image | M1.3 | ✅ | 宿主内置 Svg.Skia 5.1.1，不是插件 |
 | `sparrow.svg.optimize` | SVG 优化 | Svg | Svg | P2 | ⬜ | 去冗余属性 / 合并路径 |
-| `sparrow.svg.generate` | AI 生成 SVG | Text | Svg | P2 | ⬜ | 依赖 AI，绝不能前置 |
+| `sparrow.svg.prompt` | 提示词生成 SVG | Text | Svg | M1.3 | ✅ | 走宿主 `IAiClient`，宿主清洗后预览 |
 
 ### 3.8 开发 · Dev
 

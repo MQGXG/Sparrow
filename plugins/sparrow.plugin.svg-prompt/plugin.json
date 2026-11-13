@@ -1,0 +1,11 @@
+{
+  "id": "sparrow.plugin.svg-prompt",
+  "name": "提示词生成 SVG",
+  "version": "0.1.0",
+  "sdkVersion": "1.1",
+  "entryAssembly": "Sparrow.Plugin.Svg.Prompt.dll",
+  "author": "sparrow",
+  "description": "用一句话描述生成矢量 SVG；模型由宿主设置提供",
+  "capabilities": ["Ai", "SvgRender"],
+  "tools": ["sparrow.svg.prompt"]
+}

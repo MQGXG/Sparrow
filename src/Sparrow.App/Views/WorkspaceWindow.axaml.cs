@@ -121,6 +121,18 @@ public partial class WorkspaceWindow : Window
             viewModel.CopyResult();
     }
 
+    private void OnSvgPreviewClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel viewModel)
+            viewModel.ShowSvgPreview();
+    }
+
+    private void OnSvgSourceClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel viewModel)
+            viewModel.ShowSvgSourceView();
+    }
+
     private void OnHistoryClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: HistoryEntryViewModel history } && DataContext is WorkspaceViewModel viewModel)

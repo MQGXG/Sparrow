@@ -105,3 +105,10 @@ Requires = PlatformCapability.Ai
 - 长文本由工具自己切块（翻译工具按标点切 3000 字）
 - 不内置本地模型；本地推理由 Ollama / LM Studio 等外部进程提供
 - 不做账号、云同步、模型市场
+
+## 七、已接入工具
+
+| 工具 | 说明 |
+|---|---|
+| `sparrow.text.translate` | 翻译，长文本分块 |
+| `sparrow.svg.prompt` | 提示词生成 SVG；宿主清洗（去脚本/外链/事件）后用 Svg.Skia 渲染预览 |

@@ -20,6 +20,8 @@
 
     <!-- 图像编解码：版本跟随 Avalonia，勿升 4.x（见 docs/architecture.md） -->
     <PackageVersion Include="SkiaSharp" Version="3.119.4" />
+    <!-- SVG 预览：5.1.x 才依赖 SkiaSharp 3.x；5.2 会拉 4.148 与 Avalonia 冲突 -->
+    <PackageVersion Include="Svg.Skia" Version="5.1.1" />
 
     <!-- OCR：PP-OCRv5 本地模型 + PaddleInference（见 docs/plugin-model.md 的 C 档） -->
     <PackageVersion Include="Sdcb.PaddleOCR" Version="3.3.1" />
