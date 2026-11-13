@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -61,6 +62,23 @@ public sealed class CaptureWindowTests
 
         window.Action.ShouldBe(CaptureAction.None);
         window.IsVisible.ShouldBeTrue();
+
+        window.Close();
+    }
+
+    /// <summary>拖拽过程中要实时显示选区尺寸（物理像素）。</summary>
+    [AvaloniaFact]
+    public void 拖拽时显示选区尺寸()
+    {
+        var window = new CaptureWindow();
+        window.Show();
+
+        window.MouseDown(new Point(100, 100), MouseButton.Left);
+        window.MouseMove(new Point(300, 250));
+
+        window.SizeBadge.IsVisible.ShouldBeTrue();
+        window.SizeText.Text.ShouldNotBeNullOrEmpty();
+        window.SizeText.Text.ShouldContain("×");
 
         window.Close();
     }

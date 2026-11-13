@@ -385,10 +385,15 @@
                     Margin="0,14,0,0"
                     Padding="14">
               <Grid RowDefinitions="Auto,Auto,*">
-                <TextBlock Grid.Row="0"
-                           Classes="section"
-                           Text="结果"
-                           Margin="0,0,0,10" />
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                  <TextBlock Classes="section" Text="结果" />
+                  <TextBlock Grid.Column="1"
+                             Text="{Binding ResultSummary}"
+                             IsVisible="{Binding HasResult}"
+                             FontSize="11"
+                             Foreground="{StaticResource TextMutedBrush}"
+                             VerticalAlignment="Center" />
+                </Grid>
 
                 <!-- 错误：红色左边条 + 一行人话 -->
                 <Border Grid.Row="1"

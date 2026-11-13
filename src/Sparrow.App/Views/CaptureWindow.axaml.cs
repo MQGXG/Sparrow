@@ -269,5 +269,38 @@ public partial class CaptureWindow : Window
         Canvas.SetTop(Selection, y);
         Selection.Width = Math.Abs(current.X - start.X);
         Selection.Height = Math.Abs(current.Y - start.Y);
+
+        UpdateSizeBadge(x, y, Selection.Width, Selection.Height);
+    }
+
+    /// <summary>
+    /// 草稿区尺寸提示：按物理像素显示，和最终截图尺寸一致。
+    /// 默认放在选区右下方；贴边时翻到选区内侧，避免被屏幕边缘裁掉。
+    /// </summary>
+    private void UpdateSizeBadge(double x, double y, double width, double height)
+    {
+        if (width < 1 || height < 1)
+        {
+            SizeBadge.IsVisible = false;
+            return;
+        }
+
+        SizeBadge.IsVisible = true;
+        SizeText.Text = $"{(int)Math.Round(width * _scaling)} × {(int)Math.Round(height * _scaling)}";
+
+        const double badgeWidth = 96;
+        const double badgeHeight = 26;
+        const double gap = 8;
+
+        var left = x + width + gap;
+        if (left + badgeWidth > Width)
+            left = x + width - badgeWidth - gap;
+
+        var top = y + height + gap;
+        if (top + badgeHeight > Height)
+            top = y + height - badgeHeight - gap;
+
+        Canvas.SetLeft(SizeBadge, Math.Max(4, Math.Min(left, Width - badgeWidth - 4)));
+        Canvas.SetTop(SizeBadge, Math.Max(4, Math.Min(top, Height - badgeHeight - 4)));
     }
 }

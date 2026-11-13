@@ -36,6 +36,17 @@ public partial class PaletteViewModel : ObservableObject
     [ObservableProperty]
     private string? _resultText;
 
+    /// <summary>结果区右上角的字数/行数；执行中或空结果时为空串。</summary>
+    public string ResultSummary => IsPending ? string.Empty : TextMetrics.Summarize(ResultText);
+
+    partial void OnResultTextChanged(string? value) => OnPropertyChanged(nameof(ResultSummary));
+
+    partial void OnIsPendingChanged(bool value) => OnPropertyChanged(nameof(ResultSummary));
+
+    /// <summary>结果区正在显示「正在识别…」之类的占位，不算真实结果。</summary>
+    [ObservableProperty]
+    private bool _isPending;
+
     [ObservableProperty]
     private string? _resultTitle;
 
@@ -192,6 +203,7 @@ public partial class PaletteViewModel : ObservableObject
     /// <summary>执行中占位，避免用户以为没反应。</summary>
     public void ShowPending(string message)
     {
+        IsPending = true;
         ResultText = message;
         ResultTitle = null;
         HasResult = true;
@@ -287,6 +299,7 @@ public partial class PaletteViewModel : ObservableObject
 
     private void ShowResult(string text, string title)
     {
+        IsPending = false;
         ResultText = text;
         ResultTitle = title;
         HasResult = true;
@@ -296,6 +309,7 @@ public partial class PaletteViewModel : ObservableObject
 
     private void ShowError(string message)
     {
+        IsPending = false;
         ErrorText = message;
         HasError = true;
         HasResult = false;
@@ -305,6 +319,7 @@ public partial class PaletteViewModel : ObservableObject
 
     private void ClearResult()
     {
+        IsPending = false;
         ResultText = null;
         ResultTitle = null;
         ErrorText = null;

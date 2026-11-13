@@ -132,6 +132,11 @@ public partial class WorkspaceViewModel : ObservableObject
     [ObservableProperty]
     private string? _resultText;
 
+    /// <summary>结果区右上角的字数/行数；空结果时为空串。</summary>
+    public string ResultSummary => TextMetrics.Summarize(ResultText);
+
+    partial void OnResultTextChanged(string? value) => OnPropertyChanged(nameof(ResultSummary));
+
     [ObservableProperty]
     private string? _errorText;
 

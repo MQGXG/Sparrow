@@ -17,6 +17,21 @@
                Stroke="{StaticResource AccentBrush}"
                StrokeThickness="2" />
 
+    <!-- 选区尺寸：显示物理像素，和最终截图尺寸一致 -->
+    <Border x:Name="SizeBadge"
+            IsVisible="False"
+            IsHitTestVisible="False"
+            Background="{StaticResource OverlayBrush}"
+            BorderBrush="{StaticResource LineStrongBrush}"
+            BorderThickness="1"
+            CornerRadius="6"
+            Padding="8,4">
+      <TextBlock x:Name="SizeText"
+                 FontFamily="{StaticResource MonoFont}"
+                 FontSize="11"
+                 Foreground="{StaticResource TextPrimaryBrush}" />
+    </Border>
+
     <Border Canvas.Left="0"
             Canvas.Top="0"
             HorizontalAlignment="Center"
