@@ -4,6 +4,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Shouldly;
 using Sparrow.App.Views;
+using Sparrow.Plugin.Sdk.Payloads;
 using Xunit;
 
 namespace Sparrow.Tests;
@@ -98,5 +99,51 @@ public sealed class CaptureWindowTests
 
         window.Action.ShouldBe(expected);
         window.IsVisible.ShouldBeFalse();
+    }
+
+    /// <summary>就地 OCR：每行一个框，叠在选区上。</summary>
+    [AvaloniaFact]
+    public void 识别结果_按行框叠加()
+    {
+        var window = new CaptureWindow();
+        window.Show();
+        window.Selection.IsVisible = true;
+        window.Selection.Width = 200;
+        window.Selection.Height = 100;
+
+        window.ShowOcrResult(new CaptureOcrResult(
+            "HELLO OCR\n第二行",
+            [
+                new OcrTextLine("HELLO OCR", 10, 20, 90, 20),
+                new OcrTextLine("第二行", 0, 60, 60, 20)
+            ]));
+
+        window.OcrLayer.IsVisible.ShouldBeTrue();
+        window.OcrLayer.Children.Count.ShouldBe(2);
+        window.CopyAllButton.IsVisible.ShouldBeTrue();
+        window.OcrStatus.Text.ShouldNotBeNull().ShouldContain("2 行");
+
+        window.Close();
+    }
+
+    /// <summary>有识别结果时，Esc 先清 overlay，不直接关窗。</summary>
+    [AvaloniaFact]
+    public void 有识别结果时_Esc先清除overlay()
+    {
+        var window = new CaptureWindow();
+        window.Show();
+        window.Selection.Width = 100;
+        window.Selection.Height = 50;
+
+        window.ShowOcrResult(new CaptureOcrResult(
+            "A",
+            [new OcrTextLine("A", 0, 0, 10, 10)]));
+
+        window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.None, null);
+
+        window.OcrLayer.IsVisible.ShouldBeFalse();
+        window.IsVisible.ShouldBeTrue();
+
+        window.Close();
     }
 }

@@ -32,6 +32,11 @@
                  Foreground="{StaticResource TextPrimaryBrush}" />
     </Border>
 
+    <!-- 就地 OCR：行框叠在选区上，点一行复制一行 -->
+    <Canvas x:Name="OcrLayer"
+            IsVisible="False"
+            ClipToBounds="True" />
+
     <Border Canvas.Left="0"
             Canvas.Top="0"
             HorizontalAlignment="Center"
@@ -56,7 +61,16 @@
             Padding="8"
             BoxShadow="0 12 32 0 #99000000">
       <StackPanel Orientation="Horizontal" Spacing="6">
-        <Button Classes="accent"
+        <TextBlock x:Name="OcrStatus"
+                   IsVisible="False"
+                   MaxWidth="220"
+                   Margin="4,0"
+                   VerticalAlignment="Center"
+                   FontSize="11"
+                   TextTrimming="CharacterEllipsis"
+                   Foreground="{StaticResource TextSecondaryBrush}" />
+        <Button x:Name="RecognizeButton"
+                Classes="accent"
                 Content="识别文字"
                 Click="OnRecognizeClick"
                 ToolTip.Tip="Enter" />
@@ -64,6 +78,11 @@
         <Button Content="保存" Click="OnSaveClick" ToolTip.Tip="S" />
         <Button Content="固定" Click="OnPinClick" ToolTip.Tip="P" />
         <Button Content="滚动" Click="OnScrollClick" ToolTip.Tip="G" />
+        <Button x:Name="CopyAllButton"
+                IsVisible="False"
+                Content="复制全文"
+                Click="OnCopyAllClick"
+                ToolTip.Tip="Ctrl+C" />
         <Button Classes="ghost" Content="取消" Click="OnCancelClick" ToolTip.Tip="Esc" />
       </StackPanel>
     </Border>

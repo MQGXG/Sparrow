@@ -1,7 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Sparrow.App.Services;
 
@@ -26,11 +28,33 @@ public enum CaptureAction
 /// </summary>
 public partial class CaptureWindow : Window
 {
+    private const double OcrLinePadding = 2;
+
+    private static readonly IBrush LineFill = new SolidColorBrush(Color.Parse("#1FE5A44C"));
+    private static readonly IBrush LineHoverFill = new SolidColorBrush(Color.Parse("#40E5A44C"));
+    private static readonly IBrush LineStroke = new SolidColorBrush(Color.Parse("#80E5A44C"));
+
     private Point? _start;
     private PixelPoint _origin;
     private double _scaling = 1;
+    private Rect _selection;
+    private CancellationTokenSource? _ocrCancellation;
+    private bool _isRecognizing;
+    private string? _ocrText;
 
     public CaptureWindow() => InitializeComponent();
+
+    /// <summary>
+    /// 宿主注入的 OCR 执行器。为空时「识别文字」保持旧行为：
+    /// 关窗、由宿主走面板识别。
+    /// </summary>
+    public Func<byte[], CancellationToken, Task<CaptureOcrResult>>? OcrRunner { get; set; }
+
+    /// <summary>宿主注入的复制实现。窗口不直接碰剪贴板。</summary>
+    public Action<string>? CopyText { get; set; }
+
+    /// <summary>插件只返回文本时的回退内容，由宿主在窗口关闭后展示。</summary>
+    public string? FallbackText { get; private set; }
 
     /// <summary>选区的 PNG 结果；取消或选区过小时为 null。</summary>
     public byte[]? Result { get; private set; }
@@ -45,6 +69,14 @@ public partial class CaptureWindow : Window
     {
         base.OnOpened(e);
         ApplyVirtualScreenBounds();
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _ocrCancellation?.Cancel();
+        _ocrCancellation?.Dispose();
+        _ocrCancellation = null;
+        base.OnClosed(e);
     }
 
     /// <summary>
@@ -72,6 +104,10 @@ public partial class CaptureWindow : Window
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
+        // 已经截完图：不允许再拉新选区，否则 overlay 会被误清掉
+        if (Result is not null)
+            return;
+
         _start = e.GetPosition(this);
 
         Selection.IsVisible = true;
@@ -124,6 +160,7 @@ public partial class CaptureWindow : Window
         var height = (int)(rect.Height * scaling);
 
         SelectionRect = new PixelRect(x, y, width, height);
+        _selection = rect;
 
         // 先让遮罩透明，再截图，否则截到的是自己
         Opacity = 0;
@@ -145,7 +182,7 @@ public partial class CaptureWindow : Window
     {
         ActionBar.IsVisible = true;
 
-        const double estimatedWidth = 430;
+        const double estimatedWidth = 620;
         var left = Math.Max(8, Math.Min(selection.X, Width - estimatedWidth - 8));
         var top = selection.Bottom + 12;
 
@@ -157,11 +194,165 @@ public partial class CaptureWindow : Window
         Canvas.SetTop(ActionBar, top);
     }
 
-    private void OnRecognizeClick(object? sender, RoutedEventArgs e)
+    private async void OnRecognizeClick(object? sender, RoutedEventArgs e) => await RunOcrAsync();
+
+    private void OnCopyAllClick(object? sender, RoutedEventArgs e) => CopyAllText();
+
+    private async Task RunOcrAsync()
     {
-        Action = CaptureAction.Recognize;
-        Close();
+        // 没有注入 runner 或还没截图时，退回旧流程
+        if (OcrRunner is null || Result is not { Length: > 0 } png)
+        {
+            Action = CaptureAction.Recognize;
+            Close();
+            return;
+        }
+
+        if (_isRecognizing)
+            return;
+
+        _isRecognizing = true;
+        _ocrCancellation = new CancellationTokenSource();
+        RecognizeButton.IsEnabled = false;
+        OcrStatus.IsVisible = true;
+        OcrStatus.Text = "正在识别…";
+
+        try
+        {
+            var result = await OcrRunner(png, _ocrCancellation.Token);
+
+            if (!string.IsNullOrEmpty(result.Error))
+            {
+                ShowOcrError(result.Error);
+                return;
+            }
+
+            // 旧插件只返回文本：关窗，让宿主回退到面板
+            if (result.IsFallback)
+            {
+                FallbackText = result.Text;
+                Action = CaptureAction.Recognize;
+                Close();
+                return;
+            }
+
+            ShowOcrResult(result);
+        }
+        catch (OperationCanceledException)
+        {
+            OcrStatus.Text = "已取消";
+        }
+        catch (Exception ex)
+        {
+            ShowOcrError($"识别失败：{ex.Message}");
+        }
+        finally
+        {
+            _isRecognizing = false;
+            RecognizeButton.IsEnabled = true;
+            _ocrCancellation?.Dispose();
+            _ocrCancellation = null;
+        }
     }
+
+    /// <summary>把行框叠在选区上；坐标按主屏缩放换算回 DIP。</summary>
+    internal void ShowOcrResult(CaptureOcrResult result)
+    {
+        _ocrText = result.Text;
+        OcrLayer.Children.Clear();
+
+        var left = Canvas.GetLeft(Selection);
+        var top = Canvas.GetTop(Selection);
+        if (double.IsNaN(left)) left = _selection.X;
+        if (double.IsNaN(top)) top = _selection.Y;
+
+        OcrLayer.Width = Selection.Width;
+        OcrLayer.Height = Selection.Height;
+        Canvas.SetLeft(OcrLayer, left);
+        Canvas.SetTop(OcrLayer, top);
+        OcrLayer.IsVisible = true;
+
+        foreach (var line in result.Lines)
+        {
+            var height = Math.Max(line.Height / _scaling, 8);
+
+            var box = new Rectangle
+            {
+                Width = Math.Max(1, line.Width / _scaling + OcrLinePadding * 2),
+                Height = height + OcrLinePadding * 2,
+                Fill = LineFill,
+                Stroke = LineStroke,
+                StrokeThickness = 1,
+                RadiusX = 2,
+                RadiusY = 2,
+                Cursor = new Cursor(StandardCursorType.Hand),
+                Tag = line.Text.Trim()
+            };
+
+            box.PointerEntered += OnOcrLineEntered;
+            box.PointerExited += OnOcrLineExited;
+            box.PointerPressed += OnOcrLinePressed;
+
+            OcrLayer.Children.Add(box);
+            Canvas.SetLeft(box, line.X / _scaling - OcrLinePadding);
+            Canvas.SetTop(box, line.Y / _scaling - OcrLinePadding);
+        }
+
+        RecognizeButton.Content = "重新识别";
+        CopyAllButton.IsVisible = true;
+        OcrStatus.IsVisible = true;
+        OcrStatus.Text = $"{result.Lines.Count} 行 · 点行复制";
+    }
+
+    private void ShowOcrError(string message)
+    {
+        OcrStatus.IsVisible = true;
+        OcrStatus.Text = message;
+    }
+
+    private void ClearOcrOverlay()
+    {
+        OcrLayer.Children.Clear();
+        OcrLayer.IsVisible = false;
+        CopyAllButton.IsVisible = false;
+        OcrStatus.IsVisible = false;
+        RecognizeButton.Content = "识别文字";
+        _ocrText = null;
+    }
+
+    private void CopyAllText()
+    {
+        if (string.IsNullOrEmpty(_ocrText))
+            return;
+
+        CopyText?.Invoke(_ocrText);
+        OcrStatus.Text = $"已复制全文 · {_ocrText.Length} 字";
+    }
+
+    private void OnOcrLineEntered(object? sender, PointerEventArgs e)
+    {
+        if (sender is Rectangle box)
+            box.Fill = LineHoverFill;
+    }
+
+    private void OnOcrLineExited(object? sender, PointerEventArgs e)
+    {
+        if (sender is Rectangle box)
+            box.Fill = LineFill;
+    }
+
+    private void OnOcrLinePressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is Rectangle { Tag: string text })
+        {
+            CopyText?.Invoke(text);
+            OcrStatus.Text = $"已复制：{Shorten(text)}";
+            e.Handled = true;
+        }
+    }
+
+    private static string Shorten(string text) =>
+        text.Length <= 18 ? text : text[..18] + "…";
 
     private void OnCopyImageClick(object? sender, RoutedEventArgs e)
     {
@@ -201,8 +392,45 @@ public partial class CaptureWindow : Window
 
         if (key == Key.Escape)
         {
+            if (_isRecognizing)
+            {
+                _ocrCancellation?.Cancel();
+                e.Handled = true;
+                return;
+            }
+
+            if (OcrLayer.IsVisible)
+            {
+                ClearOcrOverlay();
+                e.Handled = true;
+                return;
+            }
+
             Action = CaptureAction.None;
             Close();
+            e.Handled = true;
+            return;
+        }
+
+        // 有识别结果时，Ctrl+C 复制全文；单击 C 仍然是复制图片
+        if (ActionBar.IsVisible
+            && OcrLayer.IsVisible
+            && key == Key.C
+            && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            CopyAllText();
+            e.Handled = true;
+            return;
+        }
+
+        // 注入了 OCR runner 时，Enter/R 在窗口内就地识别
+        if (ActionBar.IsVisible && OcrRunner is not null && key is Key.Enter or Key.R)
+        {
+            if (key == Key.Enter && OcrLayer.IsVisible)
+                CopyAllText();
+            else
+                _ = RunOcrAsync();
+
             e.Handled = true;
             return;
         }
