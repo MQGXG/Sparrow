@@ -74,21 +74,21 @@
                    FontSize="11"
                    TextTrimming="CharacterEllipsis"
                    Foreground="{StaticResource TextSecondaryBrush}" />
-        <Button x:Name="RecognizeButton"
+        <Button Focusable="False" x:Name="RecognizeButton"
                 Classes="accent"
                 Content="识别文字"
                 Click="OnRecognizeClick"
                 ToolTip.Tip="Enter" />
-        <Button Content="复制图片" Click="OnCopyImageClick" ToolTip.Tip="C" />
-        <Button Content="保存" Click="OnSaveClick" ToolTip.Tip="S" />
-        <Button Content="固定" Click="OnPinClick" ToolTip.Tip="P" />
-        <Button Content="滚动" Click="OnScrollClick" ToolTip.Tip="G" />
-        <Button x:Name="CopyAllButton"
+        <Button Focusable="False" Content="复制图片" Click="OnCopyImageClick" ToolTip.Tip="C" />
+        <Button Focusable="False" Content="保存" Click="OnSaveClick" ToolTip.Tip="S" />
+        <Button Focusable="False" Content="固定" Click="OnPinClick" ToolTip.Tip="P" />
+        <Button Focusable="False" Content="滚动" Click="OnScrollClick" ToolTip.Tip="G" />
+        <Button Focusable="False" x:Name="CopyAllButton"
                 IsVisible="False"
                 Content="复制全文"
                 Click="OnCopyAllClick"
                 ToolTip.Tip="Ctrl+C" />
-        <Button Classes="ghost" Content="取消" Click="OnCancelClick" ToolTip.Tip="Esc" />
+        <Button Focusable="False" Classes="ghost" Content="取消" Click="OnCancelClick" ToolTip.Tip="Esc" />
       </StackPanel>
     </Border>
 

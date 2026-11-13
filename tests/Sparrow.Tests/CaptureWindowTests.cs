@@ -254,4 +254,21 @@ public sealed class CaptureWindowTests
 
         window.Close();
     }
+
+    /// <summary>点在动作栏的空白处不能当成「重新拉框」。</summary>
+    [AvaloniaFact]
+    public void 点击动作栏空白_不会重置选区()
+    {
+        var window = CreateWithSelection();
+        var left = Canvas.GetLeft(window.ActionBar);
+        var top = Canvas.GetTop(window.ActionBar);
+
+        window.MouseDown(new Point(left + 4, top + 4), MouseButton.Left);
+        window.MouseUp(new Point(left + 4, top + 4), MouseButton.Left);
+
+        window.Selection.Width.ShouldBe(200, 0.01);
+        window.Selection.Height.ShouldBe(150, 0.01);
+
+        window.Close();
+    }
 }

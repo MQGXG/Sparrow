@@ -173,6 +173,12 @@ public partial class CaptureWindow : Window
         if (_isActing || _isRecognizing)
             return;
 
+        var point = e.GetPosition(this);
+
+        // 点在动作栏上：交给按钮，不要当成新选区
+        if (IsPointInActionBar(point))
+            return;
+
         // 第一次点击先清掉识别结果，不直接开始拉新框
         if (OcrLayer.IsVisible)
         {
@@ -182,8 +188,6 @@ public partial class CaptureWindow : Window
             e.Handled = true;
             return;
         }
-
-        var point = e.GetPosition(this);
 
         if (_hasSelection)
         {
@@ -485,6 +489,17 @@ public partial class CaptureWindow : Window
         Canvas.SetTop(ActionBar, top);
     }
 
+    private bool IsPointInActionBar(Point point)
+    {
+        if (!ActionBar.IsVisible)
+            return false;
+
+        if (ActionBar.TranslatePoint(new Point(0, 0), this) is not { } origin)
+            return false;
+
+        return new Rect(origin, ActionBar.Bounds.Size).Contains(point);
+    }
+
     private async void OnRecognizeClick(object? sender, RoutedEventArgs e) => await ActAsync(CaptureAction.Recognize);
 
     private void OnCopyAllClick(object? sender, RoutedEventArgs e) => CopyAllText();
@@ -512,6 +527,10 @@ public partial class CaptureWindow : Window
                 Close();
                 return;
             }
+
+            // 抓图期间用户可能已经按 Esc 关窗
+            if (!IsVisible)
+                return;
 
             Result = png;
             Action = action;
