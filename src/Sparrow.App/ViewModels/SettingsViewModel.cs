@@ -3,11 +3,12 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Sparrow.App.Plugins;
 using Sparrow.App.Services;
 using Sparrow.App.Settings;
+using Sparrow.Plugin.Sdk;
 
 namespace Sparrow.App.ViewModels;
 
 /// <summary>
-/// 设置页：插件管理 + 热键 + 开机自启。
+/// 设置页：插件管理 + 模型 + 热键 + 开机自启。
 ///
 /// 工具自己的参数不在这里——它们在工具的参数区。
 /// </summary>
@@ -16,18 +17,24 @@ public partial class SettingsViewModel : ObservableObject
     private readonly ToolCatalog _catalog;
     private readonly SettingsStore _store;
     private readonly StartupService _startup;
+    private readonly AiClient? _ai;
+    private readonly AiSecretStore? _secrets;
     private AppSettings _settings;
 
     public SettingsViewModel(
         ToolCatalog catalog,
         SettingsStore store,
         StartupService startup,
-        AppSettings settings)
+        AppSettings settings,
+        AiClient? ai = null,
+        AiSecretStore? secrets = null)
     {
         _catalog = catalog;
         _store = store;
         _startup = startup;
         _settings = settings;
+        _ai = ai;
+        _secrets = secrets;
 
         _searchHotkey = settings.SearchHotkey;
         _captureHotkey = settings.CaptureHotkey;
@@ -35,8 +42,17 @@ public partial class SettingsViewModel : ObservableObject
         _historyMaxEntries = settings.HistoryMaxEntries;
         _historyRetentionDays = settings.HistoryRetentionDays;
 
+        _selectedAiProvider = AiProviders.Find(settings.AiProvider) ?? AiProviders.All[^1];
+        _aiEnabled = settings.AiEnabled;
+        _aiBaseUrl = settings.AiBaseUrl;
+        _aiModel = settings.AiModel;
+        _aiTemperature = settings.AiTemperature;
+        _aiMaxTokens = settings.AiMaxTokens;
+
         Reload();
     }
+
+    public IReadOnlyList<AiProviderPreset> AiProviderOptions => AiProviders.All;
 
     /// <summary>历史保留策略变化时通知宿主，让存储立即清理一次。</summary>
     public event Action<int, int>? HistoryRetentionChanged;
@@ -62,6 +78,32 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>历史保留天数；0 表示不按天数清理。</summary>
     [ObservableProperty]
     private int _historyRetentionDays;
+
+    /// <summary>当前 provider 预设；切换后自动填端点与默认模型。</summary>
+    [ObservableProperty]
+    private AiProviderPreset? _selectedAiProvider;
+
+    [ObservableProperty]
+    private bool _aiEnabled;
+
+    [ObservableProperty]
+    private string _aiBaseUrl = string.Empty;
+
+    [ObservableProperty]
+    private string _aiModel = string.Empty;
+
+    /// <summary>只用于输入新密钥；已保存的密钥不会回显。</summary>
+    [ObservableProperty]
+    private string _aiKey = string.Empty;
+
+    [ObservableProperty]
+    private double _aiTemperature = 0.2;
+
+    [ObservableProperty]
+    private int _aiMaxTokens = 2048;
+
+    [ObservableProperty]
+    private string? _aiStatus;
 
     [ObservableProperty]
     private string? _statusMessage;
@@ -141,6 +183,106 @@ public partial class SettingsViewModel : ObservableObject
         _store.Save(_settings);
         HistoryRetentionChanged?.Invoke(HistoryMaxEntries, HistoryRetentionDays);
         StatusMessage = "历史保留策略已保存";
+    }
+
+    partial void OnSelectedAiProviderChanged(AiProviderPreset? value)
+    {
+        if (value is null)
+            return;
+
+        // 「自定义」保留用户已填的端点，不覆盖
+        if (value.Key == "custom")
+            return;
+
+        // 只在当前端点/模型仍是某个预设默认值时套用新预设，
+        // 避免用户在设置页加载时把自定义端点覆盖掉
+        var currentIsPresetDefault = AiProviders.All.Any(provider =>
+            provider.Key != "custom"
+            && string.Equals(provider.BaseUrl, AiBaseUrl, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(provider.Model, AiModel, StringComparison.Ordinal));
+
+        if (!string.IsNullOrWhiteSpace(AiBaseUrl) && !currentIsPresetDefault)
+            return;
+
+        // 用户主动切换 provider 时，带出该家的默认端点与模型
+        AiBaseUrl = value.BaseUrl;
+        AiModel = value.Model;
+    }
+
+    /// <summary>保存模型配置；密钥单独加密保存，留空表示不修改。</summary>
+    public void SaveAiSettings()
+    {
+        _settings = _settings with
+        {
+            AiEnabled = AiEnabled,
+            AiProvider = SelectedAiProvider?.Key ?? "custom",
+            AiBaseUrl = AiBaseUrl.Trim(),
+            AiModel = AiModel.Trim(),
+            AiTemperature = AiTemperature,
+            AiMaxTokens = AiMaxTokens
+        };
+
+        _store.Save(_settings);
+
+        if (!string.IsNullOrWhiteSpace(AiKey))
+        {
+            _secrets?.Save(AiKey);
+            AiKey = string.Empty;
+        }
+
+        _ai?.Configure(_settings);
+        AiStatus = _ai?.IsAvailable == true
+            ? "模型配置已保存"
+            : "已保存，但还缺少 API Key 或有效端点";
+    }
+
+    /// <summary>用当前配置发一条最小请求，验证端点、密钥和模型名。</summary>
+    public async Task TestAiAsync()
+    {
+        if (_ai is null)
+        {
+            AiStatus = "模型模块未初始化";
+            return;
+        }
+
+        SaveAiSettings();
+
+        if (!_ai.IsAvailable)
+        {
+            AiStatus = "还缺少 API Key 或有效端点";
+            return;
+        }
+
+        AiStatus = "正在测试…";
+
+        try
+        {
+            var response = await _ai.CompleteAsync(
+                new AiRequest
+                {
+                    Messages = [new AiMessage(AiRole.User, "只回复单词：pong")],
+                    Temperature = 0,
+                    MaxTokens = 16
+                },
+                CancellationToken.None);
+
+            AiStatus = $"连接成功：{response.Text}";
+        }
+        catch (AiException ex)
+        {
+            AiStatus = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            AiStatus = $"测试失败：{ex.Message}";
+        }
+    }
+
+    public void ClearAiKey()
+    {
+        _secrets?.Save(null);
+        _ai?.Configure(_settings);
+        AiStatus = "API Key 已清除";
     }
 
     /// <summary>

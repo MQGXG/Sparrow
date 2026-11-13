@@ -76,13 +76,14 @@ plugins/
 | 契约 `Sparrow.Plugin.Sdk` | ✅ 完成，编译 0 警告 |
 | 插件 `JsonFormat` | ✅ 完成 |
 | 插件 `Base64` | ✅ 完成（第二个插件，验证「加插件不改宿主」） |
+| 插件 `Translate` | ✅ 完成：AI 翻译；宿主统一 provider / 密钥，插件只拿 `IAiClient` |
 | 最小可运行壳 | ✅ 完成：托盘 + `Ctrl+Alt+S` + 命令面板 + 剪贴板闭环 |
 | 插件扫描 + ALC 隔离 | ✅ 完成：`plugins/` 目录发现、懒加载、独立加载上下文 |
 | 设置 / 禁用 / 卸载 | ✅ 完成：`settings.json`、`disabledPlugins`、ALC 回收断言 |
-| 宿主能力注入 | ✅ 完成：`ToolContext.Host`、`PluginDirectory`、网络默认关闭 |
+| 宿主能力注入 | ✅ 完成：`ToolContext.Host`、`PluginDirectory`、网络默认关闭、`IAiClient` |
 | 剪贴板图片 | ✅ 完成：`CF_DIB` → PNG（SkiaSharp） |
 | 插件 `OCR` | ✅ 完成：进程插件 + PP-OCRv5 真实识别（12 组语言，~2.1–2.7s/张） |
-| 工作区窗口 | ✅ 完成：工具墙 / 工具台双态 + 分类导航 + 最近使用 + 自动参数 + 设置页（插件开关） |
+| 工作区窗口 | ✅ 完成：工具墙 / 最近使用 / 工具台三态 + 分类导航 + 自动参数 + 设置页（插件开关、模型） |
 | 界面 | ✅ 完成：统一设计 token（`Styles/Theme.axaml`），深色冷灰 + 单一琥珀强调色 |
 | 截图识别 | ✅ 完成：`Ctrl+Alt+C` 选区 → 动作栏（识别文字 / 复制图片 / 保存 / 固定 / 滚动 / 取消），可全程键盘，覆盖整个虚拟桌面 |
 | 滚动截图 | ✅ 完成：选区滚动拼接，1200×1000 选区实测拼出 1200×3100，无重复无断层 |
@@ -90,7 +91,7 @@ plugins/
 | 热键设置 | ✅ 完成：`settings.json` 可改，格式 `Ctrl+Alt+S`，重启生效 |
 | 开机自启 | ✅ 完成：HKCU Run 项，只启动到托盘 |
 | M1 验收 | ✅ 完成：9 条出口条件全部达标（见 `docs/acceptance.md`） |
-| 测试 | ✅ 124 个通过（含 headless 键盘路由、真实剪贴板取图/写图、真实子进程 OCR、滚动拼接、工具墙 ViewModel） |
+| 测试 | ✅ 173 个通过（含 headless 键盘路由、真实剪贴板取图/写图、真实子进程 OCR、滚动拼接、工具墙 ViewModel、AI 请求/密钥加密） |
 | M1（剪贴板历史 / 截图 / PaddleOCR-VL） | ⬜ 未开始 |
 
 当前阶段：**M1 插件基础设施完成**——加插件不改宿主、能禁用、能卸载且内存真的回收。

@@ -13,6 +13,7 @@ public static class ToolCategories
         ["dev"] = "开发",
         ["json"] = "JSON",
         ["ocr"] = "文字识别",
+        ["ai"] = "AI",
         ["text"] = "文本",
         ["data"] = "数据",
         ["image"] = "图像",

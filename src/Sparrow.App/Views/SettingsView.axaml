@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sparrow.App.ViewModels"
+             xmlns:svc="using:Sparrow.App.Services"
              x:Class="Sparrow.App.Views.SettingsView"
              x:DataType="vm:SettingsViewModel">
 
@@ -157,6 +158,95 @@
                            FormatString="0"
                            VerticalAlignment="Center" />
           </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- 模型 -->
+      <Border Classes="panel" Padding="16">
+        <StackPanel Spacing="12">
+          <StackPanel Spacing="4">
+            <TextBlock Classes="subtitle"
+                       Text="模型" />
+            <TextBlock Text="插件只拿到统一接口；API Key 由宿主用 Windows DPAPI 加密保存，不会进入插件或日志。"
+                       FontSize="11"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+
+          <ToggleSwitch Content="启用模型（AI 工具可用）"
+                        OnContent="开"
+                        OffContent="关"
+                        IsChecked="{Binding AiEnabled, Mode=TwoWay}" />
+
+          <Grid ColumnDefinitions="92,*"
+                RowDefinitions="Auto,Auto,Auto,Auto"
+                RowSpacing="10"
+                ColumnSpacing="12">
+            <TextBlock Text="提供方"
+                       FontSize="12"
+                       VerticalAlignment="Center"
+                       Foreground="{StaticResource TextSecondaryBrush}" />
+            <ComboBox Grid.Column="1"
+                      ItemsSource="{Binding AiProviderOptions}"
+                      SelectedItem="{Binding SelectedAiProvider, Mode=TwoWay}"
+                      HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="svc:AiProviderPreset">
+                  <TextBlock Text="{Binding Name}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+
+            <TextBlock Grid.Row="1"
+                       Text="Base URL"
+                       FontSize="12"
+                       VerticalAlignment="Center"
+                       Foreground="{StaticResource TextSecondaryBrush}" />
+            <TextBox Grid.Row="1"
+                     Grid.Column="1"
+                     Text="{Binding AiBaseUrl, Mode=TwoWay}"
+                     PlaceholderText="https://api.openai.com/v1" />
+
+            <TextBlock Grid.Row="2"
+                       Text="模型名"
+                       FontSize="12"
+                       VerticalAlignment="Center"
+                       Foreground="{StaticResource TextSecondaryBrush}" />
+            <TextBox Grid.Row="2"
+                     Grid.Column="1"
+                     Text="{Binding AiModel, Mode=TwoWay}"
+                     PlaceholderText="gpt-4o-mini" />
+
+            <TextBlock Grid.Row="3"
+                       Text="API Key"
+                       FontSize="12"
+                       VerticalAlignment="Center"
+                       Foreground="{StaticResource TextSecondaryBrush}" />
+            <TextBox Grid.Row="3"
+                     Grid.Column="1"
+                     Text="{Binding AiKey, Mode=TwoWay}"
+                     PasswordChar="●"
+                     PlaceholderText="留空表示不修改已保存的密钥" />
+          </Grid>
+
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="accent small"
+                    Content="保存并测试"
+                    Click="OnSaveAiClick" />
+            <Button Classes="ghost small"
+                    Content="清除密钥"
+                    Click="OnClearAiKeyClick" />
+          </StackPanel>
+
+          <TextBlock Text="{Binding AiStatus}"
+                     FontSize="11"
+                     Foreground="{StaticResource AccentBrush}"
+                     TextWrapping="Wrap" />
+
+          <TextBlock Text="本地示例：Ollama http://localhost:11434/v1；LM Studio http://localhost:1234/v1。云端需填写 API Key。"
+                     FontSize="11"
+                     Foreground="{StaticResource TextMutedBrush}"
+                     TextWrapping="Wrap" />
         </StackPanel>
       </Border>
 

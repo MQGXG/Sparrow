@@ -13,12 +13,13 @@ namespace Sparrow.App.Plugins;
 /// </summary>
 public sealed class ToolHost : IToolHost
 {
-    public ToolHost(string pluginId, string pluginDirectory, IAppLog log)
+    public ToolHost(string pluginId, string pluginDirectory, IAppLog log, IAiClient? ai = null)
     {
         PluginDirectory = pluginDirectory;
         Logger = new PluginLogger(pluginId, log);
         Settings = new InMemoryToolSettings();
         Http = DisabledHttpAccess.Instance;
+        Ai = ai ?? NullAiClient.Instance;
     }
 
     public ILogger Logger { get; }
@@ -26,6 +27,8 @@ public sealed class ToolHost : IToolHost
     public IToolSettings Settings { get; }
 
     public IHttpClientAccess Http { get; }
+
+    public IAiClient Ai { get; }
 
     public string PluginDirectory { get; }
 }
@@ -43,6 +46,8 @@ public sealed class NullToolHost : IToolHost
     public IToolSettings Settings { get; } = new InMemoryToolSettings();
 
     public IHttpClientAccess Http => DisabledHttpAccess.Instance;
+
+    public IAiClient Ai => NullAiClient.Instance;
 
     public string PluginDirectory => AppContext.BaseDirectory;
 }
@@ -118,4 +123,22 @@ internal sealed class DisabledHttpAccess : IHttpClientAccess
         CancellationToken cancellationToken) =>
         throw new InvalidOperationException(
             "网络访问未启用。插件应先检查 IToolHost.Http.IsAvailable。");
+}
+
+/// <summary>
+/// 未配置模型时的空实现。
+/// 插件应先检查 <see cref="IsAvailable"/>；直接调用属于编程错误，抛异常而不是静默返回空。
+/// </summary>
+internal sealed class NullAiClient : IAiClient
+{
+    public static NullAiClient Instance { get; } = new();
+
+    public bool IsAvailable => false;
+
+    public string? ModelName => null;
+
+    public Task<AiResponse> CompleteAsync(AiRequest request, CancellationToken cancellationToken) =>
+        throw new AiException(
+            AiErrorKind.NotConfigured,
+            "未配置 AI 模型。插件应先检查 IToolHost.Ai.IsAvailable。");
 }

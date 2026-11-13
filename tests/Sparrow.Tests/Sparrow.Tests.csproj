@@ -26,6 +26,7 @@
     <ProjectReference Include="..\..\plugins\sparrow.plugin.json-format\Sparrow.Plugin.Json.Format.csproj" />
     <ProjectReference Include="..\..\plugins\sparrow.plugin.dev-base64\Sparrow.Plugin.Dev.Base64.csproj" />
     <ProjectReference Include="..\..\plugins\sparrow.plugin.ocr\Sparrow.Plugin.Ocr.csproj" />
+    <ProjectReference Include="..\..\plugins\sparrow.plugin.translate\Sparrow.Plugin.Translate.csproj" />
     <!-- 只为测 ToolRegistry / PaletteViewModel，不启动 Avalonia -->
     <ProjectReference Include="..\..\src\Sparrow.App\Sparrow.App.csproj" />
   </ItemGroup>

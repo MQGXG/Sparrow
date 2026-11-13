@@ -146,6 +146,7 @@ Sparrow.Plugin.Sdk
 ├─ Inputs/                 TextInput, ImageInput, FileSetInput, EmptyInput
 ├─ ToolResult.cs           输出
 ├─ Payloads/               TextPayload, OcrResultPayload, SvgPayload, ImagePayload, FileSetPayload, TablePayload
+├─ Ai.cs                   IAiClient, AiRequest, AiResponse（密钥与端点由宿主管理）
 ├─ ToolAction.cs  ToolError.cs  ToolProgress.cs
 └─ Enums/                  InputShape, OutputShape, ToolSource, PlatformCapability
 ```
@@ -168,9 +169,13 @@ public interface IToolHost
     ILogger Logger { get; }
     IToolSettings Settings { get; }           // 按 toolId 隔离的键值存储
     IHttpClientAccess Http { get; }           // 受策略控制，可被禁用
+    IAiClient Ai { get; }                     // 模型能力；未配置时 IsAvailable=false
     string PluginDirectory { get; }           // 插件自己的目录，用于定位随包资源
 }
 ```
+
+**`Ai` 只暴露「发消息、拿回复」。** provider、Base URL、模型名、API Key 全部留在宿主：
+插件不知道请求发往哪里，也不能读取密钥。需要视觉模型时传 `AiRequest.Image`，宿主负责编码成 data URL。
 
 进度上报不在这里，而在 `ToolContext.Progress`——因为它是「这一次执行」的状态，不是插件的长期能力。
 

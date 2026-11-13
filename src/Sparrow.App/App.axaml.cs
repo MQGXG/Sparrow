@@ -66,7 +66,16 @@ public partial class App : Application
         var isFirstRun = !File.Exists(settingsPath);
         var settings = settingsStore.Load();
 
-        _catalog = new ToolCatalog(pluginsRoot, log, settings);
+        // AI 是宿主基础设施：密钥只在这里解密，插件只拿 IAiClient
+        var aiKeyPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Sparrow",
+            "ai-key.dat");
+        var aiSecrets = new AiSecretStore(aiKeyPath, log);
+        var ai = new AiClient(aiSecrets, log);
+        ai.Configure(settings);
+
+        _catalog = new ToolCatalog(pluginsRoot, log, settings, ai);
 
         var historyPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -94,7 +103,7 @@ public partial class App : Application
 
         // 工作区与面板共用同一个 ToolCatalog：插件只加载一次
         var startup = new StartupService(log);
-        var settingsViewModel = new SettingsViewModel(_catalog, settingsStore, startup, settings);
+        var settingsViewModel = new SettingsViewModel(_catalog, settingsStore, startup, settings, ai, aiSecrets);
 
         // 设置页改完保留策略后，历史存储立即按新规则清理一次
         settingsViewModel.HistoryRetentionChanged += history.Configure;

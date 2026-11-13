@@ -54,7 +54,8 @@ public enum PlatformCapability
     GlobalHotkey = 1 << 4,
     Ocr = 1 << 5,
     SvgRender = 1 << 6,
-    Network = 1 << 7
+    Network = 1 << 7,
+    Ai = 1 << 8
 }
 
 /// <summary>

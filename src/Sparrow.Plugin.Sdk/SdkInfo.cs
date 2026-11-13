@@ -9,8 +9,8 @@ namespace Sparrow.Plugin.Sdk;
 /// </summary>
 public static class SdkInfo
 {
-    /// <summary>当前 SDK 版本，形如 1.0。</summary>
-    public const string Version = "1.0";
+    /// <summary>当前 SDK 版本，形如 1.1。</summary>
+    public const string Version = "1.1";
 
     /// <summary>主版本号，兼容性判断只看它。</summary>
     public const int MajorVersion = 1;

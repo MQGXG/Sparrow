@@ -1,0 +1,11 @@
+{
+  "id": "sparrow.plugin.translate",
+  "name": "翻译",
+  "version": "0.1.0",
+  "sdkVersion": "1.1",
+  "entryAssembly": "Sparrow.Plugin.Translate.dll",
+  "author": "sparrow",
+  "description": "用宿主配置的 AI 模型翻译文本，支持中英日韩俄法德西",
+  "capabilities": ["Ai"],
+  "tools": ["sparrow.text.translate"]
+}

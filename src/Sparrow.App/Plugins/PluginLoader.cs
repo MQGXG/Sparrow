@@ -12,10 +12,15 @@ namespace Sparrow.App.Plugins;
 public sealed class PluginLoader : IDisposable
 {
     private readonly IAppLog _log;
+    private readonly IAiClient? _ai;
     private readonly List<LoadedPlugin> _loaded = [];
     private bool _disposed;
 
-    public PluginLoader(IAppLog log) => _log = log;
+    public PluginLoader(IAppLog log, IAiClient? ai = null)
+    {
+        _log = log;
+        _ai = ai;
+    }
 
     /// <summary>当前已加载的插件。注册表重建与卸载都基于它。</summary>
     public IReadOnlyList<LoadedPlugin> LoadedPlugins => _loaded;
@@ -66,7 +71,7 @@ public sealed class PluginLoader : IDisposable
                 Manifest = manifest,
                 Directory = candidate.Directory,
                 Tools = tools,
-                Host = new ToolHost(manifest.Id, candidate.Directory, _log),
+                Host = new ToolHost(manifest.Id, candidate.Directory, _log, _ai),
                 Context = context
             };
 

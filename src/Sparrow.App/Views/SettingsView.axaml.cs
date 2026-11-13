@@ -30,6 +30,18 @@ public partial class SettingsView : UserControl
             await viewModel.RescanAsync();
     }
 
+    private async void OnSaveAiClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is SettingsViewModel viewModel)
+            await viewModel.TestAiAsync();
+    }
+
+    private void OnClearAiKeyClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is SettingsViewModel viewModel)
+            viewModel.ClearAiKey();
+    }
+
     private static string LocalAppData =>
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 

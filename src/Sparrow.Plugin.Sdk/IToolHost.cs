@@ -5,7 +5,7 @@ namespace Sparrow.Plugin.Sdk;
 /// <summary>
 /// 宿主注入给插件的全部外部能力。
 ///
-/// 只有三样：日志、设置、受控的网络。
+/// 只有四样：日志、设置、受控的网络、模型。
 /// **没有文件系统、没有剪贴板、没有数据库、没有窗口**——
 /// 需要产出文件时返回 FileSetPayload，由宿主落盘；
 /// 需要读取剪贴板时，输入已经在 <see cref="ToolContext.Input"/> 里了。
@@ -19,6 +19,12 @@ public interface IToolHost
 
     /// <summary>受用户策略控制的网络访问。禁用时 IsAvailable 为 false。</summary>
     IHttpClientAccess Http { get; }
+
+    /// <summary>
+    /// 模型能力。密钥、端点、provider 都由宿主管理；
+    /// 未配置时 IsAvailable 为 false。
+    /// </summary>
+    IAiClient Ai { get; }
 
     /// <summary>
     /// 插件自己的安装目录（只读）。

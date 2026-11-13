@@ -181,13 +181,13 @@ Tool : InputShape × Params → OutputShape
 | `sparrow.dev.jwt` | JWT 解析 | Text | Text | P1 | ⬜ |
 | `sparrow.dev.hash` | 文本哈希 | Text | Text | P1 | ⬜ |
 
-### 3.9 AI（可选增强）
+### 3.9 AI（可选基础设施）
 
-**全部 P2 起。不配置任何模型时，这些工具在面板里置灰并给出配置入口。**
+**翻译已落地（M1.3）；其余 P2。不配置任何模型时，执行会提示「先配置模型」，不影响其他工具。**
 
 | ID | 名称 | 输入 | 输出 | 阶段 | 状态 |
 |---|---|---|:--:|:--:|---|
-| `sparrow.ai.translate` | 翻译 | Text | Text | P2 | ⬜ |
+| `sparrow.text.translate` | 翻译 | Text | Text | M1.3 | ✅ |
 | `sparrow.ai.explain` | 解释代码/报错 | Text | Text | P2 | ⬜ |
 | `sparrow.ai.summarize` | 总结 | Text | Text | P2 | ⬜ |
 | `sparrow.ai.redraw` | 视觉重绘 | Image | Svg | P2 | ⬜ |
