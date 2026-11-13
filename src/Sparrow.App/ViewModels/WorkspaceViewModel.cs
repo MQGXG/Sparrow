@@ -70,7 +70,12 @@ public partial class WorkspaceViewModel : ObservableObject
 
     partial void OnToolQueryChanged(string value) => RefilterTools();
 
-    partial void OnSelectedCategoryChanged(string? value) => RefilterTools();
+    partial void OnSelectedCategoryChanged(string? value)
+    {
+        // 选中状态只在 Categories 上，选完必须同步书签条，否则高亮会停在「全部」
+        UpdateCategorySelection();
+        RefilterTools();
+    }
 
     /// <summary>打开一个工具：进入工具台。</summary>
     public void OpenTool(ToolItemViewModel tool)
@@ -195,7 +200,6 @@ public partial class WorkspaceViewModel : ObservableObject
             _allTools = [.. entries];
             RebuildCategories();
             RefilterTools();
-            RebuildRecentTools();
 
             SelectedTool = Groups.SelectMany(group => group.Tools).FirstOrDefault();
             IsDetailOpen = false;
@@ -206,6 +210,9 @@ public partial class WorkspaceViewModel : ObservableObject
                 .ToList();
 
             FilterHistory();
+
+            // 必须等 _allHistory 载入之后再拼「最近使用」，否则启动时永远是空的
+            RebuildRecentTools();
         }
         catch (Exception ex)
         {

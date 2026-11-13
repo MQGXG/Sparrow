@@ -149,6 +149,8 @@
                             <TextBlock Text="{Binding Preview}"
                                        FontSize="10"
                                        Foreground="{StaticResource TextMutedBrush}"
+                                       MaxLines="1"
+                                       TextWrapping="NoWrap"
                                        TextTrimming="CharacterEllipsis" />
                           </StackPanel>
                           <TextBlock Grid.Column="1"
@@ -458,10 +460,12 @@
                      VerticalAlignment="Center" />
         </StackPanel>
 
+        <!-- 墙态没有「当前工具输入/结果」，动作按钮会静默执行一个看不见的工具，直接藏起来 -->
         <StackPanel Grid.Column="1"
                     Orientation="Horizontal"
                     Spacing="8"
-                    VerticalAlignment="Center">
+                    VerticalAlignment="Center"
+                    IsVisible="{Binding IsDetailOpen}">
           <Button Content="复制"
                   IsEnabled="{Binding !IsExecuting}"
                   Click="OnCopyClick" />
