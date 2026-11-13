@@ -92,11 +92,11 @@ plugins/
 | 热键设置 | ✅ 完成：`settings.json` 可改，格式 `Ctrl+Alt+S`，重启生效 |
 | 开机自启 | ✅ 完成：HKCU Run 项，只启动到托盘 |
 | M1 验收 | ✅ 完成：9 条出口条件全部达标（见 `docs/acceptance.md`） |
-| 测试 | ✅ 187 个通过（含 headless 键盘路由、真实剪贴板取图/写图、真实子进程 OCR、滚动拼接、工具墙 ViewModel、AI 请求/密钥加密、SVG 清洗/渲染） |
-| M1（剪贴板历史 / 截图 / PaddleOCR-VL） | ⬜ 未开始 |
+| 测试 | ✅ 216 个通过（含 headless 键盘路由、真实剪贴板取图/写图、真实子进程 OCR、滚动拼接、工具墙 ViewModel、AI 请求/密钥加密、SVG 清洗/渲染、剪贴板历史存储/还原、OCR 整理模式） |
+| 插件 `Clipboard History` | ✅ 完成：宿主监听剪贴板 + JSONL 落盘（图片存独立 PNG 文件），浏览 / 搜索 / 按序号还原；设置页可暂停记录 |
 
-当前阶段：**M1 插件基础设施完成**——加插件不改宿主、能禁用、能卸载且内存真的回收。
-下一步是剪贴板历史插件与 OCR。见 [`docs/roadmap.md`](docs/roadmap.md)。
+当前阶段：**M1 完成**——插件基础设施、截图链路、剪贴板历史都已闭环。
+下一步进入 M2：图片 → SVG 描摹（产品起源闭环）。见 [`docs/roadmap.md`](docs/roadmap.md)。
 
 ---
 

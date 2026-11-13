@@ -96,7 +96,7 @@ Tool : InputShape × Params → OutputShape
 
 | ID | 名称 | 输入 | 输出 | 阶段 | 状态 | 备注 |
 |---|---|---|:--:|:--:|---|---|
-| `sparrow.clipboard.history` | 剪贴板历史 | Nothing | Text / Image / Files | **P0** | ⬜ | 列表 + 搜索 + 固定 + 去重 |
+| `sparrow.clipboard.history` | 剪贴板历史 | Nothing | Text / Image / Files | **P0** | ✅ M1 完成：宿主监听 + JSONL 落盘，浏览 / 搜索 / 按序号还原 | 列表 + 搜索 + 固定 + 去重 |
 | `sparrow.clipboard.snippet` | 固定片段 | Nothing | Text | P1 | ⬜ | 长期保留的常用文本 |
 | `sparrow.clipboard.merge` | 合并多段 | Nothing | Text | P2 | ⬜ | 多选历史按序拼接 |
 | `sparrow.clipboard.sync` | 跨设备同步 | — | — | ✂ | — | 违反本地优先 |
@@ -146,11 +146,16 @@ Tool : InputShape × Params → OutputShape
 |---|---|---|:--:|:--:|---|---|
 | `sparrow.ocr.region` | 区域识别 | Nothing | Text | **P0** | ⬜ | 圈选 → 识别 → 可接力 |
 | `sparrow.ocr.image` | 图片识别 | Image | Text | **P0** | ✅ M1 真实识别（PP-OCRv5） | 与 region 共用引擎，只是输入不同 |
-| `sparrow.ocr.table` | 表格识别 | Image | Table | P2 | ⬜ | 引擎支持有限，先不承诺 |
+| `sparrow.ocr.table` | 表格识别 | Image | Table | P2 | 🚧 由 `sparrow.ocr.image` 的「表格」整理模式先垫上（Tab 分隔文本） | 独立工具 + TablePayload 渲染器等 M2 |
 
 > **多语言**：OCR 插件按 `language` 参数切换 PP-OCRv5 的 12 组识别模型
 > （`ch`/`en`/`ja`、`ru`/`uk`/`be`、`ko`、`ar`/`fa`/`ur`、`th`、`el`、`hi`、`ta`、`te`、`fr`/`de`/`es` 等），
 > 检测与方向分类模型共用。
+>
+> **整理模式（`layout` 参数）**：`按行`（默认，聚行 + 行内按 X，块间空格）、
+> `原文`（worker 原始全文）、`按位置`（空格近似还原水平排版）、
+> `表格`（行阈值收紧一半，Tab 分隔列，可直接粘贴进 Excel）。
+> 算法移植自 OmniSeeker 的 `OcrTextSorter`；行框（截图叠加层的点行复制）在所有模式下共用同一套聚类。
 
 > **OCR 是唯一进独立进程的工具**（Paddle 原生约 78MB + OpenCV 38MB）。主进程不加载它，首次使用时启动子进程，用完退出。见 [`architecture.md`](architecture.md#ocr-为什么独立进程)。
 
