@@ -29,15 +29,29 @@
     <ProjectReference Include="..\Sparrow.Plugin.Sdk\Sparrow.Plugin.Sdk.csproj" />
   </ItemGroup>
 
+  <!--
+    构建期插件依赖：只保证 plugins/ 先编译，并让插件的 CopyPluginToHost
+    把产物复制到 $(OutDir)plugins/<PluginId>/。
+    这不是运行时引用：ReferenceOutputAssembly=false，插件 DLL 不会进 App 根目录，
+    删插件目录仍然等于删干净。
+    用 glob 而不是逐个列项目，加插件不需要改 App.csproj。
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\plugins\**\*.csproj"
+                      Exclude="..\..\plugins\**\bin\**;..\..\plugins\**\obj\**"
+                      ReferenceOutputAssembly="false"
+                      Private="false" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- 让测试能直接验证 DIB→PNG 这类内部转换，不用把实现细节暴露成 public -->
     <InternalsVisibleTo Include="Sparrow.Tests" />
   </ItemGroup>
 
   <!--
-    ★ 这里刻意没有任何插件引用。
-    插件由 plugins/Directory.Build.targets 自己复制到 $(OutDir)plugins/<PluginId>/。
-    加一个新工具不需要碰这个文件——这是「加插件不改宿主」的构建层保证。
+    插件不在运行时引用：上面的 ProjectReference 只是构建顺序，
+    ReferenceOutputAssembly=false，插件程序集不会成为 App 的依赖。
+    插件产物由 plugins/Directory.Build.targets 复制到 $(OutDir)plugins/<PluginId>/。
   -->
 
 </Project>
