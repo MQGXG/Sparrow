@@ -214,4 +214,41 @@ public sealed class WorkspaceViewModelTests
         viewModel.Parameters.Single(parameter => parameter.Key == "mode").Value.ShouldBe("压缩");
         viewModel.Parameters.Single(parameter => parameter.Key == "indent").Value.ShouldBe("4");
     }
+
+    [Fact]
+    public async Task 拖入文本文件_直接填入输入框()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+        await viewModel.ReloadAsync();
+
+        var path = System.IO.Path.Combine(root.Path, "note.md");
+        File.WriteAllText(path, "# 标题\n正文");
+
+        viewModel.AcceptDroppedFiles([path]);
+
+        viewModel.InputText.ShouldBe("# 标题\n正文");
+    }
+
+    [Fact]
+    public async Task 拖入图片_记录为输入并可清除()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+        await viewModel.ReloadAsync();
+
+        var path = System.IO.Path.Combine(root.Path, "shot.png");
+        File.WriteAllBytes(path, Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="));
+
+        viewModel.AcceptDroppedFiles([path]);
+
+        viewModel.HasDroppedImage.ShouldBeTrue();
+
+        viewModel.ClearDroppedImage();
+
+        viewModel.HasDroppedImage.ShouldBeFalse();
+    }
 }

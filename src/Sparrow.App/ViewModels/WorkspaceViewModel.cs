@@ -96,15 +96,22 @@ public partial class WorkspaceViewModel : ObservableObject
 
     public bool HasRecentTools => RecentTools.Count > 0;
 
-    /// <summary>输入框提示：图片工具用剪贴板图片，生成类工具不需要输入。</summary>
-    public string InputHint => SelectedTool?.Entry.Descriptor.Accepts switch
-    {
-        InputShape.Image => "将使用剪贴板里的图片",
-        InputShape.None => "此工具不需要输入",
-        _ => "输入内容…"
-    };
+    /// <summary>输入框提示：优先显示拖入的图片，其次按工具输入形态给出说明。</summary>
+    public string InputHint => IsImageInput && HasDroppedImage
+        ? $"将使用拖入的图片：{_droppedImageName}"
+        : SelectedTool?.Entry.Descriptor.Accepts switch
+        {
+            InputShape.Image => "将使用剪贴板里的图片",
+            InputShape.None => "此工具不需要输入",
+            _ => "输入内容…"
+        };
 
     public bool IsTextInput => SelectedTool?.Entry.Descriptor.Accepts is InputShape.Text or InputShape.RichText;
+
+    public bool IsImageInput => SelectedTool?.Entry.Descriptor.Accepts == InputShape.Image;
+
+    /// <summary>只有当前是图片工具且确实拖入了图片，才显示「清除」。</summary>
+    public bool CanClearDroppedImage => HasDroppedImage && IsImageInput;
 
     partial void OnHistoryQueryChanged(string value) => FilterHistory();
 
@@ -132,6 +139,34 @@ public partial class WorkspaceViewModel : ObservableObject
 
     [ObservableProperty]
     private string _inputText = string.Empty;
+
+    private const long MaxDroppedImageBytes = 20 * 1024 * 1024;
+    private const long MaxDroppedTextBytes = 2 * 1024 * 1024;
+
+    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"
+    };
+
+    private static readonly HashSet<string> TextExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".txt", ".md", ".json", ".xml", ".csv", ".log", ".yaml", ".yml",
+        ".ini", ".toml", ".cs", ".js", ".ts", ".py", ".html", ".css", ".sql"
+    };
+
+    private byte[]? _droppedImagePng;
+    private ImageFormat _droppedImageFormat = ImageFormat.Png;
+    private string? _droppedImageName;
+
+    /// <summary>是否已经拖入一张图片；图片工具执行时优先用它，而不是剪贴板。</summary>
+    [ObservableProperty]
+    private bool _hasDroppedImage;
+
+    partial void OnHasDroppedImageChanged(bool value)
+    {
+        OnPropertyChanged(nameof(InputHint));
+        OnPropertyChanged(nameof(CanClearDroppedImage));
+    }
 
     [ObservableProperty]
     private string? _resultText;
@@ -249,6 +284,8 @@ public partial class WorkspaceViewModel : ObservableObject
         LoadParameters(newValue);
         OnPropertyChanged(nameof(InputHint));
         OnPropertyChanged(nameof(IsTextInput));
+        OnPropertyChanged(nameof(IsImageInput));
+        OnPropertyChanged(nameof(CanClearDroppedImage));
     }
 
     /// <summary>工具墙：先按侧栏分类，再按搜索词过滤，保持分组结构。</summary>
@@ -480,6 +517,97 @@ public partial class WorkspaceViewModel : ObservableObject
 
     public void HideSettings() => IsSettingsVisible = false;
 
+    /// <summary>
+    /// 处理拖入的文件：图片进入图片输入，文本文件直接填进输入框。
+    /// 只取第一个匹配项，不在这里做批量——批量是另一个产品的能力。
+    /// </summary>
+    public void AcceptDroppedFiles(IReadOnlyList<string> paths)
+    {
+        if (paths.Count == 0)
+            return;
+
+        var imagePath = paths.FirstOrDefault(path => ImageExtensions.Contains(Path.GetExtension(path)));
+        if (imagePath is not null)
+        {
+            try
+            {
+                var info = new FileInfo(imagePath);
+                if (info.Length > MaxDroppedImageBytes)
+                {
+                    ShowError("图片超过 20 MB，请先压缩");
+                    return;
+                }
+
+                _droppedImagePng = File.ReadAllBytes(imagePath);
+                _droppedImageFormat = FormatFromExtension(Path.GetExtension(imagePath));
+                _droppedImageName = Path.GetFileName(imagePath);
+                HasDroppedImage = true;
+
+                // 当前不是图片工具时，自动切到第一个图片工具，省一次点击
+                if (!IsImageInput)
+                    OpenFirstMatching(InputShape.Image);
+
+                return;
+            }
+            catch (Exception ex)
+            {
+                ShowError($"读取图片失败：{ex.Message}");
+                return;
+            }
+        }
+
+        var textPath = paths.FirstOrDefault(path => TextExtensions.Contains(Path.GetExtension(path)));
+        if (textPath is not null)
+        {
+            try
+            {
+                var info = new FileInfo(textPath);
+                if (info.Length > MaxDroppedTextBytes)
+                {
+                    ShowError("文本文件超过 2 MB，请先拆分");
+                    return;
+                }
+
+                InputText = File.ReadAllText(textPath);
+
+                if (!IsTextInput)
+                    OpenFirstMatching(InputShape.Text);
+
+                return;
+            }
+            catch (Exception ex)
+            {
+                ShowError($"读取文本失败：{ex.Message}");
+                return;
+            }
+        }
+
+        ShowError("只支持拖入图片或文本文件");
+    }
+
+    public void ClearDroppedImage()
+    {
+        _droppedImagePng = null;
+        _droppedImageName = null;
+        HasDroppedImage = false;
+    }
+
+    private void OpenFirstMatching(InputShape shape)
+    {
+        var entry = _allTools.FirstOrDefault(tool => tool.Descriptor.Accepts == shape);
+        if (entry is not null)
+            OpenTool(new ToolItemViewModel(entry));
+    }
+
+    private static ImageFormat FormatFromExtension(string extension) => extension.ToLowerInvariant() switch
+    {
+        ".jpg" or ".jpeg" => ImageFormat.Jpeg,
+        ".webp" => ImageFormat.Webp,
+        ".bmp" => ImageFormat.Bmp,
+        ".gif" => ImageFormat.Gif,
+        _ => ImageFormat.Png
+    };
+
     private IToolInput? BuildInput(ToolDescriptor descriptor, out string? error)
     {
         error = null;
@@ -489,10 +617,14 @@ public partial class WorkspaceViewModel : ObservableObject
 
         if (descriptor.Accepts == InputShape.Image)
         {
+            // 拖入的图片优先；没有才回退到剪贴板
+            if (_droppedImagePng is not null)
+                return new ImageInput(_droppedImagePng, _droppedImageFormat);
+
             var png = _clipboard.GetImagePng();
             if (png is null)
             {
-                error = "剪贴板里没有图片";
+                error = "剪贴板中没有图片。可以先复制图片，或直接把图片拖进窗口。";
                 return null;
             }
 

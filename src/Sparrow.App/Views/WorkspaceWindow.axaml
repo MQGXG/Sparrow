@@ -8,6 +8,7 @@
         Title="Sparrow · 工具台"
         Width="1120"
         Height="730"
+        DragDrop.AllowDrop="True"
         Icon="avares://Sparrow.App/Assets/sparrow-32.png"
         MinWidth="920"
         MinHeight="600"
@@ -374,9 +375,19 @@
                     Padding="12,9"
                     Margin="0,12,0,0"
                     HorizontalAlignment="Stretch">
-              <TextBlock Text="{Binding InputHint}"
-                         FontSize="12"
-                         Foreground="{StaticResource TextMutedBrush}" />
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="{Binding InputHint}"
+                           VerticalAlignment="Center"
+                           TextWrapping="Wrap"
+                           FontSize="12"
+                           Foreground="{StaticResource TextMutedBrush}" />
+                <Button Grid.Column="1"
+                        Classes="ghost small"
+                        Content="清除"
+                        Margin="12,0,0,0"
+                        IsVisible="{Binding CanClearDroppedImage}"
+                        Click="OnClearDroppedImageClick" />
+              </Grid>
             </Border>
 
             <!-- 结果：占满剩余高度 -->
