@@ -8,11 +8,10 @@ namespace Sparrow.App.ViewModels;
 /// </summary>
 public sealed class ToolGroupViewModel
 {
-    public ToolGroupViewModel(string category, IEnumerable<ToolEntry> entries)
+    public ToolGroupViewModel(string category, IEnumerable<ToolItemViewModel> tools)
     {
         Category = category;
-        Tools = new ObservableCollection<ToolItemViewModel>(
-            entries.Select(entry => new ToolItemViewModel(entry)));
+        Tools = new ObservableCollection<ToolItemViewModel>(tools);
     }
 
     public string Category { get; }

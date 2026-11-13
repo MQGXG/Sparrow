@@ -88,7 +88,19 @@ public partial class WorkspaceWindow : Window
     private void OnRecentToolClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: RecentToolViewModel recent } && DataContext is WorkspaceViewModel viewModel)
-            viewModel.OpenTool(recent.Tool);
+            viewModel.OpenTool(recent.Tool, fromRecent: true);
+    }
+
+    private void OnShowRecentClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel viewModel)
+            viewModel.ShowRecent();
+    }
+
+    private void OnShowToolsClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel viewModel)
+            viewModel.ShowTools();
     }
 
     private void OnBackToWallClick(object? sender, RoutedEventArgs e)

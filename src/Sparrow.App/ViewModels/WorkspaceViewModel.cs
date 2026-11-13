@@ -71,9 +71,36 @@ public partial class WorkspaceViewModel : ObservableObject
     [ObservableProperty]
     private string? _selectedCategory;
 
-    /// <summary>工作区双态：false = 工具墙（启动器），true = 工具台（输入/结果详情）。</summary>
+    /// <summary>工作区三态：工具墙 / 最近使用 / 工具台。</summary>
     [ObservableProperty]
     private bool _isDetailOpen;
+
+    /// <summary>最近使用页；和工具墙互斥，工具台优先。</summary>
+    [ObservableProperty]
+    private bool _isRecentOpen;
+
+    /// <summary>工具台从哪个页面进入，返回时回到原页面。</summary>
+    private bool _detailFromRecent;
+
+    public bool IsToolsSelected => !IsRecentOpen;
+
+    public bool IsWallVisible => !IsDetailOpen && !IsRecentOpen;
+
+    public bool IsRecentVisible => IsRecentOpen && !IsDetailOpen;
+
+    partial void OnIsRecentOpenChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsToolsSelected));
+        OnPropertyChanged(nameof(IsWallVisible));
+        OnPropertyChanged(nameof(IsRecentVisible));
+        UpdateCategorySelection();
+    }
+
+    partial void OnIsDetailOpenChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsWallVisible));
+        OnPropertyChanged(nameof(IsRecentVisible));
+    }
 
     partial void OnToolQueryChanged(string value) => RefilterTools();
 
@@ -85,17 +112,41 @@ public partial class WorkspaceViewModel : ObservableObject
     }
 
     /// <summary>打开一个工具：进入工具台。</summary>
-    public void OpenTool(ToolItemViewModel tool)
+    public void OpenTool(ToolItemViewModel tool, bool fromRecent = false)
     {
+        _detailFromRecent = fromRecent;
         SelectedTool = tool;
         IsDetailOpen = true;
+        IsRecentOpen = false;
     }
 
-    /// <summary>返回工具墙。保留选中项，方便「返回再进来」。</summary>
-    public void CloseDetail() => IsDetailOpen = false;
+    /// <summary>返回工具墙；从最近页进来的则回到最近页。</summary>
+    public void CloseDetail()
+    {
+        IsDetailOpen = false;
+        IsRecentOpen = _detailFromRecent;
+    }
 
     /// <summary>侧栏点分类；name 为 null 表示「全部」。</summary>
-    public void SelectCategory(string? name) => SelectedCategory = name;
+    public void SelectCategory(string? name)
+    {
+        IsRecentOpen = false;
+        SelectedCategory = name;
+    }
+
+    /// <summary>侧栏打开「最近使用」页。</summary>
+    public void ShowRecent()
+    {
+        IsDetailOpen = false;
+        IsRecentOpen = true;
+    }
+
+    /// <summary>侧栏回到工具墙。</summary>
+    public void ShowTools()
+    {
+        IsDetailOpen = false;
+        IsRecentOpen = false;
+    }
 
     public bool HasRecentTools => RecentTools.Count > 0;
 
@@ -250,6 +301,7 @@ public partial class WorkspaceViewModel : ObservableObject
 
             SelectedTool = Groups.SelectMany(group => group.Tools).FirstOrDefault();
             IsDetailOpen = false;
+            IsRecentOpen = false;
             InputText = _clipboard.GetText() ?? string.Empty;
 
             _allHistory = _history.Recent(200)
@@ -308,15 +360,16 @@ public partial class WorkspaceViewModel : ObservableObject
         }
 
         var list = items.ToList();
+        var tools = list.Select(entry => new ToolItemViewModel(entry)).ToList();
 
         Groups.Clear();
         VisibleTools.Clear();
 
-        foreach (var entry in list)
-            VisibleTools.Add(new ToolItemViewModel(entry));
+        foreach (var tool in tools)
+            VisibleTools.Add(tool);
 
-        foreach (var group in list
-                     .GroupBy(entry => entry.Descriptor.Category)
+        foreach (var group in tools
+                     .GroupBy(tool => tool.CategoryLabel)
                      .OrderBy(group => group.Key, StringComparer.Ordinal))
         {
             Groups.Add(new ToolGroupViewModel(group.Key, group));
@@ -344,9 +397,10 @@ public partial class WorkspaceViewModel : ObservableObject
     private void UpdateCategorySelection()
     {
         foreach (var category in Categories)
-            category.IsSelected = SelectedCategory is null
-                ? category.Name == "全部"
-                : category.Name == SelectedCategory;
+            category.IsSelected = !IsRecentOpen
+                && (SelectedCategory is null
+                    ? category.Name == "全部"
+                    : category.Name == SelectedCategory);
     }
 
     /// <summary>
@@ -525,6 +579,7 @@ public partial class WorkspaceViewModel : ObservableObject
         _allHistory.Clear();
         Recent.Clear();
         RecentTools.Clear();
+        HasHistory = false;
         OnPropertyChanged(nameof(HasRecentTools));
     }
 

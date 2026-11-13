@@ -251,4 +251,75 @@ public sealed class WorkspaceViewModelTests
 
         viewModel.HasDroppedImage.ShouldBeFalse();
     }
+
+    [Fact]
+    public async Task 打开最近页_隐藏工具墙并取消分类选中()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+
+        await viewModel.ReloadAsync();
+        viewModel.ShowRecent();
+
+        viewModel.IsRecentOpen.ShouldBeTrue();
+        viewModel.IsRecentVisible.ShouldBeTrue();
+        viewModel.IsWallVisible.ShouldBeFalse();
+        viewModel.IsToolsSelected.ShouldBeFalse();
+        viewModel.Categories.ShouldAllBe(category => !category.IsSelected);
+    }
+
+    [Fact]
+    public async Task 从最近页打开工具_返回时回到最近页()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+
+        await viewModel.ReloadAsync();
+        var tool = viewModel.VisibleTools.First();
+
+        viewModel.ShowRecent();
+        viewModel.OpenTool(tool, fromRecent: true);
+
+        viewModel.IsDetailOpen.ShouldBeTrue();
+        viewModel.IsRecentOpen.ShouldBeFalse();
+
+        viewModel.CloseDetail();
+
+        viewModel.IsDetailOpen.ShouldBeFalse();
+        viewModel.IsRecentOpen.ShouldBeTrue();
+        viewModel.IsRecentVisible.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task 点分类_退出最近页回到工具墙()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+
+        await viewModel.ReloadAsync();
+        viewModel.ShowRecent();
+        viewModel.SelectCategory("json");
+
+        viewModel.IsRecentOpen.ShouldBeFalse();
+        viewModel.IsWallVisible.ShouldBeTrue();
+        viewModel.Categories.Single(category => category.Name == "json").IsSelected.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task 工具墙与分组_共用同一批实例()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+
+        await viewModel.ReloadAsync();
+
+        var wall = viewModel.VisibleTools.First();
+        var grouped = viewModel.Groups.SelectMany(group => group.Tools).First();
+
+        ReferenceEquals(wall, grouped).ShouldBeTrue();
+    }
 }
