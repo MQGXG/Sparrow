@@ -4,7 +4,7 @@
     <AssemblyName>Sparrow.Plugin.Ocr</AssemblyName>
     <RootNamespace>Sparrow.Plugin.Ocr</RootNamespace>
     <Version>0.1.0</Version>
-    <Description>OCR 文字识别（M1 假 worker 验证 IPC）</Description>
+    <Description>OCR 文字识别（PaddleOCR 子进程）</Description>
     <!-- 必须等于 plugin.json 的 id 与目录名 -->
     <PluginId>sparrow.plugin.ocr</PluginId>
   </PropertyGroup>
@@ -20,9 +20,16 @@
     <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- worker 是嵌套的私有子进程项目，不能进入插件自身的编译/打包项 -->
   <ItemGroup>
-    <!-- 只用来保证「先构建 worker、再复制」，不把 worker 当库引用 -->
-    <ProjectReference Include="..\..\tools\Sparrow.Ocr.Worker\Sparrow.Ocr.Worker.csproj">
+    <Compile Remove="worker\**" />
+    <None Remove="worker\**" />
+    <EmbeddedResource Remove="worker\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 只用来保证「先构建 worker、再复制」，不把 worker 当库引用；worker 是插件私有的子进程 -->
+    <ProjectReference Include="worker\Sparrow.Ocr.Worker.csproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <Private>false</Private>
     </ProjectReference>
@@ -34,7 +41,7 @@
   -->
   <Target Name="CopyOcrWorker" BeforeTargets="CopyPluginToHost">
     <ItemGroup>
-      <_OcrWorkerFiles Include="..\..\tools\Sparrow.Ocr.Worker\bin\$(Configuration)\$(TargetFramework)\win-x64\**\*" />
+      <_OcrWorkerFiles Include="worker\bin\$(Configuration)\$(TargetFramework)\win-x64\**\*" />
     </ItemGroup>
 
     <Copy SourceFiles="@(_OcrWorkerFiles)"

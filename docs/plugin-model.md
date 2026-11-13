@@ -52,7 +52,7 @@ plugins/sparrow.plugin.ocr/
 ├─ plugin.json
 ├─ Sparrow.Plugin.Ocr.dll        ← 实现 ITool，宿主只看到这个
 └─ worker/
-   └─ Sparrow.Ocr.Worker.exe     ← 子进程，将来装 Paddle
+   └─ Sparrow.Ocr.Worker.exe     ← 子进程，内置 PP-OCRv5
 ```
 
 宿主侧代码完全不知道子进程存在。插件通过 `IToolHost.PluginDirectory`
@@ -131,6 +131,8 @@ Sparrow.Plugin.Sdk        ← 版本化，有向后兼容承诺
 ```
 
 **插件禁止引用 `Sparrow.Core`、`Sparrow.App`、任何其他插件。**
+
+例外：插件可以包含并引用**自己的私有子进程项目**（如 OCR 的 `worker/`），用于把原生依赖隔离到独立进程。这个子项目不得引用宿主或其他插件，也不得把宿主类型带进插件输出。
 
 ### 5.1 SDK 包含什么（全部且仅有）
 
