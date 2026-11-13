@@ -290,11 +290,18 @@ public partial class App : Application
 
             var result = await entry.Tool.ExecuteAsync(context, CancellationToken.None);
 
-            if (result.Success && result.Payload is TextPayload text)
+            var text = result.Payload switch
             {
-                _paletteViewModel.ShowExternalResult("截图识别", text.Text);
+                TextPayload textPayload => textPayload.Text,
+                OcrResultPayload ocrPayload => ocrPayload.Text,
+                _ => null
+            };
+
+            if (result.Success && text is not null)
+            {
+                _paletteViewModel.ShowExternalResult("截图识别", text);
                 _paletteViewModel.CopyResult();
-                Log.Info($"截图识别完成：{text.Text.Length} 字符");
+                Log.Info($"截图识别完成：{text.Length} 字符");
             }
             else
             {

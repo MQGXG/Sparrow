@@ -84,4 +84,34 @@ public sealed class OcrTextComposerTests
 
         OcrTextComposer.Compose(regions).ShouldBe("HELLO");
     }
+
+    [Fact]
+    public void 行框_覆盖该行所有文本块()
+    {
+        var regions = new[]
+        {
+            new OcrRegion("HELLO", 10, 20, 50, 20, 0.99f),
+            new OcrRegion("OCR", 70, 22, 30, 18, 0.98f),
+            new OcrRegion("第二行", 0, 60, 60, 20, 0.97f)
+        };
+
+        var lines = OcrTextComposer.ComposeLines(regions);
+
+        lines.Count.ShouldBe(2);
+        lines[0].Text.ShouldBe("HELLO OCR");
+        lines[0].X.ShouldBe(10);
+        lines[0].Y.ShouldBe(20);
+        lines[0].Width.ShouldBe(90);
+        lines[0].Height.ShouldBe(20);
+        lines[1].Text.ShouldBe("第二行");
+
+        string.Join(Environment.NewLine, lines.Select(line => line.Text))
+            .ShouldBe(OcrTextComposer.Compose(regions));
+    }
+
+    [Fact]
+    public void 空列表_返回空行框()
+    {
+        OcrTextComposer.ComposeLines([]).ShouldBeEmpty();
+    }
 }

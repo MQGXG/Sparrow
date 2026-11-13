@@ -143,7 +143,7 @@ Sparrow.Plugin.Sdk
 ├─ ToolContext.cs          输入
 ├─ Inputs/                 TextInput, ImageInput, FileSetInput, EmptyInput
 ├─ ToolResult.cs           输出
-├─ Payloads/               TextPayload, SvgPayload, ImagePayload, FileSetPayload, TablePayload
+├─ Payloads/               TextPayload, OcrResultPayload, SvgPayload, ImagePayload, FileSetPayload, TablePayload
 ├─ ToolAction.cs  ToolError.cs  ToolProgress.cs
 └─ Enums/                  InputShape, OutputShape, ToolSource, PlatformCapability
 ```

@@ -110,7 +110,7 @@ public sealed class OcrImageToolTests
             CancellationToken.None);
 
         result.Success.ShouldBeTrue();
-        result.Payload.ShouldBeOfType<TextPayload>().Text.ShouldContain("HELL");
+        result.Payload.ShouldBeOfType<OcrResultPayload>().Text.ShouldContain("HELL");
     }
 
     private static string FindRepoRoot()

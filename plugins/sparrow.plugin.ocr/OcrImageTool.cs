@@ -67,7 +67,7 @@ public sealed class OcrImageTool : ITool
         {
             var language = context.GetParameter("language", "ch");
             var output = await RunWorkerAsync(workerPath, image.Data, language, cancellationToken);
-            return ToolResult.Ok(new TextPayload(ComposeOutput(output)));
+            return ToolResult.Ok(ComposeOutput(output));
         }
         catch (OperationCanceledException)
         {
@@ -87,30 +87,34 @@ public sealed class OcrImageTool : ITool
     };
 
     /// <summary>
-    /// worker 返回结构化 JSON；按坐标重排文本块。
-    /// 兼容旧版纯文本输出（不以 { 开头时原样返回）。
+    /// worker 返回结构化 JSON；按坐标重排文本块，并把行框一起交给宿主。
+    /// 兼容旧版纯文本输出（不以 { 开头时原样返回，行框为空）。
     /// </summary>
-    private static string ComposeOutput(string output)
+    private static OcrResultPayload ComposeOutput(string output)
     {
         var trimmed = output.Trim();
 
         if (!trimmed.StartsWith('{'))
-            return trimmed;
+            return new OcrResultPayload(trimmed, Array.Empty<OcrTextLine>());
 
         try
         {
             var payload = JsonSerializer.Deserialize<OcrWorkerResult>(trimmed, JsonOptions);
             if (payload is null)
-                return trimmed;
+                return new OcrResultPayload(trimmed, Array.Empty<OcrTextLine>());
 
-            var composed = OcrTextComposer.Compose(payload.Regions);
+            var lines = OcrTextComposer.ComposeLines(payload.Regions);
+            var text = string.Join(Environment.NewLine, lines.Select(line => line.Text));
 
             // 坐标拼不出来时回退到 worker 的原始全文
-            return string.IsNullOrWhiteSpace(composed) ? payload.Text : composed;
+            if (string.IsNullOrWhiteSpace(text))
+                text = payload.Text;
+
+            return new OcrResultPayload(text, lines);
         }
         catch (JsonException)
         {
-            return trimmed;
+            return new OcrResultPayload(trimmed, Array.Empty<OcrTextLine>());
         }
     }
 

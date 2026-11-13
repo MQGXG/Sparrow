@@ -295,6 +295,7 @@ public partial class PaletteViewModel : ObservableObject
         var text = payload switch
         {
             TextPayload textPayload => textPayload.Text,
+            OcrResultPayload ocrPayload => ocrPayload.Text,
             SvgPayload svgPayload => svgPayload.Svg,
             _ => $"（{payload.GetType().Name} 结果，面板暂不支持展示）"
         };

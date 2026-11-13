@@ -451,9 +451,16 @@ public partial class WorkspaceViewModel : ObservableObject
 
             var result = await entry.Tool.ExecuteAsync(context, CancellationToken.None);
 
-            if (result.Success && result.Payload is TextPayload text)
+            if (result.Success && result.Payload is TextPayload or OcrResultPayload)
             {
-                ResultText = text.Text;
+                var text = result.Payload switch
+                {
+                    TextPayload textPayload => textPayload.Text,
+                    OcrResultPayload ocrPayload => ocrPayload.Text,
+                    _ => string.Empty
+                };
+
+                ResultText = text;
                 HasResult = true;
                 HasError = false;
                 ErrorText = null;
@@ -462,7 +469,7 @@ public partial class WorkspaceViewModel : ObservableObject
                     Guid.NewGuid().ToString("N"),
                     entry.Descriptor.Id,
                     entry.Descriptor.Name,
-                    text.Text,
+                    text,
                     PreviewInput(context.Input),
                     DateTimeOffset.Now,
                     0);

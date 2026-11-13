@@ -20,6 +20,29 @@ public sealed record TextPayload(string Text) : IToolPayload
 }
 
 /// <summary>
+/// OCR 的一行文本及其在图片中的包围盒（图片坐标，物理像素）。
+/// 宿主用它做选区内的行框叠加与点行复制。
+/// </summary>
+public sealed record OcrTextLine(
+    string Text,
+    double X,
+    double Y,
+    double Width,
+    double Height);
+
+/// <summary>
+/// OCR 结果：完整文本 + 行框。
+///
+/// 只关心文本的调用方读 <see cref="Text"/> 即可；
+/// 需要「就地识别」的宿主再读 <see cref="Lines"/> 画框。
+/// 第三方 OCR 插件仍可返回 <see cref="TextPayload"/>，宿主会回退到面板展示。
+/// </summary>
+public sealed record OcrResultPayload(string Text, IReadOnlyList<OcrTextLine> Lines) : IToolPayload
+{
+    public static OcrResultPayload Empty { get; } = new(string.Empty, Array.Empty<OcrTextLine>());
+}
+
+/// <summary>
 /// SVG 源码结果。宿主负责渲染预览与安全清洗。
 /// </summary>
 public sealed record SvgPayload(string Svg) : IToolPayload
