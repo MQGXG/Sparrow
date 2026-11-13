@@ -1,12 +1,9 @@
 <#
   开发启动脚本。
 
-  为什么需要它：
-  `dotnet run --project src/Sparrow.App` 只会构建 App 和它直接引用的项目，
-  不会构建 plugins/ 下的插件。新拉取仓库时，如果你的 bin 里没有旧插件产物，
-  工作区就会一个工具都没有，或者看不到新加的「翻译 / 提示词生成 SVG」。
-
-  这个脚本先构建整个解决方案（含所有插件），再启动 App。
+  现在 App 的 csproj 已经有构建期插件引用，`dotnet run --project` 也会构建插件；
+  这个脚本仍然保留为一键路径：显式构建整个解决方案后再启动，
+  适合首次拉取、切换分支、或需要 Release 配置时使用。
 #>
 [CmdletBinding()]
 param(

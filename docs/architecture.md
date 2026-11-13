@@ -116,7 +116,8 @@ Sparrow/
 ```text
 Sparrow.Plugin.Sdk  → 不依赖任何项目（只允许 BCL + Microsoft.Extensions.*.Abstractions）
 Sparrow.Core        → 依赖 Sdk
-Sparrow.App         → 依赖 Sdk + Core
+Sparrow.App         → 依赖 Sdk；另以 ReferenceOutputAssembly=false 引用 plugins/*，
+                       只为构建顺序与产物复制，不是运行时依赖
 Sparrow.Ocr.Host    → 不依赖任何 Sparrow 项目（只靠 stdio）
 plugins/*           → 只依赖 Sdk
 tests/*             → 依赖全部
@@ -129,6 +130,7 @@ tests/*             → 依赖全部
 2. plugins/* 的 ProjectReference 只能是 Sparrow.Plugin.Sdk
 3. plugins/* 的 csproj 里不得出现 Avalonia.PackageReference
 4. Sparrow.App 的源码里不得出现具体工具名（grep 关键字检查）
+5. Sparrow.App 对 plugins/* 的引用必须是构建期依赖（ReferenceOutputAssembly=false、Private=false）
 ```
 
 第 4 条最有用。宿主的 `PluginScanner` / `ToolRegistry` 里如果出现 `"json"` 这种字符串，说明边界破了。
