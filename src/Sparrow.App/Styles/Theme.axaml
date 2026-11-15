@@ -8,27 +8,27 @@
          界面里不再出现散落的十六进制颜色，统一从这里取。
          ============================================================ -->
 
-    <!-- 背景层级：窗口 < 面板 < 抬起元素 < 悬停 -->
+    <!-- 背景层级：窗口 < 面板 < 抬起元素 < 悬停。每级亮度差 ~4%，保证在普通屏幕上能分开 -->
     <SolidColorBrush x:Key="BgBrush" Color="#0B0E13" />
-    <SolidColorBrush x:Key="SurfaceBrush" Color="#10141B" />
-    <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#151A23" />
-    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#1B212B" />
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#12171F" />
+    <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#1A212C" />
+    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#242D3A" />
 
     <!-- 描边：常态 / 强调 / 分隔 -->
-    <SolidColorBrush x:Key="LineBrush" Color="#222A36" />
-    <SolidColorBrush x:Key="LineStrongBrush" Color="#2E3846" />
+    <SolidColorBrush x:Key="LineBrush" Color="#2B3543" />
+    <SolidColorBrush x:Key="LineStrongBrush" Color="#3D4959" />
     <SolidColorBrush x:Key="OverlayBrush" Color="#CC0B0E13" />
 
     <!-- 文字三级 -->
     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#E9EEF6" />
     <SolidColorBrush x:Key="TextSecondaryBrush" Color="#9BA8BA" />
-    <SolidColorBrush x:Key="TextMutedBrush" Color="#6C7A8C" />
+    <SolidColorBrush x:Key="TextMutedBrush" Color="#8695A8" />
 
     <!-- 唯一强调色：琥珀。文字用 AmberText，底色用 AccentSoft -->
     <SolidColorBrush x:Key="AccentBrush" Color="#E5A44C" />
     <SolidColorBrush x:Key="AccentHoverBrush" Color="#F0B463" />
-    <SolidColorBrush x:Key="AccentSoftBrush" Color="#251D12" />
-    <SolidColorBrush x:Key="AccentBorderBrush" Color="#4A3A20" />
+    <SolidColorBrush x:Key="AccentSoftBrush" Color="#2C2318" />
+    <SolidColorBrush x:Key="AccentBorderBrush" Color="#5C4A26" />
 
     <!-- 语义色 -->
     <SolidColorBrush x:Key="DangerBrush" Color="#F87171" />
@@ -50,13 +50,13 @@
     </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="SurfaceGradientBrush" StartPoint="0%,0%" EndPoint="0%,100%">
-      <GradientStop Color="#12161F" Offset="0" />
-      <GradientStop Color="#0F131A" Offset="1" />
+      <GradientStop Color="#151B25" Offset="0" />
+      <GradientStop Color="#10141B" Offset="1" />
     </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="PanelGradientBrush" StartPoint="0%,0%" EndPoint="0%,100%">
-      <GradientStop Color="#121721" Offset="0" />
-      <GradientStop Color="#0F131A" Offset="1" />
+      <GradientStop Color="#161C26" Offset="0" />
+      <GradientStop Color="#10151D" Offset="1" />
     </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="AccentGradientBrush" StartPoint="0%,0%" EndPoint="0%,100%">
@@ -68,6 +68,16 @@
       <GradientStop Color="#F5BF76" Offset="0" />
       <GradientStop Color="#E5A94D" Offset="1" />
     </LinearGradientBrush>
+
+    <!--
+      点阵图纸底纹：32px 一格的极淡灰蓝点，铺满窗口底部。
+      这是「取景框 HUD」风格的底噪层，只可整层叠加，不参与命中。
+    -->
+    <ImageBrush x:Key="DotGridBrush"
+                Source="avares://Sparrow.App/Assets/dot-grid.png"
+                TileMode="Tile"
+                DestinationRect="0,0,32,32"
+                Stretch="None" />
 
     <!--
       覆盖 Fluent 的系统强调色（默认是紫/蓝）。
@@ -162,10 +172,12 @@
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
 
-  <!-- 工具卡片：工具墙上的大图标入口，hover 时描边泛琥珀 -->
+  <!-- 工具卡片：细描边 + 常驻外扩的取景框角标；hover 底色提亮、角标张开变亮琥珀 -->
   <Style Selector="Button.tool-card">
     <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="2" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="Padding" Value="0" />
@@ -173,11 +185,45 @@
 
   <Style Selector="Button.tool-card:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource LineStrongBrush}" />
   </Style>
 
   <Style Selector="Button.tool-card:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+  </Style>
+
+  <!-- 取景框角标：常驻半透明琥珀、贴卡片内角；hover 变实、向角张开 -->
+  <Style Selector="Button.tool-card Path.frame">
+    <Setter Property="Stroke" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Opacity" Value="0.55" />
+    <Setter Property="StrokeThickness" Value="2" />
+    <Setter Property="Margin" Value="3" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Stroke" Duration="0:0:0.15" />
+        <DoubleTransition Property="Opacity" Duration="0:0:0.15" />
+        <ThicknessTransition Property="Margin" Duration="0:0:0.15" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.tool-card:pointerover Path.frame">
+    <Setter Property="Opacity" Value="1" />
+    <Setter Property="Margin" Value="0" />
+  </Style>
+
+  <!-- 卡片右下角的「打开 →」：平时隐藏，hover 才浮现，减少墙上的静态噪声 -->
+  <Style Selector="Button.tool-card TextBlock.hint">
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.15" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.tool-card:pointerover TextBlock.hint">
+    <Setter Property="Opacity" Value="1" />
   </Style>
 
   <!-- 小按钮 -->
@@ -314,6 +360,11 @@
     <Setter Property="Stroke" Value="{StaticResource AccentBrush}" />
   </Style>
 
+  <!-- 卡片图标：琥珀线稿（必须放在 Path.icon 通用样式之后才会覆盖它） -->
+  <Style Selector="Button.tool-card Path.icon">
+    <Setter Property="Stroke" Value="{StaticResource AccentBrush}" />
+  </Style>
+
   <!-- 分类标签：小、方、低对比 -->
   <Style Selector="Border.chip">
     <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
@@ -334,7 +385,7 @@
   </Style>
 
   <Style Selector="Border.kbd TextBlock">
-    <Setter Property="FontSize" Value="10" />
+    <Setter Property="FontSize" Value="11" />
     <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
   </Style>
 
@@ -381,15 +432,138 @@
   </Style>
 
   <Style Selector="TextBlock.micro">
-    <Setter Property="FontSize" Value="10" />
+    <Setter Property="FontSize" Value="11" />
     <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
   </Style>
 
   <!-- 数据感：计数、时间、尺寸等数字用等宽字体（Developer Mono 气质） -->
   <Style Selector="TextBlock.num">
     <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
-    <Setter Property="FontSize" Value="10" />
+    <Setter Property="FontSize" Value="11" />
     <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+  </Style>
+
+  <!-- ============================================================
+     取景框 HUD 签名样式：一级 tab / 分类 chip / 大数字读出
+     ============================================================ -->
+
+  <!-- 一级 tab：文字 + 底部 2px 琥珀刻度线，无底色无描边 -->
+  <Style Selector="Button.hud-tab">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Padding" Value="2,6" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+  </Style>
+
+  <Style Selector="Button.hud-tab:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Button.hud-tab TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="FontWeight" Value="Normal" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Foreground" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.hud-tab.selected TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <Style Selector="Button.hud-tab Border.tick">
+    <Setter Property="Height" Value="2" />
+    <Setter Property="CornerRadius" Value="1" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.15" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.hud-tab.selected Border.tick">
+    <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+  </Style>
+
+  <!-- 分类 chip：方角、描边、低存在感；选中才亮琥珀 -->
+  <Style Selector="Button.hud-chip">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Padding" Value="10,5" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="BorderBrush" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.hud-chip:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource LineStrongBrush}" />
+  </Style>
+
+  <Style Selector="Button.hud-chip.selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+  </Style>
+
+  <Style Selector="Button.hud-chip.selected TextBlock.num">
+    <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+  </Style>
+
+  <!-- 大数字读出：等宽 20px，数据是界面里的「仪表」 -->
+  <Style Selector="TextBlock.stat">
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+    <Setter Property="FontSize" Value="20" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+  </Style>
+
+  <!-- 分区刻度条：分区头左侧的 2px 琥珀短竖条 -->
+  <Style Selector="Border.hud-tick">
+    <Setter Property="Width" Value="2" />
+    <Setter Property="Height" Value="13" />
+    <Setter Property="CornerRadius" Value="1" />
+    <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- 行图标座：设置行左侧的琥珀小方块 + 线性图标 -->
+  <Style Selector="Border.hud-icon">
+    <Setter Property="Width" Value="34" />
+    <Setter Property="Height" Value="34" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Border.hud-icon Path">
+    <Setter Property="Stroke" Value="{StaticResource AccentBrush}" />
+    <Setter Property="StrokeThickness" Value="1.5" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="StrokeJoin" Value="Round" />
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="Stretch" Value="Uniform" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- 发丝分隔线：行与行之间，替代卡片描边 -->
+  <Style Selector="Border.hud-line">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Background" Value="{StaticResource LineBrush}" />
   </Style>
 
   <!-- Expander 头部去掉 Fluent 的粗体灰底 -->

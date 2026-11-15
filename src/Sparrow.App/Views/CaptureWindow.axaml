@@ -50,7 +50,7 @@
             BorderBrush="{StaticResource LineStrongBrush}"
             BorderThickness="1"
             CornerRadius="8"
-            Padding="14,8"
+            Padding="12,8"
             Margin="0,24,0,0">
       <TextBlock Text="拖拽选择区域 · 松手后可移动 / 拉伸 · Enter 识别"
                  FontSize="12"

@@ -5,342 +5,493 @@
              x:Class="Sparrow.App.Views.SettingsView"
              x:DataType="vm:SettingsViewModel">
 
-  <UserControl.Styles>
-    <Style Selector="Button.settings-tab">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
-      <Setter Property="Padding" Value="14,7" />
-      <Setter Property="CornerRadius" Value="8" />
-      <Setter Property="FontSize" Value="12" />
-    </Style>
-
-    <Style Selector="Button.settings-tab:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
-    </Style>
-
-    <Style Selector="Button.settings-tab.selected">
-      <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
-      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
-    </Style>
-
-    <Style Selector="Button.settings-tab.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
-    </Style>
-  </UserControl.Styles>
-
   <Grid RowDefinitions="Auto,*">
 
-    <!-- 分段导航：插件 / 模型 / 热键 / 通用 / 关于 -->
+    <!-- 分段导航：插件 / 模型 / 热键 / 通用 / 关于（HUD tab：文字 + 琥珀刻度线） -->
     <ScrollViewer Grid.Row="0"
                   HorizontalScrollBarVisibility="Auto"
                   VerticalScrollBarVisibility="Disabled">
-      <StackPanel Orientation="Horizontal" Spacing="4" Margin="24,8,24,12">
-        <Button Classes="settings-tab"
+      <StackPanel Orientation="Horizontal" Spacing="24" Margin="24,10,24,12">
+        <Button Classes="hud-tab"
                 Classes.selected="{Binding IsPluginsSelected}"
                 Tag="Plugins"
-                Content="插件"
                 ToolTip.Tip="插件开关、目录与重新扫描"
-                Click="OnSectionClick" />
-        <Button Classes="settings-tab"
+                Click="OnSectionClick">
+          <StackPanel>
+            <TextBlock Text="插件" />
+            <Border Classes="tick" />
+          </StackPanel>
+        </Button>
+        <Button Classes="hud-tab"
                 Classes.selected="{Binding IsModelSelected}"
                 Tag="Model"
-                Content="模型"
                 ToolTip.Tip="AI 提供方、密钥与连接测试"
-                Click="OnSectionClick" />
-        <Button Classes="settings-tab"
+                Click="OnSectionClick">
+          <StackPanel>
+            <TextBlock Text="模型" />
+            <Border Classes="tick" />
+          </StackPanel>
+        </Button>
+        <Button Classes="hud-tab"
                 Classes.selected="{Binding IsHotkeysSelected}"
                 Tag="Hotkeys"
-                Content="热键"
                 ToolTip.Tip="全局快捷键"
-                Click="OnSectionClick" />
-        <Button Classes="settings-tab"
+                Click="OnSectionClick">
+          <StackPanel>
+            <TextBlock Text="热键" />
+            <Border Classes="tick" />
+          </StackPanel>
+        </Button>
+        <Button Classes="hud-tab"
                 Classes.selected="{Binding IsGeneralSelected}"
                 Tag="General"
-                Content="通用"
                 ToolTip.Tip="开机自启与历史保留"
-                Click="OnSectionClick" />
-        <Button Classes="settings-tab"
+                Click="OnSectionClick">
+          <StackPanel>
+            <TextBlock Text="通用" />
+            <Border Classes="tick" />
+          </StackPanel>
+        </Button>
+        <Button Classes="hud-tab"
                 Classes.selected="{Binding IsAboutSelected}"
                 Tag="About"
-                Content="关于"
                 ToolTip.Tip="版本、日志与数据目录"
-                Click="OnSectionClick" />
+                Click="OnSectionClick">
+          <StackPanel>
+            <TextBlock Text="关于" />
+            <Border Classes="tick" />
+          </StackPanel>
+        </Button>
       </StackPanel>
     </ScrollViewer>
 
     <ScrollViewer Grid.Row="1">
-      <StackPanel Margin="24,0,24,24" Spacing="12">
+      <StackPanel Margin="24,4,24,24" Spacing="14">
 
-        <!-- 插件 -->
-        <Border Classes="panel" Padding="16" IsVisible="{Binding IsPluginsSelected}">
-        <StackPanel Spacing="12">
-          <StackPanel Spacing="4">
-            <TextBlock Classes="subtitle"
-                       Text="插件" />
-            <TextBlock Text="工具都是插件。切换后需要重启应用生效。"
-                       FontSize="11"
-                       Foreground="{StaticResource TextSecondaryBrush}" />
-          </StackPanel>
+        <!-- ============ 插件 ============ -->
+        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,4,0,10" IsVisible="{Binding IsPluginsSelected}">
+          <Border Classes="hud-tick" />
+          <TextBlock Grid.Column="1"
+                     Text="插件"
+                     FontSize="12"
+                     FontWeight="SemiBold"
+                     Margin="10,0,0,0"
+                     VerticalAlignment="Center" />
+          <TextBlock Grid.Column="2"
+                     Classes="num"
+                     Text="{Binding Plugins.Count, StringFormat='{}{0} 个'}" />
+        </Grid>
 
-          <ItemsControl ItemsSource="{Binding Plugins}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:PluginItemViewModel">
-                <Border Padding="12,10"
-                        Margin="0,0,0,6"
-                        Background="{StaticResource SurfaceRaisedBrush}"
-                        CornerRadius="10"
-                        BorderBrush="{StaticResource LineBrush}"
-                        BorderThickness="1">
-                  <Grid ColumnDefinitions="*,Auto,Auto,Auto">
-                    <StackPanel Spacing="3">
-                      <TextBlock Text="{Binding Name}"
-                                 FontSize="13"
-                                 Foreground="{StaticResource TextPrimaryBrush}" />
-                      <TextBlock Text="{Binding Id}"
-                                 FontFamily="{StaticResource MonoFont}"
-                                 FontSize="10"
-                                 Foreground="{StaticResource TextMutedBrush}" />
-                    </StackPanel>
+        <Border Classes="panel" Padding="8" IsVisible="{Binding IsPluginsSelected}">
+          <StackPanel Spacing="6">
+            <ItemsControl ItemsSource="{Binding Plugins}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:PluginItemViewModel">
+                  <Border Background="{StaticResource SurfaceRaisedBrush}"
+                          CornerRadius="2"
+                          Padding="14,12">
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                      <StackPanel Spacing="3" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Name}"
+                                   FontSize="13"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}" />
+                        <TextBlock Text="{Binding Id}"
+                                   FontFamily="{StaticResource MonoFont}"
+                                   FontSize="11"
+                                   Foreground="{StaticResource TextMutedBrush}" />
+                      </StackPanel>
 
-                    <TextBlock Grid.Column="1"
-                               Text="{Binding Version}"
-                               Margin="16,0"
-                               FontSize="11"
-                               VerticalAlignment="Center"
-                               Foreground="{StaticResource TextMutedBrush}" />
+                      <TextBlock Grid.Column="1"
+                                 Classes="num"
+                                 Text="{Binding Version}"
+                                 Margin="16,0"
+                                 VerticalAlignment="Center" />
 
-                    <StackPanel Grid.Column="2"
-                                Orientation="Horizontal"
-                                Spacing="3"
-                                Margin="16,0"
-                                VerticalAlignment="Center">
-                      <TextBlock Text="{Binding ToolCount}"
-                                 FontSize="11"
-                                 Foreground="{StaticResource TextSecondaryBrush}" />
-                      <TextBlock Text="个工具"
-                                 FontSize="11"
-                                 Foreground="{StaticResource TextMutedBrush}" />
-                    </StackPanel>
+                      <StackPanel Grid.Column="2"
+                                  Orientation="Horizontal"
+                                  Spacing="5"
+                                  Margin="16,0"
+                                  VerticalAlignment="Center">
+                        <TextBlock Text="{Binding ToolCount}"
+                                   FontSize="11"
+                                   Foreground="{StaticResource TextSecondaryBrush}" />
+                        <TextBlock Text="个工具"
+                                   FontSize="11"
+                                   Foreground="{StaticResource TextMutedBrush}" />
+                      </StackPanel>
 
-                    <ToggleSwitch Grid.Column="3"
-                                  IsChecked="{Binding IsEnabled, Mode=TwoWay}"
-                                  OnContent="开"
-                                  OffContent="关"
-                                  VerticalAlignment="Center" />
-                  </Grid>
-                </Border>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Classes="ghost" Content="打开插件目录" Click="OnOpenPluginsClick" />
-            <Button Content="重新扫描" Click="OnRescanClick" />
-          </StackPanel>
-        </StackPanel>
-      </Border>
-
-      <!-- 热键 -->
-      <Border Classes="panel" Padding="16" IsVisible="{Binding IsHotkeysSelected}">
-        <StackPanel Spacing="12">
-          <StackPanel Spacing="4">
-            <TextBlock Classes="subtitle"
-                       Text="热键" />
-            <TextBlock Text="格式示例：Ctrl+Alt+S、Ctrl+Shift+D、F9。保存后重启应用生效。"
-                       FontSize="11"
-                       Foreground="{StaticResource TextSecondaryBrush}" />
-          </StackPanel>
-
-          <Grid ColumnDefinitions="96,*" RowDefinitions="Auto,Auto" RowSpacing="10">
-            <TextBlock Text="搜索面板"
-                       FontSize="12"
-                       VerticalAlignment="Center"
-                       Foreground="{StaticResource TextSecondaryBrush}" />
-            <TextBox Grid.Column="1" Text="{Binding SearchHotkey, Mode=TwoWay}" />
-
-            <TextBlock Grid.Row="1"
-                       Text="截图识别"
-                       FontSize="12"
-                       VerticalAlignment="Center"
-                       Foreground="{StaticResource TextSecondaryBrush}" />
-            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding CaptureHotkey, Mode=TwoWay}" />
-          </Grid>
-
-          <Button Content="保存热键"
-                  Classes="accent small"
-                  Click="OnSaveHotkeysClick"
-                  HorizontalAlignment="Left" />
-        </StackPanel>
-      </Border>
-
-      <!-- 通用 -->
-      <Border Classes="panel" Padding="16" IsVisible="{Binding IsGeneralSelected}">
-        <StackPanel Spacing="12">
-          <TextBlock Classes="subtitle"
-                     Text="通用" />
-
-          <ToggleSwitch Content="开机自启（只启动到托盘）"
-                        OnContent="开"
-                        OffContent="关"
-                        IsChecked="{Binding StartWithWindows, Mode=TwoWay}" />
-
-          <ToggleSwitch Content="记录剪贴板历史（本机本地存储）"
-                        OnContent="开"
-                        OffContent="关"
-                        IsChecked="{Binding ClipboardHistoryEnabled, Mode=TwoWay}" />
-
-          <Grid ColumnDefinitions="*,140"
-                RowDefinitions="Auto,Auto"
-                RowSpacing="10"
-                ColumnSpacing="12">
-            <StackPanel Spacing="2" VerticalAlignment="Center">
-              <TextBlock Text="历史最多保留（条）"
-                         FontSize="12"
-                         Foreground="{StaticResource TextSecondaryBrush}" />
-              <TextBlock Text="超过后只保留最近的部分"
-                         FontSize="11"
-                         Foreground="{StaticResource TextMutedBrush}" />
-            </StackPanel>
-            <NumericUpDown Grid.Column="1"
-                           Value="{Binding HistoryMaxEntries, Mode=TwoWay}"
-                           Minimum="50"
-                           Maximum="5000"
-                           Increment="50"
-                           FormatString="0"
-                           VerticalAlignment="Center" />
-
-            <StackPanel Grid.Row="1" Spacing="2" VerticalAlignment="Center">
-              <TextBlock Text="历史保留（天）"
-                         FontSize="12"
-                         Foreground="{StaticResource TextSecondaryBrush}" />
-              <TextBlock Text="0 表示不按天数清理"
-                         FontSize="11"
-                         Foreground="{StaticResource TextMutedBrush}" />
-            </StackPanel>
-            <NumericUpDown Grid.Row="1"
-                           Grid.Column="1"
-                           Value="{Binding HistoryRetentionDays, Mode=TwoWay}"
-                           Minimum="0"
-                           Maximum="3650"
-                           Increment="30"
-                           FormatString="0"
-                           VerticalAlignment="Center" />
-          </Grid>
-        </StackPanel>
-      </Border>
-
-      <!-- 模型 -->
-      <Border Classes="panel" Padding="16" IsVisible="{Binding IsModelSelected}">
-        <StackPanel Spacing="12">
-          <StackPanel Spacing="4">
-            <TextBlock Classes="subtitle"
-                       Text="模型" />
-            <TextBlock Text="插件只拿到统一接口；API Key 由宿主用 Windows DPAPI 加密保存，不会进入插件或日志。"
-                       FontSize="11"
-                       Foreground="{StaticResource TextSecondaryBrush}"
-                       TextWrapping="Wrap" />
-          </StackPanel>
-
-          <ToggleSwitch Content="启用模型（AI 工具可用）"
-                        OnContent="开"
-                        OffContent="关"
-                        IsChecked="{Binding AiEnabled, Mode=TwoWay}" />
-
-          <Grid ColumnDefinitions="92,*"
-                RowDefinitions="Auto,Auto,Auto,Auto"
-                RowSpacing="10"
-                ColumnSpacing="12">
-            <TextBlock Text="提供方"
-                       FontSize="12"
-                       VerticalAlignment="Center"
-                       Foreground="{StaticResource TextSecondaryBrush}" />
-            <ComboBox Grid.Column="1"
-                      ItemsSource="{Binding AiProviderOptions}"
-                      SelectedItem="{Binding SelectedAiProvider, Mode=TwoWay}"
-                      HorizontalAlignment="Stretch">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="svc:AiProviderPreset">
-                  <TextBlock Text="{Binding Name}" />
+                      <ToggleSwitch Grid.Column="3"
+                                    IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                    OnContent="开"
+                                    OffContent="关"
+                                    VerticalAlignment="Center" />
+                    </Grid>
+                  </Border>
                 </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
 
-            <TextBlock Grid.Row="1"
-                       Text="Base URL"
-                       FontSize="12"
-                       VerticalAlignment="Center"
-                       Foreground="{StaticResource TextSecondaryBrush}" />
-            <TextBox Grid.Row="1"
-                     Grid.Column="1"
-                     Text="{Binding AiBaseUrl, Mode=TwoWay}"
-                     PlaceholderText="https://api.openai.com/v1" />
-
-            <TextBlock Grid.Row="2"
-                       Text="模型名"
-                       FontSize="12"
-                       VerticalAlignment="Center"
-                       Foreground="{StaticResource TextSecondaryBrush}" />
-            <TextBox Grid.Row="2"
-                     Grid.Column="1"
-                     Text="{Binding AiModel, Mode=TwoWay}"
-                     PlaceholderText="gpt-4o-mini" />
-
-            <TextBlock Grid.Row="3"
-                       Text="API Key"
-                       FontSize="12"
-                       VerticalAlignment="Center"
-                       Foreground="{StaticResource TextSecondaryBrush}" />
-            <TextBox Grid.Row="3"
-                     Grid.Column="1"
-                     Text="{Binding AiKey, Mode=TwoWay}"
-                     PasswordChar="●"
-                     PlaceholderText="留空表示不修改已保存的密钥" />
-          </Grid>
-
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Classes="accent small"
-                    Content="保存并测试"
-                    Click="OnSaveAiClick" />
-            <Button Classes="ghost small"
-                    Content="清除密钥"
-                    Click="OnClearAiKeyClick" />
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="6,8,6,2">
+              <Button Classes="ghost" Content="打开插件目录" Click="OnOpenPluginsClick" />
+              <Button Content="重新扫描" Click="OnRescanClick" />
+            </StackPanel>
           </StackPanel>
+        </Border>
 
-          <TextBlock Text="{Binding AiStatus}"
-                     FontSize="11"
-                     Foreground="{StaticResource AccentBrush}"
-                     TextWrapping="Wrap" />
+        <!-- ============ 热键 ============ -->
+        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,10,0,10" IsVisible="{Binding IsHotkeysSelected}">
+          <Border Classes="hud-tick" />
+          <TextBlock Grid.Column="1"
+                     Text="热键"
+                     FontSize="12"
+                     FontWeight="SemiBold"
+                     Margin="10,0,0,0"
+                     VerticalAlignment="Center" />
+          <TextBlock Grid.Column="2"
+                     Classes="num"
+                     Text="// HOTKEYS" />
+        </Grid>
 
-          <TextBlock Text="本地示例：Ollama http://localhost:11434/v1；LM Studio http://localhost:1234/v1。云端需填写 API Key。"
-                     FontSize="11"
-                     Foreground="{StaticResource TextMutedBrush}"
-                     TextWrapping="Wrap" />
-        </StackPanel>
-      </Border>
+        <Border Classes="panel" Padding="0" IsVisible="{Binding IsHotkeysSelected}">
+          <StackPanel>
+            <Grid ColumnDefinitions="*,Auto" Margin="20,14">
+              <StackPanel Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="搜索面板"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="唤出命令面板"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <TextBox Grid.Column="1"
+                       Width="260"
+                       Text="{Binding SearchHotkey, Mode=TwoWay}" />
+            </Grid>
 
-      <!-- 关于 -->
-      <Border Classes="panel" Padding="16" IsVisible="{Binding IsAboutSelected}">
-        <StackPanel Spacing="12">
-          <TextBlock Classes="subtitle"
-                     Text="关于" />
+            <Border Classes="hud-line" Margin="20,0" />
 
-          <TextBlock Text="{Binding VersionText}"
-                     FontSize="11"
-                     Foreground="{StaticResource TextSecondaryBrush}" />
+            <Grid ColumnDefinitions="*,Auto" Margin="20,14">
+              <StackPanel Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="截图识别"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="选区截图与文字识别"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <TextBox Grid.Column="1"
+                       Width="260"
+                       Text="{Binding CaptureHotkey, Mode=TwoWay}" />
+            </Grid>
 
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="打开日志目录" Click="OnOpenLogsClick" />
-            <Button Content="打开数据目录" Click="OnOpenDataClick" />
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <Grid Margin="20,14">
+              <TextBlock Text="格式示例：Ctrl+Alt+S、Ctrl+Shift+D、F9。保存后重启应用生效。"
+                         FontSize="11"
+                         Foreground="{StaticResource TextMutedBrush}"
+                         VerticalAlignment="Center" />
+              <Button Classes="accent small"
+                      Content="保存热键"
+                      Click="OnSaveHotkeysClick"
+                      HorizontalAlignment="Right" />
+            </Grid>
           </StackPanel>
-        </StackPanel>
-      </Border>
+        </Border>
 
-      <TextBlock Text="{Binding StatusMessage}"
-                 Foreground="{StaticResource AccentBrush}"
-                 FontSize="12"
-                 TextWrapping="Wrap"
-                 Margin="2,0" />
+        <!-- ============ 通用 ============ -->
+        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,10,0,10" IsVisible="{Binding IsGeneralSelected}">
+          <Border Classes="hud-tick" />
+          <TextBlock Grid.Column="1"
+                     Text="通用"
+                     FontSize="12"
+                     FontWeight="SemiBold"
+                     Margin="10,0,0,0"
+                     VerticalAlignment="Center" />
+          <TextBlock Grid.Column="2"
+                     Classes="num"
+                     Text="// GENERAL" />
+        </Grid>
+
+        <Border Classes="panel" Padding="0" IsVisible="{Binding IsGeneralSelected}">
+          <StackPanel>
+            <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,14">
+              <Border Classes="hud-icon">
+                <Path Data="M12 3v8M6.2 6.6A8 8 0 1 0 17.8 6.6" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="3" Margin="12,0,12,0" VerticalAlignment="Center">
+                <TextBlock Text="开机自启"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="只在启动时进托盘，不弹窗口"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <ToggleSwitch Grid.Column="2"
+                            OnContent="开"
+                            OffContent="关"
+                            IsChecked="{Binding StartWithWindows, Mode=TwoWay}"
+                            VerticalAlignment="Center" />
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,14">
+              <Border Classes="hud-icon">
+                <Path Data="M9 4h6v3H9zM9 5H7a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="3" Margin="12,0,12,0" VerticalAlignment="Center">
+                <TextBlock Text="剪贴板历史"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="本机本地存储；关闭后已记录的内容保留"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <ToggleSwitch Grid.Column="2"
+                            OnContent="开"
+                            OffContent="关"
+                            IsChecked="{Binding ClipboardHistoryEnabled, Mode=TwoWay}"
+                            VerticalAlignment="Center" />
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,14">
+              <Border Classes="hud-icon">
+                <Path Data="M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16M12 8v4l3 2" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="3" Margin="12,0,12,0" VerticalAlignment="Center">
+                <TextBlock Text="历史最多保留（条）"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="超过后只保留最近的部分，改完立即清理一次"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <NumericUpDown Grid.Column="2"
+                             Value="{Binding HistoryMaxEntries, Mode=TwoWay}"
+                             Minimum="50"
+                             Maximum="5000"
+                             Increment="50"
+                             FormatString="0"
+                             Width="140"
+                             VerticalAlignment="Center" />
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,14">
+              <Border Classes="hud-icon">
+                <Path Data="M5 6h14v14H5zM5 10h14M9 3v5M15 3v5" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="3" Margin="12,0,12,0" VerticalAlignment="Center">
+                <TextBlock Text="历史保留（天）"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="0 表示不按天数清理"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <NumericUpDown Grid.Column="2"
+                             Value="{Binding HistoryRetentionDays, Mode=TwoWay}"
+                             Minimum="0"
+                             Maximum="3650"
+                             Increment="30"
+                             FormatString="0"
+                             Width="140"
+                             VerticalAlignment="Center" />
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <!-- ============ 模型 ============ -->
+        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,10,0,10" IsVisible="{Binding IsModelSelected}">
+          <Border Classes="hud-tick" />
+          <TextBlock Grid.Column="1"
+                     Text="模型"
+                     FontSize="12"
+                     FontWeight="SemiBold"
+                     Margin="10,0,0,0"
+                     VerticalAlignment="Center" />
+          <TextBlock Grid.Column="2"
+                     Classes="num"
+                     Text="// MODEL" />
+        </Grid>
+
+        <Border Classes="panel" Padding="0" IsVisible="{Binding IsModelSelected}">
+          <StackPanel>
+            <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,14">
+              <Border Classes="hud-icon">
+                <Path Data="M8 8h8v8H8zM12 4v4M12 16v4M4 12h4M16 12h4" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="3" Margin="12,0,12,0" VerticalAlignment="Center">
+                <TextBlock Text="启用模型"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="AI 类工具可用；插件只拿到统一接口"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <ToggleSwitch Grid.Column="2"
+                            OnContent="开"
+                            OffContent="关"
+                            IsChecked="{Binding AiEnabled, Mode=TwoWay}"
+                            VerticalAlignment="Center" />
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <StackPanel Margin="20,14" Spacing="12">
+              <Grid ColumnDefinitions="92,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="10">
+                <TextBlock Text="提供方"
+                           FontSize="12"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource TextSecondaryBrush}" />
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding AiProviderOptions}"
+                          SelectedItem="{Binding SelectedAiProvider, Mode=TwoWay}"
+                          HorizontalAlignment="Stretch">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="svc:AiProviderPreset">
+                      <TextBlock Text="{Binding Name}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <TextBlock Grid.Row="1"
+                           Text="Base URL"
+                           FontSize="12"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource TextSecondaryBrush}" />
+                <TextBox Grid.Row="1"
+                         Grid.Column="1"
+                         Text="{Binding AiBaseUrl, Mode=TwoWay}"
+                         PlaceholderText="https://api.openai.com/v1" />
+
+                <TextBlock Grid.Row="2"
+                           Text="模型名"
+                           FontSize="12"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource TextSecondaryBrush}" />
+                <TextBox Grid.Row="2"
+                         Grid.Column="1"
+                         Text="{Binding AiModel, Mode=TwoWay}"
+                         PlaceholderText="gpt-4o-mini" />
+
+                <TextBlock Grid.Row="3"
+                           Text="API Key"
+                           FontSize="12"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource TextSecondaryBrush}" />
+                <TextBox Grid.Row="3"
+                         Grid.Column="1"
+                         Text="{Binding AiKey, Mode=TwoWay}"
+                         PasswordChar="●"
+                         PlaceholderText="留空表示不修改已保存的密钥" />
+              </Grid>
+              <TextBlock Text="API Key 由宿主用 Windows DPAPI 加密保存，不会进入插件或日志。"
+                         FontSize="11"
+                         Foreground="{StaticResource TextMutedBrush}" />
+            </StackPanel>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <Grid Margin="20,14" ColumnDefinitions="*,Auto,Auto">
+              <TextBlock Text="{Binding AiStatus}"
+                         FontSize="11"
+                         Foreground="{StaticResource AccentBrush}"
+                         TextWrapping="Wrap"
+                         VerticalAlignment="Center" />
+              <Button Grid.Column="1"
+                      Classes="ghost small"
+                      Content="清除密钥"
+                      Margin="0,0,8,0"
+                      Click="OnClearAiKeyClick" />
+              <Button Grid.Column="2"
+                      Classes="accent small"
+                      Content="保存并测试"
+                      Click="OnSaveAiClick" />
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <!-- ============ 关于：身份卡 ============ -->
+        <Border Classes="panel" Padding="0" IsVisible="{Binding IsAboutSelected}">
+          <StackPanel>
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="20,18,20,16">
+              <StackPanel Orientation="Horizontal" Spacing="14">
+                <Border Width="46"
+                        Height="46"
+                        CornerRadius="2"
+                        Background="{StaticResource AccentSoftBrush}"
+                        VerticalAlignment="Center">
+                  <Image Source="avares://Sparrow.App/Assets/sparrow-32.png"
+                         Width="30"
+                         Height="30" />
+                </Border>
+                <StackPanel Spacing="3" VerticalAlignment="Center">
+                  <TextBlock Classes="num" Text="SPARROW // 本地工具集合" />
+                  <TextBlock Classes="title" Text="麻雀 · 工具台" />
+                  <TextBlock Classes="num"
+                             Text="{Binding VersionText, StringFormat='{}本地优先 // v{0}'}" />
+                </StackPanel>
+              </StackPanel>
+
+              <StackPanel Grid.Column="1" Margin="32,0,0,0" Spacing="5">
+                <TextBlock Classes="section" Text="版本" />
+                <TextBlock Classes="stat" Text="{Binding VersionText}" />
+              </StackPanel>
+
+              <StackPanel Grid.Column="2" Margin="32,0,0,0" Spacing="5">
+                <TextBlock Classes="section" Text="平台" />
+                <TextBlock FontSize="12"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}"
+                           Text="Windows x64"
+                           VerticalAlignment="Center" />
+              </StackPanel>
+
+              <StackPanel Grid.Column="3" Margin="32,0,0,0" Spacing="5">
+                <TextBlock Classes="section" Text="状态" />
+                <TextBlock FontSize="12"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource AccentBrush}"
+                           Text="本地就绪"
+                           VerticalAlignment="Center" />
+              </StackPanel>
+            </Grid>
+
+            <Border Classes="hud-line" />
+
+            <Grid ColumnDefinitions="*,Auto" Margin="20,14">
+              <TextBlock Text="所有工具在本地执行，数据不出机器。Bug、建议和使用问题见应用目录下的日志。"
+                         FontSize="11"
+                         Foreground="{StaticResource TextMutedBrush}"
+                         TextWrapping="Wrap"
+                         MaxWidth="420"
+                         VerticalAlignment="Center" />
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <Button Classes="ghost" Content="打开日志目录" Click="OnOpenLogsClick" />
+                <Button Content="打开数据目录" Click="OnOpenDataClick" />
+              </StackPanel>
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <TextBlock Text="{Binding StatusMessage}"
+                   Foreground="{StaticResource AccentBrush}"
+                   FontSize="12"
+                   TextWrapping="Wrap"
+                   Margin="2,0" />
 
       </StackPanel>
     </ScrollViewer>
