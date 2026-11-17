@@ -55,7 +55,7 @@ plugins/
 
 代价是每个插件有几个样板文件，用 `dotnet new sparrow-tool` 一条命令抹平。
 
-细节见 [`docs/plugin-model.md`](docs/plugin-model.md)。
+细节见 [`docs/plugin-model.md`](docs/plugin-model.md)（含「十二、宿主能力边界」：输入/结果/运行时归宿主，工具一律插件）。
 
 ---
 
