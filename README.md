@@ -160,6 +160,10 @@ App 的 csproj 里有一组**构建期**插件引用（glob，`ReferenceOutputAs
 插件产物会被自动同步到 `src/Sparrow.App/bin/<配置>/net10.0/plugins/`，
 每个插件一个目录，目录名等于它的 `plugin.json` 里的 `id`。
 
+分类显示名支持自定义：新建 `%LOCALAPPDATA%\Sparrow\categories.json`，
+写入 `{"labels": {"json": "JSON 处理"}}`，重启生效（只改展示名，不动插件分类键）。
+细节见 [`docs/ui-spec.md`](docs/ui-spec.md#30-分类显示名自定义categoriesjson)。
+
 启动后没有主窗口，托盘出现麻雀图标：
 
 1. 按 `Ctrl+Alt+S`（或点托盘）唤起面板

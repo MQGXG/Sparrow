@@ -66,6 +66,13 @@ public partial class App : Application
         var isFirstRun = !File.Exists(settingsPath);
         var settings = settingsStore.Load();
 
+        // 分类显示名可自定义（categories.json 的 labels 段）；不改插件的分类键
+        var categoriesPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Sparrow",
+            "categories.json");
+        ToolCategories.Configure(new CategoryLabelStore(categoriesPath, log).Load());
+
         // AI 是宿主基础设施：密钥只在这里解密，插件只拿 IAiClient
         var aiKeyPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
