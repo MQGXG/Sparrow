@@ -36,6 +36,7 @@ public partial class App : Application
     private ToolParameterStore? _parameterStore;
     private IHistoryStore? _history;
     private WindowOverlay? _windowOverlay;
+    private ToastService? _toasts;
     private int _toolHotkeyRunning;
 
     // 贴图窗口需要宿主一直持有引用，否则会被 GC 回收
@@ -56,6 +57,9 @@ public partial class App : Application
 
         var log = new FileAppLog();
         Log = log;
+
+        // 软件内所有提示信息的统一出口（不在窗口内的地方也能看到）
+        _toasts = new ToastService(log);
 
         // plugins/ 与 Sparrow.App.exe 同级；目录不存在时按「零插件」启动，不报错
         var pluginsRoot = Path.Combine(AppContext.BaseDirectory, "plugins");
@@ -136,6 +140,16 @@ public partial class App : Application
         var startup = new StartupService(log);
         var settingsViewModel = new SettingsViewModel(_catalog, settingsStore, startup, settings, ai, aiSecrets);
 
+        // 设置页的状态提示统一转成 toast（页面本身不再常驻一行文字）
+        settingsViewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(SettingsViewModel.StatusMessage)
+                && settingsViewModel.StatusMessage is { Length: > 0 } message)
+            {
+                _toasts?.Show(message);
+            }
+        };
+
         // 设置页改完保留策略后，历史存储立即按新规则清理一次
         settingsViewModel.HistoryRetentionChanged += history.Configure;
         settingsViewModel.ClipboardHistoryEnabledChanged += enabled => clipboardMonitor.Paused = !enabled;
@@ -163,10 +177,12 @@ public partial class App : Application
             return names;
         }
 
+        var toolNames = ReadToolNames();
+
         var trayEntries = TrayMenuPlanner.Build(
             settings.TrayMenu,
             settings.ToolHotkeys,
-            ReadToolNames(),
+            toolNames,
             HotkeyText.Format(searchModifiers, searchKey),
             HotkeyText.Format(captureModifiers, captureKey),
             log);
@@ -194,38 +210,52 @@ public partial class App : Application
                         _palette?.Toggle();
                         Log.Info($"热键唤起：{Stopwatch.GetElapsedTime(pressedAt).TotalMilliseconds:F0} ms");
                     });
-                }),
+                },
+                "搜索面板"),
 
             new(
                 0x5A5B,
                 captureModifiers | HotkeyService.ModNoRepeat,
                 captureKey,
-                () => Avalonia.Threading.Dispatcher.UIThread.Post(CaptureAndRecognize))
+                () => Avalonia.Threading.Dispatcher.UIThread.Post(CaptureAndRecognize),
+                "截图识别")
         };
 
         // 工具热键：按下直接执行，不打开面板
         foreach (var plan in toolHotkeyPlans)
         {
             var toolId = plan.ToolId;
+            var label = toolNames.TryGetValue(toolId, out var toolName) ? toolName : toolId;
 
             hotkeyBindings.Add(new HotkeyBinding(
                 plan.Id,
                 plan.Modifiers | HotkeyService.ModNoRepeat,
                 plan.VirtualKey,
                 () => Avalonia.Threading.Dispatcher.UIThread.Post(
-                    () => _ = ExecuteToolHotkeyAsync(toolId))));
+                    () => _ = ExecuteToolHotkeyAsync(toolId)),
+                label));
         }
 
         _hotkey = new HotkeyService(hotkeyBindings);
 
         if (!_hotkey.Register())
         {
-            _tray.SetStatus("Sparrow · 热键注册失败（Ctrl+Alt+S / Ctrl+Alt+C 可能被占用）");
-            log.Error("全局热键注册失败，可能被其他程序占用。托盘菜单仍可用。");
+            var failed = _hotkey.FailedBindings.Count > 0
+                ? string.Join(
+                    "，",
+                    _hotkey.FailedBindings.Select(binding =>
+                        $"{binding.Label} {HotkeyText.Format(binding.Modifiers, binding.VirtualKey)}".Trim()))
+                : "未知热键";
+
+            var message = $"热键注册失败（可能被其他软件占用）：{failed}";
+            _tray.SetStatus("Sparrow · " + message);
+            _toasts?.Show(message, TimeSpan.FromSeconds(6));
+            log.Error(message);
         }
 
         desktop.Exit += (_, _) =>
         {
+            _toasts?.Dispose();
             _windowOverlay?.Dispose();
             _hotkey?.Dispose();
             _catalog?.Dispose();
@@ -685,14 +715,14 @@ public partial class App : Application
             if (entry is null)
             {
                 Log.Warn($"工具热键对应的工具不存在（可能已禁用或卸载）：{toolId}");
-                _palette.ShowError($"工具不存在：{toolId}");
+                _toasts?.Show($"工具不存在：{toolId}");
                 return;
             }
 
             var (context, error) = _paletteViewModel.CreateContext(entry);
             if (context is null)
             {
-                _palette.ShowError(error ?? "无法构造输入");
+                _toasts?.Show(error ?? "无法构造输入");
                 return;
             }
 
@@ -705,12 +735,17 @@ public partial class App : Application
             if (!result.Success || result.Payload is null)
             {
                 Log.Warn($"工具热键执行失败：{toolId}，{result.Error?.Message}");
-                _palette.ShowError(result.Error?.Message ?? "执行失败");
+                _toasts?.Show(result.Error?.Message ?? "执行失败", TimeSpan.FromSeconds(5));
                 return;
             }
 
             var text = PaletteViewModel.FormatPayload(result.Payload);
-            _palette.ShowResult(entry.Descriptor.Name, text);
+
+            // 短结果用 toast 就够；长文本仍然交给面板，方便阅读和复制
+            if (text.Length <= 160)
+                _toasts?.Show(text);
+            else
+                _palette.ShowResult(entry.Descriptor.Name, text);
 
             _history?.Add(new HistoryEntry(
                 Guid.NewGuid().ToString("N"),
@@ -723,12 +758,13 @@ public partial class App : Application
         }
         catch (OperationCanceledException)
         {
-            // 用户主动取消：不弹错误
+            // 用户主动取消：轻提示即可，不打扰
+            _toasts?.Show("已取消");
         }
         catch (Exception ex)
         {
             Log.Error($"工具热键执行异常：{toolId}", ex);
-            _palette.ShowError($"执行异常：{ex.Message}");
+            _toasts?.Show($"执行异常：{ex.Message}", TimeSpan.FromSeconds(5));
         }
         finally
         {

@@ -1,0 +1,39 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Sparrow.App.Overlays.ToastWindow"
+        Title="Sparrow"
+        Width="380"
+        SizeToContent="Height"
+        WindowDecorations="None"
+        WindowStartupLocation="Manual"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Topmost="True"
+        CanResize="False"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent"
+        Cursor="Hand">
+
+  <Border Background="{StaticResource SurfaceGradientBrush}"
+          BorderBrush="{StaticResource LineStrongBrush}"
+          BorderThickness="1"
+          CornerRadius="10"
+          BoxShadow="0 12 32 0 #99000000"
+          ClipToBounds="True">
+
+    <Grid ColumnDefinitions="3,*">
+      <!-- 左侧刻度：沿用工具墙的琥珀强调 -->
+      <Border Background="{StaticResource AccentBrush}"
+              CornerRadius="1.5"
+              Margin="0,10" />
+
+      <TextBlock x:Name="MessageText"
+                 Grid.Column="1"
+                 Margin="12,10"
+                 FontSize="12"
+                 LineHeight="18"
+                 Foreground="{StaticResource TextPrimaryBrush}"
+                 TextWrapping="Wrap" />
+    </Grid>
+  </Border>
+</Window>

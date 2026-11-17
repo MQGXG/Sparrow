@@ -534,12 +534,6 @@
           </StackPanel>
         </Border>
 
-        <TextBlock Text="{Binding StatusMessage}"
-                   Foreground="{StaticResource AccentBrush}"
-                   FontSize="12"
-                   TextWrapping="Wrap"
-                   Margin="2,0" />
-
       </StackPanel>
     </ScrollViewer>
   </Grid>

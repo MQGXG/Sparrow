@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace Sparrow.App.Shell;
 
 /// <summary>一条全局热键的注册信息。</summary>
-public sealed record HotkeyBinding(int Id, uint Modifiers, uint VirtualKey, Action OnPressed);
+public sealed record HotkeyBinding(int Id, uint Modifiers, uint VirtualKey, Action OnPressed, string Label = "");
 
 /// <summary>
 /// 全局热键（默认 Ctrl+Alt+S 搜索、Ctrl+Alt+C 截图）。
@@ -29,6 +29,7 @@ public sealed class HotkeyService : IDisposable
 
     private readonly IReadOnlyList<HotkeyBinding> _bindings;
     private readonly Dictionary<int, HotkeyBinding> _byId;
+    private readonly List<HotkeyBinding> _failed = [];
     private readonly WndProcDelegate _wndProc;
     private readonly ManualResetEventSlim _ready = new(false);
     private readonly Thread _thread;
@@ -53,6 +54,9 @@ public sealed class HotkeyService : IDisposable
             Name = "Sparrow.Hotkey"
         };
     }
+
+    /// <summary>注册失败的条目（被其他软件占用 / 系统拒绝），供界面逐条提示。</summary>
+    public IReadOnlyList<HotkeyBinding> FailedBindings => _failed;
 
     /// <summary>
     /// 启动消息循环并注册全部热键。
@@ -104,7 +108,10 @@ public sealed class HotkeyService : IDisposable
         foreach (var binding in _bindings)
         {
             if (!RegisterHotKey(_hwnd, binding.Id, binding.Modifiers, binding.VirtualKey))
+            {
                 allRegistered = false;
+                _failed.Add(binding);
+            }
         }
 
         _registered = allRegistered;
