@@ -18,7 +18,8 @@ public sealed class ToolHost : IToolHost
         string pluginDirectory,
         IAppLog log,
         IAiClient? ai = null,
-        IClipboardHistory? clipboardHistory = null)
+        IClipboardHistory? clipboardHistory = null,
+        IWindowOverlay? windows = null)
     {
         PluginDirectory = pluginDirectory;
         Logger = new PluginLogger(pluginId, log);
@@ -26,6 +27,7 @@ public sealed class ToolHost : IToolHost
         Http = DisabledHttpAccess.Instance;
         Ai = ai ?? NullAiClient.Instance;
         ClipboardHistory = clipboardHistory;
+        Windows = windows;
     }
 
     public ILogger Logger { get; }
@@ -40,6 +42,9 @@ public sealed class ToolHost : IToolHost
 
     /// <summary>宿主的剪贴板历史；未开启记录或测试场景为 null，插件必须 null 检查。</summary>
     public IClipboardHistory? ClipboardHistory { get; }
+
+    /// <summary>通用窗口覆盖能力；无 UI 的测试环境为 null。</summary>
+    public IWindowOverlay? Windows { get; }
 }
 
 /// <summary>
@@ -61,6 +66,8 @@ public sealed class NullToolHost : IToolHost
     public string PluginDirectory => AppContext.BaseDirectory;
 
     public IClipboardHistory? ClipboardHistory => null;
+
+    public IWindowOverlay? Windows => null;
 }
 
 /// <summary>把插件的 ILogger 调用转发到应用日志，并带上插件 ID 前缀。</summary>

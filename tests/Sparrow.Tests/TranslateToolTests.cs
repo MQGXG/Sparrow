@@ -69,6 +69,8 @@ public sealed class TranslateToolTests
 
         public IClipboardHistory? ClipboardHistory { get; init; }
 
+        public IWindowOverlay? Windows => null;
+
         private sealed class NoHttp : IHttpClientAccess
         {
             public bool IsAvailable => false;

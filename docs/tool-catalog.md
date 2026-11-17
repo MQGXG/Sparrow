@@ -201,7 +201,7 @@ Tool : InputShape × Params → OutputShape
 
 | ID | 名称 | 输入 | 输出 | 阶段 | 状态 | 备注 |
 |---|---|---|---|:--:|:--:|---|
-| `sparrow.window.pin` | 窗口置顶 | Nothing | Text | M2 | ✅ 完成 | 执行后点一下目标窗口即切换置顶（DeskPins 式）；Esc 取消，30 秒超时；忽略桌面/任务栏与 Sparrow 自身窗口 |
+| `sparrow.window.pin` | 窗口置顶 | Nothing | Text | M2 | ✅ 完成 | DeskPins 式：全屏拾取（图钉光标、右键/Esc 取消、穿透宿主面板）+ 标题栏图钉（点击取消，退出恢复）；拾取与图钉走宿主通用 `IWindowOverlay` |
 
 ---
 

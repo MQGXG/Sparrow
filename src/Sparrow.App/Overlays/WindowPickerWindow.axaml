@@ -1,0 +1,52 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Sparrow.App.Overlays.WindowPickerWindow"
+        Title="选择窗口"
+        WindowDecorations="None"
+        WindowStartupLocation="Manual"
+        ShowInTaskbar="False"
+        Topmost="True"
+        CanResize="False"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent"
+        Cursor="None"
+        Focusable="True">
+
+  <Grid x:Name="Root" Background="#01000000">
+
+    <!-- 顶部提示：告诉你现在该做什么 -->
+    <Border VerticalAlignment="Top"
+            HorizontalAlignment="Center"
+            Margin="0,32,0,0"
+            Padding="14,8"
+            CornerRadius="10"
+            Background="{StaticResource OverlayBrush}"
+            BorderBrush="{StaticResource LineStrongBrush}"
+            BorderThickness="1">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock x:Name="HintText"
+                   FontSize="12"
+                   Foreground="{StaticResource TextPrimaryBrush}"
+                   VerticalAlignment="Center" />
+        <Border Classes="kbd">
+          <TextBlock Text="Esc" />
+        </Border>
+      </StackPanel>
+    </Border>
+
+    <!-- 跟随鼠标的图钉（替代系统光标） -->
+    <Canvas>
+      <TextBlock x:Name="PinGlyph"
+                 Text="&#xE718;"
+                 FontFamily="Segoe MDL2 Assets"
+                 FontSize="30"
+                 Foreground="{StaticResource AccentBrush}"
+                 IsHitTestVisible="False"
+                 IsVisible="False">
+        <TextBlock.Effect>
+          <DropShadowEffect BlurRadius="6" OffsetX="2" OffsetY="2" Color="Black" />
+        </TextBlock.Effect>
+      </TextBlock>
+    </Canvas>
+  </Grid>
+</Window>

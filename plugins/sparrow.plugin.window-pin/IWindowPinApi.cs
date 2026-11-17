@@ -1,28 +1,15 @@
 namespace Sparrow.Plugin.Window.Pin;
 
 /// <summary>
-/// 窗口置顶所需的系统操作。
+/// 插件需要的窗口状态操作。
 ///
-/// 抽成接口只有一个目的：让「点窗口 → 切换置顶」的执行流程
-/// 可以在没有鼠标、没有真实窗口的测试里稳定复现
-/// （真实实现见 <see cref="Win32WindowPinApi"/>）。
+/// 拾取窗口、图钉这些「要创建窗口」的交互由宿主的 <c>IWindowOverlay</c> 负责；
+/// 这里只剩纯 Win32 状态读写，抽成接口是为了让切换逻辑能在测试里复现。
 /// </summary>
 public interface IWindowPinApi
 {
-    /// <summary>Esc 是否被按下（取消信号）。</summary>
-    bool IsCancelPressed();
-
-    /// <summary>鼠标左键当前是否处于按下状态。</summary>
-    bool IsLeftButtonDown();
-
-    /// <summary>鼠标当前位置的最上层窗口；桌面/系统窗口返回 false。</summary>
-    bool TryGetPointedWindow(out nint handle);
-
     /// <summary>读取窗口标题；没有标题返回 false。</summary>
     bool TryGetTitle(nint handle, out string title);
-
-    /// <summary>窗口是否属于 Sparrow 自己（宿主或插件）。</summary>
-    bool IsOwnProcessWindow(nint handle);
 
     bool IsTopMost(nint handle);
 

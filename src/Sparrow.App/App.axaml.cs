@@ -5,6 +5,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
 using Sparrow.App.History;
+using Sparrow.App.Overlays;
 using Sparrow.App.Plugins;
 using Sparrow.App.Services;
 using Sparrow.App.Settings;
@@ -34,6 +35,7 @@ public partial class App : Application
     private WorkspaceViewModel? _workspaceViewModel;
     private ToolParameterStore? _parameterStore;
     private IHistoryStore? _history;
+    private WindowOverlay? _windowOverlay;
 
     // 贴图窗口需要宿主一直持有引用，否则会被 GC 回收
     private readonly List<PinnedImageWindow> _pins = [];
@@ -97,7 +99,10 @@ public partial class App : Application
         };
         clipboardMonitor.Start();
 
-        _catalog = new ToolCatalog(pluginsRoot, log, settings, ai, clipboardHistory);
+        // 通用窗口覆盖能力：拾取窗口 + 图钉指示（任何插件都可用）
+        _windowOverlay = new WindowOverlay(log);
+
+        _catalog = new ToolCatalog(pluginsRoot, log, settings, ai, clipboardHistory, _windowOverlay);
 
         var historyPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -170,6 +175,7 @@ public partial class App : Application
 
         desktop.Exit += (_, _) =>
         {
+            _windowOverlay?.Dispose();
             _hotkey?.Dispose();
             _catalog?.Dispose();
             clipboardMonitor.Dispose();

@@ -5,7 +5,7 @@ namespace Sparrow.Plugin.Sdk;
 /// <summary>
 /// 宿主注入给插件的全部外部能力。
 ///
-/// 只有五样：日志、设置、受控的网络、模型、剪贴板历史。
+/// 只有七样：日志、设置、受控的网络、模型、剪贴板历史、插件目录、窗口覆盖。
 /// **没有文件系统、没有实时剪贴板、没有数据库、没有窗口**——
 /// 需要产出文件时返回 FileSetPayload，由宿主落盘；
 /// 需要读取剪贴板时，输入已经在 <see cref="ToolContext.Input"/> 里了；
@@ -41,6 +41,12 @@ public interface IToolHost
     /// 这是「进程插件」唯一需要宿主额外提供的东西：它得知道自己在哪。
     /// </summary>
     string PluginDirectory { get; }
+
+    /// <summary>
+    /// 通用的窗口覆盖能力：拾取窗口 + 图钉指示。
+    /// 无宿主环境（单元测试）为 null，插件必须判空并返回可读的提示。
+    /// </summary>
+    IWindowOverlay? Windows { get; }
 }
 
 /// <summary>

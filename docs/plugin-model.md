@@ -172,8 +172,13 @@ public interface IToolHost
     IAiClient Ai { get; }                     // 模型能力；未配置时 IsAvailable=false
     string PluginDirectory { get; }           // 插件自己的目录，用于定位随包资源
     IClipboardHistory? ClipboardHistory { get; } // 剪贴板历史；用户关闭记录或测试场景为 null
+    IWindowOverlay? Windows { get; }          // 通用窗口覆盖：拾取 / 图钉；无 UI 场景为 null
 }
 ```
+
+**`Windows` 只提供通用覆盖能力，不暴露宿主内部窗口。** 拾取遮罩、图钉指示都由宿主创建，
+插件只描述「要拾取窗口 / 要在某句柄上显示图钉」；任何插件都能用同一套能力，
+不是为某个工具定制的后门。
 
 **`Ai` 只暴露「发消息、拿回复」。** provider、Base URL、模型名、API Key 全部留在宿主：
 插件不知道请求发往哪里，也不能读取密钥。需要视觉模型时传 `AiRequest.Image`，宿主负责编码成 data URL。
@@ -436,7 +441,7 @@ M0 的 3 个工具同样以插件形式存在，随安装包分发到 `plugins/`
 | 剪贴板历史 | 宿主监听/落盘，插件只读 | 隐私开关在宿主；插件不实时读剪贴板 |
 | AI / HTTP | 宿主 | 密钥、端点、联网策略由宿主统一管 |
 | 文本导出 TXT/MD/Word | 宿主结果动作（Save 的扩展） | 不是工具，是结果出口 |
-| 窗口置顶 | **插件** | 自己 P/Invoke 系统 API 完成，不需要宿主 UI |
+| 窗口置顶 | **插件 + 通用宿主覆盖能力** | 拾取遮罩与图钉由通用 `IWindowOverlay` 提供；置顶逻辑在插件 |
 | 文件预览弹窗 | 插件 + 契约缺口 | 预览窗必须先成为通用 SDK 能力，不能借机做成内置工具 |
 | 批量处理 | 暂缓 | 契约是单输入；宿主编排 = 工作流，踩「不是平台」红线 |
 

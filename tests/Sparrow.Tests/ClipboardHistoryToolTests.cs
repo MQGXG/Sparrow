@@ -27,6 +27,8 @@ public sealed class ClipboardHistoryToolTests
 
         public IClipboardHistory? ClipboardHistory { get; }
 
+        public IWindowOverlay? Windows => null;
+
         private sealed class InMemorySettings : IToolSettings
         {
             private readonly Dictionary<string, string> _values = new(StringComparer.Ordinal);
