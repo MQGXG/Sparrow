@@ -148,59 +148,6 @@
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
 
-              <!-- 大卡：最近使用过的工具，双倍宽；没有历史时整块不显示 -->
-              <Button IsVisible="{Binding HasFeaturedTool}"
-                      Tag="{Binding FeaturedTool}"
-                      Click="OnFeaturedToolClick"
-                      Classes="tool-card"
-                      Width="488"
-                      Height="136"
-                      Margin="0,0,16,20"
-                      Padding="0"
-                      HorizontalContentAlignment="Stretch"
-                      VerticalContentAlignment="Stretch">
-                <Panel>
-                  <Path Classes="frame" HorizontalAlignment="Left" VerticalAlignment="Top" Data="M0,11 L0,0 L11,0" />
-                  <Path Classes="frame" HorizontalAlignment="Right" VerticalAlignment="Top" Data="M0,0 L11,0 L11,11" />
-                  <Path Classes="frame" HorizontalAlignment="Left" VerticalAlignment="Bottom" Data="M0,0 L0,11 L11,11" />
-                  <Path Classes="frame" HorizontalAlignment="Right" VerticalAlignment="Bottom" Data="M11,0 L11,11 L0,11" />
-
-                  <StackPanel Margin="20" Spacing="10" VerticalAlignment="Center">
-                    <StackPanel Orientation="Horizontal" Spacing="14">
-                      <Border Width="48"
-                              Height="48"
-                              CornerRadius="2"
-                              Background="{StaticResource AccentSoftBrush}"
-                              VerticalAlignment="Center">
-                        <Path Classes="icon"
-                              Width="24"
-                              Height="24"
-                              HorizontalAlignment="Center"
-                              VerticalAlignment="Center"
-                              Data="{Binding FeaturedTool.Tool.CategoryLabel, Converter={x:Static converters:IconGeometryConverter.Instance}}" />
-                      </Border>
-                      <StackPanel Spacing="3" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding FeaturedTool.Tool.Name}"
-                                   FontSize="16"
-                                   FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextPrimaryBrush}" />
-                        <TextBlock Text="{Binding FeaturedTool.Tool.CategoryDisplay}"
-                                   FontSize="11"
-                                   Foreground="{StaticResource TextMutedBrush}" />
-                      </StackPanel>
-                    </StackPanel>
-
-                    <TextBlock Text="{Binding FeaturedTool.Tool.Description}"
-                               FontSize="12"
-                               LineHeight="18"
-                               Foreground="{StaticResource TextSecondaryBrush}"
-                               TextWrapping="Wrap"
-                               MaxLines="2"
-                               HorizontalAlignment="Left" />
-                  </StackPanel>
-                </Panel>
-              </Button>
-
               <!-- 分组工具网格：组标题可折叠；搜索时强制全展开 -->
               <ItemsControl ItemsSource="{Binding Groups}">
                 <ItemsControl.ItemTemplate>

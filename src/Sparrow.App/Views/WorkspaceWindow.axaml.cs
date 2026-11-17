@@ -117,13 +117,6 @@ public partial class WorkspaceWindow : Window
             viewModel.ToggleGroup(group.Category);
     }
 
-    /// <summary>墙顶大卡：打开最近执行过的工具；返回时回到工具墙而不是最近页。</summary>
-    private void OnFeaturedToolClick(object? sender, RoutedEventArgs e)
-    {
-        if (sender is Button { Tag: RecentToolViewModel recent } && DataContext is WorkspaceViewModel viewModel)
-            viewModel.OpenTool(recent.Tool);
-    }
-
     private void OnRecentToolClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: RecentToolViewModel recent } && DataContext is WorkspaceViewModel viewModel)

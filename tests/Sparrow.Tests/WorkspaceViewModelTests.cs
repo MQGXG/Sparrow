@@ -206,29 +206,6 @@ public sealed class WorkspaceViewModelTests
     }
 
     [Fact]
-    public async Task 有历史时_大卡显示最近工具()
-    {
-        using var root = new TempPluginRoot();
-        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
-
-        var json = catalog.GetRegistry().Search("json").ShouldHaveSingleItem();
-        var history = new FakeHistory();
-        history.Entries.Add(new HistoryEntry(
-            "h1", json.Descriptor.Id, json.Descriptor.Name,
-            "{ \"a\": 1 }", "", DateTimeOffset.Now, 12));
-
-        var viewModel = Create(catalog, history);
-        await viewModel.ReloadAsync();
-
-        viewModel.HasFeaturedTool.ShouldBeTrue();
-        viewModel.FeaturedTool!.Tool.Name.ShouldBe(json.Descriptor.Name);
-
-        viewModel.ClearHistory();
-
-        viewModel.HasFeaturedTool.ShouldBeFalse();
-    }
-
-    [Fact]
     public async Task 最近页输入搜索词_回到工具墙()
     {
         using var root = new TempPluginRoot();

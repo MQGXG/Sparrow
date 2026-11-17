@@ -55,11 +55,6 @@ public partial class WorkspaceViewModel : ObservableObject
 
     public ObservableCollection<RecentToolViewModel> RecentTools { get; } = [];
 
-    /// <summary>墙顶大卡：最近执行过的工具；没有历史时为 null。</summary>
-    public RecentToolViewModel? FeaturedTool => RecentTools.Count > 0 ? RecentTools[0] : null;
-
-    public bool HasFeaturedTool => FeaturedTool is not null;
-
     public ObservableCollection<ParameterViewModel> Parameters { get; } = [];
 
     public ObservableCollection<HistoryEntryViewModel> Recent { get; } = [];
@@ -537,14 +532,6 @@ public partial class WorkspaceViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(HasRecentTools));
-        NotifyFeatured();
-    }
-
-    /// <summary>大卡数据在历史变化后必须整体通知：属性是计算出来的，不会自己刷新。</summary>
-    private void NotifyFeatured()
-    {
-        OnPropertyChanged(nameof(FeaturedTool));
-        OnPropertyChanged(nameof(HasFeaturedTool));
     }
 
     partial void OnIsExecutingChanged(bool value) => OnPropertyChanged(nameof(ExecuteLabel));
@@ -799,7 +786,6 @@ public partial class WorkspaceViewModel : ObservableObject
         RecentTools.Clear();
         HasHistory = false;
         OnPropertyChanged(nameof(HasRecentTools));
-        NotifyFeatured();
     }
 
     public void ShowSettings() => IsSettingsVisible = true;
