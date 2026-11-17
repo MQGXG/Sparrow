@@ -60,19 +60,6 @@ public partial class WorkspaceViewModel : ObservableObject
 
     public bool HasFeaturedTool => FeaturedTool is not null;
 
-    /// <summary>大卡右侧的上次结果摘要，前 60 字。</summary>
-    public string FeaturedSummary
-    {
-        get
-        {
-            if (_allHistory.Count == 0)
-                return string.Empty;
-
-            var output = _allHistory[0].Entry.Output;
-            return output.Length <= 60 ? output : output[..60] + "…";
-        }
-    }
-
     public ObservableCollection<ParameterViewModel> Parameters { get; } = [];
 
     public ObservableCollection<HistoryEntryViewModel> Recent { get; } = [];
@@ -558,7 +545,6 @@ public partial class WorkspaceViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(FeaturedTool));
         OnPropertyChanged(nameof(HasFeaturedTool));
-        OnPropertyChanged(nameof(FeaturedSummary));
     }
 
     partial void OnIsExecutingChanged(bool value) => OnPropertyChanged(nameof(ExecuteLabel));

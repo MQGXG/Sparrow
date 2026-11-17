@@ -206,7 +206,7 @@ public sealed class WorkspaceViewModelTests
     }
 
     [Fact]
-    public async Task 有历史时_大卡显示最近工具与摘要()
+    public async Task 有历史时_大卡显示最近工具()
     {
         using var root = new TempPluginRoot();
         using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
@@ -222,12 +222,10 @@ public sealed class WorkspaceViewModelTests
 
         viewModel.HasFeaturedTool.ShouldBeTrue();
         viewModel.FeaturedTool!.Tool.Name.ShouldBe(json.Descriptor.Name);
-        viewModel.FeaturedSummary.ShouldContain("\"a\": 1");
 
         viewModel.ClearHistory();
 
         viewModel.HasFeaturedTool.ShouldBeFalse();
-        viewModel.FeaturedSummary.ShouldBeEmpty();
     }
 
     [Fact]
