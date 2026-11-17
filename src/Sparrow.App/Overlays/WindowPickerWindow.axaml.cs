@@ -55,6 +55,15 @@ public partial class WindowPickerWindow : Window
     {
         base.OnOpened(e);
         CoverAllScreens();
+
+        // 进入拾取就立刻在光标处显示图钉：否则系统光标已隐藏、用户不动鼠标会以为没反应
+        if (WindowPickerApi.TryGetCursor(out var cursor))
+        {
+            var local = new Point(
+                (cursor.X - Position.X) / RenderScaling,
+                (cursor.Y - Position.Y) / RenderScaling);
+            PlacePin(local);
+        }
     }
 
     /// <summary>覆盖整个虚拟桌面（多显示器取并集）。</summary>
@@ -78,8 +87,11 @@ public partial class WindowPickerWindow : Window
 
     private void OnPointerMoved(object? sender, PointerEventArgs e)
     {
-        var position = e.GetPosition(this);
+        PlacePin(e.GetPosition(this));
+    }
 
+    private void PlacePin(Point position)
+    {
         PinGlyph.IsVisible = true;
         Canvas.SetLeft(PinGlyph, position.X - 12);
         Canvas.SetTop(PinGlyph, position.Y - 30);

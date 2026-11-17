@@ -142,28 +142,30 @@ public partial class App : Application
         _workspaceViewModel = new WorkspaceViewModel(_catalog, clipboard, log, history, settingsViewModel, _parameterStore);
         _workspace = new WorkspaceWindow { DataContext = _workspaceViewModel };
 
-        // 托盘子菜单内容：工具名从注册表解析（首次打开菜单才加载插件）
+        // 顶层菜单项的名称：只读插件清单（toolId → 插件显示名），不加载插件程序集
         IReadOnlyList<ToolHotkeyEntry> QueryToolHotkeys()
         {
             if (toolHotkeyPlans.Count == 0)
                 return [];
 
-            var registry = _catalog?.GetRegistry();
-            if (registry is null)
+            var names = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            foreach (var candidate in _catalog?.ScanCandidates() ?? [])
             {
-                return toolHotkeyPlans
-                    .Select(plan => new ToolHotkeyEntry(plan.ToolId, plan.ToolId, plan.HotkeyText))
-                    .ToList();
+                var manifest = candidate.Manifest;
+                if (manifest is null)
+                    continue;
+
+                foreach (var toolId in manifest.Tools)
+                    names[toolId] = manifest.Name;
             }
 
-            var entries = registry.Search(null, int.MaxValue);
-            return toolHotkeyPlans.Select(plan =>
-            {
-                var entry = entries.FirstOrDefault(candidate =>
-                    string.Equals(candidate.Descriptor.Id, plan.ToolId, StringComparison.Ordinal));
-
-                return new ToolHotkeyEntry(plan.ToolId, entry?.Descriptor.Name ?? plan.ToolId, plan.HotkeyText);
-            }).ToList();
+            return toolHotkeyPlans
+                .Select(plan => new ToolHotkeyEntry(
+                    plan.ToolId,
+                    names.TryGetValue(plan.ToolId, out var name) ? name : plan.ToolId,
+                    plan.HotkeyText))
+                .ToList();
         }
 
         _tray = new TrayService(

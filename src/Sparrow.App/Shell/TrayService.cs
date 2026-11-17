@@ -49,10 +49,15 @@ public sealed class TrayService
         workspace.Click += (_, _) => _showWorkspace();
         menu.Add(workspace);
 
-        // 工具热键：内容在菜单打开时生成，冷启动不加载插件
-        var toolHotkeys = new NativeMenuItem("工具热键");
-        menu.Add(toolHotkeys);
-        menu.Opening += (_, _) => RebuildToolHotkeys(toolHotkeys);
+        // 配置了热键的工具：直接作为顶层菜单项，不埋进子菜单。
+        // 名称来自插件清单（只读 JSON，不加载插件程序集），因此启动路径仍然零插件加载。
+        foreach (var entry in ReadToolHotkeys())
+        {
+            var item = new NativeMenuItem($"{entry.Name}…    {entry.HotkeyText}");
+            var toolId = entry.ToolId;
+            item.Click += (_, _) => _executeToolHotkey(toolId);
+            menu.Add(item);
+        }
 
         menu.Add(new NativeMenuItemSeparator());
 
@@ -85,37 +90,17 @@ public sealed class TrayService
         }
     }
 
-    /// <summary>菜单打开时才解析工具热键：首次会触发插件加载，冷启动路径保持不加载。</summary>
-    private void RebuildToolHotkeys(NativeMenuItem toolHotkeys)
+    /// <summary>读取工具热键条目；任何异常都退化为「不显示」，托盘菜单不能因此起不来。</summary>
+    private IReadOnlyList<ToolHotkeyEntry> ReadToolHotkeys()
     {
-        var submenu = new NativeMenu();
-        IReadOnlyList<ToolHotkeyEntry> entries;
-
         try
         {
-            entries = _toolHotkeys();
+            return _toolHotkeys();
         }
         catch
         {
-            entries = [];
+            return [];
         }
-
-        if (entries.Count == 0)
-        {
-            submenu.Add(new NativeMenuItem("（未配置 toolHotkeys）") { IsEnabled = false });
-        }
-        else
-        {
-            foreach (var entry in entries)
-            {
-                var item = new NativeMenuItem($"{entry.Name}…    {entry.HotkeyText}");
-                var toolId = entry.ToolId;
-                item.Click += (_, _) => _executeToolHotkey(toolId);
-                submenu.Add(item);
-            }
-        }
-
-        toolHotkeys.Menu = submenu;
     }
 
     /// <summary>热键注册失败等异常状态，直接反映到托盘提示上。</summary>

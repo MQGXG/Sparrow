@@ -86,6 +86,9 @@ internal static class WindowPickerApi
         IntPtr hWnd, IntPtr hWndInsertAfter,
         int x, int y, int cx, int cy, uint flags);
 
+    /// <summary>读取当前光标位置（物理像素）。</summary>
+    public static bool TryGetCursor(out Point point) => GetCursorPos(out point);
+
     /// <summary>点击时刻解析光标下第一个「别的进程的可见根窗口」；找不到返回 0。</summary>
     public static nint ResolveAtCursor()
     {

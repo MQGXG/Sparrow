@@ -12,7 +12,7 @@
         Cursor="None"
         Focusable="True">
 
-  <Grid x:Name="Root" Background="#01000000">
+  <Grid x:Name="Root" Background="#14000000">
 
     <!-- 顶部提示：告诉你现在该做什么 -->
     <Border VerticalAlignment="Top"
