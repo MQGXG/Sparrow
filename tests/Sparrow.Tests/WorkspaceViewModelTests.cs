@@ -143,7 +143,7 @@ public sealed class WorkspaceViewModelTests
     }
 
     [Fact]
-    public async Task 选择分类_书签条同步更新_其余分组折叠()
+    public async Task 选择分类_书签条同步更新_列表只剩该分类()
     {
         using var root = new TempPluginRoot();
         using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
@@ -160,11 +160,10 @@ public sealed class WorkspaceViewModelTests
         viewModel.Categories.Single(category => category.Name == target.Name).IsSelected.ShouldBeTrue();
         viewModel.Categories.Single(category => category.Name == "全部").IsSelected.ShouldBeFalse();
 
-        // 分类不再从列表里移除：两组都在，选中组展开、其余折叠
-        viewModel.Groups.Count.ShouldBe(2);
-        viewModel.Groups.Single(group => group.Category == target.Name).IsExpanded.ShouldBeTrue();
-        viewModel.Groups.Single(group => group.Category != target.Name).IsExpanded.ShouldBeFalse();
-        viewModel.VisibleTools.Count.ShouldBe(2);
+        // 分类仍然是过滤：只剩该分类的工具与分组
+        viewModel.Groups.ShouldHaveSingleItem().Category.ShouldBe(target.Name);
+        viewModel.Groups[0].IsExpanded.ShouldBeTrue();
+        viewModel.VisibleTools.Count.ShouldBe(1);
     }
 
     [Fact]

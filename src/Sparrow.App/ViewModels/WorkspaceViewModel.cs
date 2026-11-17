@@ -140,8 +140,8 @@ public partial class WorkspaceViewModel : ObservableObject
     {
         // 选中状态只在 Categories 上，选完必须同步书签条，否则高亮会停在「全部」
         UpdateCategorySelection();
-        // 分类不再过滤列表，只决定展开哪一组
-        UpdateGroupExpansion();
+        // 分类过滤列表（和之前一致）；分组只负责视觉分节
+        RefilterTools();
     }
 
     /// <summary>打开一个工具：进入工具台。</summary>
@@ -449,10 +449,12 @@ public partial class WorkspaceViewModel : ObservableObject
         OnPropertyChanged(nameof(CanClearDroppedImage));
     }
 
-    /// <summary>工具墙：只按搜索词过滤；分类不再移除卡片，改由分组折叠表达。</summary>
+    /// <summary>工具墙：先按分类过滤（和之前一致），再按搜索词过滤；分组只负责视觉分节。</summary>
     private void RefilterTools()
     {
-        IEnumerable<ToolEntry> items = _allTools;
+        IEnumerable<ToolEntry> items = SelectedCategory is null
+            ? _allTools
+            : _allTools.Where(entry => entry.Descriptor.Category == SelectedCategory);
 
         var query = ToolQuery.Trim();
         if (query.Length > 0)
@@ -484,7 +486,7 @@ public partial class WorkspaceViewModel : ObservableObject
         OnPropertyChanged(nameof(EmptyToolMessage));
     }
 
-    /// <summary>按「搜索 &gt; chip &gt; 手动折叠」三级规则计算每组展开状态。</summary>
+    /// <summary>组装展开状态：搜索时强制全展开；选中分类时该组展开；其余按手动折叠记忆。</summary>
     private void UpdateGroupExpansion()
     {
         var hasQuery = ToolQuery.Trim().Length > 0;
@@ -492,9 +494,8 @@ public partial class WorkspaceViewModel : ObservableObject
         foreach (var group in Groups)
         {
             group.IsExpanded = hasQuery
-                || (SelectedCategory is null
-                    ? !_collapsedCategories.Contains(group.Category)
-                    : group.Category == SelectedCategory);
+                || (SelectedCategory is not null && group.Category == SelectedCategory)
+                || !_collapsedCategories.Contains(group.Category);
         }
     }
 
