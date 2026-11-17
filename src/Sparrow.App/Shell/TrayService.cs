@@ -3,6 +3,9 @@ using Sparrow.App.Views;
 
 namespace Sparrow.App.Shell;
 
+/// <summary>托盘「工具热键」子菜单的一项：工具名 + 配置的热键文本。</summary>
+public sealed record ToolHotkeyEntry(string ToolId, string Name, string HotkeyText);
+
 /// <summary>
 /// 托盘图标与右键菜单。
 /// 托盘是本应用的「常驻入口」：主窗口从不自动显示，一切从托盘或热键开始。
@@ -12,13 +15,22 @@ public sealed class TrayService
     private readonly PaletteWindow _palette;
     private readonly Action _showWorkspace;
     private readonly Action _capture;
+    private readonly Func<IReadOnlyList<ToolHotkeyEntry>> _toolHotkeys;
+    private readonly Action<string> _executeToolHotkey;
     private TrayIcon? _icon;
 
-    public TrayService(PaletteWindow palette, Action showWorkspace, Action capture)
+    public TrayService(
+        PaletteWindow palette,
+        Action showWorkspace,
+        Action capture,
+        Func<IReadOnlyList<ToolHotkeyEntry>> toolHotkeys,
+        Action<string> executeToolHotkey)
     {
         _palette = palette;
         _showWorkspace = showWorkspace;
         _capture = capture;
+        _toolHotkeys = toolHotkeys;
+        _executeToolHotkey = executeToolHotkey;
     }
 
     public void Initialize()
@@ -36,6 +48,11 @@ public sealed class TrayService
         var workspace = new NativeMenuItem("工作区…");
         workspace.Click += (_, _) => _showWorkspace();
         menu.Add(workspace);
+
+        // 工具热键：内容在菜单打开时生成，冷启动不加载插件
+        var toolHotkeys = new NativeMenuItem("工具热键");
+        menu.Add(toolHotkeys);
+        menu.Opening += (_, _) => RebuildToolHotkeys(toolHotkeys);
 
         menu.Add(new NativeMenuItemSeparator());
 
@@ -66,6 +83,39 @@ public sealed class TrayService
             icons.Add(_icon);
             TrayIcon.SetIcons(app, icons);
         }
+    }
+
+    /// <summary>菜单打开时才解析工具热键：首次会触发插件加载，冷启动路径保持不加载。</summary>
+    private void RebuildToolHotkeys(NativeMenuItem toolHotkeys)
+    {
+        var submenu = new NativeMenu();
+        IReadOnlyList<ToolHotkeyEntry> entries;
+
+        try
+        {
+            entries = _toolHotkeys();
+        }
+        catch
+        {
+            entries = [];
+        }
+
+        if (entries.Count == 0)
+        {
+            submenu.Add(new NativeMenuItem("（未配置 toolHotkeys）") { IsEnabled = false });
+        }
+        else
+        {
+            foreach (var entry in entries)
+            {
+                var item = new NativeMenuItem($"{entry.Name}…    {entry.HotkeyText}");
+                var toolId = entry.ToolId;
+                item.Click += (_, _) => _executeToolHotkey(toolId);
+                submenu.Add(item);
+            }
+        }
+
+        toolHotkeys.Menu = submenu;
     }
 
     /// <summary>热键注册失败等异常状态，直接反映到托盘提示上。</summary>

@@ -36,6 +36,7 @@ public partial class App : Application
     private ToolParameterStore? _parameterStore;
     private IHistoryStore? _history;
     private WindowOverlay? _windowOverlay;
+    private int _toolHotkeyRunning;
 
     // 贴图窗口需要宿主一直持有引用，否则会被 GC 回收
     private readonly List<PinnedImageWindow> _pins = [];
@@ -67,6 +68,9 @@ public partial class App : Application
         var settingsStore = new SettingsStore(settingsPath, log);
         var isFirstRun = !File.Exists(settingsPath);
         var settings = settingsStore.Load();
+
+        // 工具热键：settings.json 的 toolHotkeys（工具 ID → 热键），格式错误只会跳过该条
+        var toolHotkeyPlans = ToolHotkeyPlanner.Build(settings.ToolHotkeys, log);
 
         // 分类显示名可自定义（categories.json 的 labels 段）；不改插件的分类键
         var categoriesPath = Path.Combine(
@@ -138,15 +142,45 @@ public partial class App : Application
         _workspaceViewModel = new WorkspaceViewModel(_catalog, clipboard, log, history, settingsViewModel, _parameterStore);
         _workspace = new WorkspaceWindow { DataContext = _workspaceViewModel };
 
-        _tray = new TrayService(_palette, ShowWorkspace, CaptureAndRecognize);
+        // 托盘子菜单内容：工具名从注册表解析（首次打开菜单才加载插件）
+        IReadOnlyList<ToolHotkeyEntry> QueryToolHotkeys()
+        {
+            if (toolHotkeyPlans.Count == 0)
+                return [];
+
+            var registry = _catalog?.GetRegistry();
+            if (registry is null)
+            {
+                return toolHotkeyPlans
+                    .Select(plan => new ToolHotkeyEntry(plan.ToolId, plan.ToolId, plan.HotkeyText))
+                    .ToList();
+            }
+
+            var entries = registry.Search(null, int.MaxValue);
+            return toolHotkeyPlans.Select(plan =>
+            {
+                var entry = entries.FirstOrDefault(candidate =>
+                    string.Equals(candidate.Descriptor.Id, plan.ToolId, StringComparison.Ordinal));
+
+                return new ToolHotkeyEntry(plan.ToolId, entry?.Descriptor.Name ?? plan.ToolId, plan.HotkeyText);
+            }).ToList();
+        }
+
+        _tray = new TrayService(
+            _palette,
+            ShowWorkspace,
+            CaptureAndRecognize,
+            QueryToolHotkeys,
+            toolId => Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => _ = ExecuteToolHotkeyAsync(toolId)));
         _tray.Initialize();
 
         var (searchModifiers, searchKey) = ResolveHotkey(settings.SearchHotkey, "Ctrl+Alt+S");
         var (captureModifiers, captureKey) = ResolveHotkey(settings.CaptureHotkey, "Ctrl+Alt+C");
 
-        _hotkey = new HotkeyService(
-        [
-            new HotkeyBinding(
+        var hotkeyBindings = new List<HotkeyBinding>
+        {
+            new(
                 0x5A5A,
                 searchModifiers | HotkeyService.ModNoRepeat,
                 searchKey,
@@ -160,12 +194,27 @@ public partial class App : Application
                     });
                 }),
 
-            new HotkeyBinding(
+            new(
                 0x5A5B,
                 captureModifiers | HotkeyService.ModNoRepeat,
                 captureKey,
                 () => Avalonia.Threading.Dispatcher.UIThread.Post(CaptureAndRecognize))
-        ]);
+        };
+
+        // 工具热键：按下直接执行，不打开面板
+        foreach (var plan in toolHotkeyPlans)
+        {
+            var toolId = plan.ToolId;
+
+            hotkeyBindings.Add(new HotkeyBinding(
+                plan.Id,
+                plan.Modifiers | HotkeyService.ModNoRepeat,
+                plan.VirtualKey,
+                () => Avalonia.Threading.Dispatcher.UIThread.Post(
+                    () => _ = ExecuteToolHotkeyAsync(toolId))));
+        }
+
+        _hotkey = new HotkeyService(hotkeyBindings);
 
         if (!_hotkey.Register())
         {
@@ -608,6 +657,80 @@ public partial class App : Application
         catch (Exception ex)
         {
             Log.Error("显示贴图失败", ex);
+        }
+    }
+
+    /// <summary>
+    /// 工具热键 / 托盘菜单的统一执行入口：不打开面板，直接用同一个上下文构建逻辑执行，
+    /// 完成后把结果交给面板展示（长时间交互类工具的结果也写进历史）。
+    /// </summary>
+    private async Task ExecuteToolHotkeyAsync(string toolId)
+    {
+        if (_catalog is null || _palette is null || _paletteViewModel is null)
+            return;
+
+        // 上一个热键工具还没结束（比如正在拾取窗口）：忽略，避免叠两次执行
+        if (Interlocked.Exchange(ref _toolHotkeyRunning, 1) == 1)
+            return;
+
+        try
+        {
+            var entry = _catalog.GetRegistry()
+                .Search(null, int.MaxValue)
+                .FirstOrDefault(candidate =>
+                    string.Equals(candidate.Descriptor.Id, toolId, StringComparison.Ordinal));
+
+            if (entry is null)
+            {
+                Log.Warn($"工具热键对应的工具不存在（可能已禁用或卸载）：{toolId}");
+                _palette.ShowError($"工具不存在：{toolId}");
+                return;
+            }
+
+            var (context, error) = _paletteViewModel.CreateContext(entry);
+            if (context is null)
+            {
+                _palette.ShowError(error ?? "无法构造输入");
+                return;
+            }
+
+            Log.Info($"工具热键执行：{toolId}");
+
+            var startedAt = Stopwatch.GetTimestamp();
+            var result = await entry.Tool.ExecuteAsync(context, CancellationToken.None);
+            var elapsed = Stopwatch.GetElapsedTime(startedAt);
+
+            if (!result.Success || result.Payload is null)
+            {
+                Log.Warn($"工具热键执行失败：{toolId}，{result.Error?.Message}");
+                _palette.ShowError(result.Error?.Message ?? "执行失败");
+                return;
+            }
+
+            var text = PaletteViewModel.FormatPayload(result.Payload);
+            _palette.ShowResult(entry.Descriptor.Name, text);
+
+            _history?.Add(new HistoryEntry(
+                Guid.NewGuid().ToString("N"),
+                entry.Descriptor.Id,
+                entry.Descriptor.Name,
+                text,
+                PaletteViewModel.PreviewInput(context.Input),
+                DateTimeOffset.Now,
+                (long)elapsed.TotalMilliseconds));
+        }
+        catch (OperationCanceledException)
+        {
+            // 用户主动取消：不弹错误
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"工具热键执行异常：{toolId}", ex);
+            _palette.ShowError($"执行异常：{ex.Message}");
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _toolHotkeyRunning, 0);
         }
     }
 

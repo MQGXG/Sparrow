@@ -21,6 +21,12 @@ public sealed record AppSettings
     /// <summary>截图识别热键，格式 "Ctrl+Alt+C"。</summary>
     public string CaptureHotkey { get; init; } = "Ctrl+Alt+C";
 
+    /// <summary>
+    /// 工具热键：工具 ID → 热键，例如 <c>"sparrow.window.pin": "Ctrl+Alt+P"</c>。
+    /// 按下直接执行该工具（不打开面板）；工具被禁用时热键不会注册。
+    /// </summary>
+    public Dictionary<string, string> ToolHotkeys { get; init; } = [];
+
     /// <summary>历史最多保留多少条；默认 500，和 M1 行为一致。</summary>
     public int HistoryMaxEntries { get; init; } = 500;
 

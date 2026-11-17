@@ -234,6 +234,12 @@ public partial class PaletteViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// 构造一次执行的上下文。热键直达工具时宿主复用这套逻辑，
+    /// 保证「面板执行」和「热键执行」输入来源一致。
+    /// </summary>
+    public (ToolContext? Context, string? Error) CreateContext(ToolEntry entry) => BuildContext(entry);
+
     private (ToolContext? Context, string? Error) BuildContext(ToolEntry entry)
     {
         var descriptor = entry.Descriptor;
@@ -283,14 +289,16 @@ public partial class PaletteViewModel : ObservableObject
         }, null);
     }
 
-    private static string PreviewInput(IToolInput input) => input switch
+    /// <summary>历史记录里的输入摘要；热键执行也用它写历史。</summary>
+    public static string PreviewInput(IToolInput input) => input switch
     {
         TextInput text => text.Text.Length <= 120 ? text.Text : text.Text[..120] + "…",
         ImageInput image => $"图片 {image.ByteSize} 字节",
         _ => input.GetType().Name
     };
 
-    private static string FormatPayload(IToolPayload payload)
+    /// <summary>把 Payload 整理成可展示文本；热键直达工具时宿主复用同一实现。</summary>
+    public static string FormatPayload(IToolPayload payload)
     {
         var text = payload switch
         {

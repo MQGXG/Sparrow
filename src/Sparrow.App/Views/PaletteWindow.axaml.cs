@@ -54,6 +54,37 @@ public partial class PaletteWindow : Window
         if (DataContext is PaletteViewModel viewModel)
             viewModel.Reset();
 
+        ShowShell();
+
+        // 焦点必须落在搜索框上，否则用户要先点一下才能打字
+        SearchBox.Focus();
+        SearchBox.SelectAll();
+        App.Log.Info($"面板已显示，搜索框焦点={SearchBox.IsFocused}");
+    }
+
+    /// <summary>热键直达工具：执行完成后用面板展示结果（不重置查询词）。</summary>
+    public void ShowResult(string title, string text)
+    {
+        if (DataContext is PaletteViewModel viewModel)
+            viewModel.ShowExternalResult(title, text);
+
+        ShowShell();
+        SearchBox.Focus();
+    }
+
+    /// <summary>热键直达工具失败：用面板展示错误。</summary>
+    public void ShowError(string message)
+    {
+        if (DataContext is PaletteViewModel viewModel)
+            viewModel.ShowExternalError(message);
+
+        ShowShell();
+        SearchBox.Focus();
+    }
+
+    /// <summary>显示 + 上浮淡入动画；不碰数据状态。</summary>
+    private void ShowShell()
+    {
         _shownAt = DateTime.UtcNow;
 
         // 先摆到「低 8px + 透明」，Show 后再过渡到正常位置
@@ -70,11 +101,6 @@ public partial class PaletteWindow : Window
             if (Shell.RenderTransform is TranslateTransform shown)
                 shown.Y = 0;
         }, DispatcherPriority.Render);
-
-        // 焦点必须落在搜索框上，否则用户要先点一下才能打字
-        SearchBox.Focus();
-        SearchBox.SelectAll();
-        App.Log.Info($"面板已显示，搜索框焦点={SearchBox.IsFocused}");
     }
 
     private void OnWindowDeactivated(object? sender, EventArgs e)

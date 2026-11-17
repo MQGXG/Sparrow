@@ -21,7 +21,12 @@ public sealed class TrayServiceTests
     public void 初始化后_图标进入应用的TrayIcons集合()
     {
         var palette = new PaletteWindow();
-        var service = new TrayService(palette, () => { }, () => { });
+        var service = new TrayService(
+            palette,
+            () => { },
+            () => { },
+            () => [],
+            _ => { });
 
         service.Initialize();
 
