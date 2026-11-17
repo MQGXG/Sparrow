@@ -53,6 +53,8 @@ public partial class SettingsViewModel : ObservableObject
         Reload();
     }
 
+    private bool _toolHotkeysLoaded;
+
     public IReadOnlyList<AiProviderPreset> AiProviderOptions => AiProviders.All;
 
     /// <summary>历史保留策略变化时通知宿主，让存储立即清理一次。</summary>
@@ -62,6 +64,11 @@ public partial class SettingsViewModel : ObservableObject
     public event Action<bool>? ClipboardHistoryEnabledChanged;
 
     public ObservableCollection<PluginItemViewModel> Plugins { get; } = [];
+
+    /// <summary>工具热键编辑行：工具全集 + 已配置的热键。空文本 = 不绑定。</summary>
+    public ObservableCollection<ToolHotkeyRowViewModel> ToolHotkeys { get; } = [];
+
+    public bool HasToolHotkeys => ToolHotkeys.Count > 0;
 
     public string VersionText { get; } =
         typeof(SettingsViewModel).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
@@ -134,6 +141,10 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(IsHotkeysSelected));
         OnPropertyChanged(nameof(IsGeneralSelected));
         OnPropertyChanged(nameof(IsAboutSelected));
+
+        // 工具热键列表才需要工具注册表：切到热键分段时才加载插件，冷启动路径保持零加载
+        if (value == SettingsSection.Hotkeys && !_toolHotkeysLoaded)
+            ReloadToolHotkeys();
     }
 
     public void SelectSection(SettingsSection section) => SelectedSection = section;
@@ -163,6 +174,37 @@ public partial class SettingsViewModel : ObservableObject
                 Changed = Persist
             });
         }
+
+        // 插件列表变了（重新扫描后），工具热键行需要跟着重建；没显示过热键分段就不碰注册表
+        if (_toolHotkeysLoaded)
+            ReloadToolHotkeys();
+    }
+
+    /// <summary>工具热键行：工具全集（注册表）按名称排序，预填已配置值。</summary>
+    private void ReloadToolHotkeys()
+    {
+        ToolHotkeys.Clear();
+        _toolHotkeysLoaded = true;
+
+        try
+        {
+            var entries = _catalog.GetRegistry().Search(null, int.MaxValue);
+            foreach (var entry in entries.OrderBy(entry => entry.Descriptor.Name, StringComparer.Ordinal))
+            {
+                var id = entry.Descriptor.Id;
+                var configured = _settings.ToolHotkeys.TryGetValue(id, out var hotkey)
+                    ? hotkey
+                    : string.Empty;
+
+                ToolHotkeys.Add(new ToolHotkeyRowViewModel(id, entry.Descriptor.Name, configured));
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"加载工具列表失败：{ex.Message}";
+        }
+
+        OnPropertyChanged(nameof(HasToolHotkeys));
     }
 
     /// <summary>解析并保存热键。重启生效——重建热键需要重启消息循环，M1 不做运行时热切换。</summary>
@@ -175,10 +217,40 @@ public partial class SettingsViewModel : ObservableObject
             return;
         }
 
+        var searchText = HotkeyText.Format(searchModifiers, searchKey);
+        var captureText = HotkeyText.Format(captureModifiers, captureKey);
+
+        // 同一组合被注册两次时 RegisterHotKey 会静默失败，这里先拦下来
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { searchText, captureText };
+        var toolHotkeys = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var row in ToolHotkeys)
+        {
+            var text = row.HotkeyText.Trim();
+            if (text.Length == 0)
+                continue;
+
+            if (!HotkeyText.TryParse(text, out var modifiers, out var key))
+            {
+                StatusMessage = $"「{row.Name}」的热键格式错误，示例：Ctrl+Alt+P";
+                return;
+            }
+
+            var formatted = HotkeyText.Format(modifiers, key);
+            if (!used.Add(formatted))
+            {
+                StatusMessage = $"热键重复：{formatted}";
+                return;
+            }
+
+            toolHotkeys[row.ToolId] = formatted;
+        }
+
         _settings = _settings with
         {
-            SearchHotkey = HotkeyText.Format(searchModifiers, searchKey),
-            CaptureHotkey = HotkeyText.Format(captureModifiers, captureKey)
+            SearchHotkey = searchText,
+            CaptureHotkey = captureText,
+            ToolHotkeys = toolHotkeys
         };
 
         _store.Save(_settings);

@@ -189,6 +189,41 @@
 
             <Border Classes="hud-line" Margin="20,0" />
 
+            <!-- 工具热键：任意工具挂全局热键；留空 = 不绑定 -->
+            <StackPanel IsVisible="{Binding HasToolHotkeys}">
+              <Grid ColumnDefinitions="Auto,*" Margin="20,14,20,4">
+                <Border Classes="hud-tick" />
+                <StackPanel Grid.Column="1" Spacing="2" Margin="10,0,0,0">
+                  <TextBlock Text="工具热键"
+                             FontSize="12"
+                             FontWeight="SemiBold"
+                             Foreground="{StaticResource TextPrimaryBrush}" />
+                  <TextBlock Text="留空 = 不绑定；按下直接执行，不打开面板"
+                             FontSize="11"
+                             Foreground="{StaticResource TextMutedBrush}" />
+                </StackPanel>
+              </Grid>
+
+              <ItemsControl ItemsSource="{Binding ToolHotkeys}" Margin="20,0,20,8">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ToolHotkeyRowViewModel">
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,5">
+                      <TextBlock Text="{Binding Name}"
+                                 FontSize="12"
+                                 Foreground="{StaticResource TextSecondaryBrush}"
+                                 VerticalAlignment="Center" />
+                      <TextBox Grid.Column="1"
+                               Width="260"
+                               Text="{Binding HotkeyText, Mode=TwoWay}"
+                               PlaceholderText="未绑定" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
             <Grid Margin="20,14">
               <TextBlock Text="格式示例：Ctrl+Alt+S、Ctrl+Shift+D、F9。保存后重启应用生效。"
                          FontSize="11"
