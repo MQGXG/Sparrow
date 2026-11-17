@@ -18,12 +18,37 @@ public partial class WorkspaceWindow : Window
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         AddHandler(DragDrop.DropEvent, OnDrop);
 
+        // Esc：工具台返回工具墙（隧道阶段，避免被输入框吃掉）
+        AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
+
         // 关窗只是藏起来，托盘还能再打开
         Closing += (_, e) =>
         {
             e.Cancel = true;
             Hide();
         };
+    }
+
+    /// <summary>
+    /// Esc 只负责「工具台 → 工具墙」这一层返回。
+    /// 设置页有自己的「← 返回」，不抢；其余状态不拦截。
+    /// </summary>
+    private void OnPreviewKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape)
+            return;
+
+        if (DataContext is not WorkspaceViewModel viewModel)
+            return;
+
+        if (viewModel.IsSettingsVisible)
+            return;
+
+        if (viewModel.IsDetailOpen)
+        {
+            viewModel.CloseDetail();
+            e.Handled = true;
+        }
     }
 
     protected override void OnOpened(EventArgs e)

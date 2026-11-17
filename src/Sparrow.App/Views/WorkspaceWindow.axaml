@@ -56,10 +56,9 @@
                      Margin="6,2,0,0" />
         </StackPanel>
 
-        <!-- 全局工具搜索：直接过滤工具墙 -->
+        <!-- 全局工具搜索：直接过滤工具墙；最近页输入时自动回墙 -->
         <TextBox Grid.Column="2"
                  Width="320"
-                 IsVisible="{Binding !IsRecentOpen}"
                  Text="{Binding ToolQuery, Mode=TwoWay}"
                  PlaceholderText="搜索工具、描述或分类…"
                  FontSize="12"
@@ -76,48 +75,54 @@
       <!-- 顶栏分隔线 -->
       <Border Grid.Row="1" Height="1" Margin="24,0,24,0" Background="{StaticResource LineBrush}" />
 
-      <!-- 主体：墙态整宽；台态整宽 -->
-      <Grid Grid.Row="2" Margin="24,16,24,20">
-        <Grid IsVisible="{Binding !IsDetailOpen}">
+      <!-- 主体：共享切换行 + 墙态 / 最近页 / 台态 -->
+      <Grid Grid.Row="2" Margin="24,16,24,20" RowDefinitions="Auto,*">
 
-          <!-- 墙态：HUD 控制行 + 工具网格 -->
+        <!-- 切换行提到共享层：最近页也能切回工具墙（原先是卡死的根因） -->
+        <Grid x:Name="WallTabRow"
+              Grid.Row="0"
+              ColumnDefinitions="Auto,*,Auto"
+              Margin="0,0,0,16"
+              IsVisible="{Binding !IsDetailOpen}">
+          <StackPanel Orientation="Horizontal" Spacing="28">
+            <Button Classes="hud-tab"
+                    Classes.selected="{Binding IsToolsSelected}"
+                    Click="OnShowToolsClick">
+              <StackPanel>
+                <TextBlock Text="工具" />
+                <Border Classes="tick" />
+              </StackPanel>
+            </Button>
+            <Button Classes="hud-tab"
+                    Classes.selected="{Binding IsRecentOpen}"
+                    Click="OnShowRecentClick">
+              <StackPanel>
+                <TextBlock Text="最近使用" />
+                <Border Classes="tick" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+
+          <StackPanel Grid.Column="2"
+                      Orientation="Horizontal"
+                      Spacing="7"
+                      VerticalAlignment="Bottom">
+            <TextBlock Classes="stat"
+                       Text="{Binding VisibleTools.Count}"
+                       VerticalAlignment="Bottom" />
+            <TextBlock Classes="num"
+                       Text="TOOLS"
+                       VerticalAlignment="Bottom"
+                       Margin="0,0,0,3" />
+          </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="1">
+          <Grid IsVisible="{Binding !IsDetailOpen}">
+
+          <!-- 墙态：分类 chips + 大卡 + 分组工具网格 -->
           <ScrollViewer IsVisible="{Binding IsWallVisible}">
             <StackPanel>
-
-              <!-- HUD 控制行：一级 tab + 大数字读出 -->
-              <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,16">
-                <StackPanel Orientation="Horizontal" Spacing="28">
-                  <Button Classes="hud-tab"
-                          Classes.selected="{Binding IsToolsSelected}"
-                          Click="OnShowToolsClick">
-                    <StackPanel>
-                      <TextBlock Text="工具" />
-                      <Border Classes="tick" />
-                    </StackPanel>
-                  </Button>
-                  <Button Classes="hud-tab"
-                          Classes.selected="{Binding IsRecentOpen}"
-                          Click="OnShowRecentClick">
-                    <StackPanel>
-                      <TextBlock Text="最近使用" />
-                      <Border Classes="tick" />
-                    </StackPanel>
-                  </Button>
-                </StackPanel>
-
-                <StackPanel Grid.Column="2"
-                            Orientation="Horizontal"
-                            Spacing="7"
-                            VerticalAlignment="Bottom">
-                  <TextBlock Classes="stat"
-                             Text="{Binding VisibleTools.Count}"
-                             VerticalAlignment="Bottom" />
-                  <TextBlock Classes="num"
-                             Text="TOOLS"
-                             VerticalAlignment="Bottom"
-                             Margin="0,0,0,3" />
-                </StackPanel>
-              </Grid>
 
               <!-- 分类 chips：横向筛选，选中亮琥珀 -->
               <ItemsControl ItemsSource="{Binding Categories}"
@@ -709,6 +714,7 @@
             </Border>
           </Grid>
 
+        </Grid>
       </Grid>
     </Grid>
 
