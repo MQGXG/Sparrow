@@ -143,7 +143,7 @@ public sealed class WorkspaceViewModelTests
     }
 
     [Fact]
-    public async Task 选择分类_书签条同步更新_列表只剩该分类()
+    public async Task 选择分类_书签条同步更新_其余分组折叠()
     {
         using var root = new TempPluginRoot();
         using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
@@ -154,13 +154,96 @@ public sealed class WorkspaceViewModelTests
         viewModel.Categories.First().Name.ShouldBe("全部");
         viewModel.Categories.First().IsSelected.ShouldBeTrue();
 
-        viewModel.SelectCategory("json");
+        var target = viewModel.Categories.First(category => category.Name != "全部");
+        viewModel.SelectCategory(target.Name);
 
-        viewModel.Categories.Single(category => category.Name == "json").IsSelected.ShouldBeTrue();
+        viewModel.Categories.Single(category => category.Name == target.Name).IsSelected.ShouldBeTrue();
         viewModel.Categories.Single(category => category.Name == "全部").IsSelected.ShouldBeFalse();
 
-        viewModel.Groups.ShouldHaveSingleItem().Category.ShouldBe("json");
-        viewModel.Groups[0].Tools.ShouldHaveSingleItem().Name.ShouldBe("JSON 格式化");
+        // 分类不再从列表里移除：两组都在，选中组展开、其余折叠
+        viewModel.Groups.Count.ShouldBe(2);
+        viewModel.Groups.Single(group => group.Category == target.Name).IsExpanded.ShouldBeTrue();
+        viewModel.Groups.Single(group => group.Category != target.Name).IsExpanded.ShouldBeFalse();
+        viewModel.VisibleTools.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task 组标题点击_折叠状态可切换()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+
+        await viewModel.ReloadAsync();
+
+        var group = viewModel.Groups.First();
+        group.IsExpanded.ShouldBeTrue();
+
+        viewModel.ToggleGroup(group.Category);
+        group.IsExpanded.ShouldBeFalse();
+
+        viewModel.ToggleGroup(group.Category);
+        group.IsExpanded.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task 搜索时_所有分组强制展开()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+
+        await viewModel.ReloadAsync();
+
+        var category = viewModel.Groups.First().Category;
+        viewModel.ToggleGroup(category);
+        viewModel.Groups.First(group => group.Category == category).IsExpanded.ShouldBeFalse();
+
+        viewModel.ToolQuery = "json";
+        viewModel.Groups.ShouldAllBe(group => group.IsExpanded);
+
+        viewModel.ToolQuery = string.Empty;
+        viewModel.Groups.Single(group => group.Category == category).IsExpanded.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task 有历史时_大卡显示最近工具与摘要()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+
+        var json = catalog.GetRegistry().Search("json").ShouldHaveSingleItem();
+        var history = new FakeHistory();
+        history.Entries.Add(new HistoryEntry(
+            "h1", json.Descriptor.Id, json.Descriptor.Name,
+            "{ \"a\": 1 }", "", DateTimeOffset.Now, 12));
+
+        var viewModel = Create(catalog, history);
+        await viewModel.ReloadAsync();
+
+        viewModel.HasFeaturedTool.ShouldBeTrue();
+        viewModel.FeaturedTool!.Tool.Name.ShouldBe(json.Descriptor.Name);
+        viewModel.FeaturedSummary.ShouldContain("\"a\": 1");
+
+        viewModel.ClearHistory();
+
+        viewModel.HasFeaturedTool.ShouldBeFalse();
+        viewModel.FeaturedSummary.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task 最近页输入搜索词_回到工具墙()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+
+        await viewModel.ReloadAsync();
+        viewModel.ShowRecent();
+        viewModel.ToolQuery = "json";
+
+        viewModel.IsRecentOpen.ShouldBeFalse();
+        viewModel.IsWallVisible.ShouldBeTrue();
     }
 
     [Fact]

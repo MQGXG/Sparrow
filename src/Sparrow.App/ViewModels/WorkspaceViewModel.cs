@@ -48,12 +48,30 @@ public partial class WorkspaceViewModel : ObservableObject
 
     public ObservableCollection<ToolGroupViewModel> Groups { get; } = [];
 
-    /// <summary>工具墙的扁平网格：分类只作为卡片上的标签，不再按分类分节。</summary>
+    /// <summary>工具墙的扁平清单：搜索过滤后的全集；渲染按 <see cref="Groups"/> 分组进行。</summary>
     public ObservableCollection<ToolItemViewModel> VisibleTools { get; } = [];
 
     public ObservableCollection<CategoryViewModel> Categories { get; } = [];
 
     public ObservableCollection<RecentToolViewModel> RecentTools { get; } = [];
+
+    /// <summary>墙顶大卡：最近执行过的工具；没有历史时为 null。</summary>
+    public RecentToolViewModel? FeaturedTool => RecentTools.Count > 0 ? RecentTools[0] : null;
+
+    public bool HasFeaturedTool => FeaturedTool is not null;
+
+    /// <summary>大卡右侧的上次结果摘要，前 60 字。</summary>
+    public string FeaturedSummary
+    {
+        get
+        {
+            if (_allHistory.Count == 0)
+                return string.Empty;
+
+            var output = _allHistory[0].Entry.Output;
+            return output.Length <= 60 ? output : output[..60] + "…";
+        }
+    }
 
     public ObservableCollection<ParameterViewModel> Parameters { get; } = [];
 
@@ -63,6 +81,9 @@ public partial class WorkspaceViewModel : ObservableObject
 
     /// <summary>工具全集缓存，侧栏搜索在这上面过滤，不重新扫插件。</summary>
     private List<ToolEntry> _allTools = [];
+
+    /// <summary>手动折叠的分类；chip 选中时由 chip 规则接管。</summary>
+    private readonly HashSet<string> _collapsedCategories = new(StringComparer.Ordinal);
 
     [ObservableProperty]
     private string _historyQuery = string.Empty;
@@ -106,13 +127,21 @@ public partial class WorkspaceViewModel : ObservableObject
         OnPropertyChanged(nameof(IsRecentVisible));
     }
 
-    partial void OnToolQueryChanged(string value) => RefilterTools();
+    partial void OnToolQueryChanged(string value)
+    {
+        // 最近页输入搜索词 = 想找别的工具，直接回工具墙看结果
+        if (value.Length > 0)
+            IsRecentOpen = false;
+
+        RefilterTools();
+    }
 
     partial void OnSelectedCategoryChanged(string? value)
     {
         // 选中状态只在 Categories 上，选完必须同步书签条，否则高亮会停在「全部」
         UpdateCategorySelection();
-        RefilterTools();
+        // 分类不再过滤列表，只决定展开哪一组
+        UpdateGroupExpansion();
     }
 
     /// <summary>打开一个工具：进入工具台。</summary>
@@ -136,6 +165,17 @@ public partial class WorkspaceViewModel : ObservableObject
     {
         IsRecentOpen = false;
         SelectedCategory = name;
+    }
+
+    /// <summary>点组标题：折叠/展开该组。手动操作即退出 chip 联动模式，避免两套规则打架。</summary>
+    public void ToggleGroup(string category)
+    {
+        SelectedCategory = null;
+
+        if (!_collapsedCategories.Add(category))
+            _collapsedCategories.Remove(category);
+
+        UpdateGroupExpansion();
     }
 
     /// <summary>侧栏打开「最近使用」页。</summary>
@@ -409,12 +449,10 @@ public partial class WorkspaceViewModel : ObservableObject
         OnPropertyChanged(nameof(CanClearDroppedImage));
     }
 
-    /// <summary>工具墙：先按侧栏分类，再按搜索词过滤，保持分组结构。</summary>
+    /// <summary>工具墙：只按搜索词过滤；分类不再移除卡片，改由分组折叠表达。</summary>
     private void RefilterTools()
     {
-        IEnumerable<ToolEntry> items = SelectedCategory is null
-            ? _allTools
-            : _allTools.Where(entry => entry.Descriptor.Category == SelectedCategory);
+        IEnumerable<ToolEntry> items = _allTools;
 
         var query = ToolQuery.Trim();
         if (query.Length > 0)
@@ -442,7 +480,22 @@ public partial class WorkspaceViewModel : ObservableObject
         }
 
         HasTools = list.Count > 0;
+        UpdateGroupExpansion();
         OnPropertyChanged(nameof(EmptyToolMessage));
+    }
+
+    /// <summary>按「搜索 &gt; chip &gt; 手动折叠」三级规则计算每组展开状态。</summary>
+    private void UpdateGroupExpansion()
+    {
+        var hasQuery = ToolQuery.Trim().Length > 0;
+
+        foreach (var group in Groups)
+        {
+            group.IsExpanded = hasQuery
+                || (SelectedCategory is null
+                    ? !_collapsedCategories.Contains(group.Category)
+                    : group.Category == SelectedCategory);
+        }
     }
 
     /// <summary>侧栏分类导航：全部 + 各分类（含工具数）。</summary>
@@ -496,6 +549,15 @@ public partial class WorkspaceViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(HasRecentTools));
+        NotifyFeatured();
+    }
+
+    /// <summary>大卡数据在历史变化后必须整体通知：属性是计算出来的，不会自己刷新。</summary>
+    private void NotifyFeatured()
+    {
+        OnPropertyChanged(nameof(FeaturedTool));
+        OnPropertyChanged(nameof(HasFeaturedTool));
+        OnPropertyChanged(nameof(FeaturedSummary));
     }
 
     partial void OnIsExecutingChanged(bool value) => OnPropertyChanged(nameof(ExecuteLabel));
@@ -750,6 +812,7 @@ public partial class WorkspaceViewModel : ObservableObject
         RecentTools.Clear();
         HasHistory = false;
         OnPropertyChanged(nameof(HasRecentTools));
+        NotifyFeatured();
     }
 
     public void ShowSettings() => IsSettingsVisible = true;
