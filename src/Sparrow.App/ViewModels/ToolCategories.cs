@@ -23,7 +23,8 @@ public static class ToolCategories
         ["image"] = "图像",
         ["images"] = "图像",
         ["file"] = "文件",
-        ["files"] = "文件"
+        ["files"] = "文件",
+        ["window"] = "窗口"
     };
 
     /// <summary>用户自定义显示名（categories.json 的 labels）；优先级高于内置名。</summary>

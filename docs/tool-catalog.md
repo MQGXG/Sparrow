@@ -197,6 +197,12 @@ Tool : InputShape × Params → OutputShape
 | `sparrow.ai.summarize` | 总结 | Text | Text | P2 | ⬜ |
 | `sparrow.ai.redraw` | 视觉重绘 | Image | Svg | P2 | ⬜ |
 
+### 3.10 窗口 · Window
+
+| ID | 名称 | 输入 | 输出 | 阶段 | 状态 | 备注 |
+|---|---|---|---|:--:|:--:|---|
+| `sparrow.window.pin` | 窗口置顶 | Nothing | Text | M2 | ✅ 完成 | 执行后点一下目标窗口即切换置顶（DeskPins 式）；Esc 取消，30 秒超时；忽略桌面/任务栏与 Sparrow 自身窗口 |
+
 ---
 
 ## 四、集合的缺口分析

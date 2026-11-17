@@ -1,0 +1,11 @@
+{
+  "id": "sparrow.plugin.window-pin",
+  "name": "窗口置顶",
+  "version": "1.0.0",
+  "sdkVersion": "1.0",
+  "entryAssembly": "Sparrow.Plugin.Window.Pin.dll",
+  "author": "sparrow",
+  "description": "点一下任意窗口，把它钉在最前面；再点一次取消",
+  "capabilities": [],
+  "tools": ["sparrow.window.pin"]
+}
