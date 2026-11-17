@@ -148,133 +148,199 @@
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
 
-              <ItemsControl ItemsSource="{Binding VisibleTools}">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <WrapPanel Orientation="Horizontal" />
-                  </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="vm:ToolItemViewModel">
-                    <Button Tag="{Binding}"
-                            Click="OnToolClick"
-                            Classes="tool-card"
-                            Width="236"
-                            Height="136"
-                            Margin="0,0,16,16"
-                            Padding="0"
-                            HorizontalContentAlignment="Stretch"
-                            VerticalContentAlignment="Stretch">
-                      <Panel>
-                        <!-- 取景框四角标 -->
-                        <Path Classes="frame" HorizontalAlignment="Left" VerticalAlignment="Top" Data="M0,11 L0,0 L11,0" />
-                        <Path Classes="frame" HorizontalAlignment="Right" VerticalAlignment="Top" Data="M0,0 L11,0 L11,11" />
-                        <Path Classes="frame" HorizontalAlignment="Left" VerticalAlignment="Bottom" Data="M0,0 L0,11 L11,11" />
-                        <Path Classes="frame" HorizontalAlignment="Right" VerticalAlignment="Bottom" Data="M11,0 L11,11 L0,11" />
+              <!-- 大卡：最近执行过的工具，双倍宽；没有历史时整块不显示 -->
+              <Button IsVisible="{Binding HasFeaturedTool}"
+                      Tag="{Binding FeaturedTool}"
+                      Click="OnFeaturedToolClick"
+                      Classes="tool-card"
+                      Width="488"
+                      Height="136"
+                      Margin="0,0,16,20"
+                      Padding="0"
+                      HorizontalContentAlignment="Stretch"
+                      VerticalContentAlignment="Stretch">
+                <Panel>
+                  <Path Classes="frame" HorizontalAlignment="Left" VerticalAlignment="Top" Data="M0,11 L0,0 L11,0" />
+                  <Path Classes="frame" HorizontalAlignment="Right" VerticalAlignment="Top" Data="M0,0 L11,0 L11,11" />
+                  <Path Classes="frame" HorizontalAlignment="Left" VerticalAlignment="Bottom" Data="M0,0 L0,11 L11,11" />
+                  <Path Classes="frame" HorizontalAlignment="Right" VerticalAlignment="Bottom" Data="M11,0 L11,11 L0,11" />
 
-                        <Grid RowDefinitions="Auto,*,Auto" Margin="16">
-                          <StackPanel Orientation="Horizontal" Spacing="12">
-                            <Border Width="40"
-                                    Height="40"
-                                    CornerRadius="2"
-                                    Background="{StaticResource AccentSoftBrush}"
-                                    VerticalAlignment="Center">
-                              <Path Classes="icon"
-                                    Width="20"
-                                    Height="20"
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Center"
-                                    Data="{Binding CategoryLabel, Converter={x:Static converters:IconGeometryConverter.Instance}}" />
-                            </Border>
-                            <StackPanel Spacing="2" VerticalAlignment="Center">
-                              <TextBlock Text="{Binding Name}"
-                                         FontSize="14"
-                                         FontWeight="SemiBold"
-                                         Foreground="{StaticResource TextPrimaryBrush}" />
-                              <TextBlock Text="{Binding CategoryDisplay}"
-                                         FontSize="11"
-                                         Foreground="{StaticResource TextMutedBrush}" />
-                            </StackPanel>
-                          </StackPanel>
-
-                          <TextBlock Grid.Row="1"
-                                     Text="{Binding Description}"
-                                     Margin="0,10,0,0"
-                                     FontSize="12"
-                                     LineHeight="18"
-                                     Foreground="{StaticResource TextSecondaryBrush}"
-                                     TextWrapping="Wrap"
-                                     MaxLines="2" />
-
-                          <TextBlock Grid.Row="2"
-                                     Classes="hint"
-                                     Text="打开 →"
-                                     HorizontalAlignment="Right"
+                  <Grid ColumnDefinitions="*,Auto" Margin="20">
+                    <StackPanel Spacing="10" VerticalAlignment="Center">
+                      <StackPanel Orientation="Horizontal" Spacing="14">
+                        <Border Width="48"
+                                Height="48"
+                                CornerRadius="2"
+                                Background="{StaticResource AccentSoftBrush}"
+                                VerticalAlignment="Center">
+                          <Path Classes="icon"
+                                Width="24"
+                                Height="24"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Data="{Binding FeaturedTool.Tool.CategoryLabel, Converter={x:Static converters:IconGeometryConverter.Instance}}" />
+                        </Border>
+                        <StackPanel Spacing="3" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding FeaturedTool.Tool.Name}"
+                                     FontSize="16"
+                                     FontWeight="SemiBold"
+                                     Foreground="{StaticResource TextPrimaryBrush}" />
+                          <TextBlock Text="{Binding FeaturedTool.Tool.CategoryDisplay}"
                                      FontSize="11"
-                                     Foreground="{StaticResource AccentBrush}" />
-                        </Grid>
-                      </Panel>
-                    </Button>
+                                     Foreground="{StaticResource TextMutedBrush}" />
+                        </StackPanel>
+                      </StackPanel>
+
+                      <TextBlock Text="{Binding FeaturedTool.Tool.Description}"
+                                 FontSize="12"
+                                 LineHeight="18"
+                                 Foreground="{StaticResource TextSecondaryBrush}"
+                                 TextWrapping="Wrap"
+                                 MaxLines="2"
+                                 Width="280"
+                                 HorizontalAlignment="Left" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1"
+                                Width="150"
+                                Margin="24,0,0,0"
+                                Spacing="6"
+                                VerticalAlignment="Center">
+                      <TextBlock Classes="section" Text="上次执行" />
+                      <TextBlock Classes="num"
+                                 Text="{Binding FeaturedTool.TimeLabel}"
+                                 FontSize="12" />
+                      <TextBlock Text="{Binding FeaturedSummary}"
+                                 FontSize="11"
+                                 LineHeight="16"
+                                 Foreground="{StaticResource TextMutedBrush}"
+                                 TextWrapping="Wrap"
+                                 MaxLines="3" />
+                    </StackPanel>
+                  </Grid>
+                </Panel>
+              </Button>
+
+              <!-- 分组工具网格：组标题可折叠；搜索时强制全展开 -->
+              <ItemsControl ItemsSource="{Binding Groups}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ToolGroupViewModel">
+                    <StackPanel Margin="0,0,0,6">
+
+                      <!-- 组标题：琥珀刻度 + 分类名 + 数量 + 折叠状态 -->
+                      <Button Classes="group-header"
+                              Tag="{Binding}"
+                              Click="OnGroupHeaderClick"
+                              HorizontalAlignment="Stretch"
+                              HorizontalContentAlignment="Left">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                          <Border Classes="hud-tick" />
+                          <TextBlock Text="{Binding DisplayName}"
+                                     FontSize="13"
+                                     FontWeight="SemiBold"
+                                     Foreground="{StaticResource TextPrimaryBrush}"
+                                     VerticalAlignment="Center" />
+                          <TextBlock Classes="num"
+                                     Text="{Binding Tools.Count}"
+                                     Margin="4,0,0,0"
+                                     VerticalAlignment="Center" />
+                          <Path Width="8" Height="5"
+                                Margin="6,0,0,0"
+                                VerticalAlignment="Center"
+                                Stroke="{StaticResource TextMutedBrush}"
+                                StrokeThickness="1.5"
+                                StrokeLineCap="Round"
+                                StrokeJoin="Round"
+                                IsVisible="{Binding IsExpanded}"
+                                Data="M0,0 L4,4 L8,0" />
+                          <Path Width="5" Height="8"
+                                Margin="6,0,0,0"
+                                VerticalAlignment="Center"
+                                Stroke="{StaticResource TextMutedBrush}"
+                                StrokeThickness="1.5"
+                                StrokeLineCap="Round"
+                                StrokeJoin="Round"
+                                IsVisible="{Binding !IsExpanded}"
+                                Data="M0,0 L4,4 L0,8" />
+                        </StackPanel>
+                      </Button>
+
+                      <ItemsControl ItemsSource="{Binding Tools}"
+                                    IsVisible="{Binding IsExpanded}"
+                                    Margin="0,8,0,0">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal" />
+                          </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:ToolItemViewModel">
+                            <Button Tag="{Binding}"
+                                    Click="OnToolClick"
+                                    Classes="tool-card"
+                                    Width="236"
+                                    Height="136"
+                                    Margin="0,0,16,16"
+                                    Padding="0"
+                                    HorizontalContentAlignment="Stretch"
+                                    VerticalContentAlignment="Stretch">
+                              <Panel>
+                                <!-- 取景框四角标 -->
+                                <Path Classes="frame" HorizontalAlignment="Left" VerticalAlignment="Top" Data="M0,11 L0,0 L11,0" />
+                                <Path Classes="frame" HorizontalAlignment="Right" VerticalAlignment="Top" Data="M0,0 L11,0 L11,11" />
+                                <Path Classes="frame" HorizontalAlignment="Left" VerticalAlignment="Bottom" Data="M0,0 L0,11 L11,11" />
+                                <Path Classes="frame" HorizontalAlignment="Right" VerticalAlignment="Bottom" Data="M11,0 L11,11 L0,11" />
+
+                                <Grid RowDefinitions="Auto,*,Auto" Margin="16">
+                                  <StackPanel Orientation="Horizontal" Spacing="12">
+                                    <Border Width="40"
+                                            Height="40"
+                                            CornerRadius="2"
+                                            Background="{StaticResource AccentSoftBrush}"
+                                            VerticalAlignment="Center">
+                                      <Path Classes="icon"
+                                            Width="20"
+                                            Height="20"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Data="{Binding CategoryLabel, Converter={x:Static converters:IconGeometryConverter.Instance}}" />
+                                    </Border>
+                                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                                      <TextBlock Text="{Binding Name}"
+                                                 FontSize="14"
+                                                 FontWeight="SemiBold"
+                                                 Foreground="{StaticResource TextPrimaryBrush}" />
+                                      <TextBlock Text="{Binding CategoryDisplay}"
+                                                 FontSize="11"
+                                                 Foreground="{StaticResource TextMutedBrush}" />
+                                    </StackPanel>
+                                  </StackPanel>
+
+                                  <TextBlock Grid.Row="1"
+                                             Text="{Binding Description}"
+                                             Margin="0,10,0,0"
+                                             FontSize="12"
+                                             LineHeight="18"
+                                             Foreground="{StaticResource TextSecondaryBrush}"
+                                             TextWrapping="Wrap"
+                                             MaxLines="2" />
+
+                                  <TextBlock Grid.Row="2"
+                                             Classes="hint"
+                                             Text="打开 →"
+                                             HorizontalAlignment="Right"
+                                             FontSize="11"
+                                             Foreground="{StaticResource AccentBrush}" />
+                                </Grid>
+                              </Panel>
+                            </Button>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
-
-              <!-- 最近执行：填在墙下面，让下半页有真实内容 -->
-              <StackPanel Spacing="10" Margin="0,10,0,0" IsVisible="{Binding HasHistory}">
-                <Grid ColumnDefinitions="Auto,*,Auto">
-                  <Border Classes="hud-tick" />
-                  <TextBlock Grid.Column="1"
-                             Text="最近执行"
-                             FontSize="12"
-                             FontWeight="SemiBold"
-                             Margin="10,0,0,0"
-                             VerticalAlignment="Center" />
-                  <TextBlock Grid.Column="2"
-                             Classes="num"
-                             Text="{Binding Recent.Count, StringFormat='{}{0} 条'}" />
-                </Grid>
-
-                <ScrollViewer MaxHeight="236" VerticalScrollBarVisibility="Hidden">
-                  <ItemsControl ItemsSource="{Binding Recent}">
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate x:DataType="vm:HistoryEntryViewModel">
-                        <Button Tag="{Binding}"
-                                Click="OnHistoryClick"
-                                Classes="ghost"
-                                HorizontalAlignment="Stretch"
-                                HorizontalContentAlignment="Stretch"
-                                Padding="12,9"
-                                Margin="0,1"
-                                ToolTip.Tip="复制结果">
-                          <Grid ColumnDefinitions="*,Auto,Auto">
-                            <StackPanel Spacing="3">
-                              <TextBlock Text="{Binding ToolName}"
-                                         FontSize="12"
-                                         Foreground="{StaticResource TextPrimaryBrush}" />
-                              <TextBlock Text="{Binding Preview}"
-                                         FontSize="11"
-                                         Foreground="{StaticResource TextMutedBrush}"
-                                         MaxLines="1"
-                                         TextWrapping="NoWrap"
-                                         TextTrimming="CharacterEllipsis" />
-                            </StackPanel>
-                            <TextBlock Grid.Column="1"
-                                       Classes="num"
-                                       Text="{Binding TimeLabel}"
-                                       Margin="12,0,12,0"
-                                       VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="2"
-                                       Text="复制"
-                                       FontSize="11"
-                                       Foreground="{StaticResource AccentBrush}"
-                                       VerticalAlignment="Center" />
-                          </Grid>
-                        </Button>
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
-                </ScrollViewer>
-              </StackPanel>
 
               <!-- 墙空态：取景框里的大号麻雀标记 -->
               <StackPanel IsVisible="{Binding IsToolListEmpty}"
