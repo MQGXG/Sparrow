@@ -1,13 +1,45 @@
 using System.Diagnostics;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
+using Sparrow.App.Settings;
 using Sparrow.App.ViewModels;
 
 namespace Sparrow.App.Views;
 
 public partial class SettingsView : UserControl
 {
-    public SettingsView() => InitializeComponent();
+    public SettingsView()
+    {
+        InitializeComponent();
+
+        // 隧道阶段拦截：热键框是只读的，普通 KeyDown 可能先被 TextBox 处理掉
+        AddHandler(KeyDownEvent, OnHotkeyKeyDown, RoutingStrategies.Tunnel);
+    }
+
+    /// <summary>
+    /// 热键录制：点输入框后直接按组合键写入文本；Backspace / Delete 清空。
+    /// 只处理 Tag="hotkey" 的输入框，不影响其他输入。
+    /// </summary>
+    private void OnHotkeyKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Source is not TextBox { Tag: "hotkey" } box)
+            return;
+
+        if (e.Key is Key.Back or Key.Delete)
+        {
+            box.Text = string.Empty;
+            e.Handled = true;
+            return;
+        }
+
+        if (!HotkeyCapture.TryFormat(e.KeyModifiers, e.Key, out var text))
+            return;
+
+        box.Text = text;
+        box.CaretIndex = text.Length;
+        e.Handled = true;
+    }
 
     private void OnSaveHotkeysClick(object? sender, RoutedEventArgs e)
     {

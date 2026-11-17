@@ -1,9 +1,13 @@
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Headless.XUnit;
 using Shouldly;
 using Sparrow.App;
 using Sparrow.App.Plugins;
 using Sparrow.App.Services;
 using Sparrow.App.Settings;
 using Sparrow.App.ViewModels;
+using Sparrow.App.Views;
 using Xunit;
 
 namespace Sparrow.Tests;
@@ -30,6 +34,30 @@ public sealed class SettingsViewModelTests
         var viewModel = new SettingsViewModel(catalog, store, new StartupService(log), new AppSettings());
 
         return (viewModel, store, catalog);
+    }
+
+    [AvaloniaFact]
+    public void 设置页_热键框_按键即写入组合键()
+    {
+        var (viewModel, _, _) = Create();
+        viewModel.SelectSection(SettingsSection.Hotkeys);
+
+        var view = new SettingsView { DataContext = viewModel };
+        var window = new Avalonia.Controls.Window { Content = view, Width = 900, Height = 700 };
+        window.Show();
+
+        var box = view.FindControl<Avalonia.Controls.TextBox>("SearchHotkeyBox");
+        box.ShouldNotBeNull();
+        box!.Focus();
+
+        window.KeyPress(
+            Avalonia.Input.Key.P,
+            Avalonia.Input.RawInputModifiers.Control | Avalonia.Input.RawInputModifiers.Alt,
+            Avalonia.Input.PhysicalKey.P,
+            null);
+
+        box.Text.ShouldBe("Ctrl+Alt+P");
+        viewModel.SearchHotkey.ShouldBe("Ctrl+Alt+P");
     }
 
     [Fact]
