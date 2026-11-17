@@ -3,19 +3,19 @@ using Sparrow.App.Views;
 
 namespace Sparrow.App.Shell;
 
-/// <summary>托盘「工具热键」子菜单的一项：工具名 + 配置的热键文本。</summary>
-public sealed record ToolHotkeyEntry(string ToolId, string Name, string HotkeyText);
-
 /// <summary>
 /// 托盘图标与右键菜单。
 /// 托盘是本应用的「常驻入口」：主窗口从不自动显示，一切从托盘或热键开始。
+///
+/// 菜单内容来自 <c>settings.json</c> 的 <c>trayMenu</c>（见 <see cref="TrayMenuPlanner"/>）；
+/// 没配置时与内置默认一致。
 /// </summary>
 public sealed class TrayService
 {
     private readonly PaletteWindow _palette;
     private readonly Action _showWorkspace;
     private readonly Action _capture;
-    private readonly Func<IReadOnlyList<ToolHotkeyEntry>> _toolHotkeys;
+    private readonly IReadOnlyList<TrayMenuEntry> _menuEntries;
     private readonly Action<string> _executeToolHotkey;
     private TrayIcon? _icon;
 
@@ -23,13 +23,13 @@ public sealed class TrayService
         PaletteWindow palette,
         Action showWorkspace,
         Action capture,
-        Func<IReadOnlyList<ToolHotkeyEntry>> toolHotkeys,
+        IReadOnlyList<TrayMenuEntry> menuEntries,
         Action<string> executeToolHotkey)
     {
         _palette = palette;
         _showWorkspace = showWorkspace;
         _capture = capture;
-        _toolHotkeys = toolHotkeys;
+        _menuEntries = menuEntries;
         _executeToolHotkey = executeToolHotkey;
     }
 
@@ -37,36 +37,36 @@ public sealed class TrayService
     {
         var menu = new NativeMenu();
 
-        var search = new NativeMenuItem("搜索工具…    Ctrl+Alt+S");
-        search.Click += (_, _) => _palette.Toggle();
-        menu.Add(search);
-
-        var capture = new NativeMenuItem("截图识别…    Ctrl+Alt+C");
-        capture.Click += (_, _) => _capture();
-        menu.Add(capture);
-
-        var workspace = new NativeMenuItem("工作区…");
-        workspace.Click += (_, _) => _showWorkspace();
-        menu.Add(workspace);
-
-        // 配置了热键的工具：直接作为顶层菜单项，不埋进子菜单。
-        // 名称来自插件清单（只读 JSON，不加载插件程序集），因此启动路径仍然零插件加载。
-        foreach (var entry in ReadToolHotkeys())
+        foreach (var entry in _menuEntries)
         {
-            var item = new NativeMenuItem($"{entry.Name}…    {entry.HotkeyText}");
-            var toolId = entry.ToolId;
-            item.Click += (_, _) => _executeToolHotkey(toolId);
-            menu.Add(item);
+            switch (entry.Kind)
+            {
+                case TrayMenuActionKind.Separator:
+                    menu.Add(new NativeMenuItemSeparator());
+                    break;
+
+                case TrayMenuActionKind.Palette:
+                    menu.Add(CreateItem(entry.Label, () => _palette.Toggle()));
+                    break;
+
+                case TrayMenuActionKind.Capture:
+                    menu.Add(CreateItem(entry.Label, _capture));
+                    break;
+
+                case TrayMenuActionKind.Workspace:
+                    menu.Add(CreateItem(entry.Label, _showWorkspace));
+                    break;
+
+                case TrayMenuActionKind.Exit:
+                    menu.Add(CreateItem(entry.Label, ExitApplication));
+                    break;
+
+                case TrayMenuActionKind.Tool when !string.IsNullOrEmpty(entry.ToolId):
+                    var toolId = entry.ToolId;
+                    menu.Add(CreateItem(entry.Label, () => _executeToolHotkey(toolId)));
+                    break;
+            }
         }
-
-        menu.Add(new NativeMenuItemSeparator());
-
-        var exit = new NativeMenuItem("退出");
-        exit.Click += (_, _) =>
-            (Avalonia.Application.Current?.ApplicationLifetime
-                as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)
-                ?.Shutdown();
-        menu.Add(exit);
 
         _icon = new TrayIcon
         {
@@ -90,18 +90,17 @@ public sealed class TrayService
         }
     }
 
-    /// <summary>读取工具热键条目；任何异常都退化为「不显示」，托盘菜单不能因此起不来。</summary>
-    private IReadOnlyList<ToolHotkeyEntry> ReadToolHotkeys()
+    private static NativeMenuItem CreateItem(string label, Action onClick)
     {
-        try
-        {
-            return _toolHotkeys();
-        }
-        catch
-        {
-            return [];
-        }
+        var item = new NativeMenuItem(label);
+        item.Click += (_, _) => onClick();
+        return item;
     }
+
+    private static void ExitApplication() =>
+        (Avalonia.Application.Current?.ApplicationLifetime
+            as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)
+            ?.Shutdown();
 
     /// <summary>热键注册失败等异常状态，直接反映到托盘提示上。</summary>
     public void SetStatus(string text)

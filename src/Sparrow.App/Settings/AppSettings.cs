@@ -27,6 +27,12 @@ public sealed record AppSettings
     /// </summary>
     public Dictionary<string, string> ToolHotkeys { get; init; } = [];
 
+    /// <summary>
+    /// 托盘菜单自定义顺序与内容；空数组 = 使用内置默认菜单。
+    /// 条目可以是分隔线、内置动作或工具 ID，见 <see cref="TrayMenuItemConfig"/>。
+    /// </summary>
+    public List<TrayMenuItemConfig> TrayMenu { get; init; } = [];
+
     /// <summary>历史最多保留多少条；默认 500，和 M1 行为一致。</summary>
     public int HistoryMaxEntries { get; init; } = 500;
 

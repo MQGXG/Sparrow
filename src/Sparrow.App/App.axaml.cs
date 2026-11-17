@@ -142,12 +142,12 @@ public partial class App : Application
         _workspaceViewModel = new WorkspaceViewModel(_catalog, clipboard, log, history, settingsViewModel, _parameterStore);
         _workspace = new WorkspaceWindow { DataContext = _workspaceViewModel };
 
-        // 顶层菜单项的名称：只读插件清单（toolId → 插件显示名），不加载插件程序集
-        IReadOnlyList<ToolHotkeyEntry> QueryToolHotkeys()
-        {
-            if (toolHotkeyPlans.Count == 0)
-                return [];
+        var (searchModifiers, searchKey) = ResolveHotkey(settings.SearchHotkey, "Ctrl+Alt+S");
+        var (captureModifiers, captureKey) = ResolveHotkey(settings.CaptureHotkey, "Ctrl+Alt+C");
 
+        // 托盘菜单的名称只读插件清单（toolId → 插件显示名），不加载插件程序集
+        IReadOnlyDictionary<string, string> ReadToolNames()
+        {
             var names = new Dictionary<string, string>(StringComparer.Ordinal);
 
             foreach (var candidate in _catalog?.ScanCandidates() ?? [])
@@ -160,25 +160,25 @@ public partial class App : Application
                     names[toolId] = manifest.Name;
             }
 
-            return toolHotkeyPlans
-                .Select(plan => new ToolHotkeyEntry(
-                    plan.ToolId,
-                    names.TryGetValue(plan.ToolId, out var name) ? name : plan.ToolId,
-                    plan.HotkeyText))
-                .ToList();
+            return names;
         }
+
+        var trayEntries = TrayMenuPlanner.Build(
+            settings.TrayMenu,
+            settings.ToolHotkeys,
+            ReadToolNames(),
+            HotkeyText.Format(searchModifiers, searchKey),
+            HotkeyText.Format(captureModifiers, captureKey),
+            log);
 
         _tray = new TrayService(
             _palette,
             ShowWorkspace,
             CaptureAndRecognize,
-            QueryToolHotkeys,
+            trayEntries,
             toolId => Avalonia.Threading.Dispatcher.UIThread.Post(
                 () => _ = ExecuteToolHotkeyAsync(toolId)));
         _tray.Initialize();
-
-        var (searchModifiers, searchKey) = ResolveHotkey(settings.SearchHotkey, "Ctrl+Alt+S");
-        var (captureModifiers, captureKey) = ResolveHotkey(settings.CaptureHotkey, "Ctrl+Alt+C");
 
         var hotkeyBindings = new List<HotkeyBinding>
         {

@@ -17,6 +17,15 @@ namespace Sparrow.Tests;
 /// </summary>
 public sealed class TrayServiceTests
 {
+    private static IReadOnlyList<TrayMenuEntry> StandardEntries() =>
+    [
+        new(TrayMenuActionKind.Palette, "搜索工具…    Ctrl+Alt+S"),
+        new(TrayMenuActionKind.Capture, "截图识别…    Ctrl+Alt+C"),
+        new(TrayMenuActionKind.Workspace, "工作区…"),
+        new(TrayMenuActionKind.Separator, string.Empty),
+        new(TrayMenuActionKind.Exit, "退出")
+    ];
+
     [AvaloniaFact]
     public void 初始化后_图标进入应用的TrayIcons集合()
     {
@@ -25,7 +34,7 @@ public sealed class TrayServiceTests
             palette,
             () => { },
             () => { },
-            () => [],
+            StandardEntries(),
             _ => { });
 
         service.Initialize();
@@ -38,14 +47,19 @@ public sealed class TrayServiceTests
     }
 
     [AvaloniaFact]
-    public void 工具热键_作为顶层菜单项出现()
+    public void 工具项_作为一级菜单项出现()
     {
         var palette = new PaletteWindow();
+        var entries = new List<TrayMenuEntry>(StandardEntries())
+        {
+            new(TrayMenuActionKind.Tool, "窗口置顶…    Ctrl+Alt+P", "sparrow.window.pin")
+        };
+
         var service = new TrayService(
             palette,
             () => { },
             () => { },
-            () => [new ToolHotkeyEntry("sparrow.window.pin", "窗口置顶", "Ctrl+Alt+P")],
+            entries,
             _ => { });
 
         service.Initialize();
@@ -57,7 +71,7 @@ public sealed class TrayServiceTests
             .OfType<NativeMenuItem>()
             .FirstOrDefault(candidate => candidate.Header?.Contains("窗口置顶") == true);
 
-        item.ShouldNotBeNull("窗口置顶必须是一级菜单项，不能埋在子菜单里");
+        item.ShouldNotBeNull("工具热键必须是一级菜单项，不能埋在子菜单里");
         item!.Header!.ShouldContain("Ctrl+Alt+P");
     }
 }
