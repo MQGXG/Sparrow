@@ -312,6 +312,8 @@ public partial class PaletteViewModel : ObservableObject
             SvgPayload svgPayload => svgPayload.Svg,
             // 面板是只读文本结果；图片类工具去工作区用（预览 / 保存）
             ImagePayload imagePayload => WorkspaceViewModel.SummarizeImage(imagePayload),
+            TablePayload tablePayload => ResultTextFormatter.Format(tablePayload),
+            FileSetPayload fileSetPayload => ResultTextFormatter.Format(fileSetPayload),
             _ => $"（{payload.GetType().Name} 结果，面板暂不支持展示）"
         };
 

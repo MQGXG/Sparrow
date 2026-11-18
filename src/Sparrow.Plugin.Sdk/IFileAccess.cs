@@ -19,4 +19,12 @@ public interface IFileAccess
 
     /// <summary>读取文件全部字节；路径越权、文件不存在或读取失败时返回 null（不抛异常）。</summary>
     byte[]? ReadAllBytes(string path);
+
+    /// <summary>
+    /// 打开只读流；路径越权、文件不存在或打开失败时返回 null（不抛异常）。
+    ///
+    /// 为什么还要流：哈希、压缩包列表这类工具要处理大文件，
+    /// <see cref="ReadAllBytes"/> 会把整个文件读进内存。流由插件负责释放。
+    /// </summary>
+    Stream? OpenRead(string path);
 }

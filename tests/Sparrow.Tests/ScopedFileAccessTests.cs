@@ -82,6 +82,39 @@ public sealed class ScopedFileAccessTests : IDisposable
         });
     }
 
+    [Fact]
+    public void 白名单内的文件_可以按流读取()
+    {
+        var path = CreateFile("a.txt", "hello");
+        var access = new ScopedFileAccess([path]);
+
+        using var stream = access.OpenRead(path);
+        stream.ShouldNotBeNull();
+
+        using var reader = new StreamReader(stream!);
+        reader.ReadToEnd().ShouldBe("hello");
+    }
+
+    [Fact]
+    public void 白名单外的文件_打不开流()
+    {
+        var allowed = CreateFile("a.txt");
+        var other = CreateFile("b.txt");
+
+        var access = new ScopedFileAccess([allowed]);
+
+        access.OpenRead(other).ShouldBeNull();
+        access.OpenRead(Path.Combine(_root, "missing.txt")).ShouldBeNull();
+    }
+
+    [Fact]
+    public void 非法路径_打不开流而不是抛异常()
+    {
+        var access = new ScopedFileAccess(["::::"]);
+
+        Should.NotThrow(() => access.OpenRead("::::").ShouldBeNull());
+    }
+
     public void Dispose()
     {
         try

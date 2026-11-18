@@ -216,6 +216,29 @@ public sealed class PaletteViewModelTests
         viewModel.IsExecuting.ShouldBeFalse();
     }
 
+    /// <summary>表格结果在面板里也要能读——面板是纯文本出口。</summary>
+    [Fact]
+    public void 表格载荷_转成可读文本()
+    {
+        var text = PaletteViewModel.FormatPayload(
+            new TablePayload(["文件", "哈希"], [["a.txt", "abc"]]));
+
+        text.ShouldContain("文件");
+        text.ShouldContain("哈希");
+        text.ShouldContain("a.txt");
+        text.ShouldContain("abc");
+    }
+
+    [Fact]
+    public void 文件列表载荷_转成逐行路径()
+    {
+        var text = PaletteViewModel.FormatPayload(new FileSetPayload([@"C:\a.png", @"C:\b.png"]));
+
+        text.ShouldContain("2 个文件");
+        text.ShouldContain(@"C:\a.png");
+        text.ShouldContain(@"C:\b.png");
+    }
+
     /// <summary>可被测试控制何时结束的工具。</summary>
     private sealed class SlowTool : ITool
     {

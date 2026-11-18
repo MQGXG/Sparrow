@@ -23,7 +23,7 @@ public sealed class Win32Clipboard : IClipboardAccess
 
     public string? GetText()
     {
-        if (!OpenClipboard(IntPtr.Zero))
+        if (!TryOpenClipboard())
             return null;
 
         try
@@ -53,7 +53,7 @@ public sealed class Win32Clipboard : IClipboardAccess
 
     public byte[]? GetImagePng()
     {
-        if (!OpenClipboard(IntPtr.Zero))
+        if (!TryOpenClipboard())
         {
             _log?.Warn($"打开剪贴板失败，Win32 错误码 {Marshal.GetLastWin32Error()}");
             return null;
@@ -195,7 +195,7 @@ public sealed class Win32Clipboard : IClipboardAccess
 
         var dib = BuildDib(bitmap);
 
-        if (!OpenClipboard(IntPtr.Zero))
+        if (!TryOpenClipboard())
             return false;
 
         try
@@ -275,7 +275,7 @@ public sealed class Win32Clipboard : IClipboardAccess
 
     public bool SetText(string text)
     {
-        if (!OpenClipboard(IntPtr.Zero))
+        if (!TryOpenClipboard())
             return false;
 
         try
@@ -319,6 +319,30 @@ public sealed class Win32Clipboard : IClipboardAccess
         {
             CloseClipboard();
         }
+    }
+
+    /// <summary>
+    /// 打开剪贴板；被其他程序短暂占用时重试。
+    ///
+    /// Win32 的剪贴板是全局单锁：浏览器、输入法、同步工具都可能瞬时持有它。
+    /// 一次 OpenClipboard 失败就返回空，会让用户正在复制的内容凭空丢失，
+    /// 所以这里重试约 50ms，跨过这种抖动。
+    /// </summary>
+    private static bool TryOpenClipboard()
+    {
+        const int attempts = 6;
+        const int delayMilliseconds = 10;
+
+        for (var attempt = 0; attempt < attempts; attempt++)
+        {
+            if (OpenClipboard(IntPtr.Zero))
+                return true;
+
+            if (attempt < attempts - 1)
+                Thread.Sleep(delayMilliseconds);
+        }
+
+        return false;
     }
 
     [DllImport("user32.dll", SetLastError = true)]

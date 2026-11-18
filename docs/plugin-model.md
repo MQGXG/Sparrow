@@ -181,6 +181,21 @@ public interface IToolHost
 插件只描述「要拾取窗口 / 要在某句柄上显示图钉」；任何插件都能用同一套能力，
 不是为某个工具定制的后门。
 
+### 5.3 结果按载荷渲染，不能谎报失败
+
+`ToolResult.Payload` 的类型就是「这张卡片长什么样」的声明：
+
+| 载荷 | 宿主渲染 |
+|---|---|
+| `TextPayload` / `OcrResultPayload` | 可选中文本（OCR 另带行框，供截图叠加层点行复制） |
+| `SvgPayload` | 安全清洗 + 渲染预览，可切换源码 |
+| `ImagePayload` | 位图预览 + 复制 / 保存 |
+| `TablePayload` | 等宽对齐表格（表头 + 分隔线） |
+| `FileSetPayload` | 文件清单（数量 + 路径） |
+
+宿主必须覆盖 SDK 里公开的每一种载荷。**不认识的载荷只能显示占位说明，不能当成执行失败**——
+`Success = true` 就是成功，UI 没做专用渲染是宿主的问题，不是工具的问题。
+
 **`Ai` 只暴露「发消息、拿回复」。** provider、Base URL、模型名、API Key 全部留在宿主：
 插件不知道请求发往哪里，也不能读取密钥。需要视觉模型时传 `AiRequest.Image`，宿主负责编码成 data URL。
 
@@ -194,6 +209,7 @@ public interface IToolHost
 **文件读取同理，也在 `ToolContext.Files`（`IFileAccess`）。** 输入是 `FileSetInput` 时宿主注入一个
 只读访问器：只允许读取本次输入里出现的路径，越权返回 `null`。插件因此能处理用户拖入的文件，
 但依然不能遍历磁盘、不能读用户的其他文件。批量识别、文件哈希这类工具都走这条通路。
+小文件用 `ReadAllBytes`，大文件用 `OpenRead` 流式处理（哈希不会把整个文件读进内存）。
 这是**契约层的授权**，不是安全沙箱——插件与宿主同进程，仍可直接 `File.ReadAllBytes`（见 10.1）。
 
 **`ToolContext.Host` 是注入入口。** 放在 Context 而不是 `ITool.Initialize`，是为了守住
@@ -370,6 +386,7 @@ plugin.sdkVersion 的 major  ==  host.sdkVersion 的 major   → 兼容
 |---|---|
 | 1.2 | `IToolHost.Windows` / `IWindowOverlay`：窗口拾取 + 图钉 |
 | 1.3 | `ToolContext.Files` / `IFileAccess`：本次输入的只读文件访问 |
+| 1.4 | `IFileAccess.OpenRead`：流式读取，供哈希等大文件工具使用 |
 
 ---
 
@@ -450,6 +467,7 @@ M0 的 3 个工具同样以插件形式存在，随安装包分发到 `plugins/`
 | 截图、滚动拼接 | 宿主 | 产生输入；插件只拿到 `ImageInput` |
 | OCR | 插件 | 消费输入；宿主不知道 worker 进程存在 |
 | 保存图片 | 宿主结果动作 | 落盘是宿主的事，插件只返回 `ImagePayload` |
+| 表格 / 文件列表展示 | 宿主结果展示 | 插件只返回 `TablePayload` / `FileSetPayload`；怎么排版是宿主的事 |
 | 剪贴板历史 | 宿主监听/落盘，插件只读 | 隐私开关在宿主；插件不实时读剪贴板 |
 | AI / HTTP | 宿主 | 密钥、端点、联网策略由宿主统一管 |
 | 文本导出 TXT/MD/Word | 宿主结果动作（Save 的扩展） | 不是工具，是结果出口 |

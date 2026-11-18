@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>Sparrow.Plugin.Files.Hash</AssemblyName>
+    <RootNamespace>Sparrow.Plugin.Files.Hash</RootNamespace>
+    <Version>0.1.0</Version>
+    <Description>文件哈希（MD5 / SHA1 / SHA256 / SHA512）</Description>
+    <!-- 必须等于 plugin.json 的 id 与目录名 -->
+    <PluginId>sparrow.plugin.files-hash</PluginId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Sparrow.Plugin.Sdk\Sparrow.Plugin.Sdk.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

@@ -143,8 +143,8 @@ Windows 原生标题栏通过 DWM 切成深色（`WindowChrome`），避免深�
 | `TextPayload` | 等宽文本 + 语法高亮（AvaloniaEdit） |
 | `SvgPayload` | ✅ Svg.Skia 5.1.1 渲染 PNG；预览 / 源码切换；宿主先做安全清洗 |
 | `ImagePayload` | 图片查看（缩放 / 适应宽度） |
-| `FileSetPayload` | 文件列表 + 打开所在位置 |
-| `TablePayload` | 表格（M2，先用 DataGrid 或自绘） |
+| `FileSetPayload` | ✅ 文件清单（数量 + 逐行路径）；「打开所在位置」仍待结果动作契约 |
+| `TablePayload` | ✅ 等宽对齐文本（表头 + 分隔线 + 行）；列按最大显示宽度补齐，中文按两列宽 |
 
 **工具不能自定义渲染器。** 需要新的展示形态 = 新的 Payload 类型 = 一次架构变更，要慎重。
 

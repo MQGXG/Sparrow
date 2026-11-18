@@ -1,0 +1,11 @@
+{
+  "id": "sparrow.plugin.files-hash",
+  "name": "文件哈希",
+  "version": "0.1.0",
+  "sdkVersion": "1.0",
+  "entryAssembly": "Sparrow.Plugin.Files.Hash.dll",
+  "author": "sparrow",
+  "description": "计算文件的 MD5 / SHA1 / SHA256 / SHA512，结果按文件列出",
+  "capabilities": [],
+  "tools": ["sparrow.files.hash"]
+}

@@ -518,4 +518,83 @@ public sealed class WorkspaceViewModelTests
         viewModel.ShowSvgPreview();
         viewModel.IsSvgPreviewVisible.ShouldBeTrue();
     }
+
+    [Fact]
+    public async Task 表格结果_按文本展示而不是报失败()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+
+        await viewModel.ReloadAsync();
+
+        var entry = new ToolEntry { Tool = new FakeTableTool(), Host = NullToolHost.Instance };
+        viewModel.OpenTool(new ToolItemViewModel(entry));
+        viewModel.InputText = "x";
+
+        await viewModel.ExecuteAsync();
+
+        viewModel.HasResult.ShouldBeTrue();
+        viewModel.HasError.ShouldBeFalse();
+        viewModel.IsTextResultVisible.ShouldBeTrue();
+
+        var text = viewModel.ResultText.ShouldNotBeNull();
+        text.ShouldContain("列");
+        text.ShouldContain("值");
+    }
+
+    /// <summary>
+    /// 表格 / 文件列表之类的载荷以前会掉进「执行失败」——成功就是成功，
+    /// 宿主不认识的新载荷只能显示占位说明，不能谎报失败。
+    /// </summary>
+    [Fact]
+    public async Task 未知载荷类型_不报执行失败()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+
+        await viewModel.ReloadAsync();
+
+        var entry = new ToolEntry { Tool = new FakeUnknownPayloadTool(), Host = NullToolHost.Instance };
+        viewModel.OpenTool(new ToolItemViewModel(entry));
+        viewModel.InputText = "x";
+
+        await viewModel.ExecuteAsync();
+
+        viewModel.HasResult.ShouldBeTrue();
+        viewModel.HasError.ShouldBeFalse();
+        viewModel.ResultText!.ShouldContain("暂不支持展示");
+    }
+
+    private sealed class FakeTableTool : ITool
+    {
+        public ToolDescriptor Descriptor { get; } = new()
+        {
+            Id = "test.table",
+            Name = "表格测试",
+            Category = "test",
+            Accepts = InputShape.Text,
+            Produces = OutputShape.Table
+        };
+
+        public Task<ToolResult> ExecuteAsync(ToolContext context, CancellationToken cancellationToken) =>
+            Task.FromResult(ToolResult.Ok(new TablePayload(["列"], [["值"]])));
+    }
+
+    private sealed record UnknownPayload : IToolPayload;
+
+    private sealed class FakeUnknownPayloadTool : ITool
+    {
+        public ToolDescriptor Descriptor { get; } = new()
+        {
+            Id = "test.unknown",
+            Name = "未知载荷测试",
+            Category = "test",
+            Accepts = InputShape.Text
+        };
+
+        public Task<ToolResult> ExecuteAsync(ToolContext context, CancellationToken cancellationToken) =>
+            Task.FromResult(ToolResult.Ok(new UnknownPayload()));
+    }
 }

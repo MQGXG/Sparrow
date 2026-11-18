@@ -36,8 +36,8 @@ public sealed class ScopedFileAccess : IFileAccess
 
     public byte[]? ReadAllBytes(string path)
     {
-        var normalized = Normalize(path);
-        if (normalized is null || !_allowed.Contains(normalized))
+        var normalized = AllowedPath(path);
+        if (normalized is null)
             return null;
 
         try
@@ -50,6 +50,37 @@ public sealed class ScopedFileAccess : IFileAccess
             // 插件拿到 null 会给出「无法读取」的提示，不需要区分底层原因。
             return null;
         }
+    }
+
+    public Stream? OpenRead(string path)
+    {
+        var normalized = AllowedPath(path);
+        if (normalized is null)
+            return null;
+
+        try
+        {
+            // FileShare.Read：别的程序正在读同一文件时也能哈希；
+            // 不传 FileShare.Write，避免与本程序之外的写入冲突。
+            return new FileStream(
+                normalized,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                bufferSize: 81920,
+                useAsync: false);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>白名单内的规范化绝对路径；越权或无效时返回 null。</summary>
+    private string? AllowedPath(string? path)
+    {
+        var normalized = Normalize(path);
+        return normalized is not null && _allowed.Contains(normalized) ? normalized : null;
     }
 
     /// <summary>统一成绝对路径；空白或非法路径返回 null。</summary>

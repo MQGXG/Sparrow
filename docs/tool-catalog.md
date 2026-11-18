@@ -126,7 +126,7 @@ Tool : InputShape × Params → OutputShape
 | ID | 名称 | 输入 | 输出 | 阶段 | 状态 | 备注 |
 |---|---|---|:--:|:--:|---|---|
 | `sparrow.files.rename` | 批量重命名 | Files | FileSet | P1 | ⬜ | 预览 + 冲突检测 + 撤销 |
-| `sparrow.files.hash` | 文件哈希 | Files | Table | P1 | ⬜ | MD5 / SHA1 / SHA256 |
+| `sparrow.files.hash` | 文件哈希 | Files | Table | P1 | ✅ 插件 `Files Hash`：MD5 / SHA1 / SHA256 / SHA512，流式计算 | `sparrow.plugin.files-hash` |
 | `sparrow.files.path` | 路径处理 | Text | Text | P1 | ⬜ | 转斜杠 / 提取文件名 / 拼接 |
 | `sparrow.files.duplicate` | 重复文件查找 | Files | Table | P2 | ⬜ | 需要索引，收益不确定 |
 

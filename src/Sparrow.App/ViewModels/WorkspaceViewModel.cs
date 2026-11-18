@@ -706,6 +706,23 @@ public partial class WorkspaceViewModel : ObservableObject
                     case ImagePayload imagePayload:
                         ShowImageResult(entry, context, imagePayload, elapsed);
                         return;
+
+                    case TablePayload tablePayload:
+                        ShowTextResult(entry, context, ResultTextFormatter.Format(tablePayload), elapsed);
+                        return;
+
+                    case FileSetPayload fileSetPayload:
+                        ShowTextResult(entry, context, ResultTextFormatter.Format(fileSetPayload), elapsed);
+                        return;
+
+                    default:
+                        // 新载荷类型不该被当成失败：成功就是成功，只是宿主还没做专用渲染
+                        ShowTextResult(
+                            entry,
+                            context,
+                            $"（{result.Payload.GetType().Name} 结果，暂不支持展示）",
+                            elapsed);
+                        return;
                 }
             }
 
