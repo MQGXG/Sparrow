@@ -9,6 +9,7 @@ using Sparrow.App.Services;
 using Sparrow.App.Settings;
 using Sparrow.App.ViewModels;
 using Sparrow.App.Views;
+using Sparrow.Plugin.Sdk;
 
 namespace Sparrow.Tests;
 
@@ -41,6 +42,22 @@ public sealed class WorkspaceWindowTests
             ImagePng = png;
             return true;
         }
+    }
+
+    /// <summary>文件类工具的最小实现：只为验证「选择文件…」入口的可见性。</summary>
+    private sealed class FilesTool : ITool
+    {
+        public ToolDescriptor Descriptor { get; } = new()
+        {
+            Id = "test.files",
+            Name = "批量测试",
+            Category = "ocr",
+            Accepts = InputShape.Files,
+            Produces = OutputShape.Text
+        };
+
+        public Task<ToolResult> ExecuteAsync(ToolContext context, CancellationToken cancellationToken) =>
+            Task.FromResult(ToolResult.InvalidInput("未实现"));
     }
 
     private static (WorkspaceWindow Window, WorkspaceViewModel ViewModel, ToolCatalog Catalog) Create()
@@ -93,6 +110,31 @@ public sealed class WorkspaceWindowTests
 
             viewModel.IsDetailOpen.ShouldBeFalse();
             viewModel.IsWallVisible.ShouldBeTrue();
+        }
+        finally
+        {
+            catalog.Dispose();
+        }
+    }
+
+    [AvaloniaFact]
+    public void 文件类工具_显示选择文件入口()
+    {
+        var (window, viewModel, catalog) = Create();
+        try
+        {
+            viewModel.IsDetailOpen = true;
+            viewModel.SelectedTool = new ToolItemViewModel(new ToolEntry
+            {
+                Tool = new FilesTool(),
+                Host = NullToolHost.Instance
+            });
+
+            viewModel.IsFilesInput.ShouldBeTrue();
+
+            var choose = window.FindControl<Button>("ChooseFilesButton");
+            choose.ShouldNotBeNull("文件类工具必须提供选择文件入口");
+            choose.IsVisible.ShouldBeTrue();
         }
         finally
         {

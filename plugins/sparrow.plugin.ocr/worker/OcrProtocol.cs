@@ -9,6 +9,9 @@ namespace Sparrow.Ocr.Worker;
 /// </summary>
 internal sealed record OcrResultDto(string Text, OcrRegionDto[] Regions);
 
+/// <summary>单帧失败时返回的错误行；批量场景下 worker 会继续处理后续帧。</summary>
+internal sealed record OcrWorkerErrorDto(string Error);
+
 /// <summary>一个文本块及其包围盒（图片物理像素坐标）。</summary>
 internal sealed record OcrRegionDto(
     string Text,

@@ -41,6 +41,18 @@ public sealed class WorkspaceViewModelTests
         }
         """;
 
+    /// <summary>文件类工具的来源：批量识别接受 Files 输入。</summary>
+    private const string OcrManifest = """
+        {
+          "id": "sparrow.plugin.ocr",
+          "name": "OCR",
+          "version": "0.2.0",
+          "sdkVersion": "1.0",
+          "entryAssembly": "Sparrow.Plugin.Ocr.dll",
+          "tools": ["sparrow.ocr.image", "sparrow.ocr.batch"]
+        }
+        """;
+
     private sealed class NullLog : IAppLog
     {
         public void Info(string message) { }
@@ -90,6 +102,7 @@ public sealed class WorkspaceViewModelTests
 
             CreatePlugin("sparrow.plugin.json-format", JsonManifest, "Sparrow.Plugin.Json.Format.dll");
             CreatePlugin("sparrow.plugin.dev-base64", Base64Manifest, "Sparrow.Plugin.Dev.Base64.dll");
+            CreatePlugin("sparrow.plugin.ocr", OcrManifest, "Sparrow.Plugin.Ocr.dll");
         }
 
         private void CreatePlugin(string directoryName, string manifestJson, string entryAssembly)
@@ -316,6 +329,55 @@ public sealed class WorkspaceViewModelTests
     }
 
     [Fact]
+    public async Task 拖入多个文件_切到文件类工具并保留文件清单()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+        await viewModel.ReloadAsync();
+
+        var first = System.IO.Path.Combine(root.Path, "a.png");
+        var second = System.IO.Path.Combine(root.Path, "b.png");
+        File.WriteAllBytes(first, [1, 2, 3]);
+        File.WriteAllBytes(second, [4, 5, 6]);
+
+        viewModel.AcceptDroppedFiles([first, second]);
+
+        // 多选更像批量场景：自动进入文件类工具（批量识别）
+        viewModel.IsDetailOpen.ShouldBeTrue();
+        viewModel.IsFilesInput.ShouldBeTrue();
+        viewModel.SelectedTool!.Entry.Descriptor.Id.ShouldBe("sparrow.ocr.batch");
+
+        viewModel.DroppedFileCount.ShouldBe(2);
+        viewModel.InputHint.ShouldContain("2 个文件");
+        viewModel.CanClearDroppedFiles.ShouldBeTrue();
+
+        viewModel.ClearDroppedFiles();
+
+        viewModel.DroppedFileCount.ShouldBe(0);
+        viewModel.CanClearDroppedFiles.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task 文件类工具没有文件_执行时给出明确提示而不是拿剪贴板文本()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+        await viewModel.ReloadAsync();
+
+        var tool = viewModel.Groups
+            .SelectMany(group => group.Tools)
+            .First(item => item.Entry.Descriptor.Id == "sparrow.ocr.batch");
+
+        viewModel.OpenTool(tool);
+        await viewModel.ExecuteAsync();
+
+        viewModel.HasError.ShouldBeTrue();
+        viewModel.ErrorText!.ShouldContain("选择文件");
+    }
+
+    [Fact]
     public async Task 打开最近页_隐藏工具墙并取消分类选中()
     {
         using var root = new TempPluginRoot();
@@ -380,10 +442,12 @@ public sealed class WorkspaceViewModelTests
 
         await viewModel.ReloadAsync();
 
-        var wall = viewModel.VisibleTools.First();
-        var grouped = viewModel.Groups.SelectMany(group => group.Tools).First();
+        var wall = viewModel.VisibleTools.ToList();
+        var grouped = viewModel.Groups.SelectMany(group => group.Tools).ToList();
 
-        ReferenceEquals(wall, grouped).ShouldBeTrue();
+        // 分组只是把同一批实例换了个顺序展示，不能重新 new
+        grouped.Count.ShouldBe(wall.Count);
+        grouped.ShouldBe(wall, ignoreOrder: true);
     }
 
     [Fact]

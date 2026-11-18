@@ -179,19 +179,49 @@ public partial class WorkspaceViewModel : ObservableObject
     /// <summary>输入框提示：优先显示拖入的图片，其次按工具输入形态给出说明。</summary>
     public string InputHint => IsImageInput && HasDroppedImage
         ? $"将使用拖入的图片：{_droppedImageName}"
-        : SelectedTool?.Entry.Descriptor.Accepts switch
+        : IsFilesInput
+            ? DroppedFileSummary
+            : SelectedTool?.Entry.Descriptor.Accepts switch
+            {
+                InputShape.Image => "将使用剪贴板里的图片",
+                InputShape.None => "此工具不需要输入",
+                _ => "输入内容…"
+            };
+
+    /// <summary>文件输入工具的提示：列出前几个文件名，其余折叠成「等 N 个」。</summary>
+    private string DroppedFileSummary
+    {
+        get
         {
-            InputShape.Image => "将使用剪贴板里的图片",
-            InputShape.None => "此工具不需要输入",
-            _ => "输入内容…"
-        };
+            if (_droppedFiles.Count == 0)
+                return "把文件拖进窗口，或点「选择文件…」（可多选）";
+
+            var names = _droppedFiles
+                .Select(Path.GetFileName)
+                .Take(3)
+                .Select(name => name ?? string.Empty);
+
+            var text = string.Join("、", names);
+            return _droppedFiles.Count > 3
+                ? $"将处理 {_droppedFiles.Count} 个文件：{text} 等"
+                : $"将处理 {_droppedFiles.Count} 个文件：{text}";
+        }
+    }
 
     public bool IsTextInput => SelectedTool?.Entry.Descriptor.Accepts is InputShape.Text or InputShape.RichText;
 
     public bool IsImageInput => SelectedTool?.Entry.Descriptor.Accepts == InputShape.Image;
 
+    /// <summary>文件类工具（批量识别等）：输入来自拖入或选择的多个文件。</summary>
+    public bool IsFilesInput => SelectedTool?.Entry.Descriptor.Accepts == InputShape.Files;
+
+    public int DroppedFileCount => _droppedFiles.Count;
+
     /// <summary>只有当前是图片工具且确实拖入了图片，才显示「清除」。</summary>
     public bool CanClearDroppedImage => HasDroppedImage && IsImageInput;
+
+    /// <summary>文件工具的「清除」：清空本次选择的文件清单。</summary>
+    public bool CanClearDroppedFiles => IsFilesInput && _droppedFiles.Count > 0;
 
     partial void OnHistoryQueryChanged(string value) => FilterHistory();
 
@@ -237,6 +267,12 @@ public partial class WorkspaceViewModel : ObservableObject
     private byte[]? _droppedImagePng;
     private ImageFormat _droppedImageFormat = ImageFormat.Png;
     private string? _droppedImageName;
+
+    /// <summary>拖入 / 选中的文件清单，供 Files 输入的工具使用（批量识别等）。</summary>
+    private readonly List<string> _droppedFiles = [];
+
+    /// <summary>执行代次：用来丢弃上一次执行迟到的进度回调。</summary>
+    private int _progressGeneration;
 
     /// <summary>是否已经拖入一张图片；图片工具执行时优先用它，而不是剪贴板。</summary>
     [ObservableProperty]
@@ -362,7 +398,15 @@ public partial class WorkspaceViewModel : ObservableObject
     [ObservableProperty]
     private bool _hasHistory;
 
-    public string ExecuteLabel => IsExecuting ? "执行中…" : "执行";
+    public string ExecuteLabel => IsExecuting
+        ? string.IsNullOrWhiteSpace(ProgressText) ? "执行中…" : ProgressText
+        : "执行";
+
+    /// <summary>执行中的一行进度（批量工具会填「正在处理 2/5」）。</summary>
+    [ObservableProperty]
+    private string? _progressText;
+
+    partial void OnProgressTextChanged(string? value) => OnPropertyChanged(nameof(ExecuteLabel));
 
     /// <summary>
     /// 每次打开工作区时刷新工具列表与剪贴板输入。
@@ -428,7 +472,9 @@ public partial class WorkspaceViewModel : ObservableObject
         OnPropertyChanged(nameof(InputHint));
         OnPropertyChanged(nameof(IsTextInput));
         OnPropertyChanged(nameof(IsImageInput));
+        OnPropertyChanged(nameof(IsFilesInput));
         OnPropertyChanged(nameof(CanClearDroppedImage));
+        OnPropertyChanged(nameof(CanClearDroppedFiles));
     }
 
     /// <summary>工具墙：先按分类过滤（和之前一致），再按搜索词过滤；分组只负责视觉分节。</summary>
@@ -603,15 +649,35 @@ public partial class WorkspaceViewModel : ObservableObject
         _parameters?.Save(entry.Descriptor.Id, parameters);
 
         IsExecuting = true;
+        ProgressText = null;
+
+        // 只让本次执行的进度更新界面：执行结束后迟到的回调不能污染下一次
+        var generation = ++_progressGeneration;
+        var progress = new Progress<ToolProgress>(update =>
+        {
+            if (generation != _progressGeneration)
+                return;
+
+            ProgressText = update switch
+            {
+                { Message: { Length: > 0 } message, Percent: { } percent }
+                    => $"{message}（{percent * 100:F0}%）",
+                { Message: { Length: > 0 } message } => message,
+                { Percent: { } percent } => $"执行中… {percent * 100:F0}%",
+                _ => null
+            };
+        });
 
         try
         {
             var context = new ToolContext
             {
                 Input = input,
-                Source = ToolSource.Clipboard,
+                Source = input is FileSetInput ? ToolSource.Dropped : ToolSource.Clipboard,
                 Parameters = parameters,
-                Host = entry.Host
+                Host = entry.Host,
+                Progress = progress,
+                Files = input is FileSetInput files ? new ScopedFileAccess(files.Paths) : null
             };
 
             var startedAt = Stopwatch.GetTimestamp();
@@ -653,6 +719,8 @@ public partial class WorkspaceViewModel : ObservableObject
         }
         finally
         {
+            _progressGeneration++;
+            ProgressText = null;
             IsExecuting = false;
         }
     }
@@ -793,12 +861,22 @@ public partial class WorkspaceViewModel : ObservableObject
     public void HideSettings() => IsSettingsVisible = false;
 
     /// <summary>
-    /// 处理拖入的文件：图片进入图片输入，文本文件直接填进输入框。
-    /// 只取第一个匹配项，不在这里做批量——批量是另一个产品的能力。
+    /// 处理拖入的文件：先记进文件清单（文件类工具直接用），
+    /// 再为图片/文本工具做单文件特化。
     /// </summary>
     public void AcceptDroppedFiles(IReadOnlyList<string> paths)
     {
         if (paths.Count == 0)
+            return;
+
+        SetDroppedFiles(paths);
+
+        // 当前就是文件类工具：多选文件全部留给它，不做单文件特化
+        if (IsFilesInput)
+            return;
+
+        // 多选更像批量场景：有文件类工具就直接切过去
+        if (paths.Count > 1 && OpenFirstMatching(InputShape.Files))
             return;
 
         var imagePath = paths.FirstOrDefault(path => ImageExtensions.Contains(Path.GetExtension(path)));
@@ -867,11 +945,54 @@ public partial class WorkspaceViewModel : ObservableObject
         HasDroppedImage = false;
     }
 
-    private void OpenFirstMatching(InputShape shape)
+    /// <summary>「选择文件…」的结果：和拖入走同一条记录路径。</summary>
+    public void AcceptPickedFiles(IReadOnlyList<string> paths)
+    {
+        if (paths.Count == 0)
+            return;
+
+        SetDroppedFiles(paths);
+
+        // 从文件工具的选择按钮进来时已经在对的地方；不是则切过去
+        if (!IsFilesInput)
+            OpenFirstMatching(InputShape.Files);
+    }
+
+    public void ClearDroppedFiles()
+    {
+        if (_droppedFiles.Count == 0)
+            return;
+
+        _droppedFiles.Clear();
+        NotifyFilesChanged();
+    }
+
+    /// <summary>整体替换文件清单；去重并保留用户的选择顺序。</summary>
+    private void SetDroppedFiles(IEnumerable<string> paths)
+    {
+        _droppedFiles.Clear();
+        _droppedFiles.AddRange(paths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase));
+
+        NotifyFilesChanged();
+    }
+
+    private void NotifyFilesChanged()
+    {
+        OnPropertyChanged(nameof(DroppedFileCount));
+        OnPropertyChanged(nameof(InputHint));
+        OnPropertyChanged(nameof(CanClearDroppedFiles));
+    }
+
+    private bool OpenFirstMatching(InputShape shape)
     {
         var entry = _allTools.FirstOrDefault(tool => tool.Descriptor.Accepts == shape);
-        if (entry is not null)
-            OpenTool(new ToolItemViewModel(entry));
+        if (entry is null)
+            return false;
+
+        OpenTool(new ToolItemViewModel(entry));
+        return true;
     }
 
     private static ImageFormat FormatFromExtension(string extension) => extension.ToLowerInvariant() switch
@@ -889,6 +1010,17 @@ public partial class WorkspaceViewModel : ObservableObject
 
         if (descriptor.Accepts == InputShape.None)
             return EmptyInput.Instance;
+
+        if (descriptor.Accepts == InputShape.Files)
+        {
+            if (_droppedFiles.Count == 0)
+            {
+                error = "还没有文件。把文件拖进窗口，或点「选择文件…」。";
+                return null;
+            }
+
+            return new FileSetInput(_droppedFiles.ToArray());
+        }
 
         if (descriptor.Accepts == InputShape.Image)
         {
@@ -913,6 +1045,7 @@ public partial class WorkspaceViewModel : ObservableObject
     {
         TextInput text => text.Text.Length <= 120 ? text.Text : text.Text[..120] + "…",
         ImageInput image => $"图片 {image.ByteSize} 字节",
+        FileSetInput files => $"{files.Paths.Count} 个文件",
         _ => input.GetType().Name
     };
 

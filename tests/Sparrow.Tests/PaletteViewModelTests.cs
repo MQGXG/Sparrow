@@ -1,8 +1,10 @@
 using Shouldly;
 using Sparrow.App;
+using Sparrow.App.Plugins;
 using Sparrow.App.Services;
 using Sparrow.App.ViewModels;
 using Sparrow.Plugin.Json.Format;
+using Sparrow.Plugin.Ocr;
 using Sparrow.Plugin.Sdk;
 using Sparrow.Plugin.Sdk.Payloads;
 using Xunit;
@@ -155,6 +157,30 @@ public sealed class PaletteViewModelTests
         viewModel.HasResult.ShouldBeFalse();
         viewModel.HasError.ShouldBeFalse();
         viewModel.ResultText.ShouldBeNull();
+    }
+
+    /// <summary>
+    /// 文件类工具没有剪贴板输入，面板里要明确指路到工作区，
+    /// 不能退化成「把剪贴板文本传给它」——那会让工具报难以理解的输入错误。
+    /// </summary>
+    [Fact]
+    public void 文件类工具_面板里提示去工作区()
+    {
+        var tool = new OcrBatchTool();
+        var viewModel = new PaletteViewModel(
+            () => ToolRegistry.FromTools([tool]),
+            new FakeClipboard { Text = "剪贴板文本" },
+            new NullLog(),
+            new NullHistoryStore());
+
+        var (context, error) = viewModel.CreateContext(new ToolEntry
+        {
+            Tool = tool,
+            Host = NullToolHost.Instance
+        });
+
+        context.ShouldBeNull();
+        error!.ShouldContain("工作区");
     }
 
     /// <summary>

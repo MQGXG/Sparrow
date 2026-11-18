@@ -1,11 +1,11 @@
 {
   "id": "sparrow.plugin.ocr",
   "name": "OCR",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "sdkVersion": "1.0",
   "entryAssembly": "Sparrow.Plugin.Ocr.dll",
   "author": "sparrow",
-  "description": "从剪贴板图片识别文字（PP-OCRv5）",
+  "description": "识别图片文字：单张（剪贴板）与批量（多个图片文件），PP-OCRv5",
   "capabilities": ["Ocr"],
-  "tools": ["sparrow.ocr.image"]
+  "tools": ["sparrow.ocr.image", "sparrow.ocr.batch"]
 }

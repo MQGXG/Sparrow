@@ -98,6 +98,34 @@ public partial class WorkspaceWindow : Window
             viewModel.ClearDroppedImage();
     }
 
+    private void OnClearDroppedFilesClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel viewModel)
+            viewModel.ClearDroppedFiles();
+    }
+
+    /// <summary>文件类工具的选择入口：和拖入走同一条记录路径。</summary>
+    private async void OnChooseFilesClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not WorkspaceViewModel viewModel)
+            return;
+
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "选择要处理的文件",
+            AllowMultiple = true
+        });
+
+        var paths = files
+            .Select(file => file.TryGetLocalPath())
+            .Where(path => path is not null)
+            .Cast<string>()
+            .ToArray();
+
+        if (paths.Length > 0)
+            viewModel.AcceptPickedFiles(paths);
+    }
+
     private void OnToolClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: ToolItemViewModel tool } && DataContext is WorkspaceViewModel viewModel)

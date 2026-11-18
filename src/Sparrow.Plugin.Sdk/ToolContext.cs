@@ -27,6 +27,12 @@ public sealed record ToolContext
     public IProgress<ToolProgress>? Progress { get; init; }
 
     /// <summary>
+    /// 本次输入对应的只读文件访问；输入不是文件时通常为 null。
+    /// 只允许读取输入里出现的路径，插件不能借此访问文件系统其他位置。
+    /// </summary>
+    public IFileAccess? Files { get; init; }
+
+    /// <summary>
     /// 宿主注入的能力（日志、设置、受限网络、插件目录）。
     ///
     /// 可能为 null：测试宿主或早期调用方没有注入时，插件必须判空。

@@ -144,6 +144,7 @@ Sparrow.Plugin.Sdk
 ├─ ToolParameter.cs        参数声明
 ├─ ToolContext.cs          输入
 ├─ Inputs/                 TextInput, ImageInput, FileSetInput, EmptyInput
+├─ IFileAccess.cs          本次输入对应的只读文件访问（仅在 Files 输入时非空）
 ├─ ToolResult.cs           输出
 ├─ Payloads/               TextPayload, OcrResultPayload, SvgPayload, ImagePayload, FileSetPayload, TablePayload
 ├─ Ai.cs                   IAiClient, AiRequest, AiResponse（密钥与端点由宿主管理）
@@ -190,6 +191,11 @@ public interface IToolHost
 
 进度上报不在这里，而在 `ToolContext.Progress`——因为它是「这一次执行」的状态，不是插件的长期能力。
 
+**文件读取同理，也在 `ToolContext.Files`（`IFileAccess`）。** 输入是 `FileSetInput` 时宿主注入一个
+只读访问器：只允许读取本次输入里出现的路径，越权返回 `null`。插件因此能处理用户拖入的文件，
+但依然不能遍历磁盘、不能读用户的其他文件。批量识别、文件哈希这类工具都走这条通路。
+这是**契约层的授权**，不是安全沙箱——插件与宿主同进程，仍可直接 `File.ReadAllBytes`（见 10.1）。
+
 **`ToolContext.Host` 是注入入口。** 放在 Context 而不是 `ITool.Initialize`，是为了守住
 「`ITool` 只有两个成员、实现必须无状态」这条约束。插件每次执行都能拿到 Host，
 但不得把它缓存到字段里（那会让卸载后的对象继续存活，违反铁律 4）。
@@ -197,7 +203,8 @@ public interface IToolHost
 `PluginDirectory` 是「进程插件」（OCR）唯一需要宿主额外提供的东西：
 它得知道自己的 worker exe 和模型在哪。插件不得用它读写用户文件。
 
-**没有文件系统、没有剪贴板、没有数据库、没有窗口。** 需要产出文件时，返回 `FileSetPayload`，由宿主决定怎么落盘。
+**没有文件系统、没有剪贴板、没有数据库、没有窗口。** 需要产出文件时，返回 `FileSetPayload`，由宿主决定怎么落盘；
+需要读取用户拖入的文件时，用 `ToolContext.Files`（只读、按次授权）。
 
 ---
 
@@ -359,6 +366,11 @@ plugin.sdkVersion 的 major  ==  host.sdkVersion 的 major   → 兼容
 
 `Sparrow.Plugin.Sdk` 的公开 API 一旦发布，**只能加，不能改签名、不能删**。这是插件生态的底线，也是为什么 M0 阶段要一次把契约想清楚。
 
+| SDK 版本 | 新增（均为向后兼容） |
+|---|---|
+| 1.2 | `IToolHost.Windows` / `IWindowOverlay`：窗口拾取 + 图钉 |
+| 1.3 | `ToolContext.Files` / `IFileAccess`：本次输入的只读文件访问 |
+
 ---
 
 ## 十、故障处理（诚实版）
@@ -443,7 +455,8 @@ M0 的 3 个工具同样以插件形式存在，随安装包分发到 `plugins/`
 | 文本导出 TXT/MD/Word | 宿主结果动作（Save 的扩展） | 不是工具，是结果出口 |
 | 窗口置顶 | **插件 + 通用宿主覆盖能力** | 拾取遮罩与图钉由通用 `IWindowOverlay` 提供；置顶逻辑在插件 |
 | 文件预览弹窗 | 插件 + 契约缺口 | 预览窗必须先成为通用 SDK 能力，不能借机做成内置工具 |
-| 批量处理 | 暂缓 | 契约是单输入；宿主编排 = 工作流，踩「不是平台」红线 |
+| 读取用户拖入的文件 | 宿主：输入采集（`ToolContext.Files`） | 按次授权、只读、只允许本次输入的路径；文件类工具仍是插件 |
+| 批量处理 | 插件 | 宿主只提供多文件输入（`FileSetInput`），批量逻辑与循环在插件里；宿主编排工具串 = 工作流，踩「不是平台」红线 |
 
 ### 三条红线
 

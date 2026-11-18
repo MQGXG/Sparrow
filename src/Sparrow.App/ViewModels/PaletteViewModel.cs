@@ -263,6 +263,10 @@ public partial class PaletteViewModel : ObservableObject
                 source = ToolSource.Clipboard;
                 break;
 
+            // 命令面板没有文件输入：文件类工具请在工作区拖入/选择文件
+            case InputShape.Files:
+                return (null, "文件类工具请在工作区里使用（拖入文件或点「选择文件…」）");
+
             default:
                 input = new TextInput(_clipboard.GetText() ?? string.Empty);
                 source = ToolSource.Clipboard;
@@ -294,6 +298,7 @@ public partial class PaletteViewModel : ObservableObject
     {
         TextInput text => text.Text.Length <= 120 ? text.Text : text.Text[..120] + "…",
         ImageInput image => $"图片 {image.ByteSize} 字节",
+        FileSetInput files => $"{files.Paths.Count} 个文件",
         _ => input.GetType().Name
     };
 
