@@ -1,3 +1,4 @@
+using System.Runtime;
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
@@ -217,7 +218,33 @@ public partial class CaptureWindow : Window
         _frozenBitmap = null;
         _frozenPixels = null;
 
+        TrimFreezeMemory();
+
         base.OnClosed(e);
+    }
+
+    /// <summary>
+    /// 冻结帧是整屏大对象（4K 约 33MB）。抓图会把 LOH 高水位顶上去，
+    /// 关窗后在后台压缩一次，把这段内存还给系统，不卡 UI。
+    /// </summary>
+    private static void TrimFreezeMemory()
+    {
+        // 没抓过整屏（测试、小屏）时没必要付这次 GC
+        if (Environment.WorkingSet < 600L * 1024 * 1024)
+            return;
+
+        ThreadPool.QueueUserWorkItem(static _ =>
+        {
+            try
+            {
+                GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+                GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+            }
+            catch
+            {
+                // 回收失败不影响功能
+            }
+        });
     }
 
     /// <summary>

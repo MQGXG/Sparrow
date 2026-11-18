@@ -392,7 +392,12 @@ public sealed class UiElementProbe : IDisposable
         }
         catch
         {
-            node.ExpandFailed = true;
+            // 偶发超时/应用忙可以在下一次探测重试；连续失败才放弃这个分支
+            node.Failures++;
+
+            if (node.Failures >= 2)
+                node.ExpandFailed = true;
+
             return false;
         }
     }
@@ -562,6 +567,7 @@ public sealed class UiElementProbe : IDisposable
         public Node? Parent { get; } = parent;
         public List<Node>? Children { get; set; }
         public bool ExpandFailed { get; set; }
+        public int Failures { get; set; }
         public bool Structural => IsStructural(ControlType);
     }
 
