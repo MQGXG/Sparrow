@@ -172,6 +172,17 @@
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
 
+  <!-- 危险操作：平时和幽灵按钮一样安静，hover 才染红 -->
+  <Style Selector="Button.danger">
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+  </Style>
+
+  <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource DangerBgBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource DangerLineBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource DangerBrush}" />
+  </Style>
+
   <!-- 工具卡片：细描边 + 常驻外扩的取景框角标；hover 底色提亮、角标张开变亮琥珀 -->
   <Style Selector="Button.tool-card">
     <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />

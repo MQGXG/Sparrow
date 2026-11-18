@@ -120,6 +120,30 @@ public sealed class SettingsViewModelTests
     }
 
     [Fact]
+    public void 剪贴板面板热键_保存时格式化并落盘()
+    {
+        var (viewModel, store, _) = Create();
+        viewModel.ClipboardPanelHotkey = "ctrl+shift+b";
+
+        viewModel.SaveHotkeys();
+
+        store.Load().ClipboardPanelHotkey.ShouldBe("Ctrl+Shift+B");
+        viewModel.StatusMessage.ShouldNotBeNull().ShouldContain("重启");
+    }
+
+    [Fact]
+    public void 剪贴板面板热键_与搜索热键重复_拒绝保存()
+    {
+        var (viewModel, store, _) = Create();
+        viewModel.ClipboardPanelHotkey = viewModel.SearchHotkey;
+
+        viewModel.SaveHotkeys();
+
+        viewModel.StatusMessage.ShouldNotBeNull().ShouldContain("重复");
+        store.Load().ClipboardPanelHotkey.ShouldBe("Ctrl+Alt+B");
+    }
+
+    [Fact]
     public void 剪贴板保留策略_保存并广播()
     {
         var (viewModel, store, _) = Create();

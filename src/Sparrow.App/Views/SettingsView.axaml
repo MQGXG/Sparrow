@@ -198,6 +198,28 @@
 
             <Border Classes="hud-line" Margin="20,0" />
 
+            <Grid ColumnDefinitions="*,Auto" Margin="20,14">
+              <StackPanel Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="剪贴板面板"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="只呼出搜索与列表，双击 / 回车直接复制"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <TextBox x:Name="ClipboardPanelHotkeyBox"
+                       Grid.Column="1"
+                       Width="260"
+                       IsReadOnly="True"
+                       Tag="hotkey"
+                       ToolTip.Tip="点击后直接按组合键；Backspace 清空"
+                       PlaceholderText="点击后按组合键"
+                       Text="{Binding ClipboardPanelHotkey, Mode=TwoWay}" />
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
             <!-- 工具热键：任意工具挂全局热键；留空 = 不绑定 -->
             <StackPanel IsVisible="{Binding HasToolHotkeys}">
               <Grid ColumnDefinitions="Auto,*" Margin="20,14,20,4">

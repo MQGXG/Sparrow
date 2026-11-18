@@ -1,0 +1,18 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="using:Sparrow.App.Views"
+        x:Class="Sparrow.App.Views.ClipboardDetailWindow"
+        Title="麻雀 · 剪贴板详情"
+        Width="430"
+        Height="640"
+        MinWidth="380"
+        MinHeight="460"
+        RequestedThemeVariant="Dark"
+        Icon="avares://Sparrow.App/Assets/sparrow-32.png"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner">
+
+  <!-- 独立窗口只是详情内容的容器；主窗和快取面板共用 ClipboardDetailView -->
+  <views:ClipboardDetailView x:Name="DetailView"
+                             CloseRequested="OnDetailCloseRequested" />
+</Window>

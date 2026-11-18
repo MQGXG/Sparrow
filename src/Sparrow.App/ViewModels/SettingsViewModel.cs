@@ -38,6 +38,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
         _searchHotkey = settings.SearchHotkey;
         _captureHotkey = settings.CaptureHotkey;
+        _clipboardPanelHotkey = settings.ClipboardPanelHotkey;
         _startWithWindows = startup.IsEnabled;
         _historyMaxEntries = settings.HistoryMaxEntries;
         _historyRetentionDays = settings.HistoryRetentionDays;
@@ -121,6 +122,9 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
     [ObservableProperty]
     private string _captureHotkey = "Ctrl+Alt+C";
+
+    [ObservableProperty]
+    private string _clipboardPanelHotkey = "Ctrl+Alt+B";
 
     [ObservableProperty]
     private bool _startWithWindows;
@@ -254,7 +258,8 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
     public void SaveHotkeys()
     {
         if (!HotkeyText.TryParse(SearchHotkey, out var searchModifiers, out var searchKey)
-            || !HotkeyText.TryParse(CaptureHotkey, out var captureModifiers, out var captureKey))
+            || !HotkeyText.TryParse(CaptureHotkey, out var captureModifiers, out var captureKey)
+            || !HotkeyText.TryParse(ClipboardPanelHotkey, out var panelModifiers, out var panelKey))
         {
             StatusMessage = "热键格式错误，示例：Ctrl+Alt+S";
             return;
@@ -262,9 +267,28 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
         var searchText = HotkeyText.Format(searchModifiers, searchKey);
         var captureText = HotkeyText.Format(captureModifiers, captureKey);
+        var panelText = HotkeyText.Format(panelModifiers, panelKey);
 
         // 同一组合被注册两次时 RegisterHotKey 会静默失败，这里先拦下来
-        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { searchText, captureText };
+        if (string.Equals(searchText, captureText, StringComparison.OrdinalIgnoreCase))
+        {
+            StatusMessage = $"热键重复：{captureText}";
+            return;
+        }
+
+        if (string.Equals(panelText, searchText, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(panelText, captureText, StringComparison.OrdinalIgnoreCase))
+        {
+            StatusMessage = $"热键重复：{panelText}";
+            return;
+        }
+
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            searchText,
+            captureText,
+            panelText
+        };
         var toolHotkeys = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var row in ToolHotkeys)
@@ -293,6 +317,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         {
             SearchHotkey = searchText,
             CaptureHotkey = captureText,
+            ClipboardPanelHotkey = panelText,
             ToolHotkeys = toolHotkeys
         };
 

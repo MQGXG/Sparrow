@@ -16,6 +16,7 @@ public partial class WorkspaceWindow : Window
     private Point _clipboardDragOrigin;
     private bool _clipboardDragStarted;
     private bool _suppressClipboardClick;
+    private ClipboardDetailWindow? _clipboardDetail;
 
     public WorkspaceWindow()
     {
@@ -28,9 +29,10 @@ public partial class WorkspaceWindow : Window
         // Esc：工具台返回工具墙（隧道阶段，避免被输入框吃掉）
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
 
-        // 关窗只是藏起来，托盘还能再打开
+        // 关窗只是藏起来，托盘还能再打开；详情窗口跟着一起收
         Closing += (_, e) =>
         {
+            CloseClipboardDetail();
             e.Cancel = true;
             Hide();
         };
@@ -246,6 +248,54 @@ public partial class WorkspaceWindow : Window
         }
     }
 
+    /// <summary>行内「查看」：选中条目并在独立窗口里打开详情。</summary>
+    private void OnClipboardOpenDetailClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: ClipboardEntryViewModel item } &&
+            DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
+        {
+            clipboard.SelectedItem = item;
+            ShowClipboardDetail(clipboard);
+        }
+
+        e.Handled = true;
+    }
+
+    /// <summary>双击整行 = 查看详情；按钮上的双击不抢。</summary>
+    private void OnClipboardItemDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (IsInsideButton(e.Source))
+            return;
+
+        if (sender is Control { Tag: ClipboardEntryViewModel item } &&
+            DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
+        {
+            clipboard.SelectedItem = item;
+            ShowClipboardDetail(clipboard);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>详情窗口全局只留一个；已开着就前置。</summary>
+    private void ShowClipboardDetail(ClipboardHistoryViewModel clipboard)
+    {
+        if (_clipboardDetail is { IsVisible: true })
+        {
+            _clipboardDetail.Activate();
+            return;
+        }
+
+        _clipboardDetail = new ClipboardDetailWindow { DataContext = clipboard };
+        _clipboardDetail.Closed += (_, _) => _clipboardDetail = null;
+        _clipboardDetail.Show(this);
+    }
+
+    private void CloseClipboardDetail()
+    {
+        _clipboardDetail?.Close();
+        _clipboardDetail = null;
+    }
+
     private void OnClipboardQueueToggleClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: ClipboardEntryViewModel item } &&
@@ -396,46 +446,6 @@ public partial class WorkspaceWindow : Window
         e.Handled = true;
     }
 
-    private void OnClipboardCopyClick(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is WorkspaceViewModel { Clipboard: { SelectedItem: { } item } clipboard })
-            clipboard.Copy(item);
-    }
-
-    private void OnClipboardDeleteClick(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is WorkspaceViewModel { Clipboard: { SelectedItem: { } item } clipboard })
-            clipboard.Delete(item);
-    }
-
-    private void OnClipboardTagAddClick(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
-            clipboard.AddTag(clipboard.NewTag);
-    }
-
-    private void OnClipboardTagBoxKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Enter)
-            return;
-
-        if (DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
-            clipboard.AddTag(clipboard.NewTag);
-
-        e.Handled = true;
-    }
-
-    private void OnClipboardTagRemoveClick(object? sender, RoutedEventArgs e)
-    {
-        if (sender is Button { Tag: string tag } &&
-            DataContext is WorkspaceViewModel { Clipboard: { SelectedItem: { } item } clipboard })
-        {
-            clipboard.RemoveTag(item, tag);
-        }
-
-        e.Handled = true;
-    }
-
     private void OnClipboardClearClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
@@ -481,12 +491,16 @@ public partial class WorkspaceWindow : Window
 
     private void OnShowRecentClick(object? sender, RoutedEventArgs e)
     {
+        CloseClipboardDetail();
+
         if (DataContext is WorkspaceViewModel viewModel)
             viewModel.ShowRecent();
     }
 
     private void OnShowToolsClick(object? sender, RoutedEventArgs e)
     {
+        CloseClipboardDetail();
+
         if (DataContext is WorkspaceViewModel viewModel)
             viewModel.ShowTools();
     }
@@ -578,6 +592,8 @@ public partial class WorkspaceWindow : Window
 
     private void OnSettingsClick(object? sender, RoutedEventArgs e)
     {
+        CloseClipboardDetail();
+
         if (DataContext is WorkspaceViewModel viewModel)
             viewModel.ShowSettings();
     }

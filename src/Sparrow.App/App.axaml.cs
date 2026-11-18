@@ -33,6 +33,7 @@ public partial class App : Application
     private PaletteViewModel? _paletteViewModel;
     private WorkspaceWindow? _workspace;
     private WorkspaceViewModel? _workspaceViewModel;
+    private ClipboardPanelWindow? _clipboardPanel;
     private ToolParameterStore? _parameterStore;
     private IHistoryStore? _history;
     private WindowOverlay? _windowOverlay;
@@ -185,6 +186,7 @@ public partial class App : Application
         var (searchModifiers, searchKey) = ResolveHotkey(settings.SearchHotkey, "Ctrl+Alt+S");
         var (captureModifiers, captureKey) = ResolveHotkey(settings.CaptureHotkey, "Ctrl+Alt+C");
         var (queueModifiers, queueKey) = ResolveHotkey(settings.QueuePasteHotkey, "Ctrl+Alt+V");
+        var (panelModifiers, panelKey) = ResolveHotkey(settings.ClipboardPanelHotkey, "Ctrl+Alt+B");
 
         if (_pasteService is not null)
             _pasteService.TriggerModifiers = queueModifiers;
@@ -255,7 +257,14 @@ public partial class App : Application
                 queueModifiers | HotkeyService.ModNoRepeat,
                 queueKey,
                 () => Avalonia.Threading.Dispatcher.UIThread.Post(PasteNextFromQueue),
-                "顺序粘贴")
+                "顺序粘贴"),
+
+            new(
+                0x5A5D,
+                panelModifiers | HotkeyService.ModNoRepeat,
+                panelKey,
+                () => Avalonia.Threading.Dispatcher.UIThread.Post(ToggleClipboardPanel),
+                "剪贴板面板")
         };
 
         // 工具热键：按下直接执行，不打开面板
@@ -317,6 +326,29 @@ public partial class App : Application
         Log.Info($"启动完成：{Program.Startup.ElapsedMilliseconds} ms，托盘就绪");
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    /// 热键呼出 / 收起剪贴板快取面板。面板首次使用时才创建，之后复用同一实例。
+    /// 数据直接取主窗的剪贴板视图模型，复制后主窗刷新时保持一致。
+    /// </summary>
+    private void ToggleClipboardPanel()
+    {
+        if (_workspaceViewModel?.Clipboard is not { } clipboard)
+            return;
+
+        if (_clipboardPanel is { IsVisible: true })
+        {
+            _clipboardPanel.HidePanel();
+            return;
+        }
+
+        _clipboardPanel ??= new ClipboardPanelWindow { DataContext = clipboard };
+
+        clipboard.Refresh();
+        _clipboardPanel.Show();
+        _clipboardPanel.Activate();
+        _clipboardPanel.PrepareForShow();
     }
 
     /// <summary>从托盘打开工作区。窗口先显示，插件在后台加载。</summary>

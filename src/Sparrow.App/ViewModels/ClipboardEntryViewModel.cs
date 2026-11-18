@@ -75,6 +75,15 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
 
     public string TimeLabel => Entry.CreatedAt.LocalDateTime.ToString("MM-dd HH:mm");
 
+    /// <summary>详情里的完整时间：列表只给到分钟，精确定位要秒。</summary>
+    public string DetailTimeLabel => Entry.CreatedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss");
+
+    /// <summary>详情里的来源值；没有来源时给一个占位符，避免那一栏留空。</summary>
+    public string SourceDisplay => SourceLabel.Length > 0 ? SourceLabel : "—";
+
+    /// <summary>是否有手动标签（自动标签不算），详情底栏靠它显示空态提示。</summary>
+    public bool HasManualTags => Entry.Tags.Count > 0;
+
     public string SizeLabel => Entry.Kind switch
     {
         ClipboardEntryKind.Text => $"{Entry.ByteSize} 字",

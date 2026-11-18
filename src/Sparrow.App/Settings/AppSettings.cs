@@ -21,6 +21,9 @@ public sealed record AppSettings
     /// <summary>截图识别热键，格式 "Ctrl+Alt+C"。</summary>
     public string CaptureHotkey { get; init; } = "Ctrl+Alt+C";
 
+    /// <summary>剪贴板快取面板热键，格式 "Ctrl+Alt+B"；只呼出搜索 + 列表，不带主窗框架。</summary>
+    public string ClipboardPanelHotkey { get; init; } = "Ctrl+Alt+B";
+
     /// <summary>
     /// 工具热键：工具 ID → 热键，例如 <c>"sparrow.window.pin": "Ctrl+Alt+P"</c>。
     /// 按下直接执行该工具（不打开面板）；工具被禁用时热键不会注册。
