@@ -338,9 +338,25 @@ public partial class WorkspaceWindow : Window
 
         try
         {
-            var transfer = await ClipboardDragService.CreateAsync(payload, StorageProvider);
-            if (transfer is not null)
-                await DragDrop.DoDragDropAsync(_clipboardDragPress, transfer, DragDropEffects.Copy);
+            var mode = ClipboardDragMode.All;
+
+            if (_clipboardDragPress.KeyModifiers.HasFlag(KeyModifiers.Control))
+                mode = ClipboardDragMode.FileOnly;
+            else if (_clipboardDragPress.KeyModifiers.HasFlag(KeyModifiers.Shift))
+                mode = ClipboardDragMode.InlineOnly;
+
+            var drag = await ClipboardDragService.CreateAsync(payload, StorageProvider, mode);
+            if (drag is null)
+                return;
+
+            try
+            {
+                await DragDrop.DoDragDropAsync(_clipboardDragPress, drag.Transfer, DragDropEffects.Copy);
+            }
+            finally
+            {
+                drag.Lifetime?.Dispose();
+            }
         }
         catch
         {
