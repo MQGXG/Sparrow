@@ -16,7 +16,12 @@ public static class TestAppBuilder
 {
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder.Configure<TestApplication>()
-            .UseHeadless(new AvaloniaHeadlessPlatformOptions());
+            .UseSkia()
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions
+            {
+                // 关掉「无绘制」模式：需要真实渲染时（截图 / 字体度量）才有像素
+                UseHeadlessDrawing = false
+            });
 }
 
 public sealed class TestApplication : Application

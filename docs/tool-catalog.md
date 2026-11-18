@@ -96,10 +96,13 @@ Tool : InputShape × Params → OutputShape
 
 | ID | 名称 | 输入 | 输出 | 阶段 | 状态 | 备注 |
 |---|---|---|:--:|:--:|---|---|
-| `sparrow.clipboard.history` | 剪贴板历史 | Nothing | Text / Image / Files | **P0** | ✅ M1 完成：宿主监听 + JSONL 落盘，浏览 / 搜索 / 按序号还原 | 列表 + 搜索 + 固定 + 去重 |
 | `sparrow.clipboard.snippet` | 固定片段 | Nothing | Text | P1 | ⬜ | 长期保留的常用文本 |
 | `sparrow.clipboard.merge` | 合并多段 | Nothing | Text | P2 | ⬜ | 多选历史按序拼接 |
 | `sparrow.clipboard.sync` | 跨设备同步 | — | — | ✂ | — | 违反本地优先 |
+
+> **剪贴板历史已升级为工作区独立页**（`工具 / 最近使用 / 剪贴板`），不再是一个工具：
+> 收藏、标签、自动分类、缩略图、删除都需要对宿主数据的读写与富 UI，
+> 做成插件只能得到一个纯文本列表。旧的 `sparrow.clipboard.history` 工具与插件目录已删除。
 
 ### 3.2 文本 · Text
 
@@ -231,7 +234,7 @@ Tool : InputShape × Params → OutputShape
 截图 → OCR → 文本 → JSON 格式化 → 复制
 截图 → OCR → 文本 → 翻译(AI 开) → 复制
 图片 → SVG 描摹 → SVG 预览 → 导出 PNG
-剪贴板历史 → 文本 → 文本变形 → 复制回去
+文件 → 文件哈希 → 表格
 ```
 
 每条链都满足矩阵约束：**相邻两步的输出形态 ⊆ 下一步的输入形态**，无需隐式转换。

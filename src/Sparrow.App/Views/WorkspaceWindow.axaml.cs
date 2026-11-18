@@ -196,6 +196,109 @@ public partial class WorkspaceWindow : Window
             viewModel.HideImagePreview();
     }
 
+    private void OnShowClipboardClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel viewModel)
+            viewModel.ShowClipboard();
+    }
+
+    private void OnClipboardKindClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: ClipboardFilterViewModel filter } &&
+            DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
+        {
+            clipboard.SelectKind(filter);
+        }
+    }
+
+    private void OnClipboardTagFilterClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: ClipboardFilterViewModel filter } &&
+            DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
+        {
+            clipboard.SelectTagFilter(filter);
+        }
+    }
+
+    private void OnClipboardItemClick(object? sender, TappedEventArgs e)
+    {
+        if (sender is Control { Tag: ClipboardEntryViewModel item } &&
+            DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
+        {
+            clipboard.SelectedItem = item;
+        }
+    }
+
+    private void OnClipboardFavoriteClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: ClipboardEntryViewModel item } &&
+            DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
+        {
+            clipboard.ToggleFavorite(item);
+        }
+
+        // 星标不该同时触发整行选中
+        e.Handled = true;
+    }
+
+    private void OnClipboardCopyClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel { Clipboard: { SelectedItem: { } item } clipboard })
+            clipboard.Copy(item);
+    }
+
+    private void OnClipboardDeleteClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel { Clipboard: { SelectedItem: { } item } clipboard })
+            clipboard.Delete(item);
+    }
+
+    private void OnClipboardTagAddClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
+            clipboard.AddTag(clipboard.NewTag);
+    }
+
+    private void OnClipboardTagBoxKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+            return;
+
+        if (DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
+            clipboard.AddTag(clipboard.NewTag);
+
+        e.Handled = true;
+    }
+
+    private void OnClipboardTagRemoveClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string tag } &&
+            DataContext is WorkspaceViewModel { Clipboard: { SelectedItem: { } item } clipboard })
+        {
+            clipboard.RemoveTag(item, tag);
+        }
+
+        e.Handled = true;
+    }
+
+    private void OnClipboardClearClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
+            clipboard.RequestClear();
+    }
+
+    private void OnClipboardClearConfirmClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
+            clipboard.ConfirmClear();
+    }
+
+    private void OnClipboardClearCancelClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
+            clipboard.CancelClear();
+    }
+
     private void OnToolClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: ToolItemViewModel tool } && DataContext is WorkspaceViewModel viewModel)

@@ -101,12 +101,21 @@
                 <Border Classes="tick" />
               </StackPanel>
             </Button>
+            <Button Classes="hud-tab"
+                    Classes.selected="{Binding IsClipboardOpen}"
+                    Click="OnShowClipboardClick">
+              <StackPanel>
+                <TextBlock Text="剪贴板" />
+                <Border Classes="tick" />
+              </StackPanel>
+            </Button>
           </StackPanel>
 
           <StackPanel Grid.Column="2"
                       Orientation="Horizontal"
                       Spacing="7"
-                      VerticalAlignment="Bottom">
+                      VerticalAlignment="Bottom"
+                      IsVisible="{Binding IsToolsSelected}">
             <TextBlock Classes="stat"
                        Text="{Binding VisibleTools.Count}"
                        VerticalAlignment="Bottom" />
@@ -450,6 +459,249 @@
               </StackPanel>
             </StackPanel>
           </ScrollViewer>
+
+          <!-- 剪贴板页：筛选 + 列表 + 详情 -->
+          <Grid x:Name="ClipboardPage" IsVisible="{Binding IsClipboardVisible}">
+            <Grid DataContext="{Binding Clipboard}"
+                  ColumnDefinitions="1.15*,1*"
+                  ColumnSpacing="16">
+
+              <!-- 左：搜索 / 筛选 / 列表 -->
+              <Grid Grid.Column="0" RowDefinitions="Auto,Auto,Auto,*" RowSpacing="10">
+
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto">
+                  <TextBox Text="{Binding Query, Mode=TwoWay}"
+                           PlaceholderText="搜索内容、标签…" />
+                  <Button Grid.Column="1"
+                          Classes="ghost small"
+                          Content="清空"
+                          Margin="8,0,0,0"
+                          IsVisible="{Binding !IsClearConfirmVisible}"
+                          Click="OnClipboardClearClick" />
+                  <Button Grid.Column="1"
+                          Classes="ghost small"
+                          Content="确认清空"
+                          Margin="8,0,0,0"
+                          IsVisible="{Binding IsClearConfirmVisible}"
+                          Click="OnClipboardClearConfirmClick" />
+                  <Button Grid.Column="2"
+                          Classes="ghost small"
+                          Content="取消"
+                          Margin="6,0,0,0"
+                          IsVisible="{Binding IsClearConfirmVisible}"
+                          Click="OnClipboardClearCancelClick" />
+                </Grid>
+
+                <ItemsControl Grid.Row="1" ItemsSource="{Binding Kinds}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <WrapPanel />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ClipboardFilterViewModel">
+                      <Button Classes="hud-chip"
+                              Margin="0,0,6,6"
+                              Classes.selected="{Binding IsSelected}"
+                              Tag="{Binding}"
+                              Click="OnClipboardKindClick">
+                        <TextBlock Text="{Binding Name}" />
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <ItemsControl Grid.Row="2"
+                              ItemsSource="{Binding TagFilters}"
+                              IsVisible="{Binding HasTagFilters}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <WrapPanel />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ClipboardFilterViewModel">
+                      <Button Classes="hud-chip"
+                              Margin="0,0,6,6"
+                              Classes.selected="{Binding IsSelected}"
+                              Tag="{Binding}"
+                              Click="OnClipboardTagFilterClick">
+                        <TextBlock Text="{Binding Name}" />
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Border Grid.Row="3"
+                        Classes="panel"
+                        Padding="6">
+                  <Grid>
+                    <ScrollViewer IsVisible="{Binding HasItems}">
+                      <ItemsControl ItemsSource="{Binding Items}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:ClipboardEntryViewModel">
+                            <Border Margin="2"
+                                    Padding="6"
+                                    CornerRadius="6"
+                                    Background="Transparent"
+                                    Cursor="Hand"
+                                    Classes="clip-row"
+                                    Classes.selected="{Binding IsSelected}"
+                                    Tag="{Binding}"
+                                    Tapped="OnClipboardItemClick">
+                              <Border.Styles>
+                                <Style Selector="Border.clip-row:pointerover">
+                                  <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+                                </Style>
+                                <Style Selector="Border.clip-row.selected">
+                                  <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+                                </Style>
+                              </Border.Styles>
+                              <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                <Border Width="38"
+                                        Height="38"
+                                        CornerRadius="6"
+                                        Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource LineBrush}"
+                                        BorderThickness="1"
+                                        ClipToBounds="True">
+                                  <Panel>
+                                    <TextBlock Text="{Binding KindGlyph}"
+                                               FontSize="13"
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               IsVisible="{Binding !HasThumbnail}" />
+                                    <Image Source="{Binding Thumbnail, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
+                                           Stretch="UniformToFill"
+                                           IsVisible="{Binding HasThumbnail}" />
+                                  </Panel>
+                                </Border>
+
+                                <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                                  <TextBlock Text="{Binding Preview}"
+                                             FontSize="12"
+                                             TextTrimming="CharacterEllipsis"
+                                             Foreground="{StaticResource TextPrimaryBrush}" />
+                                  <TextBlock Text="{Binding TagLine}"
+                                             FontSize="10"
+                                             Foreground="{StaticResource AccentBrush}"
+                                             IsVisible="{Binding HasTags}" />
+                                  <TextBlock Text="{Binding TimeLabel}"
+                                             FontSize="10"
+                                             Foreground="{StaticResource TextMutedBrush}" />
+                                </StackPanel>
+
+                                <Button Grid.Column="2"
+                                        Classes="ghost small"
+                                        Width="28"
+                                        Height="28"
+                                        Padding="0"
+                                        Content="{Binding FavoriteGlyph}"
+                                        ToolTip.Tip="收藏 / 取消收藏"
+                                        Tag="{Binding}"
+                                        Click="OnClipboardFavoriteClick" />
+                              </Grid>
+                            </Border>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </ScrollViewer>
+
+                    <TextBlock Text="还没有剪贴板记录。复制点什么试试。"
+                               IsVisible="{Binding IsEmpty}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               FontSize="12"
+                               Foreground="{StaticResource TextMutedBrush}" />
+                  </Grid>
+                </Border>
+              </Grid>
+
+              <!-- 右：详情 -->
+              <Border Grid.Column="1"
+                      Classes="panel"
+                      Padding="16">
+                <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
+
+                  <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto">
+                    <StackPanel Spacing="3">
+                      <TextBlock Classes="section" Text="详情" />
+                      <TextBlock Text="{Binding Summary}"
+                                 FontSize="11"
+                                 Foreground="{StaticResource TextMutedBrush}" />
+                    </StackPanel>
+                    <Button Grid.Column="1"
+                            Classes="ghost small"
+                            Content="复制"
+                            Margin="0,0,6,0"
+                            IsEnabled="{Binding HasDetail}"
+                            Click="OnClipboardCopyClick" />
+                    <Button Grid.Column="2"
+                            Classes="ghost small"
+                            Content="删除"
+                            IsEnabled="{Binding HasDetail}"
+                            Click="OnClipboardDeleteClick" />
+                  </Grid>
+
+                  <ScrollViewer Grid.Row="1" IsVisible="{Binding HasDetail}">
+                    <StackPanel Spacing="10">
+                      <SelectableTextBlock Text="{Binding DetailText}"
+                                           IsVisible="{Binding HasDetailText}"
+                                           FontFamily="{StaticResource MonoFont}"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Foreground="{StaticResource TextPrimaryBrush}" />
+
+                      <Image Source="{Binding DetailImagePng, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
+                             IsVisible="{Binding HasDetailImage}"
+                             Stretch="Uniform"
+                             MaxHeight="360"
+                             HorizontalAlignment="Center" />
+
+                      <SelectableTextBlock Text="{Binding DetailPaths}"
+                                           IsVisible="{Binding HasDetailPaths}"
+                                           FontFamily="{StaticResource MonoFont}"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Foreground="{StaticResource TextPrimaryBrush}" />
+                    </StackPanel>
+                  </ScrollViewer>
+
+                  <StackPanel Grid.Row="2" Spacing="8" IsVisible="{Binding HasDetail}">
+                    <ItemsControl ItemsSource="{Binding SelectedItem.Tags}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <WrapPanel />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Button Classes="hud-chip"
+                                  Margin="0,0,6,6"
+                                  Content="{Binding}"
+                                  Tag="{Binding}"
+                                  ToolTip.Tip="点击移除标签"
+                                  Click="OnClipboardTagRemoveClick" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBox Text="{Binding NewTag, Mode=TwoWay}"
+                               PlaceholderText="添加标签，回车确认"
+                               KeyDown="OnClipboardTagBoxKeyDown" />
+                      <Button Grid.Column="1"
+                              Classes="ghost small"
+                              Content="添加"
+                              Margin="8,0,0,0"
+                              Click="OnClipboardTagAddClick" />
+                    </Grid>
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </Grid>
+          </Grid>
         </Grid>
 
         <!-- 台态：单个工具的工作区，占满整宽 -->

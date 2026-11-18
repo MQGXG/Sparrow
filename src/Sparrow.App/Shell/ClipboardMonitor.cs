@@ -23,6 +23,9 @@ public sealed class ClipboardMonitor : IDisposable
 
     private static readonly IntPtr HwndMessage = new(-3);
 
+    /// <summary>Windows 约定的「不要写入剪贴板历史」格式；密码管理器会设置它。</summary>
+    private static readonly uint IgnoreFormatId = RegisterClipboardFormat("Clipboard Viewer Ignore");
+
     private readonly ClipboardHistoryStore _store;
     private readonly IAppLog _log;
     private readonly WndProcDelegate _wndProc;
@@ -172,6 +175,11 @@ public sealed class ClipboardMonitor : IDisposable
 
         try
         {
+            // 密码管理器等会设置这个格式表示「不要记录」；
+            // 尊重它，比事后让用户清历史更可靠。
+            if (IgnoreFormatId != 0 && IsClipboardFormatAvailable(IgnoreFormatId))
+                return;
+
             var text = ReadText();
             if (!string.IsNullOrEmpty(text))
             {
@@ -358,6 +366,9 @@ public sealed class ClipboardMonitor : IDisposable
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool RemoveClipboardFormatListener(IntPtr hwnd);
+
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern uint RegisterClipboardFormat(string format);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool OpenClipboard(IntPtr hwndNewOwner);

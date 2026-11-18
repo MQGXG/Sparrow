@@ -73,10 +73,6 @@ Sparrow/
 │     └─ Program.cs
 │
 ├─ plugins/                        ← 每个工具一个插件项目
-│  ├─ Sparrow.Plugin.Clipboard.History/
-│  │  ├─ Plugin.cs                  ITool 实现
-│  │  ├─ plugin.json
-│  │  └─ Sparrow.Plugin.Clipboard.History.csproj
 │  ├─ Sparrow.Plugin.Json.Format/
 │  ├─ Sparrow.Plugin.Ocr.Region/    （region + image，共用模型）
 │  └─ …

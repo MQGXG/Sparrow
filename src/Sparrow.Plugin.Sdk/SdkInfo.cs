@@ -9,8 +9,8 @@ namespace Sparrow.Plugin.Sdk;
 /// </summary>
 public static class SdkInfo
 {
-    /// <summary>当前 SDK 版本，形如 1.5。1.5：<c>InputShape.Images</c> / <c>ImageSetInput</c>（一组图片）。</summary>
-    public const string Version = "1.5";
+    /// <summary>当前 SDK 版本，形如 1.6。1.6：剪贴板条目增加收藏 / 手动标签 / 自动标签字段。</summary>
+    public const string Version = "1.6";
 
     /// <summary>主版本号，兼容性判断只看它。</summary>
     public const int MajorVersion = 1;

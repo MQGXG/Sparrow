@@ -392,6 +392,7 @@ plugin.sdkVersion 的 major  ==  host.sdkVersion 的 major   → 兼容
 | 1.3 | `ToolContext.Files` / `IFileAccess`：本次输入的只读文件访问 |
 | 1.4 | `IFileAccess.OpenRead`：流式读取，供哈希等大文件工具使用 |
 | 1.5 | `InputShape.Images` / `ImageSetInput`：一组图片（1..N 张），供批量图片工具使用 |
+| 1.6 | `ClipboardHistoryEntry`：收藏 / 手动标签 / 自动标签字段 |
 
 ---
 
@@ -435,7 +436,7 @@ M0 的 3 个工具同样以插件形式存在，随安装包分发到 `plugins/`
 ├─ Sparrow.App.exe
 ├─ Sparrow.Plugin.Sdk.dll
 └─ plugins/
-   ├─ sparrow.plugin.clipboard-history/
+   ├─ sparrow.plugin.dev-base64/
    ├─ sparrow.plugin.json-format/
    └─ sparrow.plugin.ocr-region/
 ```
@@ -473,7 +474,7 @@ M0 的 3 个工具同样以插件形式存在，随安装包分发到 `plugins/`
 | OCR | 插件 | 消费输入；宿主不知道 worker 进程存在 |
 | 保存图片 | 宿主结果动作 | 落盘是宿主的事，插件只返回 `ImagePayload` |
 | 表格 / 文件列表展示 | 宿主结果展示 | 插件只返回 `TablePayload` / `FileSetPayload`；怎么排版是宿主的事 |
-| 剪贴板历史 | 宿主监听/落盘，插件只读 | 隐私开关在宿主；插件不实时读剪贴板 |
+| 剪贴板历史 | 宿主监听 / 落盘 + **工作区「剪贴板」页** | 收藏、标签、分类、缩略图都需要读写宿主数据与富 UI；插件只能读，做不出管理界面 |
 | AI / HTTP | 宿主 | 密钥、端点、联网策略由宿主统一管 |
 | 文本导出 TXT/MD/Word | 宿主结果动作（Save 的扩展） | 不是工具，是结果出口 |
 | 窗口置顶 | **插件 + 通用宿主覆盖能力** | 拾取遮罩与图钉由通用 `IWindowOverlay` 提供；置顶逻辑在插件 |

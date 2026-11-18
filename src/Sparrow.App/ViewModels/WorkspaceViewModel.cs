@@ -33,7 +33,8 @@ public partial class WorkspaceViewModel : ObservableObject
         IHistoryStore history,
         SettingsViewModel settings,
         ToolParameterStore? parameters = null,
-        SvgPreviewService? svgPreview = null)
+        SvgPreviewService? svgPreview = null,
+        ClipboardHistoryStore? clipboardHistory = null)
     {
         _catalog = catalog;
         _clipboard = clipboard;
@@ -42,9 +43,15 @@ public partial class WorkspaceViewModel : ObservableObject
         _parameters = parameters;
         _svgPreview = svgPreview ?? new SvgPreviewService();
         Settings = settings;
+
+        if (clipboardHistory is not null)
+            Clipboard = new ClipboardHistoryViewModel(clipboardHistory, clipboard);
     }
 
     public SettingsViewModel Settings { get; }
+
+    /// <summary>剪贴板页；测试或未接入监听时为 null。</summary>
+    public ClipboardHistoryViewModel? Clipboard { get; }
 
     public ObservableCollection<ToolGroupViewModel> Groups { get; } = [];
 
@@ -86,14 +93,20 @@ public partial class WorkspaceViewModel : ObservableObject
     [ObservableProperty]
     private bool _isRecentOpen;
 
+    /// <summary>剪贴板页；和工具墙 / 最近使用互斥，工具台优先。</summary>
+    [ObservableProperty]
+    private bool _isClipboardOpen;
+
     /// <summary>工具台从哪个页面进入，返回时回到原页面。</summary>
     private bool _detailFromRecent;
 
-    public bool IsToolsSelected => !IsRecentOpen;
+    public bool IsToolsSelected => !IsRecentOpen && !IsClipboardOpen;
 
-    public bool IsWallVisible => !IsDetailOpen && !IsRecentOpen;
+    public bool IsWallVisible => !IsDetailOpen && !IsRecentOpen && !IsClipboardOpen;
 
     public bool IsRecentVisible => IsRecentOpen && !IsDetailOpen;
+
+    public bool IsClipboardVisible => IsClipboardOpen && !IsDetailOpen;
 
     partial void OnIsRecentOpenChanged(bool value)
     {
@@ -103,17 +116,29 @@ public partial class WorkspaceViewModel : ObservableObject
         UpdateCategorySelection();
     }
 
+    partial void OnIsClipboardOpenChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsToolsSelected));
+        OnPropertyChanged(nameof(IsWallVisible));
+        OnPropertyChanged(nameof(IsClipboardVisible));
+        UpdateCategorySelection();
+    }
+
     partial void OnIsDetailOpenChanged(bool value)
     {
         OnPropertyChanged(nameof(IsWallVisible));
         OnPropertyChanged(nameof(IsRecentVisible));
+        OnPropertyChanged(nameof(IsClipboardVisible));
     }
 
     partial void OnToolQueryChanged(string value)
     {
-        // 最近页输入搜索词 = 想找别的工具，直接回工具墙看结果
+        // 最近页 / 剪贴板页输入搜索词 = 想找别的工具，直接回工具墙看结果
         if (value.Length > 0)
+        {
             IsRecentOpen = false;
+            IsClipboardOpen = false;
+        }
 
         RefilterTools();
     }
@@ -133,6 +158,7 @@ public partial class WorkspaceViewModel : ObservableObject
         SelectedTool = tool;
         IsDetailOpen = true;
         IsRecentOpen = false;
+        IsClipboardOpen = false;
     }
 
     /// <summary>返回工具墙；从最近页进来的则回到最近页。</summary>
@@ -146,6 +172,7 @@ public partial class WorkspaceViewModel : ObservableObject
     public void SelectCategory(string? name)
     {
         IsRecentOpen = false;
+        IsClipboardOpen = false;
         SelectedCategory = name;
     }
 
@@ -165,6 +192,16 @@ public partial class WorkspaceViewModel : ObservableObject
     {
         IsDetailOpen = false;
         IsRecentOpen = true;
+        IsClipboardOpen = false;
+    }
+
+    /// <summary>切到剪贴板页；每次进入都重新读一遍，后台新复制的条目立刻能看到。</summary>
+    public void ShowClipboard()
+    {
+        IsDetailOpen = false;
+        IsRecentOpen = false;
+        IsClipboardOpen = true;
+        Clipboard?.Refresh();
     }
 
     /// <summary>侧栏回到工具墙。</summary>
@@ -172,6 +209,7 @@ public partial class WorkspaceViewModel : ObservableObject
     {
         IsDetailOpen = false;
         IsRecentOpen = false;
+        IsClipboardOpen = false;
     }
 
     public bool HasRecentTools => RecentTools.Count > 0;
@@ -596,7 +634,7 @@ public partial class WorkspaceViewModel : ObservableObject
     private void UpdateCategorySelection()
     {
         foreach (var category in Categories)
-            category.IsSelected = !IsRecentOpen
+            category.IsSelected = !IsRecentOpen && !IsClipboardOpen
                 && (SelectedCategory is null
                     ? category.Name == "全部"
                     : category.Name == SelectedCategory);

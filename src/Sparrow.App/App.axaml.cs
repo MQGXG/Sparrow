@@ -153,7 +153,14 @@ public partial class App : Application
         // 设置页改完保留策略后，历史存储立即按新规则清理一次
         settingsViewModel.HistoryRetentionChanged += history.Configure;
         settingsViewModel.ClipboardHistoryEnabledChanged += enabled => clipboardMonitor.Paused = !enabled;
-        _workspaceViewModel = new WorkspaceViewModel(_catalog, clipboard, log, history, settingsViewModel, _parameterStore);
+        _workspaceViewModel = new WorkspaceViewModel(
+            _catalog,
+            clipboard,
+            log,
+            history,
+            settingsViewModel,
+            _parameterStore,
+            clipboardHistory: clipboardHistory);
         _workspace = new WorkspaceWindow { DataContext = _workspaceViewModel };
 
         var (searchModifiers, searchKey) = ResolveHotkey(settings.SearchHotkey, "Ctrl+Alt+S");

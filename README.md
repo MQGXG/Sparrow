@@ -38,9 +38,9 @@ Sparrow 是一个软件，里面装着一组小工具。
 
 ```text
 plugins/
-├─ sparrow.plugin.clipboard-history/
+├─ sparrow.plugin.dev-base64/
 ├─ sparrow.plugin.json-format/
-└─ sparrow.plugin.ocr-region/
+└─ sparrow.plugin.files-hash/
 ```
 
 由此得到三个能力：
@@ -92,8 +92,8 @@ plugins/
 | 热键设置 | ✅ 完成：`settings.json` 可改，格式 `Ctrl+Alt+S`，重启生效；`toolHotkeys` 可给任意工具挂热键（按下直接执行，不弹面板） |
 | 开机自启 | ✅ 完成：HKCU Run 项，只启动到托盘 |
 | M1 验收 | ✅ 完成：9 条出口条件全部达标（见 `docs/acceptance.md`） |
-| 测试 | ✅ 327 个通过（含 headless 键盘路由、真实剪贴板取图/写图、真实子进程 OCR（单张 + 多帧）、滚动拼接、工具墙 ViewModel、AI 请求/密钥加密、SVG 清洗/渲染、剪贴板历史存储/还原、OCR 整理模式、图片转换/缩放、窗口置顶流程、覆盖窗加载、toast、受控文件读取、文件哈希、表格/文件列表渲染、工具热键解析与录制、托盘菜单配置） |
-| 插件 `Clipboard History` | ✅ 完成：宿主监听剪贴板 + JSONL 落盘（图片存独立 PNG 文件），浏览 / 搜索 / 按序号还原；设置页可暂停记录 |
+| 测试 | ✅ 347 个通过（含 headless 键盘路由、真实剪贴板取图/写图、真实子进程 OCR（单张 + 多帧）、滚动拼接、工具墙 ViewModel、AI 请求/密钥加密、SVG 清洗/渲染、剪贴板历史存储/收藏/标签/分类、OCR 整理模式、图片转换/缩放、窗口置顶流程、覆盖窗加载、toast、受控文件读取、文件哈希、表格/文件列表渲染、工具热键解析与录制、托盘菜单配置） |
+| 剪贴板页 | ✅ 完成：工作区「剪贴板」页，收藏 / 自定义标签 / 自动分类（链接、邮箱、颜色、JSON、路径）/ 缩略图 / 详情 / 删除；收藏不受条数上限清理；尊重 `Clipboard Viewer Ignore` |
 | 插件 `Images Convert` | ✅ 完成（M2.1）：PNG / JPEG / WebP 转换；工作区图片结果预览 + 保存/复制 |
 | 插件 `Images Resize` | ✅ 完成（M2.1）：按最长边 / 按百分比缩放，输出 PNG |
 | 插件 `Files Hash` | ✅ 完成：MD5 / SHA1 / SHA256 / SHA512；多文件按表输出，流式读取，单个失败不中断 |

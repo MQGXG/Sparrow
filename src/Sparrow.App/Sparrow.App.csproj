@@ -49,6 +49,60 @@
   </ItemGroup>
 
   <!--
+    删除插件目录后，bin/.../plugins 里的旧副本不会自动消失，应用会继续加载它。
+    每次构建后按仓库 plugins/ 的目录名对齐一次：输出里有、源码里没有的直接删掉。
+  -->
+  <UsingTask TaskName="PruneStalePluginOutput"
+             TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <SourceRoot ParameterType="System.String" Required="true" />
+      <HostRoot ParameterType="System.String" Required="true" />
+      <Removed ParameterType="System.String" Output="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Linq" />
+      <Using Namespace="System.Collections.Generic" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        var expected = Directory.GetDirectories(SourceRoot);
+
+        var stale = new List<string>();
+        if (Directory.Exists(HostRoot))
+        {
+            foreach (var dir in Directory.GetDirectories(HostRoot))
+            {
+                var name = Path.GetFileName(dir);
+                var keep = expected.Any(source =>
+                    string.Equals(Path.GetFileName(source), name, StringComparison.OrdinalIgnoreCase));
+
+                if (!keep)
+                    stale.Add(dir);
+            }
+        }
+
+        foreach (var dir in stale)
+            Directory.Delete(dir, recursive: true);
+
+        Removed = string.Join(";", stale);
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="RemoveStalePluginOutput" AfterTargets="Build">
+    <PruneStalePluginOutput
+        SourceRoot="$(MSBuildProjectDirectory)\..\..\plugins"
+        HostRoot="$(MSBuildProjectDirectory)\$(OutDir)plugins">
+      <Output TaskParameter="Removed" PropertyName="_RemovedPluginDirs" />
+    </PruneStalePluginOutput>
+
+    <Message Importance="normal"
+             Text="清理已删除插件的输出：$(_RemovedPluginDirs)"
+             Condition="'$(_RemovedPluginDirs)' != ''" />
+  </Target>
+
+  <!--
     插件不在运行时引用：上面的 ProjectReference 只是构建顺序，
     ReferenceOutputAssembly=false，插件程序集不会成为 App 的依赖。
     插件产物由 plugins/Directory.Build.targets 复制到 $(OutDir)plugins/<PluginId>/。

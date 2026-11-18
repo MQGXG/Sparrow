@@ -64,7 +64,7 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
         }
     }
 
-    /// <summary>记录一段文本。与历史中的重复内容合并并刷新时间戳。</summary>
+    /// <summary>记录一段文本。与历史中的重复内容合并并刷新时间戳；收藏与标签跟着保留。</summary>
     public void AddText(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -72,10 +72,11 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
 
         var full = text.Length > MaxTextChars ? null : text;
         var hash = HashText(text);
+        var autoTags = ClipboardClassifier.ClassifyText(text).ToArray();
 
         lock (_gate)
         {
-            RemoveDuplicate(ClipboardEntryKind.Text, hash);
+            var previous = TakeDuplicate(ClipboardEntryKind.Text, hash);
 
             Insert(new StoredEntry
             {
@@ -85,9 +86,14 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
                 Text = full,
                 ContentHash = hash,
                 ByteSize = text.Length,
-                CreatedAt = NextTimestamp()
+                CreatedAt = NextTimestamp(),
+                AutoTags = autoTags,
+                Favorite = previous?.Favorite ?? false,
+                Tags = previous?.Tags ?? []
             });
         }
+
+        Changed?.Invoke();
     }
 
     /// <summary>记录一张剪贴板图片（统一 PNG）。重复图片同样合并。</summary>
@@ -103,10 +109,11 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
         }
 
         var hash = HashBytes(png);
+        var inserted = false;
 
         lock (_gate)
         {
-            RemoveDuplicate(ClipboardEntryKind.Image, hash);
+            var previous = TakeDuplicate(ClipboardEntryKind.Image, hash);
 
             var id = NewId();
             var file = $"{id}.png";
@@ -131,9 +138,17 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
                 ImageFile = file,
                 ContentHash = hash,
                 ByteSize = png.Length,
-                CreatedAt = NextTimestamp()
+                CreatedAt = NextTimestamp(),
+                AutoTags = [ClipboardClassifier.TagImage],
+                Favorite = previous?.Favorite ?? false,
+                Tags = previous?.Tags ?? []
             });
+
+            inserted = true;
         }
+
+        if (inserted)
+            Changed?.Invoke();
     }
 
     /// <summary>记录从资源管理器复制的一组文件路径（不复制文件内容）。</summary>
@@ -155,8 +170,7 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
         lock (_gate)
         {
             var filesHash = HashText(string.Join('\n', normalized));
-
-            RemoveDuplicate(ClipboardEntryKind.Files, filesHash);
+            var previous = TakeDuplicate(ClipboardEntryKind.Files, filesHash);
 
             Insert(new StoredEntry
             {
@@ -166,9 +180,14 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
                 Paths = normalized,
                 ContentHash = filesHash,
                 ByteSize = normalized.Sum(p => p.Length),
-                CreatedAt = NextTimestamp()
+                CreatedAt = NextTimestamp(),
+                AutoTags = [.. ClipboardClassifier.ClassifyFiles(normalized)],
+                Favorite = previous?.Favorite ?? false,
+                Tags = previous?.Tags ?? []
             });
         }
+
+        Changed?.Invoke();
     }
 
     /// <summary>清空全部记录和图片文件。</summary>
@@ -187,8 +206,11 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
             catch (Exception ex)
             {
                 _log.Warn($"清空剪贴板历史失败：{ex.Message}");
+                return;
             }
         }
+
+        Changed?.Invoke();
     }
 
     public IReadOnlyList<ClipboardHistoryEntry> Recent(int count)
@@ -242,6 +264,110 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
             _maxEntries = Math.Max(1, maxEntries);
             TryTrim();
         }
+
+        Changed?.Invoke();
+    }
+
+    /// <summary>历史发生变化（新增 / 收藏 / 标签 / 删除）。监听来自后台线程，订阅方自行切到 UI 线程。</summary>
+    public event Action? Changed;
+
+    /// <summary>切换收藏。条目不存在时返回 false。</summary>
+    public bool SetFavorite(string id, bool favorite) =>
+        Update(id, entry => entry with { Favorite = favorite });
+
+    /// <summary>替换手动标签：去空白、去重、限长限量。</summary>
+    public bool SetTags(string id, IReadOnlyList<string> tags)
+    {
+        var cleaned = NormalizeTags(tags);
+        return Update(id, entry => entry with { Tags = cleaned });
+    }
+
+    /// <summary>删除单条；图片条目的 PNG 一并删掉。</summary>
+    public bool Delete(string id)
+    {
+        lock (_gate)
+        {
+            var index = _entries.FindIndex(entry => entry.Id == id);
+            if (index < 0)
+                return false;
+
+            var removed = _entries[index];
+            _entries.RemoveAt(index);
+            DeleteImageFile(removed);
+            TrimAndPersist();
+        }
+
+        Changed?.Invoke();
+        return true;
+    }
+
+    /// <summary>出现过的手动标签，按名称排序；用于筛选条。</summary>
+    public IReadOnlyList<string> AllTags()
+    {
+        lock (_gate)
+        {
+            return _entries
+                .SelectMany(entry => entry.Tags)
+                .Where(tag => tag.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(tag => tag, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+    }
+
+    private bool Update(string id, Func<StoredEntry, StoredEntry> update)
+    {
+        lock (_gate)
+        {
+            var index = _entries.FindIndex(entry => entry.Id == id);
+            if (index < 0)
+                return false;
+
+            _entries[index] = update(_entries[index]);
+            TrimAndPersist();
+        }
+
+        Changed?.Invoke();
+        return true;
+    }
+
+    private static string[] NormalizeTags(IReadOnlyList<string> tags)
+    {
+        var result = new List<string>(tags.Count);
+
+        foreach (var raw in tags)
+        {
+            var tag = raw.Trim();
+
+            if (tag.Length == 0)
+                continue;
+
+            if (tag.Length > 24)
+                tag = tag[..24];
+
+            if (!result.Contains(tag, StringComparer.OrdinalIgnoreCase))
+                result.Add(tag);
+
+            if (result.Count >= 10)
+                break;
+        }
+
+        return [.. result];
+    }
+
+    private void DeleteImageFile(StoredEntry entry)
+    {
+        if (entry.ImageFile is null)
+            return;
+
+        try
+        {
+            File.Delete(Path.Combine(_imagesDirectory, entry.ImageFile));
+        }
+        catch (Exception ex)
+        {
+            _log.Warn($"删除剪贴板图片失败：{ex.Message}");
+        }
     }
 
     // ---- 内部实现 ----
@@ -265,37 +391,35 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
 
         public long ByteSize { get; init; }
         public DateTimeOffset CreatedAt { get; init; }
+
+        /// <summary>收藏；不受容量上限清理。</summary>
+        public bool Favorite { get; init; }
+
+        /// <summary>用户手动标签。</summary>
+        public string[] Tags { get; init; } = [];
+
+        /// <summary>入库时自动识别的标签，老文件缺这个字段时为 null。</summary>
+        public string[]? AutoTags { get; init; }
     }
 
     /// <summary>
-    /// 移除历史中与本次内容相同的旧条目（同形态 + 同指纹），
+    /// 移除历史中与本次内容相同的旧条目（同形态 + 同指纹），返回它以便继承收藏与标签。
     /// 被移除条目的图片文件一并删掉，不留孤儿文件。
     /// 调用方随后照常插入新条目，实现「删旧插新、时间戳刷新、置顶」。
     /// </summary>
-    private void RemoveDuplicate(ClipboardEntryKind kind, string hash)
+    private StoredEntry? TakeDuplicate(ClipboardEntryKind kind, string hash)
     {
         var index = _entries.FindIndex(entry =>
             entry.Kind == kind
             && string.Equals(entry.ContentHash, hash, StringComparison.Ordinal));
 
         if (index < 0)
-            return;
+            return null;
 
         var removed = _entries[index];
         _entries.RemoveAt(index);
-
-        // 被合并条目的图片文件一并删掉，不留孤儿文件
-        if (removed.ImageFile is not null)
-        {
-            try
-            {
-                File.Delete(Path.Combine(_imagesDirectory, removed.ImageFile));
-            }
-            catch (Exception ex)
-            {
-                _log.Warn($"删除合并前的剪贴板图片失败：{ex.Message}");
-            }
-        }
+        DeleteImageFile(removed);
+        return removed;
     }
 
     /// <summary>
@@ -326,7 +450,20 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
         Text = entry.Text,
         Paths = entry.Paths,
         CreatedAt = entry.CreatedAt,
-        ByteSize = entry.ByteSize
+        ByteSize = entry.ByteSize,
+        Favorite = entry.Favorite,
+        Tags = entry.Tags,
+        // 老文件没有这个字段：按当前规则补算，避免升级后旧条目全都没有分类
+        AutoTags = entry.AutoTags ?? ComputeAutoTags(entry)
+    };
+
+    private static IReadOnlyList<string> ComputeAutoTags(StoredEntry entry) => entry.Kind switch
+    {
+        ClipboardEntryKind.Text when entry.Text is not null => ClipboardClassifier.ClassifyText(entry.Text),
+        ClipboardEntryKind.Text => ClipboardClassifier.ClassifyText(entry.Preview),
+        ClipboardEntryKind.Image => ClipboardClassifier.ClassifyImage(),
+        ClipboardEntryKind.Files => ClipboardClassifier.ClassifyFiles(entry.Paths),
+        _ => []
     };
 
     private static bool Matches(StoredEntry entry, string keyword)
@@ -335,7 +472,9 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
 
         return (entry.Text?.Contains(keyword, comparison) ?? false)
             || entry.Preview.Contains(keyword, comparison)
-            || entry.Paths.Any(path => path.Contains(keyword, comparison));
+            || entry.Paths.Any(path => path.Contains(keyword, comparison))
+            || entry.Tags.Any(tag => tag.Contains(keyword, comparison))
+            || (entry.AutoTags?.Any(tag => tag.Contains(keyword, comparison)) ?? false);
     }
 
     private static string BuildPreview(string text)
@@ -382,16 +521,41 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
     /// <summary>
     /// 落盘当前列表；超出上限时先裁剪，被裁掉的图片条目把文件也删掉，
     /// 避免图片目录越积越大。
+    ///
+    /// 收藏条目不计入上限、也不会被裁掉——用户明确标记「要留下」的内容
+    /// 不该因为复制得多就被清走。
     /// </summary>
     private void TrimAndPersist()
     {
         try
         {
-            var removed = Array.Empty<StoredEntry>();
+            var removed = new List<StoredEntry>();
+
             if (_entries.Count > _maxEntries)
             {
-                removed = _entries.Skip(_maxEntries).ToArray();
-                _entries = _entries.Take(_maxEntries).ToList();
+                var kept = new List<StoredEntry>(_entries.Count);
+                var nonFavorites = 0;
+
+                foreach (var entry in _entries)
+                {
+                    if (entry.Favorite)
+                    {
+                        kept.Add(entry);
+                        continue;
+                    }
+
+                    if (nonFavorites < _maxEntries)
+                    {
+                        kept.Add(entry);
+                        nonFavorites++;
+                    }
+                    else
+                    {
+                        removed.Add(entry);
+                    }
+                }
+
+                _entries = kept;
             }
 
             var directory = Path.GetDirectoryName(_path);

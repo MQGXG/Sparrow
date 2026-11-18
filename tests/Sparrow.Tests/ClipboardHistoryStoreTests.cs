@@ -227,4 +227,113 @@ public sealed class ClipboardHistoryStoreTests
         reloaded.Count.ShouldBe(1);
         reloaded.Recent(1)[0].Text.ShouldBe("正常记录");
     }
+
+    [Fact]
+    public void 自动标签_识别链接邮箱颜色JSON路径()
+    {
+        using var temp = new TempStore();
+
+        temp.Store.AddText("https://example.com/a");
+        temp.Store.AddText("someone@example.com");
+        temp.Store.AddText("#E5A44C");
+        temp.Store.AddText("""{"a":1}""");
+        temp.Store.AddText(@"C:\Windows\notepad.exe");
+
+        var entries = temp.Store.Recent(5);
+
+        entries.Select(entry => entry.AutoTags.Single()).ShouldBe(
+            ["路径", "JSON", "颜色", "邮箱", "链接"]);
+    }
+
+    [Fact]
+    public void 自动标签_普通句子不误判()
+    {
+        using var temp = new TempStore();
+
+        temp.Store.AddText("看看这个 https://example.com 写得不错");
+
+        temp.Store.Recent(1)[0].AutoTags.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void 收藏_不被容量上限清理()
+    {
+        using var temp = new TempStore();
+        var store = new ClipboardHistoryStore(temp.Path, new NullLog(), maxEntries: 2);
+
+        store.AddText("要留下的");
+        var favoriteId = store.Recent(1)[0].Id;
+        store.SetFavorite(favoriteId, true).ShouldBeTrue();
+
+        store.AddText("第二条");
+        store.AddText("第三条");
+        store.AddText("第四条");
+
+        // 非收藏只留 2 条；收藏的始终在
+        store.Count.ShouldBe(3);
+        store.Recent(10).ShouldContain(entry => entry.Id == favoriteId);
+    }
+
+    [Fact]
+    public void 手动标签_持久化并参与搜索()
+    {
+        using var temp = new TempStore();
+        temp.Store.AddText("一段需要归档的文字");
+
+        var id = temp.Store.Recent(1)[0].Id;
+        temp.Store.SetTags(id, ["工作", "重要"]).ShouldBeTrue();
+
+        var reloaded = new ClipboardHistoryStore(temp.Path, new NullLog());
+
+        reloaded.Recent(1)[0].Tags.ShouldBe(["工作", "重要"], ignoreOrder: true);
+        reloaded.AllTags().ShouldBe(["工作", "重要"], ignoreOrder: true);
+        reloaded.Search("重要", 10).ShouldHaveSingleItem().Id.ShouldBe(id);
+    }
+
+    [Fact]
+    public void 重复复制_保留收藏与标签()
+    {
+        using var temp = new TempStore();
+        temp.Store.AddText("重复内容");
+
+        var id = temp.Store.Recent(1)[0].Id;
+        temp.Store.SetFavorite(id, true);
+        temp.Store.SetTags(id, ["保留"]);
+
+        // 再复制一次同样内容：合并旧条目，但收藏和标签不能丢
+        temp.Store.AddText("重复内容");
+
+        var entry = temp.Store.Recent(1).ShouldHaveSingleItem();
+        entry.Favorite.ShouldBeTrue();
+        entry.Tags.ShouldBe(["保留"], ignoreOrder: true);
+    }
+
+    [Fact]
+    public void 删除条目_图片文件一起删()
+    {
+        using var temp = new TempStore();
+        temp.Store.AddImage(FakePng());
+
+        var id = temp.Store.Recent(1)[0].Id;
+        Directory.GetFiles(temp.ImagesDirectory).ShouldHaveSingleItem();
+
+        temp.Store.Delete(id).ShouldBeTrue();
+
+        temp.Store.Count.ShouldBe(0);
+        Directory.GetFiles(temp.ImagesDirectory).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void 变更通知_新增与收藏都会触发()
+    {
+        using var temp = new TempStore();
+        var notifications = 0;
+        temp.Store.Changed += () => notifications++;
+
+        temp.Store.AddText("触发一次");
+        var id = temp.Store.Recent(1)[0].Id;
+        temp.Store.SetFavorite(id, true);
+
+        notifications.ShouldBe(2);
+    }
 }

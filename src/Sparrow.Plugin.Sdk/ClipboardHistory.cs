@@ -38,6 +38,15 @@ public sealed record ClipboardHistoryEntry
 
     /// <summary>原始内容大小：文本按字符数，图片按 PNG 字节数。</summary>
     public long ByteSize { get; init; }
+
+    /// <summary>用户收藏；收藏条目不会被容量上限清理。</summary>
+    public bool Favorite { get; init; }
+
+    /// <summary>用户手动标签。</summary>
+    public IReadOnlyList<string> Tags { get; init; } = [];
+
+    /// <summary>入库时按内容自动识别的标签（链接 / 邮箱 / 颜色 / JSON / 路径 / 图片 / 文件）。</summary>
+    public IReadOnlyList<string> AutoTags { get; init; } = [];
 }
 
 /// <summary>

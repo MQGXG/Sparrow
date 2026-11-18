@@ -77,7 +77,8 @@ public sealed class WorkspaceWindowTests
             Task.FromResult(ToolResult.InvalidInput("未实现"));
     }
 
-    private static (WorkspaceWindow Window, WorkspaceViewModel ViewModel, ToolCatalog Catalog) Create()
+    private static (WorkspaceWindow Window, WorkspaceViewModel ViewModel, ToolCatalog Catalog) Create(
+        ClipboardHistoryStore? clipboardHistory = null)
     {
         var log = new NullLog();
         var rootPath = System.IO.Path.Combine(
@@ -90,7 +91,13 @@ public sealed class WorkspaceWindowTests
             log);
         var settingsViewModel = new SettingsViewModel(catalog, store, new StartupService(log), new AppSettings());
 
-        var viewModel = new WorkspaceViewModel(catalog, new FakeClipboard(), log, new NullHistoryStore(), settingsViewModel);
+        var viewModel = new WorkspaceViewModel(
+            catalog,
+            new FakeClipboard(),
+            log,
+            new NullHistoryStore(),
+            settingsViewModel,
+            clipboardHistory: clipboardHistory);
         var window = new WorkspaceWindow { DataContext = viewModel };
         window.Show();
 
@@ -211,6 +218,49 @@ public sealed class WorkspaceWindowTests
         finally
         {
             catalog.Dispose();
+        }
+    }
+
+    [AvaloniaFact]
+    public void 剪贴板页_显示记录并保留切换入口()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard-history.jsonl"),
+                new NullLog());
+            store.AddText("https://example.com");
+
+            var (window, viewModel, catalog) = Create(store);
+            try
+            {
+                viewModel.ShowClipboard();
+
+                window.FindControl<Grid>("ClipboardPage")!.IsVisible.ShouldBeTrue();
+                window.FindControl<Grid>("WallTabRow")!.IsVisible.ShouldBeTrue();
+
+                viewModel.Clipboard!.Items.ShouldHaveSingleItem()
+                    .Preview.ShouldBe("https://example.com");
+            }
+            finally
+            {
+                catalog.Dispose();
+            }
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
         }
     }
 
