@@ -34,8 +34,8 @@ public partial class CaptureWindow : Window
     private const double OcrLinePadding = 2;
     private const double MinSelectionSize = 4;
 
-    /// <summary>鼠标停稳多久后才去查控件树。</summary>
-    private const int ControlProbeDelayMilliseconds = 120;
+    /// <summary>鼠标停稳多久后才去查控件树。控件树有逐层缓存，停一下就能出结果。</summary>
+    private const int ControlProbeDelayMilliseconds = 50;
 
     /// <summary>一次控件探测超过这个时间视为卡住，允许新的探测。</summary>
     private const long ProbeStaleMilliseconds = 2000;
@@ -93,6 +93,7 @@ public partial class CaptureWindow : Window
     private WindowCandidate? _candidateAtPress;
     private UiElementCandidate? _uiCandidate;
     private UiElementCandidate? _uiCandidateAtPress;
+    private UiElementProbe? _uiProbe;
     private bool _probeInFlight;
     private long _probeStartedAt;
     private bool _forceWindowCandidate;
@@ -185,6 +186,7 @@ public partial class CaptureWindow : Window
         ApplyVirtualScreenBounds();
 
         _candidates = WindowCandidates.Enumerate(TryGetPlatformHandle()?.Handle ?? IntPtr.Zero);
+        _uiProbe = new UiElementProbe();
 
         if (FreezeOnOpen)
             _ = FreezeScreenAsync();
@@ -193,6 +195,8 @@ public partial class CaptureWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _probeGeneration++;
+        _uiProbe?.Dispose();
+        _uiProbe = null;
         _ocrCancellation?.Cancel();
         _ocrCancellation?.Dispose();
         _ocrCancellation = null;
@@ -631,13 +635,17 @@ public partial class CaptureWindow : Window
 
             var window = _currentCandidate;
             var point = WindowCandidates.GetCursorPosition();
+            var probe = _uiProbe;
+
+            if (probe is null)
+                return;
 
             _probeInFlight = true;
             _probeStartedAt = Environment.TickCount64;
 
             try
             {
-                var candidate = await Task.Run(() => UiElementProbe.Probe(window.Handle, point));
+                var candidate = await probe.ProbeAsync(window.Handle, point);
 
                 if (generation != _probeGeneration ||
                     _currentCandidate?.Handle != window.Handle ||

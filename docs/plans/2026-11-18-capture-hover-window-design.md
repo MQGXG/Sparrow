@@ -38,19 +38,23 @@
 ### 控件级
 
 - 新增依赖 `Interop.UIAutomationClient`（UI Automation COM 互操作，netstandard2.0）
-- `UiElementProbe.Probe(hwnd, point)`
-  - `CUIAutomation.ElementFromHandle(hwnd)` + `ControlViewWalker` 递归子树
-  - 用 **矩形命中** 判断光标在哪个控件里，返回面积最小的那个
-  - 预算：深度 14、节点 260；`CurrentIsOffscreen != 0` 直接跳过
-  - 跳过窗口本身；无名字的 `Pane` / `Group` / `Custom` 视为布局容器，不当候选
-  - 结果 ≥ 窗口面积 95% 时退回窗口级，避免重复框同一块
+- `UiElementProbe`：专用 MTA 线程 + 逐层懒缓存，接口 `ProbeAsync(hwnd, point)`
+  - 缓存请求：`TreeScope = Element | Children`、`ControlViewCondition`、
+    `AutomationElementMode_Full`，一次带回 `BoundingRectangle / IsOffscreen / ControlType / Name`
+  - 根节点 `ElementFromHandleBuildCache`，子节点 `BuildUpdatedCache` + `GetCachedChildren`：
+    **每层只付一次跨进程调用**，命中在内存里查表
+  - 子节点按兄弟顺序从后往前命中（后面的更靠前）；等大 `Pane/Group` 结构节点回溯，
+    解决 Chromium 冗余容器盖住内容分支的问题（Snow Shot 同款做法）
+  - `ConnectionTimeout = 300ms`、`TransactionTimeout = 800ms`，无响应应用不会拖死探测
+  - 跳过窗口本身、无名布局容器；结果 ≥ 窗口 95% 时退回窗口级
+  - 顶层探不到时枚举包含光标的子窗口（面积小的优先），解决 UWP/WinUI：
+    顶层是 `ApplicationFrameWindow`，真正内容在 `Windows.UI.Core.CoreWindow`
   - 控件类型用 `CurrentControlType` 映射成中文（`按钮`/`输入框`/`列表项`/`文档`…），
     因为部分应用的 `LocalizedControlType` 是空串
-  - 任何 COM 异常都返回 `null`，自动回落到窗口级
-- 拖动 120ms 防抖用 `Task.Delay` + generation：
+- 拖动 50ms 防抖用 `Task.Delay` + generation：
   - 每次移动把 generation 往前推，旧的等待醒来后自行作废（不依赖 DispatcherTimer）
-  - 探测在 `Task.Run` 后台线程执行；完成后再次校验 generation / 窗口句柄 / 光标位置
-  - 一次探测超过 2s 视为卡住，允许新的探测，避免被无响应应用拖死
+  - 探测在专用线程执行；完成后再次校验 generation / 窗口句柄 / 光标位置
+  - 一次探测超过 2s 视为卡住，允许新的探测
 - 单击：`_uiCandidateAtPress` 只有包含按下点时才生效，避免用过时的控件框
 
 ### 为什么不用 `AutomationElement.FromPoint`
@@ -62,9 +66,13 @@
 ## 四、验证
 
 - 同一时刻对真实窗口取样（临时测试，验证后删除）：
-  - VS Code：`选项卡 58×33`、`工具栏 404×33`
+  - VS Code：`选项卡 58×33`、`工具栏 404×33`、`图片 1907×631`
   - Edge：`文档 1112×583`
   - Snow Shot：`按钮 698×33`、`列表项 658×23`
+  - 计算器（UWP）：`按钮 / 标准模式 233×47`、`文本 / 显示为 0 320×72`
+- 耗时（同一窗口 30 次探测）：
+  - 冷启动（每窗口第一次）：**23–96ms**
+  - 热命中：**p50 0.0ms，p95 ≤ 0.2ms**
 - 遮罩内实测日志：探测返回 `按钮 26×655` 并写入候选（`ui 按钮 26×655`）
 - 构建 0 警告 0 错误；396 个测试通过
 
@@ -74,3 +82,4 @@
 - Canvas / 游戏 / 自绘界面没有控件树，自然回落到窗口级
 - 多屏不同缩放仍沿用主屏缩放（M1 已知限制）
 - 窗口在冻结后移动不会再更新候选（位置按冻结帧计算）
+- 缓存按窗口句柄保存到本次截图结束；界面在冻结帧之后发生变化时仍按缓存结果
