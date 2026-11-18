@@ -7,9 +7,18 @@
         Topmost="True"
         ShowInTaskbar="False"
         Cursor="Cross"
-        Background="#80000000">
+        Background="Transparent">
 
   <Canvas x:Name="Root" Background="Transparent">
+
+    <!-- 冻结帧：按热键时抓的整屏图；没有时退回实时桌面 -->
+    <Image x:Name="FrozenFrame"
+           IsVisible="False"
+           IsHitTestVisible="False"
+           Stretch="Fill" />
+    <Rectangle x:Name="DimLayer"
+               Fill="#80000000"
+               IsHitTestVisible="False" />
 
     <Rectangle x:Name="Selection"
                IsVisible="False"
@@ -40,6 +49,7 @@
     <!-- 就地 OCR：行框叠在选区上，点一行复制一行 -->
     <Canvas x:Name="OcrLayer"
             IsVisible="False"
+            Background="Transparent"
             ClipToBounds="True" />
 
     <Border Canvas.Left="0"
@@ -89,6 +99,11 @@
                 Content="复制全文"
                 Click="OnCopyAllClick"
                 ToolTip.Tip="复制全部识别文字（Ctrl+C）" />
+        <Button Focusable="False" x:Name="OcrBoxButton"
+                IsVisible="False"
+                Content="框 · 悬停"
+                Click="OnOcrBoxModeClick"
+                ToolTip.Tip="识别框显示方式：全部 / 悬停 / 关闭（B）" />
         <Button Focusable="False" Classes="ghost" Content="取消" Click="OnCancelClick" ToolTip.Tip="取消截图（Esc）" />
       </StackPanel>
     </Border>

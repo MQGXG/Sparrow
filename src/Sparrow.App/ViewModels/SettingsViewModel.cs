@@ -94,6 +94,18 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         ClipboardExclusionsChanged?.Invoke(next);
     }
 
+    /// <summary>截图 OCR 的识别框模式；工具栏切换后立即落盘。</summary>
+    public OcrBoxMode CaptureOcrBoxMode => OcrBoxModes.Parse(_settings.CaptureOcrBoxMode);
+
+    public void SetCaptureOcrBoxMode(string mode)
+    {
+        if (string.Equals(_settings.CaptureOcrBoxMode, mode, StringComparison.Ordinal))
+            return;
+
+        _settings = _settings with { CaptureOcrBoxMode = mode };
+        _store.Save(_settings);
+    }
+
     public ObservableCollection<PluginItemViewModel> Plugins { get; } = [];
 
     /// <summary>工具热键编辑行：工具全集 + 已配置的热键。空文本 = 不绑定。</summary>

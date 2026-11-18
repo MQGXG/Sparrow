@@ -54,6 +54,9 @@ public sealed record AppSettings
     /// <summary>不记录这些来源进程名（如 chrome、1Password）；只影响之后的复制。</summary>
     public List<string> ClipboardExcludedApps { get; init; } = [];
 
+    /// <summary>截图 OCR 识别框显示方式：all / hover / off。</summary>
+    public string CaptureOcrBoxMode { get; init; } = "hover";
+
     /// <summary>顺序粘贴热键：在目标应用里按下，写入队列下一条并模拟 Ctrl+V。</summary>
     public string QueuePasteHotkey { get; init; } = "Ctrl+Alt+V";
 

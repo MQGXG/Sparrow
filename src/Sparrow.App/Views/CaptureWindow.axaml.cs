@@ -1,9 +1,12 @@
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using Sparrow.App.Services;
 
@@ -70,6 +73,15 @@ public partial class CaptureWindow : Window
 
     private PixelPoint _origin;
     private double _scaling = 1;
+    private int _virtualWidth;
+    private int _virtualHeight;
+    private byte[]? _frozenPixels;
+    private int _frozenWidth;
+    private int _frozenHeight;
+    private WriteableBitmap? _frozenBitmap;
+    private OcrBoxMode _ocrBoxMode = OcrBoxMode.Hover;
+    private readonly List<Rectangle> _ocrBoxes = [];
+    private Rectangle? _hoveredOcrBox;
     private Rect _selection;
     private Rect _selectionOrigin;
     private Point _dragOrigin;
@@ -86,7 +98,26 @@ public partial class CaptureWindow : Window
     {
         InitializeComponent();
         CreateHandles();
+
+        OcrLayer.PointerMoved += OnOcrLayerPointerMoved;
+        OcrLayer.PointerExited += OnOcrLayerPointerExited;
     }
+
+    /// <summary>显示前是否先冻结整屏；测试/无桌面场景由调用方关掉。</summary>
+    public bool FreezeOnOpen { get; set; }
+
+    /// <summary>识别框显示方式；工具栏或快捷键切换后回调宿主持久化。</summary>
+    public OcrBoxMode CaptureOcrBoxMode
+    {
+        get => _ocrBoxMode;
+        set
+        {
+            _ocrBoxMode = value;
+            ApplyOcrBoxMode();
+        }
+    }
+
+    public Action<OcrBoxMode>? OcrBoxModeChanged { get; set; }
 
     private void CreateHandles()
     {
@@ -136,6 +167,9 @@ public partial class CaptureWindow : Window
     {
         base.OnOpened(e);
         ApplyVirtualScreenBounds();
+
+        if (FreezeOnOpen)
+            _ = FreezeScreenAsync();
     }
 
     protected override void OnClosed(EventArgs e)
@@ -143,6 +177,11 @@ public partial class CaptureWindow : Window
         _ocrCancellation?.Cancel();
         _ocrCancellation?.Dispose();
         _ocrCancellation = null;
+
+        _frozenBitmap?.Dispose();
+        _frozenBitmap = null;
+        _frozenPixels = null;
+
         base.OnClosed(e);
     }
 
@@ -163,10 +202,84 @@ public partial class CaptureWindow : Window
 
         _origin = new PixelPoint(left, top);
         _scaling = Screens.Primary?.Scaling ?? RenderScaling;
+        _virtualWidth = right - left;
+        _virtualHeight = bottom - top;
 
         Position = _origin;
         Width = (right - left) / _scaling;
         Height = (bottom - top) / _scaling;
+    }
+
+    /// <summary>
+    /// 打开时先抓一张稳定帧并冻结；之后的 OCR / 保存 / 复制都从这张图裁剪，
+    /// 不再二次抓屏，也不会因为滚动惯性拿到上一帧。
+    /// </summary>
+    private async Task FreezeScreenAsync()
+    {
+        Opacity = 0;
+
+        try
+        {
+            // 等遮罩真正透明（DWM 合成一帧）再抓，否则抓到的就是遮罩自己
+            await Task.Delay(120);
+
+            var width = _virtualWidth;
+            var height = _virtualHeight;
+
+            var pixels = await Task.Run(() => ScreenCapture.CaptureStableRaw(
+                _origin.X,
+                _origin.Y,
+                width,
+                height));
+
+            if (pixels is null || pixels.Length != width * height * 4 || !IsVisible)
+                return;
+
+            _frozenPixels = pixels;
+            _frozenWidth = width;
+            _frozenHeight = height;
+
+            _frozenBitmap?.Dispose();
+            _frozenBitmap = CreateBitmap(pixels, width, height);
+
+            FrozenFrame.Source = _frozenBitmap;
+            FrozenFrame.Width = Width;
+            FrozenFrame.Height = Height;
+            Canvas.SetLeft(FrozenFrame, 0);
+            Canvas.SetTop(FrozenFrame, 0);
+            FrozenFrame.IsVisible = true;
+        }
+        catch
+        {
+            // 抓不到就退回实时桌面，不影响框选
+        }
+        finally
+        {
+            Opacity = 1;
+        }
+    }
+
+    private static WriteableBitmap CreateBitmap(byte[] pixels, int width, int height)
+    {
+        var bitmap = new WriteableBitmap(
+            new PixelSize(width, height),
+            new Vector(96, 96),
+            PixelFormat.Bgra8888,
+            AlphaFormat.Opaque);
+
+        using var buffer = bitmap.Lock();
+        var stride = width * 4;
+
+        for (var row = 0; row < height; row++)
+        {
+            Marshal.Copy(
+                pixels,
+                row * stride,
+                buffer.Address + row * buffer.RowBytes,
+                stride);
+        }
+
+        return bitmap;
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -528,7 +641,7 @@ public partial class CaptureWindow : Window
 
         try
         {
-            var png = await CaptureSelectionAsync();
+            var png = await CaptureSelectionAsync(action);
             if (png is null)
             {
                 Action = CaptureAction.None;
@@ -557,22 +670,42 @@ public partial class CaptureWindow : Window
         }
     }
 
-    private async Task<byte[]?> CaptureSelectionAsync()
+    private async Task<byte[]?> CaptureSelectionAsync(CaptureAction action)
     {
         var rect = _selection;
-        var x = _origin.X + (int)Math.Round(rect.X * _scaling);
-        var y = _origin.Y + (int)Math.Round(rect.Y * _scaling);
+        var x = (int)Math.Round(rect.X * _scaling);
+        var y = (int)Math.Round(rect.Y * _scaling);
         var width = (int)Math.Round(rect.Width * _scaling);
         var height = (int)Math.Round(rect.Height * _scaling);
 
-        SelectionRect = new PixelRect(x, y, width, height);
+        SelectionRect = new PixelRect(_origin.X + x, _origin.Y + y, width, height);
 
-        // 先让遮罩透明，再截图，否则截到的是自己
+        // 有冻结帧：直接从冻结图裁剪，不再抓屏；滚动截图必须用实时画面
+        if (action != CaptureAction.Scroll && _frozenPixels is not null)
+        {
+            var cropped = ScreenCapture.Crop(
+                _frozenPixels,
+                _frozenWidth,
+                _frozenHeight,
+                x,
+                y,
+                width,
+                height);
+
+            return cropped is null ? null : ScreenCapture.EncodePng(cropped, width, height);
+        }
+
+        // 退回实时抓屏（滚动截图 / 冻结失败）
         Opacity = 0;
         try
         {
             await Task.Delay(80);
-            return ScreenCapture.Capture(x, y, width, height);
+
+            var absoluteX = _origin.X + x;
+            var absoluteY = _origin.Y + y;
+
+            return await Task.Run(() =>
+                ScreenCapture.CaptureStable(absoluteX, absoluteY, width, height));
         }
         finally
         {
@@ -642,6 +775,8 @@ public partial class CaptureWindow : Window
     {
         _ocrText = result.Text;
         OcrLayer.Children.Clear();
+        _ocrBoxes.Clear();
+        _hoveredOcrBox = null;
         HandleLayer.IsVisible = false;
 
         var left = Canvas.GetLeft(Selection);
@@ -677,14 +812,16 @@ public partial class CaptureWindow : Window
             box.PointerPressed += OnOcrLinePressed;
 
             OcrLayer.Children.Add(box);
+            _ocrBoxes.Add(box);
             Canvas.SetLeft(box, line.X / _scaling - OcrLinePadding);
             Canvas.SetTop(box, line.Y / _scaling - OcrLinePadding);
         }
 
         RecognizeButton.Content = "重新识别";
         CopyAllButton.IsVisible = true;
+        OcrBoxButton.IsVisible = true;
         OcrStatus.IsVisible = true;
-        OcrStatus.Text = $"{result.Lines.Count} 行 · 点行复制";
+        ApplyOcrBoxMode();
     }
 
     private void ShowOcrError(string message)
@@ -696,12 +833,107 @@ public partial class CaptureWindow : Window
     private void ClearOcrOverlay()
     {
         OcrLayer.Children.Clear();
+        _ocrBoxes.Clear();
+        _hoveredOcrBox = null;
         OcrLayer.IsVisible = false;
         CopyAllButton.IsVisible = false;
+        OcrBoxButton.IsVisible = false;
         OcrStatus.IsVisible = false;
         RecognizeButton.Content = "识别文字";
         _ocrText = null;
         UpdateHandles();
+    }
+
+    private void OnOcrBoxModeClick(object? sender, RoutedEventArgs e) => CycleOcrBoxMode();
+
+    private void CycleOcrBoxMode()
+    {
+        _ocrBoxMode = OcrBoxModes.Next(_ocrBoxMode);
+        ApplyOcrBoxMode();
+        OcrBoxModeChanged?.Invoke(_ocrBoxMode);
+    }
+
+    /// <summary>按模式统一设置行框：全部显示 / 悬停 / 关闭。</summary>
+    private void ApplyOcrBoxMode()
+    {
+        OcrBoxButton.Content = OcrBoxModes.Label(_ocrBoxMode);
+        OcrBoxButton.IsVisible = OcrLayer.IsVisible;
+        OcrLayer.IsHitTestVisible = _ocrBoxMode != OcrBoxMode.Off;
+        _hoveredOcrBox = null;
+
+        foreach (var box in _ocrBoxes)
+        {
+            box.Fill = LineFill;
+            box.IsVisible = _ocrBoxMode == OcrBoxMode.All;
+        }
+
+        if (OcrLayer.IsVisible)
+            UpdateOcrStatus();
+    }
+
+    private void UpdateOcrStatus()
+    {
+        var hint = _ocrBoxMode switch
+        {
+            OcrBoxMode.All => "点行复制",
+            OcrBoxMode.Hover => "悬停行可点",
+            _ => "行框已关闭"
+        };
+
+        OcrStatus.Text = $"{_ocrBoxes.Count} 行 · {hint}";
+    }
+
+    private void OnOcrLayerPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_ocrBoxMode != OcrBoxMode.Hover || _ocrBoxes.Count == 0)
+            return;
+
+        var point = e.GetPosition(OcrLayer);
+        Rectangle? hit = null;
+
+        foreach (var box in _ocrBoxes)
+        {
+            var left = Canvas.GetLeft(box);
+            var top = Canvas.GetTop(box);
+
+            if (double.IsNaN(left) || double.IsNaN(top))
+                continue;
+
+            // 行框本身很薄，外扩一点更好点
+            var rect = new Rect(left - 4, top - 4, box.Width + 8, box.Height + 8);
+            if (rect.Contains(point))
+            {
+                hit = box;
+                break;
+            }
+        }
+
+        if (ReferenceEquals(hit, _hoveredOcrBox))
+            return;
+
+        if (_hoveredOcrBox is not null)
+        {
+            _hoveredOcrBox.IsVisible = false;
+            _hoveredOcrBox.Fill = LineFill;
+        }
+
+        _hoveredOcrBox = hit;
+
+        if (hit is not null)
+        {
+            hit.IsVisible = true;
+            hit.Fill = LineHoverFill;
+        }
+    }
+
+    private void OnOcrLayerPointerExited(object? sender, PointerEventArgs e)
+    {
+        if (_hoveredOcrBox is null)
+            return;
+
+        _hoveredOcrBox.IsVisible = false;
+        _hoveredOcrBox.Fill = LineFill;
+        _hoveredOcrBox = null;
     }
 
     private void CopyAllText()
@@ -757,6 +989,14 @@ public partial class CaptureWindow : Window
         // 中文输入法会把字母键标记成 ImeProcessed；
         // 截图窗口没有文本输入，按物理键还原即可，不需要放行给输入法。
         var key = e.Key == Key.ImeProcessed ? MapPhysicalKey(e.PhysicalKey) : e.Key;
+
+        // B：切换识别框显示方式（全部 / 悬停 / 关闭）
+        if (key == Key.B && OcrLayer.IsVisible)
+        {
+            CycleOcrBoxMode();
+            e.Handled = true;
+            return;
+        }
 
         if (key == Key.Escape)
         {

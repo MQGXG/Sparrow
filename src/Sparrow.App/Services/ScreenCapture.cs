@@ -67,6 +67,79 @@ public static class ScreenCapture
         }
     }
 
+    /// <summary>等画面稳定后截取 PNG；用于冻结失败/滚动截图的实时路径。</summary>
+    public static byte[]? CaptureStable(int x, int y, int width, int height)
+    {
+        var pixels = CaptureStableRaw(x, y, width, height);
+        return pixels is null ? null : EncodePng(pixels, width, height);
+    }
+
+    /// <summary>
+    /// 等画面稳定后抓原始 BGRA：连续两帧一致才返回，最多 <paramref name="attempts"/> 轮。
+    /// 用于「先冻结再框选」——避免滚动惯性/重绘延迟抓到上一帧。
+    /// </summary>
+    public static byte[]? CaptureStableRaw(
+        int x,
+        int y,
+        int width,
+        int height,
+        int attempts = 8,
+        int intervalMs = 50)
+    {
+        byte[]? previous = null;
+
+        for (var attempt = 0; attempt < Math.Max(1, attempts); attempt++)
+        {
+            var current = CaptureRaw(x, y, width, height);
+            if (current is null)
+                return null;
+
+            if (previous is not null && current.AsSpan().SequenceEqual(previous))
+                return current;
+
+            previous = current;
+
+            if (attempt < attempts - 1)
+                Thread.Sleep(intervalMs);
+        }
+
+        // 持续动画（视频等）永远不稳定：用最后一帧
+        return previous;
+    }
+
+    /// <summary>从整屏 BGRA 里裁剪一块；越界或参数非法返回 null。</summary>
+    public static byte[]? Crop(
+        byte[] source,
+        int sourceWidth,
+        int sourceHeight,
+        int x,
+        int y,
+        int width,
+        int height)
+    {
+        if (width <= 0 || height <= 0 || x < 0 || y < 0)
+            return null;
+
+        if (x + width > sourceWidth || y + height > sourceHeight)
+            return null;
+
+        var sourceStride = sourceWidth * 4;
+        var targetStride = width * 4;
+        var result = new byte[targetStride * height];
+
+        for (var row = 0; row < height; row++)
+        {
+            Buffer.BlockCopy(
+                source,
+                (y + row) * sourceStride + x * 4,
+                result,
+                row * targetStride,
+                targetStride);
+        }
+
+        return result;
+    }
+
     private static byte[]? ReadPixels(IntPtr memoryDc, IntPtr bitmap, int width, int height)
     {
         var stride = width * 4;
@@ -92,7 +165,7 @@ public static class ScreenCapture
     }
 
     /// <summary>BGRA 像素转 PNG（alpha 固定不透明）。</summary>
-    private static byte[]? EncodePng(byte[] pixels, int width, int height)
+    public static byte[]? EncodePng(byte[] pixels, int width, int height)
     {
         var stride = width * 4;
         var imageInfo = new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque);

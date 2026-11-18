@@ -4,6 +4,7 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Shouldly;
+using Sparrow.App.Services;
 using Sparrow.App.Views;
 using Sparrow.Plugin.Sdk.Payloads;
 using Xunit;
@@ -123,6 +124,38 @@ public sealed class CaptureWindowTests
         window.OcrLayer.Children.Count.ShouldBe(2);
         window.CopyAllButton.IsVisible.ShouldBeTrue();
         window.OcrStatus.Text.ShouldNotBeNull().ShouldContain("2 行");
+
+        window.Close();
+    }
+
+    /// <summary>识别框三档：全部显示 / 悬停隐藏 / 关闭。</summary>
+    [AvaloniaFact]
+    public void 识别框模式_切换后框可见性变化()
+    {
+        var window = new CaptureWindow { CaptureOcrBoxMode = OcrBoxMode.Hover };
+        window.Show();
+        window.Selection.IsVisible = true;
+        window.Selection.Width = 200;
+        window.Selection.Height = 100;
+
+        window.ShowOcrResult(new CaptureOcrResult(
+            "A\nB",
+            [
+                new OcrTextLine("A", 0, 0, 10, 10),
+                new OcrTextLine("B", 0, 20, 10, 10)
+            ]));
+
+        var boxes = window.OcrLayer.Children.OfType<Avalonia.Controls.Shapes.Rectangle>().ToList();
+        boxes.Count.ShouldBe(2);
+        boxes.ShouldAllBe(box => !box.IsVisible);
+        window.OcrLayer.IsHitTestVisible.ShouldBeTrue();
+
+        window.CaptureOcrBoxMode = OcrBoxMode.All;
+        boxes.ShouldAllBe(box => box.IsVisible);
+
+        window.CaptureOcrBoxMode = OcrBoxMode.Off;
+        boxes.ShouldAllBe(box => !box.IsVisible);
+        window.OcrLayer.IsHitTestVisible.ShouldBeFalse();
 
         window.Close();
     }

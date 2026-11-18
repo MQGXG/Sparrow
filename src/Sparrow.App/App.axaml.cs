@@ -39,6 +39,7 @@ public partial class App : Application
     private ToastService? _toasts;
     private int _toolHotkeyRunning;
     private ClipboardPasteService? _pasteService;
+    private SettingsViewModel? _settingsViewModel;
 
     // 贴图窗口需要宿主一直持有引用，否则会被 GC 回收
     private readonly List<PinnedImageWindow> _pins = [];
@@ -148,6 +149,7 @@ public partial class App : Application
         // 工作区与面板共用同一个 ToolCatalog：插件只加载一次
         var startup = new StartupService(log);
         var settingsViewModel = new SettingsViewModel(_catalog, settingsStore, startup, settings, ai, aiSecrets);
+        _settingsViewModel = settingsViewModel;
 
         // 设置页的状态提示统一转成 toast（页面本身不再常驻一行文字）
         settingsViewModel.PropertyChanged += (_, e) =>
@@ -340,8 +342,13 @@ public partial class App : Application
         var capture = new CaptureWindow
         {
             OcrRunner = RunCaptureOcrAsync,
-            CopyText = CopyTextToClipboard
+            CopyText = CopyTextToClipboard,
+            FreezeOnOpen = true,
+            CaptureOcrBoxMode = _settingsViewModel?.CaptureOcrBoxMode ?? OcrBoxMode.Hover
         };
+
+        capture.OcrBoxModeChanged += mode =>
+            _settingsViewModel?.SetCaptureOcrBoxMode(OcrBoxModes.Format(mode));
         capture.Show();
         capture.Activate();
         Log.Info($"截图窗口已显示：visible={capture.IsVisible}，title={capture.Title}");
