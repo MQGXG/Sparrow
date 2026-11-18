@@ -393,6 +393,7 @@ plugin.sdkVersion 的 major  ==  host.sdkVersion 的 major   → 兼容
 | 1.4 | `IFileAccess.OpenRead`：流式读取，供哈希等大文件工具使用 |
 | 1.5 | `InputShape.Images` / `ImageSetInput`：一组图片（1..N 张），供批量图片工具使用 |
 | 1.6 | `ClipboardHistoryEntry`：收藏 / 手动标签 / 自动标签字段 |
+| 1.7 | `ClipboardHistoryEntry.SourceApp`：复制来源进程名 |
 
 ---
 

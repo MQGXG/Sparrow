@@ -278,6 +278,12 @@ public partial class WorkspaceWindow : Window
             clipboard.PasteNext(simulate: false);
     }
 
+    private void OnClipboardUndoDeleteClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
+            clipboard.UndoDelete();
+    }
+
     private void OnClipboardItemPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (sender is not Control control || control.Tag is not ClipboardEntryViewModel item)

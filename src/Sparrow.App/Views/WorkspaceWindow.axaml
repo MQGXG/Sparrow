@@ -469,22 +469,28 @@
               <!-- 左：搜索 / 筛选 / 队列 / 列表 -->
               <Grid Grid.Column="0" RowDefinitions="Auto,Auto,Auto,Auto,*" RowSpacing="10">
 
-                <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto">
                   <TextBox Text="{Binding Query, Mode=TwoWay}"
-                           PlaceholderText="搜索内容、标签…" />
+                           PlaceholderText="搜索内容、标签、来源…" />
                   <Button Grid.Column="1"
+                          Classes="ghost small"
+                          Content="撤销删除"
+                          Margin="8,0,0,0"
+                          IsEnabled="{Binding CanUndoDelete}"
+                          Click="OnClipboardUndoDeleteClick" />
+                  <Button Grid.Column="2"
                           Classes="ghost small"
                           Content="清空"
                           Margin="8,0,0,0"
                           IsVisible="{Binding !IsClearConfirmVisible}"
                           Click="OnClipboardClearClick" />
-                  <Button Grid.Column="1"
+                  <Button Grid.Column="2"
                           Classes="ghost small"
                           Content="确认清空"
                           Margin="8,0,0,0"
                           IsVisible="{Binding IsClearConfirmVisible}"
                           Click="OnClipboardClearConfirmClick" />
-                  <Button Grid.Column="2"
+                  <Button Grid.Column="3"
                           Classes="ghost small"
                           Content="取消"
                           Margin="6,0,0,0"
@@ -492,24 +498,33 @@
                           Click="OnClipboardClearCancelClick" />
                 </Grid>
 
-                <ItemsControl Grid.Row="1" ItemsSource="{Binding Kinds}">
-                  <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                      <WrapPanel />
-                    </ItemsPanelTemplate>
-                  </ItemsControl.ItemsPanel>
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:ClipboardFilterViewModel">
-                      <Button Classes="hud-chip"
-                              Margin="0,0,6,6"
-                              Classes.selected="{Binding IsSelected}"
-                              Tag="{Binding}"
-                              Click="OnClipboardKindClick">
-                        <TextBlock Text="{Binding Name}" />
-                      </Button>
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                <Grid Grid.Row="1" ColumnDefinitions="*,Auto">
+                  <ItemsControl ItemsSource="{Binding Kinds}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <WrapPanel />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ClipboardFilterViewModel">
+                        <Button Classes="hud-chip"
+                                Margin="0,0,6,6"
+                                Classes.selected="{Binding IsSelected}"
+                                Tag="{Binding}"
+                                Click="OnClipboardKindClick">
+                          <TextBlock Text="{Binding Name}" />
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+
+                  <ComboBox Grid.Column="1"
+                            ItemsSource="{Binding SourceFilters}"
+                            SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
+                            MinWidth="118"
+                            Margin="8,0,0,6"
+                            VerticalAlignment="Top" />
+                </Grid>
 
                 <ItemsControl Grid.Row="2"
                               ItemsSource="{Binding TagFilters}"
@@ -589,9 +604,18 @@
                         Padding="6">
                   <Grid>
                     <ScrollViewer IsVisible="{Binding HasItems}">
-                      <ItemsControl ItemsSource="{Binding Items}">
+                      <ItemsControl ItemsSource="{Binding Groups}">
                         <ItemsControl.ItemTemplate>
-                          <DataTemplate x:DataType="vm:ClipboardEntryViewModel">
+                          <DataTemplate x:DataType="vm:ClipboardGroupViewModel">
+                            <StackPanel Margin="0,0,0,8">
+                              <TextBlock Text="{Binding Title}"
+                                         FontSize="10"
+                                         FontWeight="SemiBold"
+                                         Margin="4,0,0,4"
+                                         Foreground="{StaticResource TextMutedBrush}" />
+                              <ItemsControl ItemsSource="{Binding Items}">
+                                <ItemsControl.ItemTemplate>
+                                  <DataTemplate x:DataType="vm:ClipboardEntryViewModel">
                             <Border Margin="2"
                                     Padding="6"
                                     CornerRadius="6"
@@ -642,9 +666,15 @@
                                              FontSize="10"
                                              Foreground="{StaticResource AccentBrush}"
                                              IsVisible="{Binding HasTags}" />
-                                  <TextBlock Text="{Binding TimeLabel}"
-                                             FontSize="10"
-                                             Foreground="{StaticResource TextMutedBrush}" />
+                                  <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="{Binding TimeLabel}"
+                                               FontSize="10"
+                                               Foreground="{StaticResource TextMutedBrush}" />
+                                    <TextBlock Text="{Binding SourceLabel}"
+                                               FontSize="10"
+                                               IsVisible="{Binding HasSource}"
+                                               Foreground="{StaticResource TextMutedBrush}" />
+                                  </StackPanel>
                                 </StackPanel>
 
                                 <Button Grid.Column="2"
@@ -668,6 +698,10 @@
                                         Click="OnClipboardFavoriteClick" />
                               </Grid>
                             </Border>
+                                  </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                              </ItemsControl>
+                            </StackPanel>
                           </DataTemplate>
                         </ItemsControl.ItemTemplate>
                       </ItemsControl>

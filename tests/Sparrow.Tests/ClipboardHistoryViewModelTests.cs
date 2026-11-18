@@ -293,6 +293,56 @@ public sealed class ClipboardHistoryViewModelTests : IDisposable
         _viewModel.HasQueue.ShouldBeFalse();
     }
 
+    [Fact]
+    public void 来源筛选_只留选中应用()
+    {
+        _store.AddText("来自浏览器", "chrome");
+        _store.AddText("来自编辑器", "Code");
+        _viewModel.Refresh();
+
+        _viewModel.SourceFilters.ShouldContain("chrome");
+        _viewModel.SourceFilters.ShouldContain("Code");
+
+        _viewModel.SelectedSource = "chrome";
+
+        _viewModel.Items.ShouldHaveSingleItem().Preview.ShouldBe("来自浏览器");
+    }
+
+    [Fact]
+    public void 时间分组_收藏固定在最前()
+    {
+        _store.AddText("普通一条");
+        _store.AddText("收藏一条");
+        _viewModel.Refresh();
+
+        var favorite = _viewModel.Items[0];
+        _viewModel.ToggleFavorite(favorite);
+
+        _viewModel.Groups[0].Title.ShouldBe("收藏");
+        _viewModel.Groups[0].Items.ShouldHaveSingleItem().Id.ShouldBe(favorite.Id);
+        _viewModel.Groups.Skip(1).ShouldContain(group => group.Title == "今天");
+    }
+
+    [Fact]
+    public void 撤销删除_恢复条目与标签()
+    {
+        _store.AddText("删除后再恢复");
+        _viewModel.Refresh();
+
+        _viewModel.AddTag("重要");
+        _viewModel.Delete(_viewModel.Items[0]);
+
+        _viewModel.Items.ShouldBeEmpty();
+        _viewModel.CanUndoDelete.ShouldBeTrue();
+
+        _viewModel.UndoDelete();
+
+        _viewModel.CanUndoDelete.ShouldBeFalse();
+        var restored = _viewModel.Items.ShouldHaveSingleItem();
+        restored.Entry.Text.ShouldBe("删除后再恢复");
+        restored.Tags.ShouldBe(["重要"], ignoreOrder: true);
+    }
+
     public void Dispose()
     {
         try

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using Sparrow.App.Services;
@@ -198,27 +199,55 @@ public sealed class ClipboardMonitor : IDisposable
             if (IgnoreFormatId != 0 && IsClipboardFormatAvailable(IgnoreFormatId))
                 return;
 
+            var sourceApp = ReadSourceApp();
+
             var text = ReadText();
             if (!string.IsNullOrEmpty(text))
             {
-                _store.AddText(text);
+                _store.AddText(text, sourceApp);
                 return;
             }
 
             var files = ReadFiles();
             if (files is { Length: > 0 })
             {
-                _store.AddFiles(files);
+                _store.AddFiles(files, sourceApp);
                 return;
             }
 
             var png = ReadImagePng();
             if (png is not null)
-                _store.AddImage(png);
+                _store.AddImage(png, sourceApp);
         }
         finally
         {
             CloseClipboard();
+        }
+    }
+
+    /// <summary>
+    /// 复制来源进程名。拿不到（剪贴板没有 owner、进程已退出）时返回 null，
+    /// 只记录进程名，不记录路径或窗口标题。
+    /// </summary>
+    private static string? ReadSourceApp()
+    {
+        var owner = GetClipboardOwner();
+        if (owner == IntPtr.Zero)
+            return null;
+
+        GetWindowThreadProcessId(owner, out var processId);
+        if (processId == 0)
+            return null;
+
+        try
+        {
+            using var process = Process.GetProcessById((int)processId);
+            return process.ProcessName;
+        }
+        catch
+        {
+            // 进程已退出 / 无权限：来源留空
+            return null;
         }
     }
 
@@ -390,6 +419,12 @@ public sealed class ClipboardMonitor : IDisposable
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool OpenClipboard(IntPtr hwndNewOwner);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetClipboardOwner();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool CloseClipboard();

@@ -39,11 +39,13 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     private const string KindImage = "图片";
     private const string KindFiles = "文件";
     private const string KindFavorite = "收藏";
+    private const string SourceAll = "全部来源";
 
     private readonly ClipboardHistoryStore _store;
     private readonly IClipboardAccess _clipboard;
     private readonly ClipboardPasteService? _pasteService;
     private readonly SynchronizationContext? _ui;
+    private readonly List<(ClipboardHistoryEntry Entry, byte[]? Png)> _deleted = [];
     private bool _refreshing;
 
     public ClipboardHistoryViewModel(
@@ -81,7 +83,15 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     /// <summary>顺序粘贴队列；顺序就是列表里的编号。</summary>
     public ObservableCollection<ClipboardQueueItemViewModel> Queue { get; } = [];
 
+    /// <summary>按时间分组的列表视图：收藏 / 今天 / 三日内 / 一周内 / 更早。</summary>
+    public ObservableCollection<ClipboardGroupViewModel> Groups { get; } = [];
+
+    /// <summary>来源应用筛选（第一个是「全部来源」）。</summary>
+    public ObservableCollection<string> SourceFilters { get; } = [];
+
     public bool HasQueue => Queue.Count > 0;
+
+    public bool CanUndoDelete => _deleted.Count > 0;
 
     public string QueueHint => HasQueue
         ? $"队列 {Queue.Count} 条 · 在目标应用按全局热键粘贴下一条"
@@ -95,6 +105,12 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
 
     [ObservableProperty]
     private string? _selectedTag;
+
+    /// <summary>来源应用筛选；「全部来源」表示不过滤。</summary>
+    [ObservableProperty]
+    private string _selectedSource = SourceAll;
+
+    partial void OnSelectedSourceChanged(string value) => Refresh();
 
     [ObservableProperty]
     private ClipboardEntryViewModel? _selectedItem;
@@ -184,6 +200,8 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
 
         try
         {
+            SyncSourceFilters();
+
             var entries = string.IsNullOrWhiteSpace(Query)
                 ? _store.Recent(MaxLoad)
                 : _store.Search(Query, MaxLoad);
@@ -206,6 +224,7 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
                 ?? Items.FirstOrDefault();
 
             SyncQueueBadges();
+            BuildGroups();
             LoadDetail();
         }
         finally
@@ -231,7 +250,30 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
             RenumberQueue();
         }
 
-        _store.Delete(item.Id);
+        // 先把图片字节留一份，删除会同时移除磁盘文件
+        var png = item.Entry.Kind == ClipboardEntryKind.Image ? _store.LoadImage(item.Entry) : null;
+
+        if (!_store.Delete(item.Id))
+            return;
+
+        _deleted.Add((item.Entry, png));
+        if (_deleted.Count > 20)
+            _deleted.RemoveAt(0);
+
+        OnPropertyChanged(nameof(CanUndoDelete));
+    }
+
+    /// <summary>撤销最近一次删除；保留原来的收藏、标签和来源。</summary>
+    public void UndoDelete()
+    {
+        if (_deleted.Count == 0)
+            return;
+
+        var (entry, png) = _deleted[^1];
+        _deleted.RemoveAt(_deleted.Count - 1);
+
+        _store.Restore(entry, png);
+        OnPropertyChanged(nameof(CanUndoDelete));
     }
 
     public void Copy(ClipboardEntryViewModel item)
@@ -367,7 +409,79 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     {
         IsClearConfirmVisible = false;
         ClearQueue();
+        _deleted.Clear();
+        OnPropertyChanged(nameof(CanUndoDelete));
         _store.Clear();
+    }
+
+    private void SyncSourceFilters()
+    {
+        if (SourceFilters.Count == 0)
+            SourceFilters.Add(SourceAll);
+
+        var apps = _store.AllSourceApps();
+        var current = SourceFilters.Skip(1).ToArray();
+
+        if (!current.SequenceEqual(apps, StringComparer.OrdinalIgnoreCase))
+        {
+            SourceFilters.Clear();
+            SourceFilters.Add(SourceAll);
+
+            foreach (var app in apps)
+                SourceFilters.Add(app);
+        }
+
+        if (SelectedSource != SourceAll &&
+            !apps.Contains(SelectedSource, StringComparer.OrdinalIgnoreCase))
+        {
+            SelectedSource = SourceAll;
+        }
+    }
+
+    /// <summary>收藏固定在最前，其余按时间分叠；空组不显示。</summary>
+    private void BuildGroups()
+    {
+        Groups.Clear();
+
+        var favorites = Items.Where(item => item.IsFavorite).ToList();
+        if (favorites.Count > 0)
+            Groups.Add(new ClipboardGroupViewModel(ClipboardTimeGroup.Favorites, favorites));
+
+        var today = new List<ClipboardEntryViewModel>();
+        var threeDays = new List<ClipboardEntryViewModel>();
+        var week = new List<ClipboardEntryViewModel>();
+        var older = new List<ClipboardEntryViewModel>();
+        var now = DateTimeOffset.Now;
+
+        foreach (var item in Items.Where(item => !item.IsFavorite))
+        {
+            switch (ClipboardTimeGroup.Resolve(item.Entry.CreatedAt, now))
+            {
+                case ClipboardTimeGroup.Today:
+                    today.Add(item);
+                    break;
+                case ClipboardTimeGroup.ThreeDays:
+                    threeDays.Add(item);
+                    break;
+                case ClipboardTimeGroup.Week:
+                    week.Add(item);
+                    break;
+                default:
+                    older.Add(item);
+                    break;
+            }
+        }
+
+        AddGroup(ClipboardTimeGroup.Today, today);
+        AddGroup(ClipboardTimeGroup.ThreeDays, threeDays);
+        AddGroup(ClipboardTimeGroup.Week, week);
+        AddGroup(ClipboardTimeGroup.Older, older);
+
+        void AddGroup(string title, List<ClipboardEntryViewModel> items)
+        {
+            if (items.Count > 0)
+                Groups.Add(new ClipboardGroupViewModel(title, items));
+        }
     }
 
     private void RenumberQueue()
@@ -408,6 +522,12 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
 
         if (!kindMatches)
             return false;
+
+        if (SelectedSource != SourceAll &&
+            !string.Equals(entry.SourceApp, SelectedSource, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
 
         return SelectedTag is null
             || entry.Tags.Contains(SelectedTag, StringComparer.OrdinalIgnoreCase)

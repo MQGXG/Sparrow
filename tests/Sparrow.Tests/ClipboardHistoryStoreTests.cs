@@ -324,6 +324,58 @@ public sealed class ClipboardHistoryStoreTests
     }
 
     [Fact]
+    public void 来源应用_持久化并参与搜索()
+    {
+        using var temp = new TempStore();
+        temp.Store.AddText("来自浏览器的内容", "chrome");
+
+        var reloaded = new ClipboardHistoryStore(temp.Path, new NullLog());
+
+        reloaded.Recent(1)[0].SourceApp.ShouldBe("chrome");
+        reloaded.AllSourceApps().ShouldBe(["chrome"]);
+        reloaded.Search("chrome", 10).ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public void 撤销删除_恢复收藏标签与内容()
+    {
+        using var temp = new TempStore();
+        temp.Store.AddText("会被删除再恢复");
+
+        var entry = temp.Store.Recent(1)[0];
+        temp.Store.SetFavorite(entry.Id, true);
+        temp.Store.SetTags(entry.Id, ["保留"]);
+
+        var snapshot = temp.Store.Recent(1)[0];
+        temp.Store.Delete(snapshot.Id).ShouldBeTrue();
+        temp.Store.Count.ShouldBe(0);
+
+        temp.Store.Restore(snapshot).ShouldBeTrue();
+
+        var restored = temp.Store.Recent(1)[0];
+        restored.Text.ShouldBe("会被删除再恢复");
+        restored.Favorite.ShouldBeTrue();
+        restored.Tags.ShouldBe(["保留"], ignoreOrder: true);
+    }
+
+    [Fact]
+    public void 撤销删除_恢复图片内容()
+    {
+        using var temp = new TempStore();
+        temp.Store.AddImage(FakePng());
+
+        var entry = temp.Store.Recent(1)[0];
+        var png = temp.Store.LoadImage(entry).ShouldNotBeNull();
+
+        temp.Store.Delete(entry.Id);
+        temp.Store.Restore(entry, png).ShouldBeTrue();
+
+        var restored = temp.Store.Recent(1)[0];
+        restored.Kind.ShouldBe(Sparrow.Plugin.Sdk.ClipboardEntryKind.Image);
+        temp.Store.LoadImage(restored).ShouldNotBeNull();
+    }
+
+    [Fact]
     public void 变更通知_新增与收藏都会触发()
     {
         using var temp = new TempStore();

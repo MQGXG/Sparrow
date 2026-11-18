@@ -47,6 +47,9 @@ public sealed record ClipboardHistoryEntry
 
     /// <summary>入库时按内容自动识别的标签（链接 / 邮箱 / 颜色 / JSON / 路径 / 图片 / 文件）。</summary>
     public IReadOnlyList<string> AutoTags { get; init; } = [];
+
+    /// <summary>复制来源进程名（如 chrome / Code / explorer）；拿不到时为 null。</summary>
+    public string? SourceApp { get; init; }
 }
 
 /// <summary>

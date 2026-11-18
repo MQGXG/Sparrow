@@ -65,7 +65,7 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
     }
 
     /// <summary>记录一段文本。与历史中的重复内容合并并刷新时间戳；收藏与标签跟着保留。</summary>
-    public void AddText(string text)
+    public void AddText(string text, string? sourceApp = null)
     {
         if (string.IsNullOrWhiteSpace(text))
             return;
@@ -89,7 +89,8 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
                 CreatedAt = NextTimestamp(),
                 AutoTags = autoTags,
                 Favorite = previous?.Favorite ?? false,
-                Tags = previous?.Tags ?? []
+                Tags = previous?.Tags ?? [],
+                SourceApp = sourceApp
             });
         }
 
@@ -97,7 +98,7 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
     }
 
     /// <summary>记录一张剪贴板图片（统一 PNG）。重复图片同样合并。</summary>
-    public void AddImage(byte[] png)
+    public void AddImage(byte[] png, string? sourceApp = null)
     {
         if (png is not { Length: > 0 })
             return;
@@ -141,7 +142,8 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
                 CreatedAt = NextTimestamp(),
                 AutoTags = [ClipboardClassifier.TagImage],
                 Favorite = previous?.Favorite ?? false,
-                Tags = previous?.Tags ?? []
+                Tags = previous?.Tags ?? [],
+                SourceApp = sourceApp
             });
 
             inserted = true;
@@ -152,7 +154,7 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
     }
 
     /// <summary>记录从资源管理器复制的一组文件路径（不复制文件内容）。</summary>
-    public void AddFiles(IReadOnlyList<string> paths)
+    public void AddFiles(IReadOnlyList<string> paths, string? sourceApp = null)
     {
         if (paths is not { Count: > 0 })
             return;
@@ -183,7 +185,8 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
                 CreatedAt = NextTimestamp(),
                 AutoTags = [.. ClipboardClassifier.ClassifyFiles(normalized)],
                 Favorite = previous?.Favorite ?? false,
-                Tags = previous?.Tags ?? []
+                Tags = previous?.Tags ?? [],
+                SourceApp = sourceApp
             });
         }
 
@@ -301,6 +304,83 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
         return true;
     }
 
+    /// <summary>
+    /// 把一条被删除的条目写回历史（撤销删除）。
+    ///
+    /// 保留收藏 / 标签 / 来源应用；内容指纹重新计算，若已有同内容条目会先合并。
+    /// 图片需要调用方把 PNG 字节一起带回来——删除时它已经从磁盘移除。
+    /// </summary>
+    public bool Restore(ClipboardHistoryEntry entry, byte[]? imagePng = null)
+    {
+        lock (_gate)
+        {
+            string? imageFile = null;
+            string hash;
+
+            switch (entry.Kind)
+            {
+                case ClipboardEntryKind.Text when entry.Text is { Length: > 0 }:
+                    hash = HashText(entry.Text);
+                    break;
+
+                case ClipboardEntryKind.Image when imagePng is { Length: > 0 }:
+                    var id = NewId();
+                    imageFile = $"{id}.png";
+
+                    try
+                    {
+                        Directory.CreateDirectory(_imagesDirectory);
+                        File.WriteAllBytes(Path.Combine(_imagesDirectory, imageFile), imagePng);
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.Warn($"撤销删除时写入图片失败：{ex.Message}");
+                        return false;
+                    }
+
+                    hash = HashBytes(imagePng);
+                    break;
+
+                case ClipboardEntryKind.Files when entry.Paths.Count > 0:
+                    hash = HashText(string.Join('\n', entry.Paths));
+                    break;
+
+                default:
+                    return false;
+            }
+
+            TakeDuplicate(entry.Kind, hash);
+
+            Insert(new StoredEntry
+            {
+                Id = NewId(),
+                Kind = entry.Kind,
+                Preview = entry.Preview,
+                Text = entry.Text,
+                ImageFile = imageFile,
+                Paths = entry.Paths.ToArray(),
+                ContentHash = hash,
+                ByteSize = entry.Kind == ClipboardEntryKind.Image
+                    ? imagePng!.Length
+                    : entry.ByteSize,
+                CreatedAt = NextTimestamp(),
+                AutoTags = ComputeAutoTags(new StoredEntry
+                {
+                    Kind = entry.Kind,
+                    Text = entry.Text,
+                    Paths = entry.Paths.ToArray(),
+                    Preview = entry.Preview
+                }).ToArray(),
+                Favorite = entry.Favorite,
+                Tags = entry.Tags.ToArray(),
+                SourceApp = entry.SourceApp
+            });
+        }
+
+        Changed?.Invoke();
+        return true;
+    }
+
     /// <summary>出现过的手动标签，按名称排序；用于筛选条。</summary>
     public IReadOnlyList<string> AllTags()
     {
@@ -311,6 +391,21 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
                 .Where(tag => tag.Length > 0)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(tag => tag, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+    }
+
+    /// <summary>出现过的来源应用名，按名称排序；用于筛选。</summary>
+    public IReadOnlyList<string> AllSourceApps()
+    {
+        lock (_gate)
+        {
+            return _entries
+                .Select(entry => entry.SourceApp)
+                .Where(app => !string.IsNullOrWhiteSpace(app))
+                .Select(app => app!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(app => app, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
         }
     }
@@ -400,6 +495,9 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
 
         /// <summary>入库时自动识别的标签，老文件缺这个字段时为 null。</summary>
         public string[]? AutoTags { get; init; }
+
+        /// <summary>复制来源进程名；老文件缺这个字段时为空。</summary>
+        public string? SourceApp { get; init; }
     }
 
     /// <summary>
@@ -454,7 +552,8 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
         Favorite = entry.Favorite,
         Tags = entry.Tags,
         // 老文件没有这个字段：按当前规则补算，避免升级后旧条目全都没有分类
-        AutoTags = entry.AutoTags ?? ComputeAutoTags(entry)
+        AutoTags = entry.AutoTags ?? ComputeAutoTags(entry),
+        SourceApp = entry.SourceApp
     };
 
     private static IReadOnlyList<string> ComputeAutoTags(StoredEntry entry) => entry.Kind switch
@@ -474,7 +573,8 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
             || entry.Preview.Contains(keyword, comparison)
             || entry.Paths.Any(path => path.Contains(keyword, comparison))
             || entry.Tags.Any(tag => tag.Contains(keyword, comparison))
-            || (entry.AutoTags?.Any(tag => tag.Contains(keyword, comparison)) ?? false);
+            || (entry.AutoTags?.Any(tag => tag.Contains(keyword, comparison)) ?? false)
+            || (entry.SourceApp?.Contains(keyword, comparison) ?? false);
     }
 
     private static string BuildPreview(string text)
