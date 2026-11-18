@@ -180,8 +180,28 @@ public partial class CaptureWindow : Window
         _candidates = WindowCandidates.Enumerate(TryGetPlatformHandle()?.Handle ?? IntPtr.Zero);
         _uiProbe = new UiElementProbe();
 
+        // 打开遮罩时鼠标可能已经停在目标控件上，不用晃一下才出候选
+        ShowCandidateUnderCursor();
+
         if (FreezeOnOpen)
             _ = FreezeScreenAsync();
+    }
+
+    /// <summary>按当前光标位置立刻显示候选（含控件级细化）。</summary>
+    private void ShowCandidateUnderCursor()
+    {
+        if (Width <= 0 || Height <= 0)
+            return;
+
+        var cursor = WindowCandidates.GetCursorPosition();
+        var local = new Point(
+            (cursor.X - _origin.X) / _scaling,
+            (cursor.Y - _origin.Y) / _scaling);
+
+        if (local.X < 0 || local.Y < 0 || local.X > Width || local.Y > Height)
+            return;
+
+        UpdateCandidateAt(local);
     }
 
     protected override void OnClosed(EventArgs e)
