@@ -17,6 +17,8 @@
     <PackageVersion Include="Avalonia.Desktop" Version="12.1.6" />
     <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.1.6" />
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <!-- 剪贴板历史：本地 SQLite（WAL + FTS5 trigram），不联网 -->
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.15" />
 
     <!-- 图像编解码：版本跟随 Avalonia，勿升 4.x（见 docs/architecture.md） -->
     <PackageVersion Include="SkiaSharp" Version="3.119.4" />

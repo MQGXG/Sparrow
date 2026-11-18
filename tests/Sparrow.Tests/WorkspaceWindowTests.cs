@@ -231,7 +231,7 @@ public sealed class WorkspaceWindowTests
         try
         {
             var store = new ClipboardHistoryStore(
-                System.IO.Path.Combine(directory, "clipboard-history.jsonl"),
+                System.IO.Path.Combine(directory, "clipboard.db"),
                 new NullLog());
             store.AddText("https://example.com");
 

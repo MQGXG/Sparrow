@@ -1,6 +1,9 @@
 # 2026-11-18 剪贴板历史升级为工作区页
 
 > 状态：已实现
+>
+> 后续变更：存储已从 JSONL 迁移到 SQLite（WAL + FTS5），见
+> [`2026-11-18-clipboard-sqlite-design.md`](2026-11-18-clipboard-sqlite-design.md)。
 
 ## 一、问题
 

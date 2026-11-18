@@ -21,6 +21,7 @@
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="SkiaSharp" />
     <PackageReference Include="Svg.Skia" />
   </ItemGroup>

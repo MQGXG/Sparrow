@@ -1,6 +1,9 @@
 # 2026-11-18 剪贴板管理增强：来源、时间分叠、撤销删除
 
 > 状态：已实现
+>
+> 后续变更：存储已迁移到 SQLite，见
+> [`2026-11-18-clipboard-sqlite-design.md`](2026-11-18-clipboard-sqlite-design.md)。
 
 ## 一、来源
 

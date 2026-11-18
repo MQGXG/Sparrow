@@ -19,17 +19,22 @@ public sealed class ClipboardHistoryStoreTests
     {
         public TempStore()
         {
-            var directory = System.IO.Path.Combine(
+            DirectoryPath = System.IO.Path.Combine(
                 System.IO.Path.GetTempPath(),
                 "sparrow-tests",
                 Guid.NewGuid().ToString("N"));
 
-            Path = System.IO.Path.Combine(directory, "clipboard-history.jsonl");
-            ImagesDirectory = System.IO.Path.Combine(directory, "clipboard-images");
+            Path = System.IO.Path.Combine(DirectoryPath, "clipboard.db");
+            LegacyPath = System.IO.Path.Combine(DirectoryPath, "clipboard-history.jsonl");
+            ImagesDirectory = System.IO.Path.Combine(DirectoryPath, "clipboard-images");
             Store = new ClipboardHistoryStore(Path, new NullLog());
         }
 
+        public string DirectoryPath { get; }
+
         public string Path { get; }
+
+        public string LegacyPath { get; }
 
         public string ImagesDirectory { get; }
 
@@ -39,9 +44,8 @@ public sealed class ClipboardHistoryStoreTests
         {
             try
             {
-                var directory = System.IO.Path.GetDirectoryName(Path);
-                if (directory is not null && Directory.Exists(directory))
-                    Directory.Delete(directory, recursive: true);
+                if (Directory.Exists(DirectoryPath))
+                    Directory.Delete(DirectoryPath, recursive: true);
             }
             catch
             {
@@ -201,7 +205,7 @@ public sealed class ClipboardHistoryStoreTests
     }
 
     [Fact]
-    public void 重启后_从JSONL恢复记录()
+    public void 重启后_从数据库恢复记录()
     {
         using var temp = new TempStore();
 
@@ -216,17 +220,107 @@ public sealed class ClipboardHistoryStoreTests
     }
 
     [Fact]
-    public void 损坏的行_被跳过不影响其余记录()
+    public void 搜索_中文三字走全文索引()
     {
         using var temp = new TempStore();
-        temp.Store.AddText("正常记录");
+        temp.Store.AddText("今天要买牛奶和面包");
 
-        File.AppendAllText(temp.Path, "{这不是JSON" + Environment.NewLine);
+        temp.Store.UsesFullTextIndex.ShouldBeTrue(
+            "内置 SQLite 应支持 FTS5 trigram；不可用时搜索会退化，但功能仍可用");
 
-        var reloaded = new ClipboardHistoryStore(temp.Path, new NullLog());
+        temp.Store.Search("买牛奶", 10).ShouldHaveSingleItem()
+            .Text.ShouldBe("今天要买牛奶和面包");
+        temp.Store.Search("牛奶", 10).ShouldHaveSingleItem(); // 两字走 LIKE 兜底
+    }
 
-        reloaded.Count.ShouldBe(1);
-        reloaded.Recent(1)[0].Text.ShouldBe("正常记录");
+    [Fact]
+    public void 搜索_全文索引大小写不敏感()
+    {
+        using var temp = new TempStore();
+        temp.Store.AddText("HELLO SPARROW");
+
+        temp.Store.UsesFullTextIndex.ShouldBeTrue();
+        temp.Store.Search("hello", 10).ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public void 迁移_旧JSONL导入并保留字段()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        var legacy = Path.Combine(directory, "clipboard-history.jsonl");
+        var database = Path.Combine(directory, "clipboard.db");
+
+        File.WriteAllLines(legacy,
+        [
+            SerializeEntry("带标签的旧记录", DateTimeOffset.Now.AddHours(-2), favorite: true,
+                tags: ["工作"], sourceApp: "chrome"),
+            SerializeEntry("普通旧记录", DateTimeOffset.Now.AddHours(-1), favorite: false)
+        ]);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(database, new NullLog());
+
+            store.Count.ShouldBe(2);
+
+            var favorite = store.Recent(10).Single(entry => entry.Text == "带标签的旧记录");
+            favorite.Favorite.ShouldBeTrue();
+            favorite.Tags.ShouldBe(["工作"]);
+            favorite.SourceApp.ShouldBe("chrome");
+
+            // 迁移成功后旧文件改名备份，不再参与下次启动
+            File.Exists(legacy).ShouldBeFalse();
+            File.Exists(legacy + ".bak").ShouldBeTrue();
+
+            // 再次启动不会重复导入
+            new ClipboardHistoryStore(database, new NullLog()).Count.ShouldBe(2);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [Fact]
+    public void 迁移_损坏行跳过且不影响其余记录()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        var legacy = Path.Combine(directory, "clipboard-history.jsonl");
+        File.WriteAllLines(legacy,
+        [
+            SerializeEntry("正常记录", DateTimeOffset.Now, favorite: false),
+            "{这不是JSON"
+        ]);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(Path.Combine(directory, "clipboard.db"), new NullLog());
+
+            store.Count.ShouldBe(1);
+            store.Recent(1)[0].Text.ShouldBe("正常记录");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
     }
 
     [Fact]
@@ -381,22 +475,27 @@ public sealed class ClipboardHistoryStoreTests
     {
         var directory = Path.Combine(Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
-        var path = Path.Combine(directory, "history.jsonl");
+        var legacy = Path.Combine(directory, "clipboard-history.jsonl");
 
         var old = DateTimeOffset.Now.AddDays(-10);
-        File.WriteAllLines(path,
+        File.WriteAllLines(legacy,
         [
             SerializeEntry("过期的", old, favorite: false),
             SerializeEntry("过期但收藏", old, favorite: true),
             SerializeEntry("昨天的", DateTimeOffset.Now.AddDays(-1), favorite: false)
         ]);
 
-        var store = new ClipboardHistoryStore(path, new NullLog(), maxEntries: 200, retentionDays: 7, maxBytes: 0);
+        var store = new ClipboardHistoryStore(
+            Path.Combine(directory, "clipboard.db"),
+            new NullLog(),
+            maxEntries: 200,
+            retentionDays: 7,
+            maxBytes: 0);
 
         // 过期的非收藏被删；7 天内的和收藏都留下
         store.Count.ShouldBe(2);
         store.Recent(10).Select(entry => entry.Text)
-            .ShouldBe(["过期但收藏", "昨天的"]);
+            .ShouldBe(["昨天的", "过期但收藏"], ignoreOrder: true);
     }
 
     [Fact]
@@ -446,7 +545,12 @@ public sealed class ClipboardHistoryStoreTests
         temp.Store.ApproximateBytes.ShouldBe(15);
     }
 
-    private static string SerializeEntry(string text, DateTimeOffset createdAt, bool favorite) =>
+    private static string SerializeEntry(
+        string text,
+        DateTimeOffset createdAt,
+        bool favorite,
+        string[]? tags = null,
+        string? sourceApp = null) =>
         JsonSerializer.Serialize(new
         {
             id = Guid.NewGuid().ToString("N"),
@@ -454,11 +558,12 @@ public sealed class ClipboardHistoryStoreTests
             preview = text,
             text,
             paths = Array.Empty<string>(),
-            contentHash = "HASH",
+            contentHash = "HASH-" + text,
             byteSize = text.Length,
             createdAt,
             favorite,
-            tags = Array.Empty<string>()
+            tags = tags ?? Array.Empty<string>(),
+            sourceApp
         });
 
     [Fact]

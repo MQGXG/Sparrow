@@ -42,4 +42,5 @@
 
 ## 四、不做
 
-按窗口标题排除、按内容正则排除、加密存储、SQLite。
+按窗口标题排除、按内容正则排除、加密存储。
+（SQLite 已在后续单独迁移，见 [`2026-11-18-clipboard-sqlite-design.md`](2026-11-18-clipboard-sqlite-design.md)。）

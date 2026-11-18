@@ -92,8 +92,8 @@ plugins/
 | 热键设置 | ✅ 完成：`settings.json` 可改，格式 `Ctrl+Alt+S`，重启生效；`toolHotkeys` 可给任意工具挂热键（按下直接执行，不弹面板） |
 | 开机自启 | ✅ 完成：HKCU Run 项，只启动到托盘 |
 | M1 验收 | ✅ 完成：9 条出口条件全部达标（见 `docs/acceptance.md`） |
-| 测试 | ✅ 371 个通过（含 headless 键盘路由、真实剪贴板取图/写图、真实子进程 OCR（单张 + 多帧）、滚动拼接、工具墙 ViewModel、AI 请求/密钥加密、SVG 清洗/渲染、剪贴板历史存储/收藏/标签/分类/队列/撤销/保留策略、OCR 整理模式、图片转换/缩放、窗口置顶流程、覆盖窗加载、toast、受控文件读取、文件哈希、表格/文件列表渲染、工具热键解析与录制、托盘菜单配置） |
-| 剪贴板页 | ✅ 完成：工作区「剪贴板」页，收藏 / 自定义标签 / 自动分类 / 时间分叠 / 来源应用筛选与「不记录」/ 缩略图 / 详情 / 删除与撤销 / 保留天数与容量；收藏不受任何清理；尊重 `Clipboard Viewer Ignore`；支持拖出为文件与顺序粘贴队列 |
+| 测试 | ✅ 374 个通过（含 headless 键盘路由、真实剪贴板取图/写图、真实子进程 OCR（单张 + 多帧）、滚动拼接、工具墙 ViewModel、AI 请求/密钥加密、SVG 清洗/渲染、剪贴板历史 SQLite/迁移/收藏/标签/分类/队列/撤销/保留策略、OCR 整理模式、图片转换/缩放、窗口置顶流程、覆盖窗加载、toast、受控文件读取、文件哈希、表格/文件列表渲染、工具热键解析与录制、托盘菜单配置） |
+| 剪贴板页 | ✅ 完成：SQLite（WAL + FTS5 trigram）存储，旧 JSONL 自动迁移；收藏 / 自定义标签 / 自动分类 / 时间分叠 / 来源应用筛选与「不记录」/ 缩略图 / 详情 / 删除与撤销 / 保留天数与容量；收藏不受任何清理；尊重 `Clipboard Viewer Ignore`；支持拖出为文件与顺序粘贴队列 |
 | 插件 `Images Convert` | ✅ 完成（M2.1）：PNG / JPEG / WebP 转换；工作区图片结果预览 + 保存/复制 |
 | 插件 `Images Resize` | ✅ 完成（M2.1）：按最长边 / 按百分比缩放，输出 PNG |
 | 插件 `Files Hash` | ✅ 完成：MD5 / SHA1 / SHA256 / SHA512；多文件按表输出，流式读取，单个失败不中断 |
@@ -194,6 +194,9 @@ Sparrow 会写入下一条并模拟 `Ctrl+V`，队列自动前进；也可以点
 
 `ClipboardExcludedApps` 是进程名（来源下拉里显示的名字）；`ClipboardHistoryRetentionDays` 为 0 表示永久；
 `ClipboardHistoryMaxBytes` 为 0 表示不限制。收藏条目不参与条数 / 天数 / 容量任何一项清理。
+
+剪贴板数据存放在 `%LOCALAPPDATA%\Sparrow\clipboard.db`（SQLite，WAL 模式），图片仍在 `clipboard-images\`。
+首次启动会把旧的 `clipboard-history.jsonl` 自动迁移；迁移成功后原文件改名为 `.bak` 保留，可用于回滚。
 
 托盘菜单本身也能整体自定义（`settings.json` 的 `trayMenu`，空数组 = 内置默认）：
 

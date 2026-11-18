@@ -100,7 +100,7 @@ public partial class App : Application
         var clipboardHistoryPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Sparrow",
-            "clipboard-history.jsonl");
+            "clipboard.db");
         var clipboardHistory = new ClipboardHistoryStore(
             clipboardHistoryPath,
             log,
