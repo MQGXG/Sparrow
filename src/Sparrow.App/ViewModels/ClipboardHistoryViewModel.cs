@@ -42,13 +42,18 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
 
     private readonly ClipboardHistoryStore _store;
     private readonly IClipboardAccess _clipboard;
+    private readonly ClipboardPasteService? _pasteService;
     private readonly SynchronizationContext? _ui;
     private bool _refreshing;
 
-    public ClipboardHistoryViewModel(ClipboardHistoryStore store, IClipboardAccess clipboard)
+    public ClipboardHistoryViewModel(
+        ClipboardHistoryStore store,
+        IClipboardAccess clipboard,
+        ClipboardPasteService? pasteService = null)
     {
         _store = store;
         _clipboard = clipboard;
+        _pasteService = pasteService;
         _ui = SynchronizationContext.Current;
 
         Kinds =
@@ -72,6 +77,15 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     public ObservableCollection<ClipboardFilterViewModel> TagFilters { get; } = [];
 
     public ObservableCollection<ClipboardEntryViewModel> Items { get; } = [];
+
+    /// <summary>顺序粘贴队列；顺序就是列表里的编号。</summary>
+    public ObservableCollection<ClipboardQueueItemViewModel> Queue { get; } = [];
+
+    public bool HasQueue => Queue.Count > 0;
+
+    public string QueueHint => HasQueue
+        ? $"队列 {Queue.Count} 条 · 在目标应用按全局热键粘贴下一条"
+        : string.Empty;
 
     [ObservableProperty]
     private string _query = string.Empty;
@@ -191,6 +205,7 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
             SelectedItem = Items.FirstOrDefault(item => item.Id == previousId)
                 ?? Items.FirstOrDefault();
 
+            SyncQueueBadges();
             LoadDetail();
         }
         finally
@@ -208,6 +223,13 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     {
         if (SelectedItem?.Id == item.Id)
             SelectedItem = null;
+
+        var queued = Queue.FirstOrDefault(entry => entry.Entry.Id == item.Id);
+        if (queued is not null)
+        {
+            Queue.Remove(queued);
+            RenumberQueue();
+        }
 
         _store.Delete(item.Id);
     }
@@ -229,6 +251,84 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
                 break;
         }
     }
+
+    /// <summary>加入 / 移出顺序粘贴队列。</summary>
+    public void ToggleQueue(ClipboardEntryViewModel item)
+    {
+        var index = Queue.ToList().FindIndex(queued => queued.Entry.Id == item.Id);
+
+        if (index >= 0)
+            Queue.RemoveAt(index);
+        else
+            Queue.Add(new ClipboardQueueItemViewModel(item.Entry, Queue.Count + 1));
+
+        RenumberQueue();
+    }
+
+    public void RemoveQueueItem(ClipboardQueueItemViewModel item)
+    {
+        Queue.Remove(item);
+        RenumberQueue();
+    }
+
+    public void ClearQueue()
+    {
+        Queue.Clear();
+        RenumberQueue();
+    }
+
+    /// <summary>
+    /// 取出队首并转成可粘贴内容；不可粘贴（超长文本、图片丢失）的条目跳过。
+    /// 队列在取出时前进，不依赖写入剪贴板是否成功。
+    /// </summary>
+    public ClipboardPastePayload? TakeNextPaste()
+    {
+        while (Queue.Count > 0)
+        {
+            var entry = Queue[0].Entry;
+            Queue.RemoveAt(0);
+            RenumberQueue();
+
+            switch (entry.Kind)
+            {
+                case ClipboardEntryKind.Text when entry.Text is { Length: > 0 }:
+                    return new ClipboardPastePayload(entry.Kind, entry.Text, null, []);
+
+                case ClipboardEntryKind.Image when _store.LoadImage(entry) is { Length: > 0 } png:
+                    return new ClipboardPastePayload(entry.Kind, null, png, []);
+
+                case ClipboardEntryKind.Files when entry.Paths.Count > 0:
+                    return new ClipboardPastePayload(entry.Kind, null, null, entry.Paths);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// 粘贴下一条。simulate=true 走全局热键（写剪贴板 + 模拟 Ctrl+V）；
+    /// false 只复制，供页面按钮使用。
+    /// </summary>
+    public bool PasteNext(bool simulate)
+    {
+        var payload = TakeNextPaste();
+        return payload is not null && (_pasteService?.Paste(payload, simulate) ?? false);
+    }
+
+    /// <summary>拖出用：把条目转成临时文件所需的内容。</summary>
+    public ClipboardPastePayload? GetDragPayload(ClipboardEntryViewModel item) => item.Entry.Kind switch
+    {
+        ClipboardEntryKind.Text when item.Entry.Text is { Length: > 0 } =>
+            new ClipboardPastePayload(item.Entry.Kind, item.Entry.Text, null, []),
+
+        ClipboardEntryKind.Image when _store.LoadImage(item.Entry) is { Length: > 0 } png =>
+            new ClipboardPastePayload(item.Entry.Kind, null, png, []),
+
+        ClipboardEntryKind.Files when item.Entry.Paths.Count > 0 =>
+            new ClipboardPastePayload(item.Entry.Kind, null, null, item.Entry.Paths),
+
+        _ => null
+    };
 
     /// <summary>给当前选中条目加一个手动标签。</summary>
     public void AddTag(string tag)
@@ -266,7 +366,32 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     public void ConfirmClear()
     {
         IsClearConfirmVisible = false;
+        ClearQueue();
         _store.Clear();
+    }
+
+    private void RenumberQueue()
+    {
+        var entries = Queue.Select(queued => queued.Entry).ToList();
+
+        Queue.Clear();
+        for (var index = 0; index < entries.Count; index++)
+            Queue.Add(new ClipboardQueueItemViewModel(entries[index], index + 1));
+
+        SyncQueueBadges();
+        OnPropertyChanged(nameof(HasQueue));
+        OnPropertyChanged(nameof(QueueHint));
+    }
+
+    private void SyncQueueBadges()
+    {
+        var numbers = Queue.ToDictionary(queued => queued.Entry.Id, queued => queued.Number);
+
+        foreach (var item in Items)
+        {
+            item.IsQueued = numbers.TryGetValue(item.Id, out var number);
+            item.QueueBadge = item.IsQueued ? number.ToString() : "＋";
+        }
     }
 
     private bool Matches(ClipboardHistoryEntry entry)

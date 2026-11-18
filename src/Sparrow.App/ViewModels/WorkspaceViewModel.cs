@@ -34,7 +34,8 @@ public partial class WorkspaceViewModel : ObservableObject
         SettingsViewModel settings,
         ToolParameterStore? parameters = null,
         SvgPreviewService? svgPreview = null,
-        ClipboardHistoryStore? clipboardHistory = null)
+        ClipboardHistoryStore? clipboardHistory = null,
+        ClipboardPasteService? pasteService = null)
     {
         _catalog = catalog;
         _clipboard = clipboard;
@@ -45,7 +46,7 @@ public partial class WorkspaceViewModel : ObservableObject
         Settings = settings;
 
         if (clipboardHistory is not null)
-            Clipboard = new ClipboardHistoryViewModel(clipboardHistory, clipboard);
+            Clipboard = new ClipboardHistoryViewModel(clipboardHistory, clipboard, pasteService);
     }
 
     public SettingsViewModel Settings { get; }

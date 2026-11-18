@@ -25,6 +25,14 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
     [ObservableProperty]
     private bool _isSelected;
 
+    /// <summary>是否在顺序粘贴队列里。</summary>
+    [ObservableProperty]
+    private bool _isQueued;
+
+    /// <summary>行内队列按钮上的标记：未入队为「＋」，入队后显示序号。</summary>
+    [ObservableProperty]
+    private string _queueBadge = "＋";
+
     public string Id => Entry.Id;
 
     public bool IsFavorite => Entry.Favorite;

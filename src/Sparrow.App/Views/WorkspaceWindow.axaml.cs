@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.VisualTree;
 using Sparrow.App.Services;
 using Sparrow.App.ViewModels;
 
@@ -10,6 +11,12 @@ namespace Sparrow.App.Views;
 
 public partial class WorkspaceWindow : Window
 {
+    private PointerPressedEventArgs? _clipboardDragPress;
+    private ClipboardEntryViewModel? _clipboardDragItem;
+    private Point _clipboardDragOrigin;
+    private bool _clipboardDragStarted;
+    private bool _suppressClipboardClick;
+
     public WorkspaceWindow()
     {
         InitializeComponent();
@@ -222,11 +229,131 @@ public partial class WorkspaceWindow : Window
 
     private void OnClipboardItemClick(object? sender, TappedEventArgs e)
     {
+        if (_suppressClipboardClick)
+        {
+            _suppressClipboardClick = false;
+            return;
+        }
+
         if (sender is Control { Tag: ClipboardEntryViewModel item } &&
             DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
         {
-            clipboard.SelectedItem = item;
+            // Ctrl+点击 = 加入/移出顺序粘贴队列
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+                clipboard.ToggleQueue(item);
+            else
+                clipboard.SelectedItem = item;
         }
+    }
+
+    private void OnClipboardQueueToggleClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: ClipboardEntryViewModel item } &&
+            DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
+        {
+            clipboard.ToggleQueue(item);
+        }
+
+        e.Handled = true;
+    }
+
+    private void OnClipboardQueueRemoveClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: ClipboardQueueItemViewModel item } &&
+            DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
+        {
+            clipboard.RemoveQueueItem(item);
+        }
+    }
+
+    private void OnClipboardQueueClearClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
+            clipboard.ClearQueue();
+    }
+
+    private void OnClipboardCopyNextClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
+            clipboard.PasteNext(simulate: false);
+    }
+
+    private void OnClipboardItemPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not Control control || control.Tag is not ClipboardEntryViewModel item)
+            return;
+
+        // 星标 / 队列 / 移除按钮自己处理点击，不要触发拖拽
+        if (IsInsideButton(e.Source))
+            return;
+
+        if (!e.GetCurrentPoint(control).Properties.IsLeftButtonPressed)
+            return;
+
+        _clipboardDragPress = e;
+        _clipboardDragItem = item;
+        _clipboardDragOrigin = e.GetPosition(this);
+        _clipboardDragStarted = false;
+    }
+
+    private async void OnClipboardItemPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_clipboardDragPress is null || _clipboardDragItem is null || _clipboardDragStarted)
+            return;
+
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            ResetClipboardDrag();
+            return;
+        }
+
+        var position = e.GetPosition(this);
+        if (Math.Abs(position.X - _clipboardDragOrigin.X) < 8 &&
+            Math.Abs(position.Y - _clipboardDragOrigin.Y) < 8)
+        {
+            return;
+        }
+
+        var payload = (DataContext as WorkspaceViewModel)?.Clipboard?.GetDragPayload(_clipboardDragItem);
+        if (payload is null)
+        {
+            ResetClipboardDrag();
+            return;
+        }
+
+        _clipboardDragStarted = true;
+        _suppressClipboardClick = true;
+
+        try
+        {
+            var transfer = await ClipboardDragService.CreateAsync(payload, StorageProvider);
+            if (transfer is not null)
+                await DragDrop.DoDragDropAsync(_clipboardDragPress, transfer, DragDropEffects.Copy);
+        }
+        catch
+        {
+            // 目标应用拒绝拖放、临时文件被占用等都不该影响页面
+        }
+        finally
+        {
+            ResetClipboardDrag();
+        }
+    }
+
+    private void OnClipboardItemPointerReleased(object? sender, PointerReleasedEventArgs e) =>
+        ResetClipboardDrag();
+
+    private void ResetClipboardDrag()
+    {
+        _clipboardDragPress = null;
+        _clipboardDragItem = null;
+        _clipboardDragStarted = false;
+    }
+
+    private static bool IsInsideButton(object? source)
+    {
+        var control = source as Control;
+        return control?.FindAncestorOfType<Button>(includeSelf: true) is not null;
     }
 
     private void OnClipboardFavoriteClick(object? sender, RoutedEventArgs e)

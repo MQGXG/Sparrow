@@ -466,8 +466,8 @@
                   ColumnDefinitions="1.15*,1*"
                   ColumnSpacing="16">
 
-              <!-- 左：搜索 / 筛选 / 列表 -->
-              <Grid Grid.Column="0" RowDefinitions="Auto,Auto,Auto,*" RowSpacing="10">
+              <!-- 左：搜索 / 筛选 / 队列 / 列表 -->
+              <Grid Grid.Column="0" RowDefinitions="Auto,Auto,Auto,Auto,*" RowSpacing="10">
 
                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto">
                   <TextBox Text="{Binding Query, Mode=TwoWay}"
@@ -533,6 +533,58 @@
                 </ItemsControl>
 
                 <Border Grid.Row="3"
+                        IsVisible="{Binding HasQueue}"
+                        Background="{StaticResource SurfaceRaisedBrush}"
+                        BorderBrush="{StaticResource LineBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="8">
+                  <StackPanel Spacing="4">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                      <TextBlock Text="粘贴队列"
+                                 Classes="section"
+                                 VerticalAlignment="Center" />
+
+                      <ScrollViewer Grid.Column="1"
+                                    Margin="10,0"
+                                    VerticalScrollBarVisibility="Disabled"
+                                    HorizontalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding Queue}">
+                          <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                              <StackPanel Orientation="Horizontal" Spacing="6" />
+                            </ItemsPanelTemplate>
+                          </ItemsControl.ItemsPanel>
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ClipboardQueueItemViewModel">
+                              <Button Classes="hud-chip"
+                                      Content="{Binding Label}"
+                                      Tag="{Binding}"
+                                      ToolTip.Tip="点击移出队列"
+                                      Click="OnClipboardQueueRemoveClick" />
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </ScrollViewer>
+
+                      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+                        <Button Classes="ghost small"
+                                Content="复制下一条"
+                                ToolTip.Tip="写入剪贴板，自己在目标应用按 Ctrl+V"
+                                Click="OnClipboardCopyNextClick" />
+                        <Button Classes="ghost small"
+                                Content="清空"
+                                Click="OnClipboardQueueClearClick" />
+                      </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="{Binding QueueHint}"
+                               FontSize="10"
+                               Foreground="{StaticResource TextMutedBrush}" />
+                  </StackPanel>
+                </Border>
+
+                <Border Grid.Row="4"
                         Classes="panel"
                         Padding="6">
                   <Grid>
@@ -548,7 +600,10 @@
                                     Classes="clip-row"
                                     Classes.selected="{Binding IsSelected}"
                                     Tag="{Binding}"
-                                    Tapped="OnClipboardItemClick">
+                                    Tapped="OnClipboardItemClick"
+                                    PointerPressed="OnClipboardItemPointerPressed"
+                                    PointerMoved="OnClipboardItemPointerMoved"
+                                    PointerReleased="OnClipboardItemPointerReleased">
                               <Border.Styles>
                                 <Style Selector="Border.clip-row:pointerover">
                                   <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
@@ -557,7 +612,7 @@
                                   <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
                                 </Style>
                               </Border.Styles>
-                              <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                              <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
                                 <Border Width="38"
                                         Height="38"
                                         CornerRadius="6"
@@ -593,6 +648,16 @@
                                 </StackPanel>
 
                                 <Button Grid.Column="2"
+                                        Classes="ghost small"
+                                        Width="28"
+                                        Height="28"
+                                        Padding="0"
+                                        Content="{Binding QueueBadge}"
+                                        ToolTip.Tip="加入 / 移出顺序粘贴队列"
+                                        Tag="{Binding}"
+                                        Click="OnClipboardQueueToggleClick" />
+
+                                <Button Grid.Column="3"
                                         Classes="ghost small"
                                         Width="28"
                                         Height="28"

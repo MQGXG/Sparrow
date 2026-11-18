@@ -38,6 +38,20 @@ public sealed class ClipboardMonitor : IDisposable
     private volatile bool _disposed;
     private bool _started;
 
+    /// <summary>本程序自己写剪贴板的抑制窗口（UTC ticks）；期间的上报不记历史。</summary>
+    private long _suppressUntilTicks;
+
+    /// <summary>
+    /// 抑制接下来的一小段时间的剪贴板记录。
+    /// 顺序粘贴会主动写剪贴板，不抑制的话粘贴内容会被当成一次用户复制，
+    /// 在历史里不断置顶。
+    /// </summary>
+    public void SuppressNextWrite(TimeSpan duration)
+    {
+        var until = DateTimeOffset.UtcNow.Add(duration).UtcTicks;
+        Interlocked.Exchange(ref _suppressUntilTicks, until);
+    }
+
     /// <summary>
     /// 暂停记录（隐私开关）。暂停期间剪贴板照常可用，只是不写历史。
     /// </summary>
@@ -158,6 +172,10 @@ public sealed class ClipboardMonitor : IDisposable
     /// </summary>
     private void RecordClipboard()
     {
+        // 自己刚写的剪贴板（顺序粘贴）不记录，避免历史被粘贴内容刷屏
+        if (DateTimeOffset.UtcNow.UtcTicks < Interlocked.Read(ref _suppressUntilTicks))
+            return;
+
         // 复制方可能还握着剪贴板没放，稍等重试几次
         for (var attempt = 0; attempt < 10; attempt++)
         {

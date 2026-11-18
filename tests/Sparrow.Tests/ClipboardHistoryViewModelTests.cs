@@ -181,6 +181,118 @@ public sealed class ClipboardHistoryViewModelTests : IDisposable
         _viewModel.Items.ShouldBeEmpty();
     }
 
+    [Fact]
+    public void 队列_加入移出并重新编号()
+    {
+        _store.AddText("第一条");
+        _store.AddText("第二条");
+        _viewModel.Refresh();
+
+        var first = _viewModel.Items[1];
+        var second = _viewModel.Items[0];
+
+        _viewModel.ToggleQueue(first);
+        _viewModel.ToggleQueue(second);
+
+        _viewModel.HasQueue.ShouldBeTrue();
+        _viewModel.Queue.Select(item => item.Number).ShouldBe([1, 2]);
+        first.IsQueued.ShouldBeTrue();
+        first.QueueBadge.ShouldBe("1");
+
+        // 移出第一项：剩下那项重新编号为 1
+        _viewModel.RemoveQueueItem(_viewModel.Queue[0]);
+        _viewModel.Queue.ShouldHaveSingleItem().Number.ShouldBe(1);
+        second.IsQueued.ShouldBeTrue();
+        second.QueueBadge.ShouldBe("1");
+
+        _viewModel.ClearQueue();
+        _viewModel.HasQueue.ShouldBeFalse();
+        _viewModel.Items.ShouldAllBe(item => !item.IsQueued);
+    }
+
+    [Fact]
+    public void 取队列下一条_文本并前进()
+    {
+        _store.AddText("第一条");
+        _store.AddText("第二条");
+        _viewModel.Refresh();
+
+        _viewModel.ToggleQueue(_viewModel.Items[1]);
+        _viewModel.ToggleQueue(_viewModel.Items[0]);
+
+        var payload = _viewModel.TakeNextPaste();
+
+        payload.ShouldNotBeNull();
+        payload!.Text.ShouldBe("第一条");
+        _viewModel.Queue.ShouldHaveSingleItem().Entry.Text.ShouldBe("第二条");
+
+        var second = _viewModel.TakeNextPaste();
+        second!.Text.ShouldBe("第二条");
+        _viewModel.HasQueue.ShouldBeFalse();
+        _viewModel.TakeNextPaste().ShouldBeNull();
+    }
+
+    [Fact]
+    public void 取队列下一条_图片以PNG返回()
+    {
+        var png = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+        _store.AddImage(png);
+        _viewModel.Refresh();
+
+        _viewModel.ToggleQueue(_viewModel.Items[0]);
+
+        var payload = _viewModel.TakeNextPaste();
+
+        payload!.Kind.ShouldBe(Sparrow.Plugin.Sdk.ClipboardEntryKind.Image);
+        payload.Png!.SequenceEqual(png).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void 复制下一条_写入剪贴板()
+    {
+        _store.AddText("要粘贴的内容");
+        _viewModel.Refresh();
+
+        _viewModel.ToggleQueue(_viewModel.Items[0]);
+        var paste = new ClipboardPasteService(_clipboard);
+        var viewModel = new ClipboardHistoryViewModel(_store, _clipboard, paste);
+        viewModel.ToggleQueue(viewModel.Items[0]);
+
+        viewModel.PasteNext(simulate: false).ShouldBeTrue();
+
+        _clipboard.Text.ShouldBe("要粘贴的内容");
+        viewModel.HasQueue.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void 拖出载荷_文本与文件()
+    {
+        _store.AddText("拖我出去");
+        _viewModel.Refresh();
+
+        var text = _viewModel.GetDragPayload(_viewModel.Items[0]);
+        text!.Text.ShouldBe("拖我出去");
+
+        _store.AddFiles([@"C:\a.txt", @"C:\b.pdf"]);
+        _viewModel.Refresh();
+
+        var files = _viewModel.GetDragPayload(_viewModel.Items[0]);
+        files!.Paths.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public void 删除条目_同时移出队列()
+    {
+        _store.AddText("要删除的");
+        _viewModel.Refresh();
+
+        _viewModel.ToggleQueue(_viewModel.Items[0]);
+        _viewModel.Delete(_viewModel.Items[0]);
+
+        _viewModel.HasQueue.ShouldBeFalse();
+    }
+
     public void Dispose()
     {
         try

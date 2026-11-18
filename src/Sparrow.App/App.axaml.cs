@@ -38,6 +38,7 @@ public partial class App : Application
     private WindowOverlay? _windowOverlay;
     private ToastService? _toasts;
     private int _toolHotkeyRunning;
+    private ClipboardPasteService? _pasteService;
 
     // 贴图窗口需要宿主一直持有引用，否则会被 GC 回收
     private readonly List<PinnedImageWindow> _pins = [];
@@ -60,6 +61,9 @@ public partial class App : Application
 
         // 软件内所有提示信息的统一出口（不在窗口内的地方也能看到）
         _toasts = new ToastService(log);
+
+        // 拖出用的临时文件只保证一次会话；上次留下的按天清理
+        ClipboardDragService.CleanupOldFiles();
 
         // plugins/ 与 Sparrow.App.exe 同级；目录不存在时按「零插件」启动，不报错
         var pluginsRoot = Path.Combine(AppContext.BaseDirectory, "plugins");
@@ -132,6 +136,9 @@ public partial class App : Application
 
         var clipboard = new Win32Clipboard(log);
 
+        // 顺序粘贴：写剪贴板前抑制历史，热键触发时再模拟 Ctrl+V
+        _pasteService = new ClipboardPasteService(clipboard, clipboardMonitor, log);
+
         // 传方法组而不是实例：第一次搜索时才真正扫描 + 加载插件
         _paletteViewModel = new PaletteViewModel(_catalog.GetRegistry, clipboard, log, history, _parameterStore);
         _palette = new PaletteWindow { DataContext = _paletteViewModel };
@@ -160,11 +167,16 @@ public partial class App : Application
             history,
             settingsViewModel,
             _parameterStore,
-            clipboardHistory: clipboardHistory);
+            clipboardHistory: clipboardHistory,
+            pasteService: _pasteService);
         _workspace = new WorkspaceWindow { DataContext = _workspaceViewModel };
 
         var (searchModifiers, searchKey) = ResolveHotkey(settings.SearchHotkey, "Ctrl+Alt+S");
         var (captureModifiers, captureKey) = ResolveHotkey(settings.CaptureHotkey, "Ctrl+Alt+C");
+        var (queueModifiers, queueKey) = ResolveHotkey(settings.QueuePasteHotkey, "Ctrl+Alt+V");
+
+        if (_pasteService is not null)
+            _pasteService.TriggerModifiers = queueModifiers;
 
         // 托盘菜单的名称只读插件清单（toolId → 插件显示名），不加载插件程序集
         IReadOnlyDictionary<string, string> ReadToolNames()
@@ -225,7 +237,14 @@ public partial class App : Application
                 captureModifiers | HotkeyService.ModNoRepeat,
                 captureKey,
                 () => Avalonia.Threading.Dispatcher.UIThread.Post(CaptureAndRecognize),
-                "截图识别")
+                "截图识别"),
+
+            new(
+                0x5A5C,
+                queueModifiers | HotkeyService.ModNoRepeat,
+                queueKey,
+                () => Avalonia.Threading.Dispatcher.UIThread.Post(PasteNextFromQueue),
+                "顺序粘贴")
         };
 
         // 工具热键：按下直接执行，不打开面板
@@ -706,6 +725,24 @@ public partial class App : Application
     /// 工具热键 / 托盘菜单的统一执行入口：不打开面板，直接用同一个上下文构建逻辑执行，
     /// 完成后把结果交给面板展示（长时间交互类工具的结果也写进历史）。
     /// </summary>
+    /// <summary>
+    /// 全局热键：粘贴队列下一条。
+    /// 热键在目标应用里按下时，Sparrow 不抢焦点；写剪贴板后注入 Ctrl+V。
+    /// </summary>
+    private void PasteNextFromQueue()
+    {
+        var clipboard = _workspaceViewModel?.Clipboard;
+
+        if (clipboard is null || !clipboard.HasQueue)
+        {
+            _toasts?.Show("粘贴队列为空：先到「剪贴板」页把条目加入队列", TimeSpan.FromSeconds(4));
+            return;
+        }
+
+        if (!clipboard.PasteNext(simulate: true))
+            _toasts?.Show("顺序粘贴失败：下一条没有可粘贴内容", TimeSpan.FromSeconds(4));
+    }
+
     private async Task ExecuteToolHotkeyAsync(string toolId)
     {
         if (_catalog is null || _palette is null || _paletteViewModel is null)

@@ -45,6 +45,9 @@ public sealed record AppSettings
     /// <summary>剪贴板历史最多保留多少条；图片另存为 PNG 文件。</summary>
     public int ClipboardHistoryMaxEntries { get; init; } = 200;
 
+    /// <summary>顺序粘贴热键：在目标应用里按下，写入队列下一条并模拟 Ctrl+V。</summary>
+    public string QueuePasteHotkey { get; init; } = "Ctrl+Alt+V";
+
     /// <summary>AI 是否启用；默认关闭，用户显式配置后才可用。</summary>
     public bool AiEnabled { get; init; }
 
