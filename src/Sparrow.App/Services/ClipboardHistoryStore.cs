@@ -36,13 +36,17 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
     private readonly object _gate = new();
 
     private int _maxEntries;
+    private int _retentionDays;
+    private long _maxBytes;
     private DateTimeOffset _lastTimestamp;
     private List<StoredEntry> _entries = [];
 
     public ClipboardHistoryStore(
         string path,
         IAppLog log,
-        int maxEntries = DefaultMaxEntries)
+        int maxEntries = DefaultMaxEntries,
+        int retentionDays = 0,
+        long maxBytes = 0)
     {
         _path = path;
         _imagesDirectory = Path.Combine(
@@ -50,6 +54,8 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
             "clipboard-images");
         _log = log;
         _maxEntries = Math.Max(1, maxEntries);
+        _retentionDays = Math.Max(0, retentionDays);
+        _maxBytes = Math.Max(0, maxBytes);
 
         Load();
         TryTrim();
@@ -61,6 +67,16 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
         {
             lock (_gate)
                 return _entries.Count;
+        }
+    }
+
+    /// <summary>历史占用的近似字节数：文本按字符数、图片按 PNG 字节数。</summary>
+    public long ApproximateBytes
+    {
+        get
+        {
+            lock (_gate)
+                return _entries.Sum(entry => Math.Max(0, entry.ByteSize));
         }
     }
 
@@ -265,6 +281,19 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
         lock (_gate)
         {
             _maxEntries = Math.Max(1, maxEntries);
+            TryTrim();
+        }
+
+        Changed?.Invoke();
+    }
+
+    /// <summary>保留策略（天数 / 容量）变化时由设置页调用；立即按新策略清理一次。</summary>
+    public void ConfigureRetention(int retentionDays, long maxBytes)
+    {
+        lock (_gate)
+        {
+            _retentionDays = Math.Max(0, retentionDays);
+            _maxBytes = Math.Max(0, maxBytes);
             TryTrim();
         }
 
@@ -631,7 +660,24 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
         {
             var removed = new List<StoredEntry>();
 
-            if (_entries.Count > _maxEntries)
+            // 1) 按天数：过期的非收藏条目直接走
+            if (_retentionDays > 0)
+            {
+                var cutoff = DateTimeOffset.Now.AddDays(-_retentionDays);
+
+                for (var index = _entries.Count - 1; index >= 0; index--)
+                {
+                    var entry = _entries[index];
+                    if (!entry.Favorite && entry.CreatedAt < cutoff)
+                    {
+                        removed.Add(entry);
+                        _entries.RemoveAt(index);
+                    }
+                }
+            }
+
+            // 2) 按条数：只数非收藏
+            if (_entries.Count(entry => !entry.Favorite) > _maxEntries)
             {
                 var kept = new List<StoredEntry>(_entries.Count);
                 var nonFavorites = 0;
@@ -656,6 +702,23 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
                 }
 
                 _entries = kept;
+            }
+
+            // 3) 按总容量：从最旧的非收藏条目开始删，收藏不参与
+            if (_maxBytes > 0)
+            {
+                var total = _entries.Sum(entry => Math.Max(0, entry.ByteSize));
+
+                for (var index = _entries.Count - 1; index >= 0 && total > _maxBytes; index--)
+                {
+                    var entry = _entries[index];
+                    if (entry.Favorite)
+                        continue;
+
+                    total -= Math.Max(0, entry.ByteSize);
+                    removed.Add(entry);
+                    _entries.RemoveAt(index);
+                }
             }
 
             var directory = Path.GetDirectoryName(_path);

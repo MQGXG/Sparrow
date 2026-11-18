@@ -46,7 +46,13 @@ public partial class WorkspaceViewModel : ObservableObject
         Settings = settings;
 
         if (clipboardHistory is not null)
-            Clipboard = new ClipboardHistoryViewModel(clipboardHistory, clipboard, pasteService);
+        {
+            Clipboard = new ClipboardHistoryViewModel(
+                clipboardHistory,
+                clipboard,
+                pasteService,
+                settings);
+        }
     }
 
     public SettingsViewModel Settings { get; }

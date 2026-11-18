@@ -118,4 +118,45 @@ public sealed class SettingsViewModelTests
         viewModel.StatusMessage.ShouldNotBeNull().ShouldContain("重复");
         store.Load().ToolHotkeys.ShouldBeEmpty();
     }
+
+    [Fact]
+    public void 剪贴板保留策略_保存并广播()
+    {
+        var (viewModel, store, _) = Create();
+
+        (int days, long bytes)? received = null;
+        viewModel.ClipboardRetentionChanged += (d, b) => received = (d, b);
+
+        viewModel.ClipboardRetentionDays = 30;
+        viewModel.ClipboardMaxMb = 64;
+
+        received.ShouldNotBeNull();
+        received!.Value.days.ShouldBe(30);
+        received.Value.bytes.ShouldBe(64L * 1024 * 1024);
+
+        var saved = store.Load();
+        saved.ClipboardHistoryRetentionDays.ShouldBe(30);
+        saved.ClipboardHistoryMaxBytes.ShouldBe(64L * 1024 * 1024);
+    }
+
+    [Fact]
+    public void 排除名单_保存并广播()
+    {
+        var (viewModel, store, _) = Create();
+
+        IReadOnlyList<string>? received = null;
+        viewModel.ClipboardExclusionsChanged += apps => received = apps;
+
+        viewModel.ExcludedApps.ShouldBeEmpty();
+        viewModel.SaveExcludedApps(["chrome", "1Password"]);
+
+        received.ShouldNotBeNull();
+        received!.ShouldContain("chrome");
+        viewModel.ExcludedApps.ShouldContain("1Password");
+        store.Load().ClipboardExcludedApps.ShouldBe(["chrome", "1Password"], ignoreOrder: true);
+
+        // 名单没变时不重复落盘
+        viewModel.SaveExcludedApps(["chrome", "1Password"]);
+        store.Load().ClipboardExcludedApps.Count.ShouldBe(2);
+    }
 }

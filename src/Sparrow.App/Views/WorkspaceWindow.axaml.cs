@@ -284,6 +284,12 @@ public partial class WorkspaceWindow : Window
             clipboard.UndoDelete();
     }
 
+    private void OnClipboardExclusionClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
+            clipboard.ToggleSourceExclusion();
+    }
+
     private void OnClipboardItemPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (sender is not Control control || control.Tag is not ClipboardEntryViewModel item)

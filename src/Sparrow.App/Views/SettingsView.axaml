@@ -311,6 +311,56 @@
 
             <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,14">
               <Border Classes="hud-icon">
+                <Path Data="M5 6h14v14H5zM5 10h14M9 3v5M15 3v5" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="3" Margin="12,0,12,0" VerticalAlignment="Center">
+                <TextBlock Text="剪贴板保留（天）"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="0 表示永久保留；收藏条目不参与清理"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <NumericUpDown Grid.Column="2"
+                             Value="{Binding ClipboardRetentionDays, Mode=TwoWay}"
+                             Minimum="0"
+                             Maximum="3650"
+                             Increment="30"
+                             FormatString="0"
+                             Width="140"
+                             VerticalAlignment="Center" />
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,14">
+              <Border Classes="hud-icon">
+                <Path Data="M4 6h16v4H4zM4 14h16v4H4z" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="3" Margin="12,0,12,0" VerticalAlignment="Center">
+                <TextBlock Text="剪贴板总容量（MB）"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="超出后从最旧的开始删，收藏不参与；0 表示不限制"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <NumericUpDown Grid.Column="2"
+                             Value="{Binding ClipboardMaxMb, Mode=TwoWay}"
+                             Minimum="0"
+                             Maximum="10240"
+                             Increment="64"
+                             FormatString="0"
+                             Width="140"
+                             VerticalAlignment="Center" />
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,14">
+              <Border Classes="hud-icon">
                 <Path Data="M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16M12 8v4l3 2" />
               </Border>
               <StackPanel Grid.Column="1" Spacing="3" Margin="12,0,12,0" VerticalAlignment="Center">

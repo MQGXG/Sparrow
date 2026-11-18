@@ -104,7 +104,9 @@ public partial class App : Application
         var clipboardHistory = new ClipboardHistoryStore(
             clipboardHistoryPath,
             log,
-            settings.ClipboardHistoryMaxEntries);
+            settings.ClipboardHistoryMaxEntries,
+            settings.ClipboardHistoryRetentionDays,
+            settings.ClipboardHistoryMaxBytes);
         var clipboardMonitor = new ClipboardMonitor(clipboardHistory, log)
         {
             Paused = !settings.ClipboardHistoryEnabled
@@ -160,6 +162,13 @@ public partial class App : Application
         // 设置页改完保留策略后，历史存储立即按新规则清理一次
         settingsViewModel.HistoryRetentionChanged += history.Configure;
         settingsViewModel.ClipboardHistoryEnabledChanged += enabled => clipboardMonitor.Paused = !enabled;
+
+        // 「不记录」名单：启动时给监听器一份，设置页改完立即生效
+        clipboardMonitor.SetExcludedApps(settings.ClipboardExcludedApps);
+        settingsViewModel.ClipboardExclusionsChanged += clipboardMonitor.SetExcludedApps;
+
+        // 剪贴板保留策略改完立即清理一次
+        settingsViewModel.ClipboardRetentionChanged += clipboardHistory.ConfigureRetention;
         _workspaceViewModel = new WorkspaceViewModel(
             _catalog,
             clipboard,

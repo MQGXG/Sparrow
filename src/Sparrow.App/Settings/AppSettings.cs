@@ -45,6 +45,15 @@ public sealed record AppSettings
     /// <summary>剪贴板历史最多保留多少条；图片另存为 PNG 文件。</summary>
     public int ClipboardHistoryMaxEntries { get; init; } = 200;
 
+    /// <summary>剪贴板历史保留天数；0 表示不按天数清理。</summary>
+    public int ClipboardHistoryRetentionDays { get; init; }
+
+    /// <summary>剪贴板历史总容量上限（字节）；0 表示不限制。收藏条目不参与清理。</summary>
+    public long ClipboardHistoryMaxBytes { get; init; } = 512L * 1024 * 1024;
+
+    /// <summary>不记录这些来源进程名（如 chrome、1Password）；只影响之后的复制。</summary>
+    public List<string> ClipboardExcludedApps { get; init; } = [];
+
     /// <summary>顺序粘贴热键：在目标应用里按下，写入队列下一条并模拟 Ctrl+V。</summary>
     public string QueuePasteHotkey { get; init; } = "Ctrl+Alt+V";
 

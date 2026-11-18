@@ -37,6 +37,19 @@ public sealed class ClipboardHistoryViewModelTests : IDisposable
         }
     }
 
+    private sealed class FakeExclusions : IClipboardExclusionStore
+    {
+        public List<string> Apps { get; } = [];
+        public IReadOnlyList<string> ExcludedApps => Apps;
+        public int Saves { get; private set; }
+        public void SaveExcludedApps(IReadOnlyList<string> apps)
+        {
+            Apps.Clear();
+            Apps.AddRange(apps);
+            Saves++;
+        }
+    }
+
     private readonly string _directory;
     private readonly ClipboardHistoryStore _store;
     private readonly FakeClipboard _clipboard = new();
@@ -341,6 +354,44 @@ public sealed class ClipboardHistoryViewModelTests : IDisposable
         var restored = _viewModel.Items.ShouldHaveSingleItem();
         restored.Entry.Text.ShouldBe("删除后再恢复");
         restored.Tags.ShouldBe(["重要"], ignoreOrder: true);
+    }
+
+    [Fact]
+    public void 来源排除_切换名单并给出状态()
+    {
+        _store.AddText("来自浏览器", "chrome");
+
+        var exclusions = new FakeExclusions();
+        var viewModel = new ClipboardHistoryViewModel(_store, _clipboard, pasteService: null, exclusions: exclusions);
+        viewModel.Refresh();
+
+        viewModel.SelectedSource = "chrome";
+        viewModel.CanToggleExclusion.ShouldBeTrue();
+        viewModel.ExclusionButtonLabel.ShouldContain("不记录 chrome");
+
+        viewModel.ToggleSourceExclusion();
+
+        exclusions.Apps.ShouldContain("chrome");
+        exclusions.Saves.ShouldBe(1);
+        viewModel.StatusText.ShouldContain("已排除 chrome");
+        viewModel.ExclusionButtonLabel.ShouldContain("恢复记录 chrome");
+
+        viewModel.ToggleSourceExclusion();
+
+        exclusions.Apps.ShouldBeEmpty();
+        viewModel.StatusText.ShouldContain("已恢复记录 chrome");
+    }
+
+    [Fact]
+    public void 概要_显示条数与占用容量()
+    {
+        _store.AddText("第一条内容");
+        _store.AddText("第二条内容");
+
+        _viewModel.Refresh();
+
+        _viewModel.Summary.ShouldContain("条");
+        _viewModel.Summary.ShouldContain("MB");
     }
 
     public void Dispose()

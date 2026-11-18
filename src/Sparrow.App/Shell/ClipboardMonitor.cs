@@ -42,6 +42,20 @@ public sealed class ClipboardMonitor : IDisposable
     /// <summary>本程序自己写剪贴板的抑制窗口（UTC ticks）；期间的上报不记历史。</summary>
     private long _suppressUntilTicks;
 
+    /// <summary>排除的来源进程名；整体替换，读取走引用交换，避免监听线程持锁。</summary>
+    private HashSet<string> _excludedApps = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>设置「不记录」的应用；监听线程每次复制前都会查。</summary>
+    public void SetExcludedApps(IReadOnlyList<string> apps)
+    {
+        Volatile.Write(
+            ref _excludedApps,
+            new HashSet<string>(apps, StringComparer.OrdinalIgnoreCase));
+    }
+
+    private bool IsSourceExcluded(string? sourceApp) =>
+        sourceApp is not null && Volatile.Read(ref _excludedApps).Contains(sourceApp);
+
     /// <summary>
     /// 抑制接下来的一小段时间的剪贴板记录。
     /// 顺序粘贴会主动写剪贴板，不抑制的话粘贴内容会被当成一次用户复制，
@@ -200,6 +214,10 @@ public sealed class ClipboardMonitor : IDisposable
                 return;
 
             var sourceApp = ReadSourceApp();
+
+            // 「不记录」的来源直接跳过：只在读取之前判断，不进存储
+            if (IsSourceExcluded(sourceApp))
+                return;
 
             var text = ReadText();
             if (!string.IsNullOrEmpty(text))

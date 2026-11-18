@@ -12,7 +12,7 @@ namespace Sparrow.App.ViewModels;
 ///
 /// 工具自己的参数不在这里——它们在工具的参数区。
 /// </summary>
-public partial class SettingsViewModel : ObservableObject
+public partial class SettingsViewModel : ObservableObject, IClipboardExclusionStore
 {
     private readonly ToolCatalog _catalog;
     private readonly SettingsStore _store;
@@ -42,6 +42,8 @@ public partial class SettingsViewModel : ObservableObject
         _historyMaxEntries = settings.HistoryMaxEntries;
         _historyRetentionDays = settings.HistoryRetentionDays;
         _clipboardHistoryEnabled = settings.ClipboardHistoryEnabled;
+        _clipboardRetentionDays = settings.ClipboardHistoryRetentionDays;
+        _clipboardMaxMb = Math.Max(0, settings.ClipboardHistoryMaxBytes / (1024 * 1024));
 
         _selectedAiProvider = AiProviders.Find(settings.AiProvider) ?? AiProviders.All[^1];
         _aiEnabled = settings.AiEnabled;
@@ -62,6 +64,35 @@ public partial class SettingsViewModel : ObservableObject
 
     /// <summary>剪贴板历史开关变化时通知宿主，让监听立即暂停 / 恢复。</summary>
     public event Action<bool>? ClipboardHistoryEnabledChanged;
+
+    /// <summary>剪贴板保留策略变化时通知宿主，让存储立即清理一次。</summary>
+    public event Action<int, long>? ClipboardRetentionChanged;
+
+    /// <summary>「不记录」名单变化时通知监听器。</summary>
+    public event Action<IReadOnlyList<string>>? ClipboardExclusionsChanged;
+
+    /// <summary>剪贴板保留天数；0 = 永久。</summary>
+    [ObservableProperty]
+    private int _clipboardRetentionDays;
+
+    /// <summary>剪贴板总容量上限（MB）。</summary>
+    [ObservableProperty]
+    private long _clipboardMaxMb;
+
+    /// <summary>剪贴板页通过这个接口改排除名单。</summary>
+    public IReadOnlyList<string> ExcludedApps => _settings.ClipboardExcludedApps;
+
+    public void SaveExcludedApps(IReadOnlyList<string> apps)
+    {
+        var next = new List<string>(apps);
+
+        if (next.SequenceEqual(_settings.ClipboardExcludedApps, StringComparer.OrdinalIgnoreCase))
+            return;
+
+        _settings = _settings with { ClipboardExcludedApps = next };
+        _store.Save(_settings);
+        ClipboardExclusionsChanged?.Invoke(next);
+    }
 
     public ObservableCollection<PluginItemViewModel> Plugins { get; } = [];
 
@@ -279,6 +310,32 @@ public partial class SettingsViewModel : ObservableObject
         _store.Save(_settings);
         ClipboardHistoryEnabledChanged?.Invoke(value);
         StatusMessage = value ? "已恢复记录剪贴板历史" : "已暂停记录剪贴板历史（已记录的内容保留）";
+    }
+
+    /// <summary>剪贴板保留策略改完立即清理一次；容量以 MB 存配置。</summary>
+    partial void OnClipboardRetentionDaysChanged(int value) => PersistClipboardRetention();
+
+    partial void OnClipboardMaxMbChanged(long value) => PersistClipboardRetention();
+
+    private void PersistClipboardRetention()
+    {
+        var maxBytes = Math.Max(0, ClipboardMaxMb) * 1024 * 1024;
+
+        if (ClipboardRetentionDays == _settings.ClipboardHistoryRetentionDays
+            && maxBytes == _settings.ClipboardHistoryMaxBytes)
+        {
+            return;
+        }
+
+        _settings = _settings with
+        {
+            ClipboardHistoryRetentionDays = ClipboardRetentionDays,
+            ClipboardHistoryMaxBytes = maxBytes
+        };
+
+        _store.Save(_settings);
+        ClipboardRetentionChanged?.Invoke(ClipboardRetentionDays, maxBytes);
+        StatusMessage = "剪贴板保留策略已更新，立即生效";
     }
 
     /// <summary>

@@ -466,8 +466,8 @@
                   ColumnDefinitions="1.15*,1*"
                   ColumnSpacing="16">
 
-              <!-- 左：搜索 / 筛选 / 队列 / 列表 -->
-              <Grid Grid.Column="0" RowDefinitions="Auto,Auto,Auto,Auto,*" RowSpacing="10">
+              <!-- 左：搜索 / 反馈 / 筛选 / 队列 / 列表 -->
+              <Grid Grid.Column="0" RowDefinitions="Auto,Auto,Auto,Auto,Auto,*" RowSpacing="10">
 
                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto">
                   <TextBox Text="{Binding Query, Mode=TwoWay}"
@@ -498,7 +498,13 @@
                           Click="OnClipboardClearCancelClick" />
                 </Grid>
 
-                <Grid Grid.Row="1" ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Row="1"
+                           Text="{Binding StatusText}"
+                           IsVisible="{Binding HasStatus}"
+                           FontSize="11"
+                           Foreground="{StaticResource AccentBrush}" />
+
+                <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto">
                   <ItemsControl ItemsSource="{Binding Kinds}">
                     <ItemsControl.ItemsPanel>
                       <ItemsPanelTemplate>
@@ -518,15 +524,24 @@
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
 
-                  <ComboBox Grid.Column="1"
+                  <Button Grid.Column="1"
+                          Classes="ghost small"
+                          Content="{Binding ExclusionButtonLabel}"
+                          IsEnabled="{Binding CanToggleExclusion}"
+                          Margin="8,0,6,6"
+                          VerticalAlignment="Top"
+                          ToolTip.Tip="选中一个来源后，让它之后的复制不进历史"
+                          Click="OnClipboardExclusionClick" />
+
+                  <ComboBox Grid.Column="2"
                             ItemsSource="{Binding SourceFilters}"
                             SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
                             MinWidth="118"
-                            Margin="8,0,0,6"
+                            Margin="0,0,0,6"
                             VerticalAlignment="Top" />
                 </Grid>
 
-                <ItemsControl Grid.Row="2"
+                <ItemsControl Grid.Row="3"
                               ItemsSource="{Binding TagFilters}"
                               IsVisible="{Binding HasTagFilters}">
                   <ItemsControl.ItemsPanel>
@@ -547,7 +562,7 @@
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <Border Grid.Row="3"
+                <Border Grid.Row="4"
                         IsVisible="{Binding HasQueue}"
                         Background="{StaticResource SurfaceRaisedBrush}"
                         BorderBrush="{StaticResource LineBrush}"
@@ -599,7 +614,7 @@
                   </StackPanel>
                 </Border>
 
-                <Border Grid.Row="4"
+                <Border Grid.Row="5"
                         Classes="panel"
                         Padding="6">
                   <Grid>

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Shouldly;
 using Sparrow.App;
 using Sparrow.App.Services;
@@ -374,6 +375,91 @@ public sealed class ClipboardHistoryStoreTests
         restored.Kind.ShouldBe(Sparrow.Plugin.Sdk.ClipboardEntryKind.Image);
         temp.Store.LoadImage(restored).ShouldNotBeNull();
     }
+
+    [Fact]
+    public void 按天数清理_过期条目被移除但收藏保留()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "history.jsonl");
+
+        var old = DateTimeOffset.Now.AddDays(-10);
+        File.WriteAllLines(path,
+        [
+            SerializeEntry("过期的", old, favorite: false),
+            SerializeEntry("过期但收藏", old, favorite: true),
+            SerializeEntry("昨天的", DateTimeOffset.Now.AddDays(-1), favorite: false)
+        ]);
+
+        var store = new ClipboardHistoryStore(path, new NullLog(), maxEntries: 200, retentionDays: 7, maxBytes: 0);
+
+        // 过期的非收藏被删；7 天内的和收藏都留下
+        store.Count.ShouldBe(2);
+        store.Recent(10).Select(entry => entry.Text)
+            .ShouldBe(["过期但收藏", "昨天的"]);
+    }
+
+    [Fact]
+    public void 按容量清理_从最旧开始删但收藏保留()
+    {
+        using var temp = new TempStore();
+        var store = new ClipboardHistoryStore(temp.Path, new NullLog(), maxEntries: 200, retentionDays: 0, maxBytes: 30);
+
+        store.AddText("favorite-clip"); // 13
+        var favoriteId = store.Recent(1)[0].Id;
+        store.SetFavorite(favoriteId, true);
+
+        store.AddText("second-clip-1"); // 13
+        store.AddText("third-clip-12"); // 13
+
+        // 总量 39 > 30：从最旧的非收藏开始删，收藏始终在
+        store.Recent(10).ShouldContain(entry => entry.Id == favoriteId);
+        store.ApproximateBytes.ShouldBeLessThanOrEqualTo(30);
+        store.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public void 保留策略改完_立即清理并发通知()
+    {
+        using var temp = new TempStore();
+        var store = new ClipboardHistoryStore(temp.Path, new NullLog());
+
+        store.AddText("第一条内容");
+        store.AddText("第二条内容");
+
+        var notified = 0;
+        store.Changed += () => notified++;
+
+        store.ConfigureRetention(retentionDays: 1, maxBytes: 5);
+
+        notified.ShouldBe(1);
+        store.ApproximateBytes.ShouldBeLessThanOrEqualTo(5);
+    }
+
+    [Fact]
+    public void 近似字节数_累加所有条目()
+    {
+        using var temp = new TempStore();
+        temp.Store.AddText("12345");
+        temp.Store.AddText("6789012345");
+
+        temp.Store.ApproximateBytes.ShouldBe(15);
+    }
+
+    private static string SerializeEntry(string text, DateTimeOffset createdAt, bool favorite) =>
+        JsonSerializer.Serialize(new
+        {
+            id = Guid.NewGuid().ToString("N"),
+            kind = 0,
+            preview = text,
+            text,
+            paths = Array.Empty<string>(),
+            contentHash = "HASH",
+            byteSize = text.Length,
+            createdAt,
+            favorite,
+            tags = Array.Empty<string>()
+        });
 
     [Fact]
     public void 变更通知_新增与收藏都会触发()

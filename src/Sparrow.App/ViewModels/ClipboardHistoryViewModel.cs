@@ -44,6 +44,7 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     private readonly ClipboardHistoryStore _store;
     private readonly IClipboardAccess _clipboard;
     private readonly ClipboardPasteService? _pasteService;
+    private readonly IClipboardExclusionStore? _exclusions;
     private readonly SynchronizationContext? _ui;
     private readonly List<(ClipboardHistoryEntry Entry, byte[]? Png)> _deleted = [];
     private bool _refreshing;
@@ -51,11 +52,13 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     public ClipboardHistoryViewModel(
         ClipboardHistoryStore store,
         IClipboardAccess clipboard,
-        ClipboardPasteService? pasteService = null)
+        ClipboardPasteService? pasteService = null,
+        IClipboardExclusionStore? exclusions = null)
     {
         _store = store;
         _clipboard = clipboard;
         _pasteService = pasteService;
+        _exclusions = exclusions;
         _ui = SynchronizationContext.Current;
 
         Kinds =
@@ -110,7 +113,62 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     [ObservableProperty]
     private string _selectedSource = SourceAll;
 
-    partial void OnSelectedSourceChanged(string value) => Refresh();
+    /// <summary>操作反馈（排除/恢复记录）；空串表示不显示。</summary>
+    [ObservableProperty]
+    private string _statusText = string.Empty;
+
+    public bool HasStatus => StatusText.Length > 0;
+
+    /// <summary>来源行的「不记录」按钮；没选具体应用时禁用。</summary>
+    public bool CanToggleExclusion => _exclusions is not null && SelectedSource != SourceAll;
+
+    public string ExclusionButtonLabel
+    {
+        get
+        {
+            if (SelectedSource == SourceAll || _exclusions is null)
+                return "不记录此应用";
+
+            var excluded = _exclusions.ExcludedApps.Contains(SelectedSource, StringComparer.OrdinalIgnoreCase);
+            return excluded ? $"恢复记录 {SelectedSource}" : $"不记录 {SelectedSource}";
+        }
+    }
+
+    partial void OnStatusTextChanged(string value) => OnPropertyChanged(nameof(HasStatus));
+
+    partial void OnSelectedSourceChanged(string value)
+    {
+        StatusText = string.Empty;
+        Refresh();
+        OnPropertyChanged(nameof(CanToggleExclusion));
+        OnPropertyChanged(nameof(ExclusionButtonLabel));
+    }
+
+    /// <summary>把当前来源加入 / 移出「不记录」名单；只影响之后的复制。</summary>
+    public void ToggleSourceExclusion()
+    {
+        if (_exclusions is null || SelectedSource == SourceAll)
+            return;
+
+        var app = SelectedSource;
+        var list = new List<string>(_exclusions.ExcludedApps);
+
+        if (list.Contains(app, StringComparer.OrdinalIgnoreCase))
+        {
+            list.Remove(app);
+            _exclusions.SaveExcludedApps(list);
+            StatusText = $"已恢复记录 {app}";
+        }
+        else
+        {
+            list.Add(app);
+            _exclusions.SaveExcludedApps(list);
+            StatusText = $"已排除 {app}：之后从它复制的内容不再记录";
+        }
+
+        OnPropertyChanged(nameof(CanToggleExclusion));
+        OnPropertyChanged(nameof(ExclusionButtonLabel));
+    }
 
     [ObservableProperty]
     private ClipboardEntryViewModel? _selectedItem;
@@ -214,9 +272,10 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
                 Items.Add(new ClipboardEntryViewModel(entry, _store));
 
             HasItems = Items.Count > 0;
+            var megabytes = _store.ApproximateBytes / (1024.0 * 1024);
             Summary = Query.Length > 0
-                ? $"匹配 {Items.Count} 条"
-                : $"共 {_store.Count} 条，显示 {Items.Count} 条";
+                ? $"匹配 {Items.Count} 条 · {megabytes:F1} MB"
+                : $"共 {_store.Count} 条 · {megabytes:F1} MB · 显示 {Items.Count} 条";
 
             SyncTagFilters();
 
