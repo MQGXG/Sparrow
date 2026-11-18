@@ -34,6 +34,12 @@ public partial class CaptureWindow : Window
     private const double OcrLinePadding = 2;
     private const double MinSelectionSize = 4;
 
+    /// <summary>鼠标停稳多久后才去查控件树。</summary>
+    private const int ControlProbeDelayMilliseconds = 120;
+
+    /// <summary>一次控件探测超过这个时间视为卡住，允许新的探测。</summary>
+    private const long ProbeStaleMilliseconds = 2000;
+
     private enum DragMode
     {
         None,
@@ -85,6 +91,12 @@ public partial class CaptureWindow : Window
     private IReadOnlyList<WindowCandidate> _candidates = [];
     private WindowCandidate? _currentCandidate;
     private WindowCandidate? _candidateAtPress;
+    private UiElementCandidate? _uiCandidate;
+    private UiElementCandidate? _uiCandidateAtPress;
+    private bool _probeInFlight;
+    private long _probeStartedAt;
+    private bool _forceWindowCandidate;
+    private int _probeGeneration;
     private Point _lastPointerPoint;
     private Rect _selection;
     private Rect _selectionOrigin;
@@ -180,6 +192,7 @@ public partial class CaptureWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        _probeGeneration++;
         _ocrCancellation?.Cancel();
         _ocrCancellation?.Dispose();
         _ocrCancellation = null;
@@ -336,6 +349,9 @@ public partial class CaptureWindow : Window
         // 框外按下：重新拉一个
         // 任何按下都先结束候选态：拖动就是自由选区，单击才用候选窗口
         _candidateAtPress = _currentCandidate;
+        _uiCandidateAtPress = _uiCandidate is not null && Contains(_uiCandidate.Bounds, ToPhysical(point))
+            ? _uiCandidate
+            : null;
         HideCandidate();
 
         BeginCreate(point);
@@ -385,7 +401,9 @@ public partial class CaptureWindow : Window
         _mode = DragMode.None;
 
         var candidateAtPress = _candidateAtPress;
+        var uiCandidateAtPress = _uiCandidateAtPress;
         _candidateAtPress = null;
+        _uiCandidateAtPress = null;
 
         if (mode == DragMode.Create)
         {
@@ -393,10 +411,10 @@ public partial class CaptureWindow : Window
 
             if (_selection.Width < MinSelectionSize || _selection.Height < MinSelectionSize)
             {
-                // 没拖动就是一次单击：有候选窗口就选它
+                // 没拖动就是一次单击：有控件候选选中控件，否则选中窗口
                 if (candidateAtPress is not null)
                 {
-                    ApplyCandidate(candidateAtPress);
+                    ApplyCandidate(candidateAtPress, uiCandidateAtPress);
                     return;
                 }
 
@@ -457,22 +475,32 @@ public partial class CaptureWindow : Window
         UpdateSelectionVisuals();
     }
 
-    /// <summary>鼠标悬停：高亮光标下最上层的窗口。</summary>
+    /// <summary>鼠标悬停：高亮窗口，并在短暂停顿后细化到 UIA 控件。</summary>
     private void UpdateCandidateAt(Point point)
     {
-        var physical = new PixelPoint(
-            _origin.X + (int)Math.Round(point.X * _scaling),
-            _origin.Y + (int)Math.Round(point.Y * _scaling));
+        _forceWindowCandidate = false;
 
-        SetCandidate(WindowCandidates.Pick(_candidates, physical));
+        var physical = ToPhysical(point);
+
+        if (_uiCandidate is not null && !Contains(_uiCandidate.Bounds, physical))
+            SetUiCandidate(null);
+
+        SetWindowCandidate(WindowCandidates.Pick(_candidates, physical));
+
+        ScheduleControlProbe();
     }
 
-    private void SetCandidate(WindowCandidate? candidate)
+    private PixelPoint ToPhysical(Point point) => new(
+        _origin.X + (int)Math.Round(point.X * _scaling),
+        _origin.Y + (int)Math.Round(point.Y * _scaling));
+
+    private void SetWindowCandidate(WindowCandidate? candidate)
     {
         if (candidate?.Handle == _currentCandidate?.Handle)
             return;
 
         _currentCandidate = candidate;
+        _uiCandidate = null;
 
         if (candidate is null)
         {
@@ -480,10 +508,31 @@ public partial class CaptureWindow : Window
             return;
         }
 
-        var x = (candidate.Bounds.X - _origin.X) / _scaling;
-        var y = (candidate.Bounds.Y - _origin.Y) / _scaling;
-        var width = candidate.Bounds.Width / _scaling;
-        var height = candidate.Bounds.Height / _scaling;
+        ShowCandidateVisual(candidate.Bounds, candidate.Title, kind: null);
+    }
+
+    private void SetUiCandidate(UiElementCandidate? candidate)
+    {
+        _uiCandidate = candidate;
+
+        if (candidate is not null)
+        {
+            ShowCandidateVisual(candidate.Bounds, candidate.Title, candidate.ControlType);
+            return;
+        }
+
+        if (_currentCandidate is not null)
+            ShowCandidateVisual(_currentCandidate.Bounds, _currentCandidate.Title, kind: null);
+        else
+            HideCandidate();
+    }
+
+    private void ShowCandidateVisual(PixelRect bounds, string title, string? kind)
+    {
+        var x = (bounds.X - _origin.X) / _scaling;
+        var y = (bounds.Y - _origin.Y) / _scaling;
+        var width = bounds.Width / _scaling;
+        var height = bounds.Height / _scaling;
 
         Canvas.SetLeft(CandidateBox, x);
         Canvas.SetTop(CandidateBox, y);
@@ -491,11 +540,12 @@ public partial class CaptureWindow : Window
         CandidateBox.Height = height;
         CandidateBox.IsVisible = true;
 
-        var title = candidate.Title.Length <= 36
-            ? candidate.Title
-            : candidate.Title[..36] + "…";
+        var name = title.Length <= 32 ? title : title[..32] + "…";
 
-        CandidateText.Text = $"{title}  {candidate.Bounds.Width} × {candidate.Bounds.Height}";
+        CandidateText.Text = kind is null
+            ? $"{name}  {bounds.Width} × {bounds.Height}"
+            : $"{kind} · {name}  {bounds.Width} × {bounds.Height}";
+
         Canvas.SetLeft(CandidateBadge, Math.Max(0, x));
         Canvas.SetTop(CandidateBadge, y >= 34 ? y - 30 : y + 6);
         CandidateBadge.IsVisible = true;
@@ -503,21 +553,28 @@ public partial class CaptureWindow : Window
 
     private void HideCandidate()
     {
+        _probeGeneration++;
         _currentCandidate = null;
+        _uiCandidate = null;
         CandidateBox.IsVisible = false;
         CandidateBadge.IsVisible = false;
     }
 
-    /// <summary>单击候选窗口：把选区设为整个窗口。</summary>
-    private void ApplyCandidate(WindowCandidate candidate)
+    /// <summary>单击候选：控件优先，否则整个窗口。</summary>
+    private void ApplyCandidate(WindowCandidate candidate, UiElementCandidate? uiCandidate)
     {
-        var x = (candidate.Bounds.X - _origin.X) / _scaling;
-        var y = (candidate.Bounds.Y - _origin.Y) / _scaling;
+        ApplyRect(uiCandidate?.Bounds ?? candidate.Bounds);
+    }
+
+    private void ApplyRect(PixelRect bounds)
+    {
+        var x = (bounds.X - _origin.X) / _scaling;
+        var y = (bounds.Y - _origin.Y) / _scaling;
 
         var left = Math.Clamp(x, 0, Math.Max(0, Width - 1));
         var top = Math.Clamp(y, 0, Math.Max(0, Height - 1));
-        var right = Math.Clamp(x + candidate.Bounds.Width / _scaling, left + 1, Width);
-        var bottom = Math.Clamp(y + candidate.Bounds.Height / _scaling, top + 1, Height);
+        var right = Math.Clamp(x + bounds.Width / _scaling, left + 1, Width);
+        var bottom = Math.Clamp(y + bounds.Height / _scaling, top + 1, Height);
 
         _selection = new Rect(left, top, right - left, bottom - top);
 
@@ -531,6 +588,81 @@ public partial class CaptureWindow : Window
         UpdateHandles();
         UpdateSizeBadge(_selection);
         Cursor = MoveCursor;
+    }
+
+    private static bool Contains(PixelRect bounds, PixelPoint point) =>
+        point.X >= bounds.X && point.X < bounds.X + bounds.Width &&
+        point.Y >= bounds.Y && point.Y < bounds.Y + bounds.Height;
+
+    /// <summary>
+    /// 鼠标停稳后再查 UIA，避免每次移动都跨进程遍历控件树。
+    /// 每次移动都把 generation 往前推，旧的等待醒来后自行作废。
+    /// </summary>
+    private void ScheduleControlProbe()
+    {
+        if (_forceWindowCandidate || _hasSelection || OcrLayer.IsVisible || _currentCandidate is null)
+            return;
+
+        var generation = ++_probeGeneration;
+        _ = ProbeAfterDelayAsync(generation);
+    }
+
+    private async Task ProbeAfterDelayAsync(int generation)
+    {
+        try
+        {
+            await Task.Delay(ControlProbeDelayMilliseconds);
+
+            if (generation != _probeGeneration ||
+                _forceWindowCandidate ||
+                _hasSelection ||
+                OcrLayer.IsVisible ||
+                _currentCandidate is null)
+            {
+                return;
+            }
+
+            // 上一次探测可能卡在无响应的应用里；太久就放弃它，重新探测
+            if (_probeInFlight &&
+                Environment.TickCount64 - _probeStartedAt < ProbeStaleMilliseconds)
+            {
+                return;
+            }
+
+            var window = _currentCandidate;
+            var point = WindowCandidates.GetCursorPosition();
+
+            _probeInFlight = true;
+            _probeStartedAt = Environment.TickCount64;
+
+            try
+            {
+                var candidate = await Task.Run(() => UiElementProbe.Probe(window.Handle, point));
+
+                if (generation != _probeGeneration ||
+                    _currentCandidate?.Handle != window.Handle ||
+                    _hasSelection ||
+                    _forceWindowCandidate)
+                {
+                    return;
+                }
+
+                // 探测期间鼠标又动了：这次结果已过时，等下一次防抖
+                var latest = WindowCandidates.GetCursorPosition();
+                if (Math.Abs(latest.X - point.X) > 2 || Math.Abs(latest.Y - point.Y) > 2)
+                    return;
+
+                SetUiCandidate(candidate);
+            }
+            finally
+            {
+                _probeInFlight = false;
+            }
+        }
+        catch
+        {
+            // 探测失败就保持窗口级候选
+        }
     }
 
     private void ApplyMove(Point current)
@@ -1098,13 +1230,30 @@ public partial class CaptureWindow : Window
         // 截图窗口没有文本输入，按物理键还原即可，不需要放行给输入法。
         var key = e.Key == Key.ImeProcessed ? MapPhysicalKey(e.PhysicalKey) : e.Key;
 
-        // Tab：在没有选区时循环切换光标下的窗口（从最上层往后）
+        // Tab：没有选区时切换窗口；控件级由鼠标停顿后自动探测
         if (key == Key.Tab && !_hasSelection && !OcrLayer.IsVisible && _candidates.Count > 0)
         {
-            SetCandidate(WindowCandidates.Next(
+            _forceWindowCandidate = true;
+            _probeGeneration++;
+            _uiCandidate = null;
+
+            var previous = _currentCandidate;
+            _currentCandidate = null;
+
+            var next = WindowCandidates.Next(
                 _candidates,
                 WindowCandidates.GetCursorPosition(),
-                _currentCandidate));
+                previous);
+
+            if (next is null)
+            {
+                HideCandidate();
+            }
+            else
+            {
+                _currentCandidate = next;
+                ShowCandidateVisual(next.Bounds, next.Title, kind: null);
+            }
 
             e.Handled = true;
             return;
