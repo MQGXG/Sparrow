@@ -58,11 +58,16 @@ public sealed class UiElementProbe : IDisposable
     }
 
     /// <summary>在专用线程上探测，永不抛异常；失败或无结果时返回 null。</summary>
-    public Task<UiElementCandidate?> ProbeAsync(IntPtr hwnd, PixelPoint point)
+    /// <param name="stillWanted">每次遍历前询问；返回 false 说明结果已过时，立即放弃。</param>
+    public Task<UiElementCandidate?> ProbeAsync(
+        IntPtr hwnd,
+        PixelPoint point,
+        Func<bool>? stillWanted = null)
     {
         if (_disposed)
             return Task.FromResult<UiElementCandidate?>(null);
 
+        var gate = stillWanted ?? AlwaysWanted;
         var completion = new TaskCompletionSource<UiElementCandidate?>(
             TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -74,7 +79,9 @@ public sealed class UiElementProbe : IDisposable
 
                 try
                 {
-                    candidate = Probe(hwnd, point);
+                    // 排队期间鼠标已经移开：连根节点都不用查
+                    if (gate())
+                        candidate = Probe(hwnd, point, gate);
                 }
                 catch
                 {
@@ -91,6 +98,8 @@ public sealed class UiElementProbe : IDisposable
 
         return completion.Task;
     }
+
+    private static readonly Func<bool> AlwaysWanted = static () => true;
 
     public void Dispose()
     {
@@ -215,12 +224,12 @@ public sealed class UiElementProbe : IDisposable
         }
     }
 
-    private UiElementCandidate? Probe(IntPtr hwnd, PixelPoint point)
+    private UiElementCandidate? Probe(IntPtr hwnd, PixelPoint point, Func<bool> stillWanted)
     {
         if (_request is null)
             return null;
 
-        var candidate = ProbeWindow(hwnd, point);
+        var candidate = ProbeWindow(hwnd, point, stillWanted);
         if (candidate is not null)
             return candidate;
 
@@ -228,7 +237,10 @@ public sealed class UiElementProbe : IDisposable
         // 真正的内容在 Windows.UI.Core.CoreWindow 这类子窗口里
         foreach (var child in ChildWindowsAt(hwnd, point))
         {
-            candidate = ProbeWindow(child, point);
+            if (!stillWanted())
+                return null;
+
+            candidate = ProbeWindow(child, point, stillWanted);
             if (candidate is not null)
                 return candidate;
         }
@@ -236,7 +248,7 @@ public sealed class UiElementProbe : IDisposable
         return null;
     }
 
-    private UiElementCandidate? ProbeWindow(IntPtr hwnd, PixelPoint point)
+    private UiElementCandidate? ProbeWindow(IntPtr hwnd, PixelPoint point, Func<bool> stillWanted)
     {
         if (!_trees.TryGetValue(hwnd, out var root))
         {
@@ -254,6 +266,10 @@ public sealed class UiElementProbe : IDisposable
 
         for (var step = 0; step < MaxSteps; step++)
         {
+            // 长时间遍历期间鼠标可能已经移开，及时收手
+            if (!stillWanted())
+                return null;
+
             if (!TryExpand(current))
                 break;
 

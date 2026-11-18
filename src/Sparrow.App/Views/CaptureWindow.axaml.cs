@@ -34,12 +34,6 @@ public partial class CaptureWindow : Window
     private const double OcrLinePadding = 2;
     private const double MinSelectionSize = 4;
 
-    /// <summary>鼠标停稳多久后才去查控件树。控件树有逐层缓存，停一下就能出结果。</summary>
-    private const int ControlProbeDelayMilliseconds = 50;
-
-    /// <summary>一次控件探测超过这个时间视为卡住，允许新的探测。</summary>
-    private const long ProbeStaleMilliseconds = 2000;
-
     private enum DragMode
     {
         None,
@@ -94,8 +88,6 @@ public partial class CaptureWindow : Window
     private UiElementCandidate? _uiCandidate;
     private UiElementCandidate? _uiCandidateAtPress;
     private UiElementProbe? _uiProbe;
-    private bool _probeInFlight;
-    private long _probeStartedAt;
     private bool _forceWindowCandidate;
     private int _probeGeneration;
     private Point _lastPointerPoint;
@@ -486,7 +478,15 @@ public partial class CaptureWindow : Window
 
         var physical = ToPhysical(point);
 
-        if (_uiCandidate is not null && !Contains(_uiCandidate.Bounds, physical))
+        // 还在同一个控件里：候选不变，不用再查任何东西
+        if (_uiCandidate is not null &&
+            _currentCandidate is not null &&
+            Contains(_uiCandidate.Bounds, physical))
+        {
+            return;
+        }
+
+        if (_uiCandidate is not null)
             SetUiCandidate(null);
 
         SetWindowCandidate(WindowCandidates.Pick(_candidates, physical));
@@ -599,8 +599,9 @@ public partial class CaptureWindow : Window
         point.Y >= bounds.Y && point.Y < bounds.Y + bounds.Height;
 
     /// <summary>
-    /// 鼠标停稳后再查 UIA，避免每次移动都跨进程遍历控件树。
-    /// 每次移动都把 generation 往前推，旧的等待醒来后自行作废。
+    /// 立刻把探测投递到 UIA 线程，不做时间防抖。
+    /// 每次移动都把 generation 往前推，还没轮到的旧任务在 worker 里直接丢掉，
+    /// 所以鼠标扫过时不会真的去查控件树，停下来那一刻的结果才是最接近实时的。
     /// </summary>
     private void ScheduleControlProbe()
     {
@@ -608,64 +609,41 @@ public partial class CaptureWindow : Window
             return;
 
         var generation = ++_probeGeneration;
-        _ = ProbeAfterDelayAsync(generation);
+        _ = ProbeAsync(generation);
     }
 
-    private async Task ProbeAfterDelayAsync(int generation)
+    private async Task ProbeAsync(int generation)
     {
+        var window = _currentCandidate;
+        var probe = _uiProbe;
+
+        if (window is null || probe is null)
+            return;
+
+        var point = WindowCandidates.GetCursorPosition();
+
         try
         {
-            await Task.Delay(ControlProbeDelayMilliseconds);
+            // worker 在真正遍历前会再看一次 generation，过时的任务直接返回
+            var candidate = await probe.ProbeAsync(
+                window.Handle,
+                point,
+                () => generation == Volatile.Read(ref _probeGeneration));
 
             if (generation != _probeGeneration ||
-                _forceWindowCandidate ||
+                _currentCandidate?.Handle != window.Handle ||
                 _hasSelection ||
-                OcrLayer.IsVisible ||
-                _currentCandidate is null)
+                _forceWindowCandidate)
             {
                 return;
             }
 
-            // 上一次探测可能卡在无响应的应用里；太久就放弃它，重新探测
-            if (_probeInFlight &&
-                Environment.TickCount64 - _probeStartedAt < ProbeStaleMilliseconds)
-            {
-                return;
-            }
-
-            var window = _currentCandidate;
-            var point = WindowCandidates.GetCursorPosition();
-            var probe = _uiProbe;
-
-            if (probe is null)
+            // 探测期间鼠标又动了：这次结果已过时，等下一次移动重新探测
+            var latest = WindowCandidates.GetCursorPosition();
+            if (Math.Abs(latest.X - point.X) > 2 || Math.Abs(latest.Y - point.Y) > 2)
                 return;
 
-            _probeInFlight = true;
-            _probeStartedAt = Environment.TickCount64;
-
-            try
-            {
-                var candidate = await probe.ProbeAsync(window.Handle, point);
-
-                if (generation != _probeGeneration ||
-                    _currentCandidate?.Handle != window.Handle ||
-                    _hasSelection ||
-                    _forceWindowCandidate)
-                {
-                    return;
-                }
-
-                // 探测期间鼠标又动了：这次结果已过时，等下一次防抖
-                var latest = WindowCandidates.GetCursorPosition();
-                if (Math.Abs(latest.X - point.X) > 2 || Math.Abs(latest.Y - point.Y) > 2)
-                    return;
-
-                SetUiCandidate(candidate);
-            }
-            finally
-            {
-                _probeInFlight = false;
-            }
+            SetUiCandidate(candidate);
         }
         catch
         {
