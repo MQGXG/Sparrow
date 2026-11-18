@@ -20,6 +20,27 @@
                Fill="#80000000"
                IsHitTestVisible="False" />
 
+    <!-- 悬停候选：鼠标停在哪个窗口就虚线框住哪个 -->
+    <Rectangle x:Name="CandidateBox"
+               IsVisible="False"
+               IsHitTestVisible="False"
+               Fill="Transparent"
+               Stroke="#E5A44C"
+               StrokeThickness="1.5"
+               StrokeDashArray="4,3" />
+    <Border x:Name="CandidateBadge"
+            IsVisible="False"
+            IsHitTestVisible="False"
+            Background="{StaticResource OverlayBrush}"
+            BorderBrush="{StaticResource LineStrongBrush}"
+            BorderThickness="1"
+            CornerRadius="6"
+            Padding="6,3">
+      <TextBlock x:Name="CandidateText"
+                 FontSize="11"
+                 Foreground="{StaticResource TextPrimaryBrush}" />
+    </Border>
+
     <Rectangle x:Name="Selection"
                IsVisible="False"
                Fill="{StaticResource AccentSelectionBrush}"

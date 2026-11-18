@@ -82,6 +82,10 @@ public partial class CaptureWindow : Window
     private OcrBoxMode _ocrBoxMode = OcrBoxMode.Hover;
     private readonly List<Rectangle> _ocrBoxes = [];
     private Rectangle? _hoveredOcrBox;
+    private IReadOnlyList<WindowCandidate> _candidates = [];
+    private WindowCandidate? _currentCandidate;
+    private WindowCandidate? _candidateAtPress;
+    private Point _lastPointerPoint;
     private Rect _selection;
     private Rect _selectionOrigin;
     private Point _dragOrigin;
@@ -167,6 +171,8 @@ public partial class CaptureWindow : Window
     {
         base.OnOpened(e);
         ApplyVirtualScreenBounds();
+
+        _candidates = WindowCandidates.Enumerate(TryGetPlatformHandle()?.Handle ?? IntPtr.Zero);
 
         if (FreezeOnOpen)
             _ = FreezeScreenAsync();
@@ -328,6 +334,10 @@ public partial class CaptureWindow : Window
         }
 
         // 框外按下：重新拉一个
+        // 任何按下都先结束候选态：拖动就是自由选区，单击才用候选窗口
+        _candidateAtPress = _currentCandidate;
+        HideCandidate();
+
         BeginCreate(point);
         e.Handled = true;
     }
@@ -335,6 +345,17 @@ public partial class CaptureWindow : Window
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         var point = e.GetPosition(this);
+        _lastPointerPoint = point;
+
+        // 没有选区、没有 OCR overlay 时，悬停高亮光标下的窗口
+        if (_mode == DragMode.None && !_hasSelection && !OcrLayer.IsVisible)
+        {
+            UpdateCandidateAt(point);
+        }
+        else
+        {
+            HideCandidate();
+        }
 
         switch (_mode)
         {
@@ -363,12 +384,22 @@ public partial class CaptureWindow : Window
         var mode = _mode;
         _mode = DragMode.None;
 
+        var candidateAtPress = _candidateAtPress;
+        _candidateAtPress = null;
+
         if (mode == DragMode.Create)
         {
             ApplyCreate(e.GetPosition(this));
 
             if (_selection.Width < MinSelectionSize || _selection.Height < MinSelectionSize)
             {
+                // 没拖动就是一次单击：有候选窗口就选它
+                if (candidateAtPress is not null)
+                {
+                    ApplyCandidate(candidateAtPress);
+                    return;
+                }
+
                 ResetSelection();
                 return;
             }
@@ -424,6 +455,82 @@ public partial class CaptureWindow : Window
 
         _selection = new Rect(x, y, width, height);
         UpdateSelectionVisuals();
+    }
+
+    /// <summary>鼠标悬停：高亮光标下最上层的窗口。</summary>
+    private void UpdateCandidateAt(Point point)
+    {
+        var physical = new PixelPoint(
+            _origin.X + (int)Math.Round(point.X * _scaling),
+            _origin.Y + (int)Math.Round(point.Y * _scaling));
+
+        SetCandidate(WindowCandidates.Pick(_candidates, physical));
+    }
+
+    private void SetCandidate(WindowCandidate? candidate)
+    {
+        if (candidate?.Handle == _currentCandidate?.Handle)
+            return;
+
+        _currentCandidate = candidate;
+
+        if (candidate is null)
+        {
+            HideCandidate();
+            return;
+        }
+
+        var x = (candidate.Bounds.X - _origin.X) / _scaling;
+        var y = (candidate.Bounds.Y - _origin.Y) / _scaling;
+        var width = candidate.Bounds.Width / _scaling;
+        var height = candidate.Bounds.Height / _scaling;
+
+        Canvas.SetLeft(CandidateBox, x);
+        Canvas.SetTop(CandidateBox, y);
+        CandidateBox.Width = width;
+        CandidateBox.Height = height;
+        CandidateBox.IsVisible = true;
+
+        var title = candidate.Title.Length <= 36
+            ? candidate.Title
+            : candidate.Title[..36] + "…";
+
+        CandidateText.Text = $"{title}  {candidate.Bounds.Width} × {candidate.Bounds.Height}";
+        Canvas.SetLeft(CandidateBadge, Math.Max(0, x));
+        Canvas.SetTop(CandidateBadge, y >= 34 ? y - 30 : y + 6);
+        CandidateBadge.IsVisible = true;
+    }
+
+    private void HideCandidate()
+    {
+        _currentCandidate = null;
+        CandidateBox.IsVisible = false;
+        CandidateBadge.IsVisible = false;
+    }
+
+    /// <summary>单击候选窗口：把选区设为整个窗口。</summary>
+    private void ApplyCandidate(WindowCandidate candidate)
+    {
+        var x = (candidate.Bounds.X - _origin.X) / _scaling;
+        var y = (candidate.Bounds.Y - _origin.Y) / _scaling;
+
+        var left = Math.Clamp(x, 0, Math.Max(0, Width - 1));
+        var top = Math.Clamp(y, 0, Math.Max(0, Height - 1));
+        var right = Math.Clamp(x + candidate.Bounds.Width / _scaling, left + 1, Width);
+        var bottom = Math.Clamp(y + candidate.Bounds.Height / _scaling, top + 1, Height);
+
+        _selection = new Rect(left, top, right - left, bottom - top);
+
+        if (_selection.Width < MinSelectionSize || _selection.Height < MinSelectionSize)
+            return;
+
+        _hasSelection = true;
+        HideCandidate();
+        UpdateSelectionVisuals();
+        ShowActionBar(_selection);
+        UpdateHandles();
+        UpdateSizeBadge(_selection);
+        Cursor = MoveCursor;
     }
 
     private void ApplyMove(Point current)
@@ -581,6 +688,7 @@ public partial class CaptureWindow : Window
         _hasSelection = false;
         _selection = default;
         Selection.IsVisible = false;
+        HideCandidate();
         HandleLayer.IsVisible = false;
         ActionBar.IsVisible = false;
         SizeBadge.IsVisible = false;
@@ -989,6 +1097,18 @@ public partial class CaptureWindow : Window
         // 中文输入法会把字母键标记成 ImeProcessed；
         // 截图窗口没有文本输入，按物理键还原即可，不需要放行给输入法。
         var key = e.Key == Key.ImeProcessed ? MapPhysicalKey(e.PhysicalKey) : e.Key;
+
+        // Tab：在没有选区时循环切换光标下的窗口（从最上层往后）
+        if (key == Key.Tab && !_hasSelection && !OcrLayer.IsVisible && _candidates.Count > 0)
+        {
+            SetCandidate(WindowCandidates.Next(
+                _candidates,
+                WindowCandidates.GetCursorPosition(),
+                _currentCandidate));
+
+            e.Handled = true;
+            return;
+        }
 
         // B：切换识别框显示方式（全部 / 悬停 / 关闭）
         if (key == Key.B && OcrLayer.IsVisible)
