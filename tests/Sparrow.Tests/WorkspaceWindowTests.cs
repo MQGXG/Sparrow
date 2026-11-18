@@ -10,6 +10,7 @@ using Sparrow.App.Settings;
 using Sparrow.App.ViewModels;
 using Sparrow.App.Views;
 using Sparrow.Plugin.Sdk;
+using Sparrow.Plugin.Sdk.Inputs;
 
 namespace Sparrow.Tests;
 
@@ -53,6 +54,22 @@ public sealed class WorkspaceWindowTests
             Name = "批量测试",
             Category = "ocr",
             Accepts = InputShape.Files,
+            Produces = OutputShape.Text
+        };
+
+        public Task<ToolResult> ExecuteAsync(ToolContext context, CancellationToken cancellationToken) =>
+            Task.FromResult(ToolResult.InvalidInput("未实现"));
+    }
+
+    /// <summary>图片集工具的最小实现：只为验证缩略图条与「添加图片…」入口。</summary>
+    private sealed class ImagesTool : ITool
+    {
+        public ToolDescriptor Descriptor { get; } = new()
+        {
+            Id = "test.images",
+            Name = "图片集测试",
+            Category = "ocr",
+            Accepts = InputShape.Images,
             Produces = OutputShape.Text
         };
 
@@ -135,6 +152,61 @@ public sealed class WorkspaceWindowTests
             var choose = window.FindControl<Button>("ChooseFilesButton");
             choose.ShouldNotBeNull("文件类工具必须提供选择文件入口");
             choose.IsVisible.ShouldBeTrue();
+        }
+        finally
+        {
+            catalog.Dispose();
+        }
+    }
+
+    [AvaloniaFact]
+    public void 图片集工具_显示缩略图条与添加入口()
+    {
+        var (window, viewModel, catalog) = Create();
+        try
+        {
+            viewModel.IsDetailOpen = true;
+            viewModel.SelectedTool = new ToolItemViewModel(new ToolEntry
+            {
+                Tool = new ImagesTool(),
+                Host = NullToolHost.Instance
+            });
+
+            viewModel.InputImages.Add(new InputImageViewModel(
+                new ImageInput(new byte[] { 1, 2, 3 }, ImageFormat.Png) { Name = "a.png" },
+                sourcePath: null));
+
+            viewModel.IsImagesInput.ShouldBeTrue();
+
+            var choose = window.FindControl<Button>("ChooseImagesButton");
+            choose.ShouldNotBeNull("图片集工具必须提供添加图片入口");
+            choose.IsVisible.ShouldBeTrue();
+
+            var strip = window.FindControl<ItemsControl>("InputImagesStrip");
+            strip.ShouldNotBeNull("图片集工具必须显示缩略图条");
+            strip.IsVisible.ShouldBeTrue();
+            strip.ItemCount.ShouldBe(1);
+        }
+        finally
+        {
+            catalog.Dispose();
+        }
+    }
+
+    [AvaloniaFact]
+    public void 大图预览_Esc只关预览不退出工具页()
+    {
+        var (window, viewModel, catalog) = Create();
+        try
+        {
+            viewModel.IsDetailOpen = true;
+            viewModel.IsImagePreviewVisible = true;
+
+            window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.None, null);
+
+            viewModel.IsImagePreviewVisible.ShouldBeFalse();
+            viewModel.IsDetailOpen.ShouldBeTrue();
+            window.IsVisible.ShouldBeTrue();
         }
         finally
         {

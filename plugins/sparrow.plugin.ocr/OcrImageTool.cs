@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.Extensions.Logging;
 using Sparrow.Plugin.Sdk;
 using Sparrow.Plugin.Sdk.Inputs;
@@ -8,19 +9,16 @@ namespace Sparrow.Plugin.Ocr;
 /// <summary>
 /// OCR 工具（C 档：进程插件）。
 ///
+/// 输入是 1..N 张图片：剪贴板单图、拖入多图、文件选择都归一到这里。
 /// 宿主看到的仍然只是一个 <see cref="ITool"/>；「用子进程」是这个插件自己的实现细节。
 /// 这么做是因为 Paddle + OpenCV 体积大、无 arm64，而且原生崩溃会带走宿主——
 /// 进程隔离是唯一可靠的解法。
+///
+/// 多张图复用同一个 worker 会话：模型只初始化一次，
+/// 否则「批量」会被每张图 1-3 秒的初始化淹没。
 /// </summary>
 public sealed class OcrImageTool : ITool
 {
-    private const string ParameterLayout = "layout";
-
-    private const string LayoutLine = "按行";
-    private const string LayoutRaw = "原文";
-    private const string LayoutPosition = "按位置";
-    private const string LayoutTable = "表格";
-
     private readonly IOcrWorkerRunner _runner;
 
     public OcrImageTool() : this(new ProcessOcrWorkerRunner())
@@ -34,9 +32,9 @@ public sealed class OcrImageTool : ITool
         Id = "sparrow.ocr.image",
         Name = "图片文字识别",
         Category = "ocr",
-        Description = "识别剪贴板图片里的文字",
-        Keywords = ["ocr", "识别", "文字", "图片", "提取"],
-        Accepts = InputShape.Image,
+        Description = "识别剪贴板、拖入或选择的多张图片文字",
+        Keywords = ["ocr", "识别", "文字", "图片", "批量", "多图", "提取"],
+        Accepts = InputShape.Images,
         Produces = OutputShape.Text,
         Requires = PlatformCapability.Ocr,
         Order = 30,
@@ -49,11 +47,11 @@ public sealed class OcrImageTool : ITool
 
     public async Task<ToolResult> ExecuteAsync(ToolContext context, CancellationToken cancellationToken)
     {
-        if (context.Input is not ImageInput image)
+        if (context.Input is not ImageSetInput set)
             return ToolResult.InvalidInput("需要图片输入");
 
-        if (image.ByteSize == 0)
-            return ToolResult.InvalidInput("图片为空");
+        if (set.Images.Count == 0)
+            return ToolResult.InvalidInput("没有可识别的图片");
 
         if (context.Host is null)
             return ToolResult.Failed("宿主未注入能力，无法定位 OCR worker");
@@ -64,18 +62,59 @@ public sealed class OcrImageTool : ITool
         if (!File.Exists(workerPath))
             return ToolResult.Failed($"OCR worker 不存在：{workerPath}");
 
+        var language = context.GetParameter(OcrParameters.LanguageKey, "ch");
+        var layout = OcrParameters.ResolveLayout(context);
+
+        var sections = new List<(string Name, string Text)>();
+        var lines = new List<OcrTextLine>();
+
         try
         {
-            var language = context.GetParameter("language", "ch");
-
             await using var session = await _runner.StartAsync(workerPath, language, cancellationToken);
-            var output = await session.RecognizeAsync(image.Data, cancellationToken);
 
-            var error = OcrOutputComposer.TryReadError(output);
-            if (error is not null)
-                return ToolResult.Failed("OCR 执行失败", error);
+            for (var index = 0; index < set.Images.Count; index++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
 
-            return ToolResult.Ok(OcrOutputComposer.Compose(output, OcrParameters.ResolveLayout(context)));
+                var image = set.Images[index];
+                var name = DisplayName(image, index);
+
+                context.Progress?.Report(new ToolProgress(
+                    index / (double)set.Images.Count,
+                    $"正在识别 {index + 1}/{set.Images.Count}：{name}"));
+
+                if (image.ByteSize == 0)
+                {
+                    sections.Add((name, string.Empty));
+                    continue;
+                }
+
+                try
+                {
+                    var output = await session.RecognizeAsync(image.Data, cancellationToken);
+
+                    var error = OcrOutputComposer.TryReadError(output);
+                    if (error is not null)
+                    {
+                        context.Host.Logger.LogWarning("OCR：{Name} 失败：{Error}", name, error);
+                        sections.Add((name, string.Empty));
+                        continue;
+                    }
+
+                    var payload = OcrOutputComposer.Compose(output, layout);
+                    sections.Add((name, payload.Text));
+
+                    // 行框只对单张有意义：截图叠加层用它做「点行复制」
+                    if (set.Images.Count == 1)
+                        lines.AddRange(payload.Lines);
+                }
+                catch (OcrWorkerException ex)
+                {
+                    // 单张失败不能让整批停下
+                    context.Host.Logger.LogWarning("OCR：{Name} 失败：{Error}", name, ex.Message);
+                    sections.Add((name, string.Empty));
+                }
+            }
         }
         catch (OperationCanceledException)
         {
@@ -87,5 +126,60 @@ public sealed class OcrImageTool : ITool
             context.Host.Logger.LogError(ex, "OCR worker 执行失败");
             return ToolResult.Failed("OCR 执行失败", ex.Message);
         }
+
+        var recognized = sections.Count(section => !string.IsNullOrWhiteSpace(section.Text));
+        if (recognized == 0)
+            return ToolResult.Failed("没有识别到文字", "图片无法解码、没有文字或 worker 异常");
+
+        context.Progress?.Report(new ToolProgress(1, "整理结果"));
+
+        // 单张不套标题：面板 / 截图结果应该是干净正文
+        var text = set.Images.Count == 1
+            ? sections[0].Text.Trim()
+            : ComposeBatchText(sections);
+
+        return ToolResult.Ok(new OcrResultPayload(text, lines));
     }
+
+    /// <summary>
+    /// 多张图拼成一份可读文本：识别成功的按文件分节，失败的集中在末尾说明。
+    /// 纯函数，便于单测。
+    /// </summary>
+    public static string ComposeBatchText(IReadOnlyList<(string Name, string Text)> sections)
+    {
+        var builder = new StringBuilder();
+        var failed = new List<string>();
+
+        foreach (var (name, text) in sections)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                failed.Add(name);
+                continue;
+            }
+
+            if (builder.Length > 0)
+                builder.AppendLine();
+
+            builder.Append("## ").AppendLine(name);
+            builder.AppendLine();
+            builder.AppendLine(text.TrimEnd());
+        }
+
+        if (failed.Count > 0)
+        {
+            if (builder.Length > 0)
+                builder.AppendLine();
+
+            builder.AppendLine("---");
+            builder.Append("未识别：").Append(failed.Count).AppendLine(" 个文件");
+            foreach (var name in failed)
+                builder.Append("- ").AppendLine(name);
+        }
+
+        return builder.ToString().TrimEnd();
+    }
+
+    private static string DisplayName(ImageInput image, int index) =>
+        string.IsNullOrWhiteSpace(image.Name) ? $"图片 {index + 1}" : image.Name;
 }

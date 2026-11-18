@@ -1,7 +1,6 @@
 using Shouldly;
 using Sparrow.App;
 using Sparrow.App.Plugins;
-using Sparrow.App.Services;
 using Sparrow.Plugin.Ocr;
 using Sparrow.Plugin.Sdk;
 using Sparrow.Plugin.Sdk.Inputs;
@@ -11,7 +10,7 @@ using Xunit;
 namespace Sparrow.Tests;
 
 /// <summary>
-/// 批量识别的真实子进程路径：一次会话连续识别多张。
+/// 多张识别的真实子进程路径：一次会话连续识别多张。
 ///
 /// 这条测试保护的是 worker 协议本身——多帧 stdin、每帧一行 stdout、
 /// 模型只初始化一次。假 runner 测不到这些。
@@ -47,12 +46,15 @@ public sealed class OcrBatchIntegrationTests
 
             var host = new ToolHost("sparrow.plugin.ocr", pluginDirectory, new NullLog());
 
-            var result = await new OcrBatchTool().ExecuteAsync(
+            var result = await new OcrImageTool().ExecuteAsync(
                 new ToolContext
                 {
-                    Input = new FileSetInput([first, second]),
-                    Host = host,
-                    Files = new ScopedFileAccess([first, second])
+                    Input = new ImageSetInput(
+                    [
+                        new ImageInput(File.ReadAllBytes(first), ImageFormat.Png) { Name = "one.png" },
+                        new ImageInput(File.ReadAllBytes(second), ImageFormat.Png) { Name = "two.png" }
+                    ]),
+                    Host = host
                 },
                 CancellationToken.None);
 

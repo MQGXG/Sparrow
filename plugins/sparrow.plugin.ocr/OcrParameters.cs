@@ -49,9 +49,4 @@ internal static class OcrParameters
     /// <summary>worker 固定在插件目录的 worker 子目录下。</summary>
     public static string WorkerPath(IToolHost host) =>
         Path.Combine(host.PluginDirectory, "worker", "Sparrow.Ocr.Worker.exe");
-
-    /// <summary>批量工具只处理这些扩展名；其余文件直接跳过并在结果里说明。</summary>
-    public static bool IsImage(string path) =>
-        Path.GetExtension(path).ToLowerInvariant() is
-            ".png" or ".jpg" or ".jpeg" or ".webp" or ".bmp" or ".gif" or ".tif" or ".tiff";
 }

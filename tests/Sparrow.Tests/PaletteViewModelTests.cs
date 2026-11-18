@@ -4,8 +4,10 @@ using Sparrow.App.Plugins;
 using Sparrow.App.Services;
 using Sparrow.App.ViewModels;
 using Sparrow.Plugin.Json.Format;
+using Sparrow.Plugin.Files.Hash;
 using Sparrow.Plugin.Ocr;
 using Sparrow.Plugin.Sdk;
+using Sparrow.Plugin.Sdk.Inputs;
 using Sparrow.Plugin.Sdk.Payloads;
 using Xunit;
 
@@ -166,7 +168,7 @@ public sealed class PaletteViewModelTests
     [Fact]
     public void 文件类工具_面板里提示去工作区()
     {
-        var tool = new OcrBatchTool();
+        var tool = new FileHashTool();
         var viewModel = new PaletteViewModel(
             () => ToolRegistry.FromTools([tool]),
             new FakeClipboard { Text = "剪贴板文本" },
@@ -181,6 +183,49 @@ public sealed class PaletteViewModelTests
 
         context.ShouldBeNull();
         error!.ShouldContain("工作区");
+    }
+
+    /// <summary>面板只有剪贴板这一张图：图片集工具应该接住它，而不是报输入错误。</summary>
+    [Fact]
+    public void 图片集工具_面板用剪贴板图片()
+    {
+        var tool = new OcrImageTool();
+        var viewModel = new PaletteViewModel(
+            () => ToolRegistry.FromTools([tool]),
+            new FakeClipboard { ImagePng = [1, 2, 3] },
+            new NullLog(),
+            new NullHistoryStore());
+
+        var (context, error) = viewModel.CreateContext(new ToolEntry
+        {
+            Tool = tool,
+            Host = NullToolHost.Instance
+        });
+
+        error.ShouldBeNull();
+        context!.Input.ShouldBeOfType<ImageSetInput>()
+            .Images.ShouldHaveSingleItem()
+            .Name.ShouldBe("剪贴板图片");
+    }
+
+    [Fact]
+    public void 图片集工具_剪贴板没有图片时给出提示()
+    {
+        var tool = new OcrImageTool();
+        var viewModel = new PaletteViewModel(
+            () => ToolRegistry.FromTools([tool]),
+            new FakeClipboard(),
+            new NullLog(),
+            new NullHistoryStore());
+
+        var (context, error) = viewModel.CreateContext(new ToolEntry
+        {
+            Tool = tool,
+            Host = NullToolHost.Instance
+        });
+
+        context.ShouldBeNull();
+        error!.ShouldContain("没有图片");
     }
 
     /// <summary>

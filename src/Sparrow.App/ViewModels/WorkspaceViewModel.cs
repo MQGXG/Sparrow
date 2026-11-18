@@ -176,17 +176,39 @@ public partial class WorkspaceViewModel : ObservableObject
 
     public bool HasRecentTools => RecentTools.Count > 0;
 
-    /// <summary>输入框提示：优先显示拖入的图片，其次按工具输入形态给出说明。</summary>
+    /// <summary>输入框提示：图片集 / 拖入的图片 / 文件清单 / 工具输入形态，依次给出说明。</summary>
     public string InputHint => IsImageInput && HasDroppedImage
         ? $"将使用拖入的图片：{_droppedImageName}"
-        : IsFilesInput
-            ? DroppedFileSummary
-            : SelectedTool?.Entry.Descriptor.Accepts switch
-            {
-                InputShape.Image => "将使用剪贴板里的图片",
-                InputShape.None => "此工具不需要输入",
-                _ => "输入内容…"
-            };
+        : IsImagesInput
+            ? InputImageSummary
+            : IsFilesInput
+                ? DroppedFileSummary
+                : SelectedTool?.Entry.Descriptor.Accepts switch
+                {
+                    InputShape.Image => "将使用剪贴板里的图片",
+                    InputShape.None => "此工具不需要输入",
+                    _ => "输入内容…"
+                };
+
+    /// <summary>图片集提示：张数 + 前三个文件名，其余折叠。</summary>
+    private string InputImageSummary
+    {
+        get
+        {
+            if (InputImages.Count == 0)
+                return "把图片拖进窗口，或点「添加图片…」（可多选）";
+
+            var names = InputImages
+                .Take(3)
+                .Select(image => image.Name)
+                .Where(name => name.Length > 0);
+
+            var text = string.Join("、", names);
+            return InputImages.Count > 3
+                ? $"将识别 {InputImages.Count} 张图片：{text} 等"
+                : $"将识别 {InputImages.Count} 张图片：{text}";
+        }
+    }
 
     /// <summary>文件输入工具的提示：列出前几个文件名，其余折叠成「等 N 个」。</summary>
     private string DroppedFileSummary
@@ -214,6 +236,25 @@ public partial class WorkspaceViewModel : ObservableObject
 
     /// <summary>文件类工具（批量识别等）：输入来自拖入或选择的多个文件。</summary>
     public bool IsFilesInput => SelectedTool?.Entry.Descriptor.Accepts == InputShape.Files;
+
+    /// <summary>图片集工具（OCR）：输入是 1..N 张图片，来源不限。</summary>
+    public bool IsImagesInput => SelectedTool?.Entry.Descriptor.Accepts == InputShape.Images;
+
+    /// <summary>图片集里的图片；缩略图条直接绑定它。</summary>
+    public ObservableCollection<InputImageViewModel> InputImages { get; } = [];
+
+    public int InputImageCount => InputImages.Count;
+
+    public bool HasInputImages => InputImages.Count > 0;
+
+    public bool CanClearInputImages => IsImagesInput && HasInputImages;
+
+    /// <summary>页内大图预览（点缩略图打开）。</summary>
+    [ObservableProperty]
+    private bool _isImagePreviewVisible;
+
+    [ObservableProperty]
+    private byte[]? _previewImagePng;
 
     public int DroppedFileCount => _droppedFiles.Count;
 
@@ -252,6 +293,11 @@ public partial class WorkspaceViewModel : ObservableObject
 
     private const long MaxDroppedImageBytes = 20 * 1024 * 1024;
     private const long MaxDroppedTextBytes = 2 * 1024 * 1024;
+
+    /// <summary>图片集上限：再多就不是「顺手识别」，而是批量处理产品了。</summary>
+    private const int MaxInputImageCount = 50;
+
+    private const long MaxInputImagesTotalBytes = 200L * 1024 * 1024;
 
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -473,6 +519,10 @@ public partial class WorkspaceViewModel : ObservableObject
         OnPropertyChanged(nameof(IsTextInput));
         OnPropertyChanged(nameof(IsImageInput));
         OnPropertyChanged(nameof(IsFilesInput));
+        OnPropertyChanged(nameof(IsImagesInput));
+        OnPropertyChanged(nameof(HasInputImages));
+        OnPropertyChanged(nameof(InputImageCount));
+        OnPropertyChanged(nameof(CanClearInputImages));
         OnPropertyChanged(nameof(CanClearDroppedImage));
         OnPropertyChanged(nameof(CanClearDroppedFiles));
     }
@@ -673,7 +723,9 @@ public partial class WorkspaceViewModel : ObservableObject
             var context = new ToolContext
             {
                 Input = input,
-                Source = input is FileSetInput ? ToolSource.Dropped : ToolSource.Clipboard,
+                Source = input is FileSetInput or ImageSetInput
+                    ? ToolSource.Dropped
+                    : ToolSource.Clipboard,
                 Parameters = parameters,
                 Host = entry.Host,
                 Progress = progress,
@@ -878,53 +930,53 @@ public partial class WorkspaceViewModel : ObservableObject
     public void HideSettings() => IsSettingsVisible = false;
 
     /// <summary>
-    /// 处理拖入的文件：先记进文件清单（文件类工具直接用），
-    /// 再为图片/文本工具做单文件特化。
+    /// 处理拖入的文件：图片进图片集 / 单图输入，多文件进文件清单，
+    /// 文本文件填输入框。分流规则见 docs/plans/2026-11-18-ocr-image-set-design.md。
     /// </summary>
     public void AcceptDroppedFiles(IReadOnlyList<string> paths)
     {
         if (paths.Count == 0)
             return;
 
+        var imagePaths = paths
+            .Where(path => ImageExtensions.Contains(Path.GetExtension(path)))
+            .ToList();
+
+        // 全是图片：交给图片集（OCR 这类工具），不再要求用户先选对卡片
+        if (imagePaths.Count == paths.Count)
+        {
+            AddInputImages(paths);
+
+            if (InputImages.Count == 0)
+                return;
+
+            // 当前是单图工具：保留「拖入图片优先」的老行为
+            if (IsImageInput)
+                SetDroppedImage(imagePaths[0]);
+            else if (!IsImagesInput)
+                OpenFirstMatching(InputShape.Images);
+
+            return;
+        }
+
         SetDroppedFiles(paths);
+
+        // 当前就在图片集工具里：混合文件也只收图片，不跳走
+        if (IsImagesInput)
+        {
+            if (imagePaths.Count > 0)
+                AddInputImages(imagePaths);
+
+            return;
+        }
 
         // 当前就是文件类工具：多选文件全部留给它，不做单文件特化
         if (IsFilesInput)
             return;
 
-        // 多选更像批量场景：有文件类工具就直接切过去
+        // 混合 / 多选：有文件类工具就直接切过去
         if (paths.Count > 1 && OpenFirstMatching(InputShape.Files))
             return;
-
-        var imagePath = paths.FirstOrDefault(path => ImageExtensions.Contains(Path.GetExtension(path)));
-        if (imagePath is not null)
-        {
-            try
-            {
-                var info = new FileInfo(imagePath);
-                if (info.Length > MaxDroppedImageBytes)
-                {
-                    ShowError("图片超过 20 MB，请先压缩");
-                    return;
-                }
-
-                _droppedImagePng = File.ReadAllBytes(imagePath);
-                _droppedImageFormat = FormatFromExtension(Path.GetExtension(imagePath));
-                _droppedImageName = Path.GetFileName(imagePath);
-                HasDroppedImage = true;
-
-                // 当前不是图片工具时，自动切到第一个图片工具，省一次点击
-                if (!IsImageInput)
-                    OpenFirstMatching(InputShape.Image);
-
-                return;
-            }
-            catch (Exception ex)
-            {
-                ShowError($"读取图片失败：{ex.Message}");
-                return;
-            }
-        }
 
         var textPath = paths.FirstOrDefault(path => TextExtensions.Contains(Path.GetExtension(path)));
         if (textPath is not null)
@@ -953,6 +1005,171 @@ public partial class WorkspaceViewModel : ObservableObject
         }
 
         ShowError("只支持拖入图片或文本文件");
+    }
+
+    /// <summary>把一张图片设为单图工具的输入（拖入优先于剪贴板）。</summary>
+    private void SetDroppedImage(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            if (info.Length > MaxDroppedImageBytes)
+            {
+                ShowError("图片超过 20 MB，请先压缩");
+                return;
+            }
+
+            _droppedImagePng = File.ReadAllBytes(path);
+            _droppedImageFormat = FormatFromExtension(Path.GetExtension(path));
+            _droppedImageName = Path.GetFileName(path);
+            HasDroppedImage = true;
+        }
+        catch (Exception ex)
+        {
+            ShowError($"读取图片失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>「添加图片…」的结果：加入图片集，必要时切到图片集工具。</summary>
+    public void AcceptPickedImages(IReadOnlyList<string> paths)
+    {
+        if (paths.Count == 0)
+            return;
+
+        AddInputImages(paths);
+
+        if (InputImages.Count > 0 && !IsImagesInput)
+            OpenFirstMatching(InputShape.Images);
+    }
+
+    /// <summary>
+    /// 把磁盘图片加入图片集；返回实际加入数量。
+    /// 非图片、超限、重复路径都会跳过并说明，不让一次坏文件毁掉整次选择。
+    /// </summary>
+    public int AddInputImages(IReadOnlyList<string> paths)
+    {
+        var added = 0;
+
+        foreach (var path in paths.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (!ImageExtensions.Contains(Path.GetExtension(path)))
+                continue;
+
+            if (InputImages.Count >= MaxInputImageCount)
+            {
+                ShowError($"最多一次处理 {MaxInputImageCount} 张图片");
+                break;
+            }
+
+            if (InputImages.Any(image =>
+                    string.Equals(image.SourcePath, path, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            try
+            {
+                var info = new FileInfo(path);
+
+                if (info.Length > MaxDroppedImageBytes)
+                {
+                    ShowError($"「{info.Name}」超过 20 MB，已跳过");
+                    continue;
+                }
+
+                var total = InputImages.Sum(image => (long)image.Input.ByteSize) + info.Length;
+                if (total > MaxInputImagesTotalBytes)
+                {
+                    ShowError("图片总大小超过 200 MB，已停止添加");
+                    break;
+                }
+
+                var bytes = File.ReadAllBytes(path);
+                var input = new ImageInput(bytes, FormatFromExtension(Path.GetExtension(path)))
+                {
+                    Name = info.Name
+                };
+
+                InputImages.Add(new InputImageViewModel(input, path));
+                added++;
+            }
+            catch (Exception ex)
+            {
+                ShowError($"读取图片失败：{ex.Message}");
+            }
+        }
+
+        NotifyInputImagesChanged();
+        return added;
+    }
+
+    /// <summary>把剪贴板图片加入图片集。</summary>
+    public void AddClipboardImage()
+    {
+        var png = _clipboard.GetImagePng();
+        if (png is null)
+        {
+            ShowError("剪贴板里没有图片");
+            return;
+        }
+
+        if (InputImages.Count >= MaxInputImageCount)
+        {
+            ShowError($"最多一次处理 {MaxInputImageCount} 张图片");
+            return;
+        }
+
+        var name = InputImages.Count == 0
+            ? "剪贴板图片"
+            : $"剪贴板图片 {InputImages.Count + 1}";
+
+        InputImages.Add(new InputImageViewModel(
+            new ImageInput(png, ImageFormat.Png) { Name = name },
+            sourcePath: null));
+
+        NotifyInputImagesChanged();
+
+        if (!IsImagesInput)
+            OpenFirstMatching(InputShape.Images);
+    }
+
+    public void RemoveInputImage(InputImageViewModel image)
+    {
+        if (!InputImages.Remove(image))
+            return;
+
+        if (IsImagePreviewVisible)
+            HideImagePreview();
+
+        NotifyInputImagesChanged();
+    }
+
+    public void ClearInputImages()
+    {
+        if (InputImages.Count == 0)
+            return;
+
+        InputImages.Clear();
+        HideImagePreview();
+        NotifyInputImagesChanged();
+    }
+
+    public void ShowImagePreview(InputImageViewModel image)
+    {
+        PreviewImagePng = image.PreviewBytes;
+        IsImagePreviewVisible = true;
+    }
+
+    public void HideImagePreview()
+    {
+        IsImagePreviewVisible = false;
+        PreviewImagePng = null;
+    }
+
+    private void NotifyInputImagesChanged()
+    {
+        OnPropertyChanged(nameof(InputImageCount));
+        OnPropertyChanged(nameof(HasInputImages));
+        OnPropertyChanged(nameof(CanClearInputImages));
+        OnPropertyChanged(nameof(InputHint));
     }
 
     public void ClearDroppedImage()
@@ -1039,6 +1256,17 @@ public partial class WorkspaceViewModel : ObservableObject
             return new FileSetInput(_droppedFiles.ToArray());
         }
 
+        if (descriptor.Accepts == InputShape.Images)
+        {
+            if (InputImages.Count == 0)
+            {
+                error = "还没有图片。把图片拖进窗口，或点「添加图片…」。";
+                return null;
+            }
+
+            return new ImageSetInput(InputImages.Select(image => image.Input).ToArray());
+        }
+
         if (descriptor.Accepts == InputShape.Image)
         {
             // 拖入的图片优先；没有才回退到剪贴板
@@ -1062,6 +1290,7 @@ public partial class WorkspaceViewModel : ObservableObject
     {
         TextInput text => text.Text.Length <= 120 ? text.Text : text.Text[..120] + "…",
         ImageInput image => $"图片 {image.ByteSize} 字节",
+        ImageSetInput images => $"{images.Images.Count} 张图片",
         FileSetInput files => $"{files.Paths.Count} 个文件",
         _ => input.GetType().Name
     };

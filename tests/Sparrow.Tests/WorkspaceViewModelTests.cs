@@ -41,15 +41,27 @@ public sealed class WorkspaceViewModelTests
         }
         """;
 
-    /// <summary>文件类工具的来源：批量识别接受 Files 输入。</summary>
+    /// <summary>图片集工具的来源：OCR 接受 1..N 张图片。</summary>
     private const string OcrManifest = """
         {
           "id": "sparrow.plugin.ocr",
           "name": "OCR",
-          "version": "0.2.0",
+          "version": "0.3.0",
           "sdkVersion": "1.0",
           "entryAssembly": "Sparrow.Plugin.Ocr.dll",
-          "tools": ["sparrow.ocr.image", "sparrow.ocr.batch"]
+          "tools": ["sparrow.ocr.image"]
+        }
+        """;
+
+    /// <summary>文件类工具的来源：文件哈希接受 Files 输入。</summary>
+    private const string FilesHashManifest = """
+        {
+          "id": "sparrow.plugin.files-hash",
+          "name": "文件哈希",
+          "version": "0.1.0",
+          "sdkVersion": "1.0",
+          "entryAssembly": "Sparrow.Plugin.Files.Hash.dll",
+          "tools": ["sparrow.files.hash"]
         }
         """;
 
@@ -103,6 +115,7 @@ public sealed class WorkspaceViewModelTests
             CreatePlugin("sparrow.plugin.json-format", JsonManifest, "Sparrow.Plugin.Json.Format.dll");
             CreatePlugin("sparrow.plugin.dev-base64", Base64Manifest, "Sparrow.Plugin.Dev.Base64.dll");
             CreatePlugin("sparrow.plugin.ocr", OcrManifest, "Sparrow.Plugin.Ocr.dll");
+            CreatePlugin("sparrow.plugin.files-hash", FilesHashManifest, "Sparrow.Plugin.Files.Hash.dll");
         }
 
         private void CreatePlugin(string directoryName, string manifestJson, string entryAssembly)
@@ -136,7 +149,8 @@ public sealed class WorkspaceViewModelTests
     private static WorkspaceViewModel Create(
         ToolCatalog catalog,
         IHistoryStore history,
-        ToolParameterStore? parameters = null)
+        ToolParameterStore? parameters = null,
+        IClipboardAccess? clipboard = null)
     {
         var log = new NullLog();
         var settings = new AppSettings();
@@ -148,7 +162,7 @@ public sealed class WorkspaceViewModelTests
 
         return new WorkspaceViewModel(
             catalog,
-            new FakeClipboard { Text = "clipboard" },
+            clipboard ?? new FakeClipboard { Text = "clipboard" },
             log,
             history,
             settingsViewModel,
@@ -308,7 +322,7 @@ public sealed class WorkspaceViewModelTests
     }
 
     [Fact]
-    public async Task 拖入图片_记录为输入并可清除()
+    public async Task 拖入单张图片_进入图片集()
     {
         using var root = new TempPluginRoot();
         using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
@@ -321,15 +335,17 @@ public sealed class WorkspaceViewModelTests
 
         viewModel.AcceptDroppedFiles([path]);
 
-        viewModel.HasDroppedImage.ShouldBeTrue();
+        // 合并后单张也走图片集：不必先打开「图片文字识别」再拖
+        viewModel.IsImagesInput.ShouldBeTrue();
+        viewModel.InputImageCount.ShouldBe(1);
 
-        viewModel.ClearDroppedImage();
+        viewModel.ClearInputImages();
 
-        viewModel.HasDroppedImage.ShouldBeFalse();
+        viewModel.InputImageCount.ShouldBe(0);
     }
 
     [Fact]
-    public async Task 拖入多个文件_切到文件类工具并保留文件清单()
+    public async Task 拖入多张图片_合并进图片集并切到OCRTool()
     {
         using var root = new TempPluginRoot();
         using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
@@ -343,10 +359,39 @@ public sealed class WorkspaceViewModelTests
 
         viewModel.AcceptDroppedFiles([first, second]);
 
-        // 多选更像批量场景：自动进入文件类工具（批量识别）
+        // 全是图片：自动进入图片集工具，不再要求先选对卡片
+        viewModel.IsDetailOpen.ShouldBeTrue();
+        viewModel.IsImagesInput.ShouldBeTrue();
+        viewModel.SelectedTool!.Entry.Descriptor.Id.ShouldBe("sparrow.ocr.image");
+
+        viewModel.InputImageCount.ShouldBe(2);
+        viewModel.InputHint.ShouldContain("2 张图片");
+        viewModel.CanClearInputImages.ShouldBeTrue();
+
+        viewModel.ClearInputImages();
+
+        viewModel.InputImageCount.ShouldBe(0);
+        viewModel.CanClearInputImages.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task 拖入多个非图片文件_切到文件类工具并保留文件清单()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+        await viewModel.ReloadAsync();
+
+        var first = System.IO.Path.Combine(root.Path, "a.txt");
+        var second = System.IO.Path.Combine(root.Path, "b.pdf");
+        File.WriteAllText(first, "a");
+        File.WriteAllText(second, "b");
+
+        viewModel.AcceptDroppedFiles([first, second]);
+
         viewModel.IsDetailOpen.ShouldBeTrue();
         viewModel.IsFilesInput.ShouldBeTrue();
-        viewModel.SelectedTool!.Entry.Descriptor.Id.ShouldBe("sparrow.ocr.batch");
+        viewModel.SelectedTool!.Entry.Descriptor.Id.ShouldBe("sparrow.files.hash");
 
         viewModel.DroppedFileCount.ShouldBe(2);
         viewModel.InputHint.ShouldContain("2 个文件");
@@ -368,13 +413,57 @@ public sealed class WorkspaceViewModelTests
 
         var tool = viewModel.Groups
             .SelectMany(group => group.Tools)
-            .First(item => item.Entry.Descriptor.Id == "sparrow.ocr.batch");
+            .First(item => item.Entry.Descriptor.Id == "sparrow.files.hash");
 
         viewModel.OpenTool(tool);
         await viewModel.ExecuteAsync();
 
         viewModel.HasError.ShouldBeTrue();
         viewModel.ErrorText!.ShouldContain("选择文件");
+    }
+
+    [Fact]
+    public async Task 图片集工具没有图片_执行时给出明确提示()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+        await viewModel.ReloadAsync();
+
+        var tool = viewModel.Groups
+            .SelectMany(group => group.Tools)
+            .First(item => item.Entry.Descriptor.Id == "sparrow.ocr.image");
+
+        viewModel.OpenTool(tool);
+        await viewModel.ExecuteAsync();
+
+        viewModel.HasError.ShouldBeTrue();
+        viewModel.ErrorText!.ShouldContain("添加图片");
+    }
+
+    [Fact]
+    public async Task 剪贴板图片加入图片集_并能在预览里打开()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var clipboard = new FakeClipboard { ImagePng = [1, 2, 3] };
+        var viewModel = Create(catalog, new FakeHistory(), clipboard: clipboard);
+        await viewModel.ReloadAsync();
+
+        viewModel.AddClipboardImage();
+
+        viewModel.IsImagesInput.ShouldBeTrue();
+        viewModel.InputImageCount.ShouldBe(1);
+        viewModel.InputImages[0].Name.ShouldBe("剪贴板图片");
+
+        viewModel.ShowImagePreview(viewModel.InputImages[0]);
+
+        viewModel.IsImagePreviewVisible.ShouldBeTrue();
+        viewModel.PreviewImagePng!.SequenceEqual(new byte[] { 1, 2, 3 }).ShouldBeTrue();
+
+        viewModel.HideImagePreview();
+
+        viewModel.IsImagePreviewVisible.ShouldBeFalse();
     }
 
     [Fact]

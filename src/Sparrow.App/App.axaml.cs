@@ -384,7 +384,7 @@ public partial class App : Application
             return CaptureOcrResult.Failed("工具目录尚未就绪");
 
         var entry = _catalog.GetRegistry()
-            .FindAccepting(InputShape.Image)
+            .FindAccepting(InputShape.Images)
             .FirstOrDefault();
 
         if (entry is null)
@@ -396,7 +396,10 @@ public partial class App : Application
         {
             var context = new ToolContext
             {
-                Input = new ImageInput(png, ImageFormat.Png),
+                Input = new ImageSetInput(
+                [
+                    new ImageInput(png, ImageFormat.Png) { Name = "截图" }
+                ]),
                 Source = ToolSource.Screenshot,
                 Parameters = BuildParameters(entry),
                 Host = entry.Host

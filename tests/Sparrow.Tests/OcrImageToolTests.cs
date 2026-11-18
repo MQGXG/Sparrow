@@ -18,6 +18,72 @@ public sealed class OcrImageToolTests
         public void Error(string message, Exception? exception = null) { }
     }
 
+    private sealed class FakeSession : IOcrWorkerSession
+    {
+        private readonly Queue<string> _outputs;
+
+        public FakeSession(IEnumerable<string> outputs) => _outputs = new Queue<string>(outputs);
+
+        public int Calls { get; private set; }
+
+        public Task<string> RecognizeAsync(ReadOnlyMemory<byte> image, CancellationToken cancellationToken)
+        {
+            Calls++;
+            return Task.FromResult(_outputs.Count > 0 ? _outputs.Dequeue() : Result(string.Empty));
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class FakeRunner : IOcrWorkerRunner
+    {
+        private readonly FakeSession _session;
+
+        public FakeRunner(IEnumerable<string> outputs) => _session = new FakeSession(outputs);
+
+        public int Sessions { get; private set; }
+
+        public FakeSession Session => _session;
+
+        public Task<IOcrWorkerSession> StartAsync(
+            string workerPath,
+            string language,
+            CancellationToken cancellationToken)
+        {
+            Sessions++;
+            return Task.FromResult<IOcrWorkerSession>(_session);
+        }
+    }
+
+    private sealed class CollectingProgress : IProgress<ToolProgress>
+    {
+        public List<ToolProgress> Reports { get; } = [];
+
+        public void Report(ToolProgress value) => Reports.Add(value);
+    }
+
+    private static string Result(string text) =>
+        $$"""{"text":"{{text}}","regions":[]}""";
+
+    private static ImageInput Image(string name, params byte[] bytes)
+    {
+        byte[] data = bytes.Length == 0 ? [1, 2, 3] : bytes;
+        return new ImageInput(data, ImageFormat.Png) { Name = name };
+    }
+
+    /// <summary>只校验 worker 是否存在的假宿主目录。</summary>
+    private static string CreateWorkerDirectory()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        var worker = Path.Combine(root, "worker");
+        Directory.CreateDirectory(worker);
+        File.WriteAllBytes(Path.Combine(worker, "Sparrow.Ocr.Worker.exe"), [0]);
+        return root;
+    }
+
+    private static ToolHost CreateHost(string pluginDirectory) =>
+        new("sparrow.plugin.ocr", pluginDirectory, new NullLog());
+
     [Fact]
     public async Task 非图片输入_返回InvalidInput()
     {
@@ -30,12 +96,12 @@ public sealed class OcrImageToolTests
     }
 
     [Fact]
-    public async Task 空图片_返回InvalidInput()
+    public async Task 空图片集_返回InvalidInput()
     {
         var result = await new OcrImageTool().ExecuteAsync(
             new ToolContext
             {
-                Input = new ImageInput(ReadOnlyMemory<byte>.Empty, ImageFormat.Png),
+                Input = new ImageSetInput([]),
                 Host = NullToolHost.Instance
             },
             CancellationToken.None);
@@ -48,7 +114,7 @@ public sealed class OcrImageToolTests
     public async Task 没有宿主_返回Failed而不是抛异常()
     {
         var result = await new OcrImageTool().ExecuteAsync(
-            new ToolContext { Input = new ImageInput(new byte[] { 1, 2, 3 }, ImageFormat.Png) },
+            new ToolContext { Input = new ImageSetInput([Image("a.png")]) },
             CancellationToken.None);
 
         result.Success.ShouldBeFalse();
@@ -63,7 +129,7 @@ public sealed class OcrImageToolTests
         var result = await new OcrImageTool().ExecuteAsync(
             new ToolContext
             {
-                Input = new ImageInput(new byte[] { 1, 2, 3 }, ImageFormat.Png),
+                Input = new ImageSetInput([Image("a.png")]),
                 Host = host
             },
             CancellationToken.None);
@@ -73,16 +139,116 @@ public sealed class OcrImageToolTests
     }
 
     [Fact]
-    public void 描述符_声明图片输入与Ocr能力()
+    public void 描述符_声明图片集输入与Ocr能力()
     {
         var descriptor = new OcrImageTool().Descriptor;
 
         descriptor.Id.ShouldBe("sparrow.ocr.image");
-        descriptor.Accepts.ShouldBe(InputShape.Image);
+        descriptor.Accepts.ShouldBe(InputShape.Images);
         descriptor.Produces.ShouldBe(OutputShape.Text);
         descriptor.Requires.ShouldBe(PlatformCapability.Ocr);
         descriptor.Parameters.ShouldContain(p => p.Key == "language");
         descriptor.Parameters.ShouldContain(p => p.Key == "layout");
+    }
+
+    [Fact]
+    public async Task 单张图片_输出纯文本不带文件名标题()
+    {
+        var runner = new FakeRunner([Result("HELLO")]);
+
+        var result = await new OcrImageTool(runner).ExecuteAsync(
+            new ToolContext
+            {
+                Input = new ImageSetInput([Image("a.png")]),
+                Host = CreateHost(CreateWorkerDirectory())
+            },
+            CancellationToken.None);
+
+        result.Success.ShouldBeTrue();
+
+        var text = result.Payload.ShouldBeOfType<OcrResultPayload>().Text;
+        text.ShouldBe("HELLO");
+        text.ShouldNotContain("##");
+    }
+
+    [Fact]
+    public async Task 多张图片_复用同一会话并按文件名分节()
+    {
+        var runner = new FakeRunner([Result("第一张"), Result("第二张")]);
+        var progress = new CollectingProgress();
+
+        var result = await new OcrImageTool(runner).ExecuteAsync(
+            new ToolContext
+            {
+                Input = new ImageSetInput([Image("a.png"), Image("b.jpg")]),
+                Host = CreateHost(CreateWorkerDirectory()),
+                Progress = progress
+            },
+            CancellationToken.None);
+
+        result.Success.ShouldBeTrue();
+
+        var text = result.Payload.ShouldBeOfType<OcrResultPayload>().Text;
+        text.ShouldContain("## a.png");
+        text.ShouldContain("第一张");
+        text.ShouldContain("## b.jpg");
+        text.ShouldContain("第二张");
+
+        // 模型只加载一次
+        runner.Sessions.ShouldBe(1);
+        runner.Session.Calls.ShouldBe(2);
+        progress.Reports.ShouldNotBeEmpty();
+        progress.Reports.Last().Percent.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task 单张失败_不影响其他图片()
+    {
+        var runner = new FakeRunner(["""{"error":"无法解码图片"}""", Result("第二张")]);
+
+        var result = await new OcrImageTool(runner).ExecuteAsync(
+            new ToolContext
+            {
+                Input = new ImageSetInput([Image("a.png"), Image("b.png")]),
+                Host = CreateHost(CreateWorkerDirectory())
+            },
+            CancellationToken.None);
+
+        result.Success.ShouldBeTrue();
+
+        var text = result.Payload.ShouldBeOfType<OcrResultPayload>().Text;
+        text.ShouldContain("第二张");
+        text.ShouldContain("未识别：1 个文件");
+        text.ShouldContain("- a.png");
+    }
+
+    [Fact]
+    public async Task 全部失败_返回Failed()
+    {
+        var runner = new FakeRunner(["""{"error":"坏图"}"""]);
+
+        var result = await new OcrImageTool(runner).ExecuteAsync(
+            new ToolContext
+            {
+                Input = new ImageSetInput([Image("a.png")]),
+                Host = CreateHost(CreateWorkerDirectory())
+            },
+            CancellationToken.None);
+
+        result.Success.ShouldBeFalse();
+        result.Error!.Message.ShouldContain("没有识别到文字");
+    }
+
+    [Fact]
+    public void 多图拼接_关闭失败项只留正文()
+    {
+        var text = OcrImageTool.ComposeBatchText(
+            [("a.png", "一"), ("b.png", ""), ("c.png", "三")]);
+
+        text.ShouldContain("## a.png");
+        text.ShouldContain("## c.png");
+        text.ShouldContain("未识别：1 个文件");
+        text.ShouldContain("- b.png");
     }
 
     /// <summary>
@@ -90,7 +256,7 @@ public sealed class OcrImageToolTests
     /// 依赖 OCR 插件构建目录里的 worker，路径从仓库根算，不依赖测试输出目录。
     /// </summary>
     [Fact]
-    public async Task 假worker_能通过stdin收图并返回文本()
+    public async Task 真实worker_单张图片能识别()
     {
         var repoRoot = FindRepoRoot();
         var pluginDirectory = Path.Combine(
@@ -105,7 +271,10 @@ public sealed class OcrImageToolTests
         var result = await new OcrImageTool().ExecuteAsync(
             new ToolContext
             {
-                Input = new ImageInput(png, ImageFormat.Png),
+                Input = new ImageSetInput(
+                [
+                    new ImageInput(png, ImageFormat.Png) { Name = "hello.png" }
+                ]),
                 Host = host
             },
             CancellationToken.None);

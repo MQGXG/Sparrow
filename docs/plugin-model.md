@@ -143,7 +143,7 @@ Sparrow.Plugin.Sdk
 ├─ ToolDescriptor.cs       元数据
 ├─ ToolParameter.cs        参数声明
 ├─ ToolContext.cs          输入
-├─ Inputs/                 TextInput, ImageInput, FileSetInput, EmptyInput
+├─ Inputs/                 TextInput, ImageInput, ImageSetInput, FileSetInput, EmptyInput
 ├─ IFileAccess.cs          本次输入对应的只读文件访问（仅在 Files 输入时非空）
 ├─ ToolResult.cs           输出
 ├─ Payloads/               TextPayload, OcrResultPayload, SvgPayload, ImagePayload, FileSetPayload, TablePayload
@@ -205,6 +205,10 @@ public interface IToolHost
 图片经 `LoadImage` 取回字节，插件仍然不碰文件系统。
 
 进度上报不在这里，而在 `ToolContext.Progress`——因为它是「这一次执行」的状态，不是插件的长期能力。
+
+**图片有单张与图片集两种形态。** 单图工具（缩放 / 转换）收 `ImageInput`；
+需要 1..N 张时收 `ImageSetInput`（例如 OCR：剪贴板单图、拖入多图、文件选择都归一到这里）。
+采集是宿主的事，插件只拿字节与展示名，不关心来源。
 
 **文件读取同理，也在 `ToolContext.Files`（`IFileAccess`）。** 输入是 `FileSetInput` 时宿主注入一个
 只读访问器：只允许读取本次输入里出现的路径，越权返回 `null`。插件因此能处理用户拖入的文件，
@@ -387,6 +391,7 @@ plugin.sdkVersion 的 major  ==  host.sdkVersion 的 major   → 兼容
 | 1.2 | `IToolHost.Windows` / `IWindowOverlay`：窗口拾取 + 图钉 |
 | 1.3 | `ToolContext.Files` / `IFileAccess`：本次输入的只读文件访问 |
 | 1.4 | `IFileAccess.OpenRead`：流式读取，供哈希等大文件工具使用 |
+| 1.5 | `InputShape.Images` / `ImageSetInput`：一组图片（1..N 张），供批量图片工具使用 |
 
 ---
 

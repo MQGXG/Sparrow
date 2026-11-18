@@ -71,7 +71,7 @@ Tool : InputShape × Params → OutputShape
 可以单独升级      各自的依赖互不影响
 ```
 
-**例外的只有一种**：一个插件声明多个工具（`plugin.json` 的 `tools` 数组有多项）。目前只有 OCR（`image` 单张 + `batch` 批量共用同一个 worker 与 Paddle 模型）会这样。
+**例外的只有一种**：一个插件声明多个工具（`plugin.json` 的 `tools` 数组有多项）。目前每个插件都只声明一个工具；OCR 的单张 / 多张已经合并成同一个 `sparrow.ocr.image`。
 
 插件机制细节见 [`plugin-model.md`](plugin-model.md)。
 
@@ -145,8 +145,7 @@ Tool : InputShape × Params → OutputShape
 | ID | 名称 | 输入 | 输出 | 阶段 | 状态 | 备注 |
 |---|---|---|:--:|:--:|---|---|
 | `sparrow.ocr.region` | 区域识别 | Nothing | Text | **P0** | ⬜ | 圈选 → 识别 → 可接力 |
-| `sparrow.ocr.image` | 图片识别 | Image | Text | **P0** | ✅ M1 真实识别（PP-OCRv5） | 与 region 共用引擎，只是输入不同 |
-| `sparrow.ocr.batch` | 批量图片识别 | Files | Text | **P1** | ✅ 多文件按节输出 | 同一进程连识别多张，模型只加载一次 |
+| `sparrow.ocr.image` | 图片文字识别 | Images | Text | **P0** | ✅ PP-OCRv5；单张 / 多张同一工具 | 剪贴板、拖入、选图都走图片集；多张按文件名分节 |
 | `sparrow.ocr.table` | 表格识别 | Image | Table | P2 | 🚧 由 `sparrow.ocr.image` 的「表格」整理模式先垫上（Tab 分隔文本） | 独立工具 + TablePayload 渲染器等 M2 |
 
 > **多语言**：OCR 插件按 `language` 参数切换 PP-OCRv5 的 12 组识别模型
@@ -158,12 +157,15 @@ Tool : InputShape × Params → OutputShape
 > `表格`（行阈值收紧一半，Tab 分隔列，可直接粘贴进 Excel）。
 > 算法移植自 OmniSeeker 的 `OcrTextSorter`；行框（截图叠加层的点行复制）在所有模式下共用同一套聚类。
 
+> **一张卡，1..N 张图**：输入形态是 `Images`（图片集），剪贴板单图、拖入多图、
+> 「添加图片…」多选都归一到这里；单张输出纯文本，多张按 `## 文件名` 分节。
+> 工具页用缩略图条展示已选图片，点缩略图看大图。
+>
 > **OCR 是唯一进独立进程的工具**（Paddle 原生约 78MB + OpenCV 38MB）。主进程不加载它，首次使用时启动子进程，用完退出。见 [`architecture.md`](architecture.md#ocr-为什么独立进程)。
 >
-> **批量识别复用同一个 worker 进程**：worker 协议是「多帧 stdin、每帧一行 stdout」，
-> 单张调用方只写一帧再关 stdin，行为与旧协议一致；批量则在一个会话里连续识别，
+> **多张复用同一个 worker 进程**：worker 协议是「多帧 stdin、每帧一行 stdout」，
+> 单张调用方只写一帧再关 stdin，行为与旧协议一致；多张则在一个会话里连续识别，
 > 模型只初始化一次（每张图重启会多花 1–3 秒）。
-> 批量工具通过 `ToolContext.Files`（只读、仅限本次输入的路径）取图片字节，插件仍不碰文件系统。
 
 > **已知限制（M1）**：PP-OCRv5 对**文本块内部**的空格识别不稳定，
 > 实测 `HELLO OCR 麻雀 123` 可能输出 `HELLOOCR麻雀123`。

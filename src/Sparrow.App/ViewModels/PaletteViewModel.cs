@@ -263,6 +263,19 @@ public partial class PaletteViewModel : ObservableObject
                 source = ToolSource.Clipboard;
                 break;
 
+            // 图片集工具（OCR）：面板只有剪贴板这一张图
+            case InputShape.Images:
+                var clipboardPng = _clipboard.GetImagePng();
+                if (clipboardPng is null)
+                    return (null, "剪贴板里没有图片");
+
+                input = new ImageSetInput(
+                [
+                    new ImageInput(clipboardPng, ImageFormat.Png) { Name = "剪贴板图片" }
+                ]);
+                source = ToolSource.Clipboard;
+                break;
+
             // 命令面板没有文件输入：文件类工具请在工作区拖入/选择文件
             case InputShape.Files:
                 return (null, "文件类工具请在工作区里使用（拖入文件或点「选择文件…」）");
@@ -298,6 +311,7 @@ public partial class PaletteViewModel : ObservableObject
     {
         TextInput text => text.Text.Length <= 120 ? text.Text : text.Text[..120] + "…",
         ImageInput image => $"图片 {image.ByteSize} 字节",
+        ImageSetInput images => $"{images.Images.Count} 张图片",
         FileSetInput files => $"{files.Paths.Count} 个文件",
         _ => input.GetType().Name
     };

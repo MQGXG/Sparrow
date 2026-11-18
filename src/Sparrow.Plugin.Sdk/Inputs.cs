@@ -28,7 +28,21 @@ public sealed record ImageInput(ReadOnlyMemory<byte> Data, ImageFormat Format) :
     public int Width { get; init; }
     public int Height { get; init; }
 
+    /// <summary>展示名（文件名 /「剪贴板图片」/「截图」）；单张工具可以忽略。</summary>
+    public string Name { get; init; } = string.Empty;
+
     public int ByteSize => Data.Length;
+}
+
+/// <summary>
+/// 一组图片（1..N 张）。批量识别、批量处理用。
+///
+/// 为什么不是 <c>FileSetInput</c>：图片已经从磁盘读成字节，插件不该为了拿图再去碰文件；
+/// 也是为什么单张工具仍然只收 <see cref="ImageInput"/>——批量只是多包一层。
+/// </summary>
+public sealed record ImageSetInput(IReadOnlyList<ImageInput> Images) : IToolInput
+{
+    public static ImageSetInput Empty { get; } = new(Array.Empty<ImageInput>());
 }
 
 /// <summary>

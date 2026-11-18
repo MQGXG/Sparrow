@@ -41,6 +41,13 @@ public partial class WorkspaceWindow : Window
         if (DataContext is not WorkspaceViewModel viewModel)
             return;
 
+        if (viewModel.IsImagePreviewVisible)
+        {
+            viewModel.HideImagePreview();
+            e.Handled = true;
+            return;
+        }
+
         if (viewModel.IsSettingsVisible)
             return;
 
@@ -124,6 +131,69 @@ public partial class WorkspaceWindow : Window
 
         if (paths.Length > 0)
             viewModel.AcceptPickedFiles(paths);
+    }
+
+    /// <summary>图片集的选择入口：多选，只收图片。</summary>
+    private async void OnChooseImagesClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not WorkspaceViewModel viewModel)
+            return;
+
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "选择图片",
+            AllowMultiple = true,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("图片")
+                {
+                    Patterns = ["*.png", "*.jpg", "*.jpeg", "*.webp", "*.bmp", "*.gif"],
+                    MimeTypes = ["image/png", "image/jpeg", "image/webp", "image/bmp", "image/gif"]
+                }
+            ]
+        });
+
+        var paths = files
+            .Select(file => file.TryGetLocalPath())
+            .Where(path => path is not null)
+            .Cast<string>()
+            .ToArray();
+
+        if (paths.Length > 0)
+            viewModel.AcceptPickedImages(paths);
+    }
+
+    private void OnPasteImageClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel viewModel)
+            viewModel.AddClipboardImage();
+    }
+
+    private void OnRemoveInputImageClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: InputImageViewModel image } && DataContext is WorkspaceViewModel viewModel)
+            viewModel.RemoveInputImage(image);
+
+        // 别让移除按钮的点击继续冒泡去打开大图
+        e.Handled = true;
+    }
+
+    private void OnPreviewInputImageClick(object? sender, TappedEventArgs e)
+    {
+        if (sender is Control { Tag: InputImageViewModel image } && DataContext is WorkspaceViewModel viewModel)
+            viewModel.ShowImagePreview(image);
+    }
+
+    private void OnClearInputImagesClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel viewModel)
+            viewModel.ClearInputImages();
+    }
+
+    private void OnCloseImagePreviewClick(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel viewModel)
+            viewModel.HideImagePreview();
     }
 
     private void OnToolClick(object? sender, RoutedEventArgs e)

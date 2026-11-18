@@ -574,31 +574,95 @@
                     Padding="12,8"
                     Margin="0,12,0,0"
                     HorizontalAlignment="Stretch">
-              <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Text="{Binding InputHint}"
-                           VerticalAlignment="Center"
-                           TextWrapping="Wrap"
-                           FontSize="12"
-                           Foreground="{StaticResource TextMutedBrush}" />
-                <StackPanel Grid.Column="1"
-                            Orientation="Horizontal"
-                            Spacing="8"
-                            Margin="12,0,0,0">
-                  <Button x:Name="ChooseFilesButton"
-                          Classes="ghost small"
-                          Content="选择文件…"
-                          IsVisible="{Binding IsFilesInput}"
-                          Click="OnChooseFilesClick" />
-                  <Button Classes="ghost small"
-                          Content="清除"
-                          IsVisible="{Binding CanClearDroppedImage}"
-                          Click="OnClearDroppedImageClick" />
-                  <Button Classes="ghost small"
-                          Content="清除"
-                          IsVisible="{Binding CanClearDroppedFiles}"
-                          Click="OnClearDroppedFilesClick" />
-                </StackPanel>
-              </Grid>
+              <StackPanel Spacing="10">
+                <!-- 图片集缩略图：选了什么一眼能看见 -->
+                <ItemsControl x:Name="InputImagesStrip"
+                              ItemsSource="{Binding InputImages}"
+                              IsVisible="{Binding IsImagesInput}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <WrapPanel />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:InputImageViewModel">
+                      <Border Width="96"
+                              Margin="0,0,8,8"
+                              CornerRadius="6"
+                              Background="{StaticResource SurfaceBrush}"
+                              BorderBrush="{StaticResource LineBrush}"
+                              BorderThickness="1"
+                              ClipToBounds="True"
+                              Cursor="Hand"
+                              Tapped="OnPreviewInputImageClick"
+                              Tag="{Binding}">
+                        <Grid RowDefinitions="64,Auto">
+                          <Image Grid.Row="0"
+                                 Source="{Binding PreviewBytes, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
+                                 Stretch="UniformToFill" />
+                          <TextBlock Grid.Row="1"
+                                     Text="{Binding Name}"
+                                     Margin="6,3"
+                                     FontSize="10"
+                                     TextTrimming="CharacterEllipsis"
+                                     Foreground="{StaticResource TextMutedBrush}" />
+                          <Button Grid.Row="0"
+                                  Content="×"
+                                  Classes="ghost small"
+                                  Width="20"
+                                  Height="20"
+                                  Padding="0"
+                                  HorizontalAlignment="Right"
+                                  VerticalAlignment="Top"
+                                  Margin="2"
+                                  ToolTip.Tip="移除这张图片"
+                                  Click="OnRemoveInputImageClick"
+                                  Tag="{Binding}" />
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="{Binding InputHint}"
+                             VerticalAlignment="Center"
+                             TextWrapping="Wrap"
+                             FontSize="12"
+                             Foreground="{StaticResource TextMutedBrush}" />
+                  <StackPanel Grid.Column="1"
+                              Orientation="Horizontal"
+                              Spacing="8"
+                              Margin="12,0,0,0">
+                    <Button x:Name="ChooseImagesButton"
+                            Classes="ghost small"
+                            Content="添加图片…"
+                            IsVisible="{Binding IsImagesInput}"
+                            Click="OnChooseImagesClick" />
+                    <Button Classes="ghost small"
+                            Content="粘贴剪贴板"
+                            IsVisible="{Binding IsImagesInput}"
+                            Click="OnPasteImageClick" />
+                    <Button x:Name="ChooseFilesButton"
+                            Classes="ghost small"
+                            Content="选择文件…"
+                            IsVisible="{Binding IsFilesInput}"
+                            Click="OnChooseFilesClick" />
+                    <Button Classes="ghost small"
+                            Content="清除"
+                            IsVisible="{Binding CanClearInputImages}"
+                            Click="OnClearInputImagesClick" />
+                    <Button Classes="ghost small"
+                            Content="清除"
+                            IsVisible="{Binding CanClearDroppedImage}"
+                            Click="OnClearDroppedImageClick" />
+                    <Button Classes="ghost small"
+                            Content="清除"
+                            IsVisible="{Binding CanClearDroppedFiles}"
+                            Click="OnClearDroppedFilesClick" />
+                  </StackPanel>
+                </Grid>
+              </StackPanel>
             </Border>
 
             <!-- 结果：占满剩余高度 -->
@@ -739,6 +803,17 @@
 
       <views:SettingsView Grid.Row="1" DataContext="{Binding Settings}" />
     </Grid>
+
+    <!-- 图片集大图预览：点缩略图打开，点任意处 / Esc 关闭 -->
+    <Border IsVisible="{Binding IsImagePreviewVisible}"
+            Background="#D9000000"
+            PointerPressed="OnCloseImagePreviewClick"
+            Cursor="Hand">
+      <Image Source="{Binding PreviewImagePng, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
+             Stretch="Uniform"
+             Margin="48"
+             IsHitTestVisible="False" />
+    </Border>
 
   </Panel>
 </Window>

@@ -3,8 +3,8 @@
   <PropertyGroup>
     <AssemblyName>Sparrow.Plugin.Ocr</AssemblyName>
     <RootNamespace>Sparrow.Plugin.Ocr</RootNamespace>
-    <Version>0.2.0</Version>
-    <Description>OCR 文字识别（PaddleOCR 子进程，单张 + 批量）</Description>
+    <Version>0.3.0</Version>
+    <Description>OCR 文字识别（PaddleOCR 子进程，1..N 张图片）</Description>
     <!-- 必须等于 plugin.json 的 id 与目录名 -->
     <PluginId>sparrow.plugin.ocr</PluginId>
   </PropertyGroup>

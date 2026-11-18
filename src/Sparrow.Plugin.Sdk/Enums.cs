@@ -10,7 +10,9 @@ public enum InputShape
     RichText,
     Image,
     Files,
-    Selection
+    Selection,
+    /// <summary>一组图片（1..N 张）：剪贴板单图、拖入多图、文件选择都归一到这里。</summary>
+    Images
 }
 
 /// <summary>
