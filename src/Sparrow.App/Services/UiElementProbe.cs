@@ -32,6 +32,9 @@ public sealed class UiElementProbe : IDisposable
     private const int MaxRectangles = 100;
     private const int MaxChildWindows = 10;
 
+    /// <summary>单个窗口最多保留多少懒展开节点，防止异常大树把内存撑爆。</summary>
+    private const int MaxNodesPerWindow = 12000;
+
     /// <summary>单次跨进程调用最多等多久（毫秒）。</summary>
     private const int ConnectionTimeoutMilliseconds = 300;
     private const int TransactionTimeoutMilliseconds = 800;
@@ -43,6 +46,7 @@ public sealed class UiElementProbe : IDisposable
 
     private IUIAutomation2? _automation;
     private IUIAutomationCacheRequest? _request;
+    private int _nodeCount;
     private volatile bool _disposed;
 
     public UiElementProbe()
@@ -163,22 +167,12 @@ public sealed class UiElementProbe : IDisposable
 
     private void Release()
     {
-        foreach (var node in EnumerateNodes())
-        {
-            if (node.Element is null)
-                continue;
-
-            try
-            {
-                Marshal.FinalReleaseComObject(node.Element);
-            }
-            catch
-            {
-            }
-        }
+        foreach (var root in _trees.Values)
+            ReleaseTree(root);
 
         _trees.Clear();
         _childWindows.Clear();
+        _nodeCount = 0;
 
         if (_request is not null)
         {
@@ -204,23 +198,6 @@ public sealed class UiElementProbe : IDisposable
             }
 
             _automation = null;
-        }
-    }
-
-    private IEnumerable<Node> EnumerateNodes()
-    {
-        var pending = new Stack<Node>(_trees.Values);
-
-        while (pending.Count > 0)
-        {
-            var node = pending.Pop();
-            yield return node;
-
-            if (node.Children is null)
-                continue;
-
-            foreach (var child in node.Children)
-                pending.Push(child);
         }
     }
 
@@ -252,6 +229,10 @@ public sealed class UiElementProbe : IDisposable
     {
         if (!_trees.TryGetValue(hwnd, out var root))
         {
+            // 只保留当前窗口的控件树：一次截图里通常只需要一个窗口，
+            // 跨窗口累积会把工作集推到几百 MB
+            EvictOtherTrees(hwnd);
+
             root = BuildRoot(hwnd);
             if (root is null)
                 return null;
@@ -291,6 +272,75 @@ public sealed class UiElementProbe : IDisposable
         }
 
         return Pick(current, root);
+    }
+
+    /// <summary>释放除当前窗口以外的控件树（每个窗口的树可能上千个元素）。</summary>
+    private void EvictOtherTrees(IntPtr keep)
+    {
+        if (_trees.Count == 0)
+            return;
+
+        var keepTree = _trees.TryGetValue(keep, out var kept) ? kept : null;
+
+        foreach (var (handle, root) in _trees)
+        {
+            if (handle != keep)
+                ReleaseTree(root);
+        }
+
+        _trees.Clear();
+        _childWindows.Clear();
+
+        if (keepTree is not null)
+            _trees[keep] = keepTree;
+
+        _nodeCount = keepTree is null ? 0 : CountNodes(keepTree);
+    }
+
+    private static void ReleaseTree(Node root)
+    {
+        var pending = new Stack<Node>();
+        pending.Push(root);
+
+        while (pending.Count > 0)
+        {
+            var node = pending.Pop();
+
+            try
+            {
+                Marshal.FinalReleaseComObject(node.Element);
+            }
+            catch
+            {
+            }
+
+            if (node.Children is null)
+                continue;
+
+            foreach (var child in node.Children)
+                pending.Push(child);
+        }
+    }
+
+    private static int CountNodes(Node root)
+    {
+        var count = 0;
+        var pending = new Stack<Node>();
+        pending.Push(root);
+
+        while (pending.Count > 0)
+        {
+            var node = pending.Pop();
+            count++;
+
+            if (node.Children is null)
+                continue;
+
+            foreach (var child in node.Children)
+                pending.Push(child);
+        }
+
+        return count;
     }
 
     /// <summary>包含光标的子窗口，面积小的（更深的）排前面。</summary>
@@ -364,6 +414,10 @@ public sealed class UiElementProbe : IDisposable
         if (node.ExpandFailed || node.Element is null || _request is null)
             return false;
 
+        // 异常大树到上限就不再往下展开，宁可退回窗口级也不撑爆内存
+        if (_nodeCount >= MaxNodesPerWindow)
+            return false;
+
         try
         {
             // 一次调用同时刷新本节点缓存并带回子节点集合
@@ -377,6 +431,9 @@ public sealed class UiElementProbe : IDisposable
 
                 for (var index = 0; index < count; index++)
                 {
+                    if (_nodeCount >= MaxNodesPerWindow)
+                        break;
+
                     var element = array.GetElement(index);
                     if (element is null)
                         continue;
@@ -402,7 +459,7 @@ public sealed class UiElementProbe : IDisposable
         }
     }
 
-    private static Node? CreateNode(IUIAutomationElement element, Node? parent)
+    private Node? CreateNode(IUIAutomationElement element, Node? parent)
     {
         if (element.CachedIsOffscreen != 0)
             return null;
@@ -415,6 +472,8 @@ public sealed class UiElementProbe : IDisposable
             return null;
 
         var controlType = element.CachedControlType;
+
+        _nodeCount++;
 
         return new Node(
             new PixelRect(rect.left, rect.top, width, height),

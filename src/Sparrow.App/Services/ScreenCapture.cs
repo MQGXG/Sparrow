@@ -25,7 +25,7 @@ public static class ScreenCapture
     /// 截取原始 BGRA 像素（top-down，stride = width*4）。
     /// 滚动截图每 200ms 抓一帧，跳过 PNG 编解码。
     /// </summary>
-    public static byte[]? CaptureRaw(int x, int y, int width, int height)
+    public static byte[]? CaptureRaw(int x, int y, int width, int height, byte[]? reuse = null)
     {
         if (width <= 0 || height <= 0)
             return null;
@@ -56,7 +56,7 @@ public static class ScreenCapture
             if (!BitBlt(memoryDc, 0, 0, width, height, screenDc, x, y, SrcCopy))
                 return null;
 
-            return ReadPixels(memoryDc, bitmap, width, height);
+            return ReadPixels(memoryDc, bitmap, width, height, reuse);
         }
         finally
         {
@@ -75,28 +75,36 @@ public static class ScreenCapture
     }
 
     /// <summary>
-    /// 等画面稳定后抓原始 BGRA：连续两帧一致才返回，最多 <paramref name="attempts"/> 轮。
+    /// 等画面稳定后抓原始 BGRA：抓两帧比较，几乎一致就用后一帧，最多 2 轮。
     /// 用于「先冻结再框选」——避免滚动惯性/重绘延迟抓到上一帧。
+    ///
+    /// 不做逐字节相等：任务栏时钟、光标闪烁这类几十个像素的变化永远等不到，
+    /// 结果就是每轮都跑满、白分配几百 MB。允许千分之一的像素不同。
+    /// 最多只保留两块缓冲（比较用），不会按轮次累积大对象。
     /// </summary>
     public static byte[]? CaptureStableRaw(
         int x,
         int y,
         int width,
         int height,
-        int attempts = 8,
-        int intervalMs = 50)
+        int attempts = 2,
+        int intervalMs = 40)
     {
+        var length = width * 4 * height;
+        var maxDifferentPixels = Math.Max(64, length / 4 / 1000);
         byte[]? previous = null;
+        byte[]? spare = null;
 
         for (var attempt = 0; attempt < Math.Max(1, attempts); attempt++)
         {
-            var current = CaptureRaw(x, y, width, height);
+            var current = CaptureRaw(x, y, width, height, spare);
             if (current is null)
                 return null;
 
-            if (previous is not null && current.AsSpan().SequenceEqual(previous))
+            if (previous is not null && NearlyEqual(current, previous, maxDifferentPixels))
                 return current;
 
+            spare = previous;
             previous = current;
 
             if (attempt < attempts - 1)
@@ -105,6 +113,30 @@ public static class ScreenCapture
 
         // 持续动画（视频等）永远不稳定：用最后一帧
         return previous;
+    }
+
+    /// <summary>比较 BGRA 两帧，允许最多 <paramref name="maxDifferentPixels"/> 个像素不同（忽略 alpha）。</summary>
+    private static bool NearlyEqual(byte[] current, byte[] previous, int maxDifferentPixels)
+    {
+        if (current.Length != previous.Length)
+            return false;
+
+        var different = 0;
+
+        for (var index = 0; index + 3 < current.Length; index += 4)
+        {
+            if (current[index] == previous[index] &&
+                current[index + 1] == previous[index + 1] &&
+                current[index + 2] == previous[index + 2])
+            {
+                continue;
+            }
+
+            if (++different > maxDifferentPixels)
+                return false;
+        }
+
+        return true;
     }
 
     /// <summary>从整屏 BGRA 里裁剪一块；越界或参数非法返回 null。</summary>
@@ -140,10 +172,16 @@ public static class ScreenCapture
         return result;
     }
 
-    private static byte[]? ReadPixels(IntPtr memoryDc, IntPtr bitmap, int width, int height)
+    private static byte[]? ReadPixels(
+        IntPtr memoryDc,
+        IntPtr bitmap,
+        int width,
+        int height,
+        byte[]? reuse)
     {
         var stride = width * 4;
-        var pixels = new byte[stride * height];
+        var length = stride * height;
+        var pixels = reuse is not null && reuse.Length == length ? reuse : new byte[length];
 
         var info = new BITMAPINFO
         {
