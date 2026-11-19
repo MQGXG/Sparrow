@@ -1,7 +1,9 @@
 # 2026-11-19 浅色皮肤 / 多主题设计
 
-> 状态：**待评估，未实现**
-> 结论先说：可以做，且成本比预想低；建议只做「一套浅色」，不做多主题包。
+> 状态：**方案已定，未实现**
+> 结论先说：可以做，且成本比预想低；只做「一套浅色 + 三态切换」，不做多主题包。
+>
+> **已确认的产品决策（2026-11-19）：** 三态（跟随系统 / 浅色 / 深色）全保留；默认**深色**；落点是设置页「通用」分组第一行，与现有 5 个 tab 并存。
 
 ## 一、现状盘点（2026-11-19 实测）
 
@@ -69,9 +71,11 @@ Avalonia 的 `ThemeDictionaries`（Light / Dark 两套）只对 `{DynamicResourc
 
 | 方案 | 内容 | 估时 | 评价 |
 |---|---|---|---|
-| **A. 单套浅色 + 重启生效** | 改 `Theme.axaml` 为 `ThemeDictionaries`；5 个窗口目视校正；标题栏 / 阴影 / 点阵修正；设置页加「外观：深色 / 浅色」 | 1 天 | 性价比最高，先验证方向 |
-| **B. 单套浅色 + 即时切换** | A + 314 处 `StaticResource` → `DynamicResource` | 1.5～2 天 | 体验完整，推荐最终形态 |
+| **A. 单套浅色 + 重启生效** | 改 `Theme.axaml` 为 `ThemeDictionaries`；5 个窗口目视校正；标题栏 / 阴影 / 点阵修正；设置页「通用」第一行加三态预览卡 | 1.5 天 | 性价比最高，先验证方向 |
+| **B. 单套浅色 + 即时切换** | A + 314 处 `StaticResource` → `DynamicResource` | 2 天 | 体验完整，推荐最终形态 |
 | **C. 多主题包** | B + token 外置为 JSON + 主题目录加载 + 每套 light/dark | 再 +2～3 天 | 不建议 |
+
+A / B 的 0.5 天差额来自三态：`system` 需要订阅 `ActualThemeVariantChanged`、固定模式不能跟随、加上三张预览卡和持久化。
 
 ### 为什么不建议 C
 
@@ -109,16 +113,35 @@ Avalonia 的 `ThemeDictionaries`（Light / Dark 两套）只对 `{DynamicResourc
 
 - `WindowChrome.TryApplyDarkTitleBar` 目前写死传 `1`。改为按主题传 `0` / `1`，否则浅色主题会出现「白色窗口 + 黑色系统标题栏」。
 - `WindowChrome` 只处理标题栏；托盘菜单（`TrayService`）跟随系统，不需要改。
-- `App.axaml` 与两个窗口的 `RequestedThemeVariant="Dark"` 改为跟随 `Application.RequestedThemeVariant`。
+- `App.axaml` 与两个窗口的 `RequestedThemeVariant="Dark"` 改为跟随 `Application.RequestedThemeVariant`；**恒定深色的 8 个窗口保留写死 `Dark`**，不参与切换。
 - `dot-grid.png`（100 字节，32×32）：浅色需要反相版本，或改为代码生成的 `DrawingBrush`（推荐，省一个资源文件）。
 
 ### 4.4 设置与持久化
 
-- `AppSettings` 新增 `Appearance`（`dark` / `light`，默认 `dark`）。
-- `SettingsViewModel` 增加外观下拉；切换后：
-  - 方案 A：写设置 + `toast` 提示「重启后生效」
-  - 方案 B：直接改 `Application.Current.RequestedThemeVariant` + 重设资源
-- 首启动读取设置在 `App.axaml.cs` 初始化窗口之前完成。
+**已确认的产品决策（2026-11-19）：**
+
+- 三态都保留：`system`（跟随系统）/ `light` / `dark`
+- **默认 `dark`**：保持现有识别度，首次启动外观不变
+- 落点：设置页 **「通用」分组第一行**（不新增 tab），一行三张预览卡
+
+**数据与行为：**
+
+- `AppSettings` 新增 `Appearance`（`system` / `light` / `dark`，默认 `dark`）。
+- `SettingsViewModel` 增加三张预览卡（迷你窗口示意 + 底部标签），选中态用琥珀描边；卡片建议用 `Border` / 矩形拼出来，不引入图片资源。
+- 映射关系：
+  - `system` → `Application.RequestedThemeVariant = ThemeVariant.Default`
+  - `light` → `ThemeVariant.Light`
+  - `dark` → `ThemeVariant.Dark`
+- **只有 `system` 模式订阅 `Application.Current.ActualThemeVariantChanged`**；固定浅色/深色时不跟随系统，否则会出现「我选了深色，重启却变浅」。
+- 方案 A（重启生效）：写设置 + `toast` 提示「重启后生效」。注意此时 `system` 模式在运行中切换 Windows 应用模式**不会**立刻变色，体验有折扣。
+- 方案 B（即时切换）：直接改 `RequestedThemeVariant`，token 走 `DynamicResource` 即时生效，`system` 模式的系统监听也才有意义。
+- 首启动读取设置在 `App.axaml.cs` 创建任何窗口之前完成，避免先深后浅闪一下。
+
+**恒定深色的例外（不受三态影响）：**
+
+`CaptureWindow`、`ScrollCaptureWindow`、`ScrollResultWindow`、`PinnedImageWindow`、`ClipboardImageZoomWindow`、`ToastWindow`、`WindowPickerWindow`、`PinIndicatorWindow`。
+
+其中「贴图菜单统一跟随」这句要注意：Sparrow 的贴图窗口目前**没有右键菜单**（那是 LumaShot 的形态）。将来若加，菜单可以跟随主题，但建议用不透明底而非玻璃模糊，否则浮在复杂图片上文字会糊。
 
 ### 4.5 浅色主题配色草案
 
@@ -144,10 +167,14 @@ Avalonia 的 `ThemeDictionaries`（Light / Dark 两套）只对 `{DynamicResourc
 
 1. 工具台、设置、快速面板、详情、命令面板在浅色下无「深色块残留」、无低对比灰字。
 2. 截图、贴图、灯箱、滚动截图在浅色主题下**外观完全不变**。
-3. 切换主题后标题栏颜色一致（无黑白混搭）。
-4. 焦点环、选中行、chip、`ToggleSwitch` 在浅色下仍以琥珀为唯一强调色。
-5. 两种主题下 `hud-tab` 刻度线、`hud-tick`、工具卡片取景框角标都能看清。
-6. 现有 401 个测试全绿；新增：设置持久化、主题应用不抛异常（headless 可测 token 解析）。
+3. 三态行为正确：
+   - `system`：切 Windows 应用模式时跟随（方案 B 即时，方案 A 重启后）
+   - `light` / `dark`：系统换主题时**不**跟着变
+   - 默认 `dark`：首次启动外观与现在完全一致
+4. 切换主题后标题栏颜色一致（无黑白混搭）。
+5. 焦点环、选中行、chip、`ToggleSwitch` 在浅色下仍以琥珀为唯一强调色。
+6. 两种主题下 `hud-tab` 刻度线、`hud-tick`、工具卡片取景框角标都能看清。
+7. 现有 401 个测试全绿；新增：三态持久化与映射、`system` 订阅只在该模式下生效、headless 下 token 解析不抛异常。
 
 ## 六、长期成本（必须接受）
 
@@ -160,5 +187,5 @@ Avalonia 的 `ThemeDictionaries`（Light / Dark 两套）只对 `{DynamicResourc
 1. `Theme.axaml` 拆 `ThemeDictionaries` + 加 `AccentInk` / `AccentFill`（此步完成后深色外观必须 1:1 不变）。
 2. `WindowChrome` 按主题传参；`App.axaml` / 两个窗口去掉写死 `Dark`。
 3. 5 个窗口逐个目视校正（工具台最费时）。
-4. 设置页下拉 + 持久化 + toast。
+4. 「通用」分组第一行加三态预览卡 + 持久化 + toast；`system` 订阅 `ActualThemeVariantChanged`。
 5. 方案 B 追加：`StaticResource → DynamicResource` 批量替换 + 回归两套主题。
