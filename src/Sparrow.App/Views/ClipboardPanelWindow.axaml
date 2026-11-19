@@ -258,6 +258,31 @@
                                 <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
                                 <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
                               </Style>
+                              <!-- 图标按钮：22×22，悬停只换底色和描边色 -->
+                              <Style Selector="Button.row-icon">
+                                <Setter Property="Width" Value="22" />
+                                <Setter Property="Height" Value="22" />
+                                <Setter Property="Padding" Value="0" />
+                                <Setter Property="CornerRadius" Value="4" />
+                                <Setter Property="Background" Value="Transparent" />
+                                <Setter Property="BorderThickness" Value="0" />
+                                <Setter Property="FontSize" Value="11" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+                              </Style>
+                              <Style Selector="Button.row-icon:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                                <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+                              </Style>
+                              <Style Selector="Button.row-icon Path">
+                                <Setter Property="Stroke" Value="{DynamicResource TextSecondaryBrush}" />
+                                <Setter Property="StrokeThickness" Value="1.4" />
+                                <Setter Property="Width" Value="13" />
+                                <Setter Property="Height" Value="13" />
+                                <Setter Property="Stretch" Value="Uniform" />
+                              </Style>
+                              <Style Selector="Button.row-icon:pointerover Path">
+                                <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+                              </Style>
+
                               <!-- 操作浮层：默认不可见，悬停或选中才出现 -->
                               <Style Selector="Border.clip-row Border.row-actions">
                                 <Setter Property="IsVisible" Value="False" />
@@ -343,38 +368,62 @@
 
                               </Grid>
 
-                              <!-- 悬停浮层：查看 / 队列 / 收藏，不占列表布局宽度 -->
+                              <!-- 悬停浮层：查看 / 队列 / 收藏，三个等宽图标 -->
                               <Border Classes="row-actions"
                                       HorizontalAlignment="Right"
                                       VerticalAlignment="Top"
                                       Background="{StaticResource SurfaceRaisedBrush}"
                                       BorderBrush="{StaticResource LineBrush}"
                                       BorderThickness="1"
-                                      CornerRadius="6"
-                                      Padding="3">
-                                <StackPanel Orientation="Horizontal" Spacing="2">
-                                  <Button Width="36"
-                                          Height="24"
+                                      CornerRadius="8"
+                                      Padding="2">
+                                <StackPanel Orientation="Horizontal" Spacing="1">
+                                  <Button Classes="row-icon"
+                                          Width="22"
+                                          Height="22"
                                           Padding="0"
-                                          FontSize="10"
-                                          Content="查看"
+                                          Background="Transparent"
+                                          BorderThickness="0"
                                           ToolTip.Tip="在面板内查看详情"
                                           Tag="{Binding}"
-                                          Click="OnOpenDetailClick" />
-                                  <Button Width="24"
-                                          Height="24"
+                                          Click="OnOpenDetailClick">
+                                    <Path Width="13"
+                                          Height="13"
+                                          Stretch="Uniform"
+                                          Stroke="{DynamicResource TextSecondaryBrush}"
+                                          StrokeThickness="1.4"
+                                          Data="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z M8 6.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" />
+                                  </Button>
+                                  <Button Classes="row-icon"
+                                          Width="22"
+                                          Height="22"
                                           Padding="0"
-                                          Content="{Binding QueueBadge}"
+                                          Background="Transparent"
+                                          BorderThickness="0"
                                           ToolTip.Tip="加入 / 移出顺序粘贴队列"
                                           Tag="{Binding}"
-                                          Click="OnQueueToggleClick" />
-                                  <Button Width="24"
-                                          Height="24"
+                                          Click="OnQueueToggleClick">
+                                    <TextBlock Text="{Binding QueueBadge}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                  </Button>
+                                  <Button Classes="row-icon"
+                                          Width="22"
+                                          Height="22"
                                           Padding="0"
-                                          Content="{Binding FavoriteGlyph}"
+                                          Background="Transparent"
+                                          BorderThickness="0"
                                           ToolTip.Tip="收藏 / 取消收藏"
                                           Tag="{Binding}"
-                                          Click="OnFavoriteClick" />
+                                          Click="OnFavoriteClick">
+                                    <TextBlock Text="{Binding FavoriteGlyph}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                  </Button>
                                 </StackPanel>
                               </Border>
                             </Panel>

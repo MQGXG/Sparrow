@@ -370,9 +370,10 @@ public sealed class ClipboardPanelWindowTests
             window.PrepareForShow();
             Dispatcher.UIThread.RunJobs();
 
+            // 第一个 row-icon 就是「查看」：三个图标按 查看 / 队列 / 收藏 排列
             var viewButton = window.GetVisualDescendants()
                 .OfType<Button>()
-                .FirstOrDefault(button => Equals(button.Content, "查看"));
+                .FirstOrDefault(button => button.Classes.Contains("row-icon"));
             viewButton.ShouldNotBeNull("列表行必须提供「查看」入口");
             viewButton!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 

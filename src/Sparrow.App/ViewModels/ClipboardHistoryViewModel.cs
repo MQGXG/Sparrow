@@ -602,7 +602,7 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
         foreach (var item in Items)
         {
             item.IsQueued = numbers.TryGetValue(item.Id, out var number);
-            item.QueueBadge = item.IsQueued ? number.ToString() : "＋";
+            item.QueueBadge = item.IsQueued ? number.ToString() : "+";
         }
     }
 
