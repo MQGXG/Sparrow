@@ -183,6 +183,54 @@ public sealed class ClipboardPanelWindowTests
     }
 
     [AvaloniaFact]
+    public async Task 剪贴板面板_工具条粘贴按钮_先收起面板()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"),
+                new NullLog());
+            store.AddText("第一条");
+
+            var viewModel = new ClipboardHistoryViewModel(store, new FakeClipboard());
+            var window = new ClipboardPanelWindow { DataContext = viewModel };
+            window.Show();
+            window.PrepareForShow();
+            Dispatcher.UIThread.RunJobs();
+
+            var paste = window.GetVisualDescendants()
+                .OfType<Button>()
+                .FirstOrDefault(button => button.Tag is ClipboardEntryViewModel
+                    && ToolTip.GetTip(button) as string == "粘贴到刚才的应用");
+            paste.ShouldNotBeNull("条目的悬停工具条应提供「粘贴到刚才的应用」");
+
+            paste!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+
+            window.IsVisible.ShouldBeFalse("粘贴前要先收起面板，把焦点还给目标窗口");
+
+            // 处理器等焦点切换后再写剪贴板；等续体跑完，别让它落到测试清理之后
+            await Task.Delay(200);
+            Dispatcher.UIThread.RunJobs();
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [AvaloniaFact]
     public void 剪贴板视图_类型计数()
     {
         var directory = System.IO.Path.Combine(

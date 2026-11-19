@@ -389,6 +389,26 @@ public partial class ClipboardPanelWindow : Window
         e.Handled = true;
     }
 
+    /// <summary>
+    /// 工具条的「粘贴到刚才的应用」：先收起面板把焦点还给目标窗口，再写剪贴板并注入 Ctrl+V。
+    /// 不收起直接注入会把「粘贴」送给面板自己，所以这里要等一次焦点切换。
+    /// </summary>
+    private async void OnRowPasteClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: ClipboardEntryViewModel item } && History is { } clipboard)
+        {
+            clipboard.SelectedItem = item;
+            HidePanel();
+
+            // 窗口隐藏到系统把前台还给上一个窗口有一小段延迟，立刻发键会打到空处
+            await Task.Delay(120);
+
+            clipboard.PasteItem(item);
+        }
+
+        e.Handled = true;
+    }
+
     /// <summary>工具条的「打开」：链接走浏览器，文件在资源管理器里选中。</summary>
     private void OnRowOpenClick(object? sender, RoutedEventArgs e)
     {
