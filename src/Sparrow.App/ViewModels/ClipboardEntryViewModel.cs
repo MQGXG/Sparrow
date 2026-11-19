@@ -68,14 +68,6 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
 
     public string FavoriteGlyph => IsFavorite ? "★" : "☆";
 
-    /// <summary>当前列表里的快贴序号（1–9）；0 表示不显示。Alt+数字 按它取条目。</summary>
-    [ObservableProperty]
-    private int _quickIndex;
-
-    public bool HasQuickIndex => QuickIndex > 0;
-
-    partial void OnQuickIndexChanged(int value) => OnPropertyChanged(nameof(HasQuickIndex));
-
     /// <summary>来源进程名；拿不到时为空串（界面隐藏）。</summary>
     public string SourceLabel => Entry.SourceApp ?? string.Empty;
 

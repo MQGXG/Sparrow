@@ -90,21 +90,6 @@ public partial class ClipboardPanelWindow : Window
             return;
         }
 
-        // Alt+1–9：直接粘贴当前列表第 N 条并收起，不经过选中
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Alt) && TryGetQuickIndex(e.Key, out var quickIndex))
-        {
-            var quickItem = History?.Items.ElementAtOrDefault(quickIndex - 1);
-            if (quickItem is not null && History is { } history)
-            {
-                history.SelectedItem = quickItem;
-                history.Copy(quickItem);
-                HidePanel();
-            }
-
-            e.Handled = true;
-            return;
-        }
-
         // 详情覆盖时，Enter 属于标签框 / 按钮，不再触发「复制并收起」
         if (e.Key != Key.Enter || e.Source is Button || DetailLayer.IsVisible)
             return;
@@ -408,18 +393,5 @@ public partial class ClipboardPanelWindow : Window
     {
         var control = source as Control;
         return control?.FindAncestorOfType<Button>(includeSelf: true) is not null;
-    }
-
-    /// <summary>把 D1–D9 / NumPad1–9 映射成 1–9。</summary>
-    private static bool TryGetQuickIndex(Key key, out int index)
-    {
-        index = key switch
-        {
-            >= Key.D1 and <= Key.D9 => key - Key.D1 + 1,
-            >= Key.NumPad1 and <= Key.NumPad9 => key - Key.NumPad1 + 1,
-            _ => 0
-        };
-
-        return index > 0;
     }
 }

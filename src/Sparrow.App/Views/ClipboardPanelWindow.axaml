@@ -292,25 +292,8 @@
                             </Border.Styles>
 
                             <Panel>
-                              <Grid ColumnDefinitions="18,Auto,*" ColumnSpacing="6">
-                                <!-- 快贴序号：Alt+1–9 直接贴这一条 -->
-                                <Border Width="17"
-                                        Height="17"
-                                        CornerRadius="5"
-                                        Background="{StaticResource AccentBrush}"
-                                        HorizontalAlignment="Left"
-                                        VerticalAlignment="Top"
-                                        IsVisible="{Binding HasQuickIndex}">
-                                  <TextBlock Text="{Binding QuickIndex}"
-                                             FontSize="9"
-                                             FontWeight="SemiBold"
-                                             Foreground="{StaticResource AccentOnBrush}"
-                                             HorizontalAlignment="Center"
-                                             VerticalAlignment="Center" />
-                                </Border>
-
-                                <Border Grid.Column="1"
-                                        Width="34"
+                              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                <Border Width="34"
                                       Height="34"
                                       CornerRadius="6"
                                       Background="{StaticResource SurfaceBrush}"
@@ -330,7 +313,7 @@
                                 </Panel>
                               </Border>
 
-                              <StackPanel Grid.Column="2" Spacing="1" VerticalAlignment="Center">
+                              <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding Preview}"
                                            FontSize="12"
                                            TextTrimming="CharacterEllipsis"

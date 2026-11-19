@@ -302,7 +302,6 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
 
             SyncTagFilters();
             UpdateKindCounts(entries);
-            UpdateQuickIndexes();
             UpdateStatusBar();
 
             SelectedItem = Items.FirstOrDefault(item => item.Id == previousId)
@@ -636,13 +635,6 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
         }
     }
 
-    /// <summary>前 9 条给 Alt+1–9 快贴编号，和列表显示顺序一致。</summary>
-    private void UpdateQuickIndexes()
-    {
-        for (var index = 0; index < Items.Count; index++)
-            Items[index].QuickIndex = index < 9 ? index + 1 : 0;
-    }
-
     /// <summary>状态栏：条数 / 配额 + 随队列变化的快捷键提示。</summary>
     private void UpdateStatusBar()
     {
@@ -659,7 +651,7 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
 
         StatusHint = HasQueue
             ? $"队列 {Queue.Count} 条 · Ctrl+Alt+V"
-            : "Enter 粘贴 · Alt+1–9 快贴";
+            : "Enter 粘贴 · Esc 关闭";
     }
 
     private bool Matches(ClipboardHistoryEntry entry)
