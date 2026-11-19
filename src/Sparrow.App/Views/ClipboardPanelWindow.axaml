@@ -218,7 +218,10 @@
                                   Classes.selected="{Binding IsSelected}"
                                   Tag="{Binding}"
                                   Tapped="OnItemClick"
-                                  DoubleTapped="OnItemDoubleTapped">
+                                  DoubleTapped="OnItemDoubleTapped"
+                                  PointerPressed="OnItemPointerPressed"
+                                  PointerMoved="OnItemPointerMoved"
+                                  PointerReleased="OnItemPointerReleased">
                             <Border.Styles>
                               <Style Selector="Border.clip-row:pointerover">
                                 <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />

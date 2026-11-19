@@ -23,6 +23,15 @@ public partial class ClipboardPanelWindow : Window
     /// </summary>
     private string _savedQuery = string.Empty;
 
+    /// <summary>拖出状态：按下位置、被拖条目、是否已越过阈值。</summary>
+    private PointerPressedEventArgs? _dragPress;
+    private ClipboardEntryViewModel? _dragItem;
+    private Point _dragOrigin;
+    private bool _dragStarted;
+
+    /// <summary>拖动结束后要吃掉那一次 Tapped，避免顺带改变选中或复制。</summary>
+    private bool _suppressClick;
+
     public ClipboardPanelWindow()
     {
         InitializeComponent();
@@ -96,6 +105,12 @@ public partial class ClipboardPanelWindow : Window
 
     private void OnItemClick(object? sender, TappedEventArgs e)
     {
+        if (_suppressClick)
+        {
+            _suppressClick = false;
+            return;
+        }
+
         if (sender is Control { Tag: ClipboardEntryViewModel item } && History is { } clipboard)
         {
             // Ctrl+点击 = 加入/移出顺序粘贴队列，和主窗一致
@@ -104,6 +119,94 @@ public partial class ClipboardPanelWindow : Window
             else
                 clipboard.SelectedItem = item;
         }
+    }
+
+    /// <summary>按住条目准备拖出；按钮上的按下交给按钮自己。</summary>
+    private void OnItemPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not Control control || control.Tag is not ClipboardEntryViewModel item)
+            return;
+
+        if (IsInsideButton(e.Source))
+            return;
+
+        if (!e.GetCurrentPoint(control).Properties.IsLeftButtonPressed)
+            return;
+
+        _dragPress = e;
+        _dragItem = item;
+        _dragOrigin = e.GetPosition(this);
+        _dragStarted = false;
+    }
+
+    /// <summary>越过 8px 阈值后拖出；Ctrl 只给文件、Shift 只给内容，和主窗同一套约定。</summary>
+    private async void OnItemPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_dragPress is null || _dragItem is null || _dragStarted)
+            return;
+
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            ResetDrag();
+            return;
+        }
+
+        var position = e.GetPosition(this);
+        if (Math.Abs(position.X - _dragOrigin.X) < 8 &&
+            Math.Abs(position.Y - _dragOrigin.Y) < 8)
+        {
+            return;
+        }
+
+        var payload = History?.GetDragPayload(_dragItem);
+        if (payload is null)
+        {
+            ResetDrag();
+            return;
+        }
+
+        _dragStarted = true;
+        _suppressClick = true;
+
+        try
+        {
+            var mode = ClipboardDragMode.All;
+
+            if (_dragPress.KeyModifiers.HasFlag(KeyModifiers.Control))
+                mode = ClipboardDragMode.FileOnly;
+            else if (_dragPress.KeyModifiers.HasFlag(KeyModifiers.Shift))
+                mode = ClipboardDragMode.InlineOnly;
+
+            var drag = await ClipboardDragService.CreateAsync(payload, StorageProvider, mode);
+            if (drag is null)
+                return;
+
+            try
+            {
+                await DragDrop.DoDragDropAsync(_dragPress, drag.Transfer, DragDropEffects.Copy);
+            }
+            finally
+            {
+                drag.Lifetime?.Dispose();
+            }
+        }
+        catch
+        {
+            // 目标应用拒绝拖放、临时文件被占用等都不该影响面板
+        }
+        finally
+        {
+            ResetDrag();
+        }
+    }
+
+    private void OnItemPointerReleased(object? sender, PointerReleasedEventArgs e) => ResetDrag();
+
+    private void ResetDrag()
+    {
+        _dragPress = null;
+        _dragItem = null;
+        _dragStarted = false;
     }
 
     /// <summary>双击整行 = 复制并收起；按钮上的双击交给按钮自己。</summary>
