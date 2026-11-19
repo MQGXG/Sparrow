@@ -457,6 +457,22 @@
                                           Padding="0"
                                           Background="Transparent"
                                           BorderThickness="0"
+                                          ToolTip.Tip="粘贴到刚才的应用"
+                                          Tag="{Binding}"
+                                          Click="OnRowPasteClick">
+                                    <Path Width="13"
+                                          Height="13"
+                                          Stretch="Uniform"
+                                          Stroke="{DynamicResource TextSecondaryBrush}"
+                                          StrokeThickness="1.4"
+                                          Data="M8 2v9M4.5 7.5 8 11l3.5-3.5M3.5 13.5h9" />
+                                  </Button>
+                                  <Button Classes="row-icon"
+                                          Width="22"
+                                          Height="22"
+                                          Padding="0"
+                                          Background="Transparent"
+                                          BorderThickness="0"
                                           ToolTip.Tip="用默认程序打开"
                                           IsVisible="{Binding CanOpen}"
                                           Tag="{Binding}"

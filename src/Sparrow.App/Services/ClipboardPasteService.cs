@@ -10,7 +10,9 @@ public sealed record ClipboardPastePayload(
     ClipboardEntryKind Kind,
     string? Text,
     byte[]? Png,
-    IReadOnlyList<string> Paths);
+    IReadOnlyList<string> Paths,
+    byte[]? Html = null,
+    byte[]? Rtf = null);
 
 /// <summary>
 /// 顺序粘贴的宿主侧编排：抑制历史记录 → 写剪贴板 →（可选）模拟 Ctrl+V。
@@ -45,7 +47,9 @@ public sealed class ClipboardPasteService
         var written = payload.Kind switch
         {
             ClipboardEntryKind.Text when payload.Text is { Length: > 0 } =>
-                _clipboard.SetText(payload.Text),
+                payload.Html is not null || payload.Rtf is not null
+                    ? _clipboard.SetRichText(payload.Text, payload.Html, payload.Rtf)
+                    : _clipboard.SetText(payload.Text),
 
             ClipboardEntryKind.Image when payload.Png is { Length: > 0 } =>
                 _clipboard.SetImagePng(payload.Png),

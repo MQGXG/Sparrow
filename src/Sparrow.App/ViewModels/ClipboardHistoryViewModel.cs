@@ -467,6 +467,25 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
         return payload is not null && (_pasteService?.Paste(payload, simulate) ?? false);
     }
 
+    /// <summary>粘贴单条：复制（带原格式）后模拟 Ctrl+V，目标应用是面板打开前的窗口。</summary>
+    public bool PasteItem(ClipboardEntryViewModel item, bool simulate = true)
+    {
+        var payload = GetPastePayload(item);
+        return payload is not null && (_pasteService?.Paste(payload, simulate) ?? false);
+    }
+
+    /// <summary>粘贴用载荷：文本带上 HTML / RTF，其余与拖出载荷一致。</summary>
+    public ClipboardPastePayload? GetPastePayload(ClipboardEntryViewModel item)
+    {
+        if (item.Entry.Kind == ClipboardEntryKind.Text && item.Entry.Text is { Length: > 0 } text)
+        {
+            var (html, rtf) = _store.LoadRichText(item.Id);
+            return new ClipboardPastePayload(item.Entry.Kind, text, null, [], html, rtf);
+        }
+
+        return GetDragPayload(item);
+    }
+
     /// <summary>拖出用：把条目转成临时文件所需的内容。</summary>
     public ClipboardPastePayload? GetDragPayload(ClipboardEntryViewModel item) => item.Entry.Kind switch
     {

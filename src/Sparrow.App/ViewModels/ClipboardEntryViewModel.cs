@@ -185,6 +185,25 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
         return null;
     }
 
+    /// <summary>文件条目可以在资源管理器里定位。</summary>
+    public bool CanReveal => Entry.Kind == ClipboardEntryKind.Files
+        && Entry.Paths.Count > 0
+        && File.Exists(Entry.Paths[0]);
+
+    /// <summary>在资源管理器里选中文件（不是打开）。</summary>
+    public void RevealInExplorer()
+    {
+        if (!CanReveal)
+            return;
+
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+            "explorer.exe",
+            $"/select,\"{Entry.Paths[0]}\"")
+        {
+            UseShellExecute = true
+        });
+    }
+
     /// <summary>用系统默认程序打开条目。</summary>
     public void Open()
     {
