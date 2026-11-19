@@ -46,6 +46,7 @@ public sealed class ClipboardEntryDisplayTests
             viewModel.KindLabel.ShouldBe("链接");
             viewModel.ShowPlainPreview.ShouldBeFalse("链接有自己的布局");
             viewModel.ShowTagLine.ShouldBeFalse("类型已经是「链接」，不再重复标签");
+            viewModel.CanOpen.ShouldBeTrue("链接可以用浏览器打开");
         }
         finally
         {
@@ -81,6 +82,7 @@ public sealed class ClipboardEntryDisplayTests
             viewModel.IsLink.ShouldBeFalse();
             viewModel.LinkHost.ShouldBeEmpty();
             viewModel.ShowPlainPreview.ShouldBeTrue();
+            viewModel.CanOpen.ShouldBeFalse("普通文本没有打开目标");
             viewModel.KindLabel.ShouldBe("文本");
         }
         finally
@@ -120,6 +122,7 @@ public sealed class ClipboardEntryDisplayTests
             viewModel.HasFileSubtitle.ShouldBeTrue();
             viewModel.ShowPlainPreview.ShouldBeFalse();
             viewModel.ShowTagLine.ShouldBeFalse();
+            viewModel.CanOpen.ShouldBeTrue("文件可以在资源管理器里定位");
         }
         finally
         {
@@ -134,4 +137,5 @@ public sealed class ClipboardEntryDisplayTests
         }
     }
 }
+
 

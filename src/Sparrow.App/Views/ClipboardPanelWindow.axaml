@@ -442,6 +442,39 @@
                                           Padding="0"
                                           Background="Transparent"
                                           BorderThickness="0"
+                                          ToolTip.Tip="复制"
+                                          Tag="{Binding}"
+                                          Click="OnRowCopyClick">
+                                    <Path Width="13"
+                                          Height="13"
+                                          Stretch="Uniform"
+                                          Stroke="{DynamicResource TextSecondaryBrush}"
+                                          StrokeThickness="1.4"
+                                          Data="M5.5 5.5V3.5h7v7h-2M3.5 5.5h7v7h-7z" />
+                                  </Button>
+                                  <Button Classes="row-icon"
+                                          Width="22"
+                                          Height="22"
+                                          Padding="0"
+                                          Background="Transparent"
+                                          BorderThickness="0"
+                                          ToolTip.Tip="用默认程序打开"
+                                          IsVisible="{Binding CanOpen}"
+                                          Tag="{Binding}"
+                                          Click="OnRowOpenClick">
+                                    <Path Width="13"
+                                          Height="13"
+                                          Stretch="Uniform"
+                                          Stroke="{DynamicResource TextSecondaryBrush}"
+                                          StrokeThickness="1.4"
+                                          Data="M9.5 3.5h3v3M12.5 3.5 7 9M11 9.5v3h-7v-7h3" />
+                                  </Button>
+                                  <Button Classes="row-icon"
+                                          Width="22"
+                                          Height="22"
+                                          Padding="0"
+                                          Background="Transparent"
+                                          BorderThickness="0"
                                           ToolTip.Tip="加入 / 移出顺序粘贴队列"
                                           Tag="{Binding}"
                                           Click="OnQueueToggleClick">
@@ -465,6 +498,22 @@
                                                Foreground="{DynamicResource TextSecondaryBrush}"
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center" />
+                                  </Button>
+                                  <Button Classes="row-icon"
+                                          Width="22"
+                                          Height="22"
+                                          Padding="0"
+                                          Background="Transparent"
+                                          BorderThickness="0"
+                                          ToolTip.Tip="删除（可撤销）"
+                                          Tag="{Binding}"
+                                          Click="OnRowDeleteClick">
+                                    <Path Width="13"
+                                          Height="13"
+                                          Stretch="Uniform"
+                                          Stroke="{DynamicResource TextSecondaryBrush}"
+                                          StrokeThickness="1.4"
+                                          Data="M2.5 4.5h11M6 4.5v-2h4v2M4 4.5l.8 9h6.4l.8-9M6.5 7v4M9.5 7v4" />
                                   </Button>
                                 </StackPanel>
                               </Border>

@@ -117,6 +117,44 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
     /// <summary>普通文本预览：图片、链接、文件各有专用布局。</summary>
     public bool ShowPlainPreview => !HasThumbnail && !IsLink && !IsFileSet;
 
+    /// <summary>文件或链接可以直接用系统默认程序打开。</summary>
+    public bool CanOpen => IsLink
+        || (Entry.Kind == ClipboardEntryKind.Files && Entry.Paths.Count > 0);
+
+    /// <summary>
+    /// 打开条目：链接交给默认浏览器，文件在资源管理器里选中。
+    /// 只接受 http/https，避免把任意字符串当命令执行。
+    /// </summary>
+    public void Open()
+    {
+        if (IsLink && Entry.Text is { Length: > 0 } text)
+        {
+            var firstLine = text.TrimStart();
+            var end = firstLine.IndexOfAny(['\r', '\n']);
+            if (end >= 0)
+                firstLine = firstLine[..end];
+
+            if (Uri.TryCreate(firstLine.Trim(), UriKind.Absolute, out var uri)
+                && uri.Scheme is "http" or "https")
+            {
+                System.Diagnostics.Process.Start(
+                    new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+            }
+
+            return;
+        }
+
+        if (Entry.Kind == ClipboardEntryKind.Files && Entry.Paths.Count > 0)
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                "explorer.exe",
+                $"/select,\"{Entry.Paths[0]}\"")
+            {
+                UseShellExecute = true
+            });
+        }
+    }
+
     public string TagLine => string.Join("  ",
         Entry.Tags.Concat(Entry.AutoTags).Distinct(StringComparer.OrdinalIgnoreCase));
 

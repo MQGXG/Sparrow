@@ -364,6 +364,37 @@ public partial class ClipboardPanelWindow : Window
         e.Handled = true;
     }
 
+    /// <summary>工具条的「复制」：复制并收起，和双击一致。</summary>
+    private void OnRowCopyClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: ClipboardEntryViewModel item } && History is { } clipboard)
+        {
+            clipboard.SelectedItem = item;
+            clipboard.Copy(item);
+            HidePanel();
+        }
+
+        e.Handled = true;
+    }
+
+    /// <summary>工具条的「打开」：链接走浏览器，文件在资源管理器里选中。</summary>
+    private void OnRowOpenClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: ClipboardEntryViewModel item })
+            item.Open();
+
+        e.Handled = true;
+    }
+
+    /// <summary>工具条的「删除」：删掉后留在面板，可撤销。</summary>
+    private void OnRowDeleteClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: ClipboardEntryViewModel item } && History is { } clipboard)
+            clipboard.Delete(item);
+
+        e.Handled = true;
+    }
+
     private void OnUndoDeleteClick(object? sender, RoutedEventArgs e)
     {
         History?.UndoDelete();
