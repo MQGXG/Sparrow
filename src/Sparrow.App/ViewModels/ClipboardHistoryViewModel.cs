@@ -16,6 +16,10 @@ public sealed partial class ClipboardFilterViewModel : ObservableObject
 
     public string Name { get; }
 
+    /// <summary>当前筛选下的条目数，显示在 chip 名称后面。</summary>
+    [ObservableProperty]
+    private int _count;
+
     /// <summary>「全部」/「全部标签」：不是具体筛选值。</summary>
     public bool IsAll { get; }
 
@@ -179,6 +183,14 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     [ObservableProperty]
     private string _summary = string.Empty;
 
+    /// <summary>状态栏左侧：条数 / 配额与已用容量。</summary>
+    [ObservableProperty]
+    private string _statusBarText = string.Empty;
+
+    /// <summary>状态栏右侧：随队列状态变化的快捷键提示。</summary>
+    [ObservableProperty]
+    private string _statusHint = string.Empty;
+
     [ObservableProperty]
     private string? _detailText;
 
@@ -278,6 +290,9 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
                 : $"共 {_store.Count} 条 · {megabytes:F1} MB · 显示 {Items.Count} 条";
 
             SyncTagFilters();
+            UpdateKindCounts(entries);
+            UpdateQuickIndexes();
+            UpdateStatusBar();
 
             SelectedItem = Items.FirstOrDefault(item => item.Id == previousId)
                 ?? Items.FirstOrDefault();
@@ -554,6 +569,7 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
         SyncQueueBadges();
         OnPropertyChanged(nameof(HasQueue));
         OnPropertyChanged(nameof(QueueHint));
+        UpdateStatusBar();
     }
 
     private void SyncQueueBadges()
@@ -565,6 +581,57 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
             item.IsQueued = numbers.TryGetValue(item.Id, out var number);
             item.QueueBadge = item.IsQueued ? number.ToString() : "＋";
         }
+    }
+
+    /// <summary>
+    /// 类型 chip 上的数字：按当前搜索与来源筛选统计，但不按类型/标签筛选，
+    /// 否则切到某一类后其他类都会变成 0。
+    /// </summary>
+    private void UpdateKindCounts(IReadOnlyList<ClipboardHistoryEntry> entries)
+    {
+        var scoped = SelectedSource == SourceAll
+            ? entries
+            : entries
+                .Where(entry => string.Equals(
+                    entry.SourceApp, SelectedSource, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+        foreach (var kind in Kinds)
+        {
+            kind.Count = kind.Name switch
+            {
+                KindAll => scoped.Count,
+                KindText => scoped.Count(entry => entry.Kind == ClipboardEntryKind.Text),
+                KindLink => scoped.Count(entry =>
+                    entry.AutoTags.Contains(ClipboardClassifier.TagLink, StringComparer.OrdinalIgnoreCase)),
+                KindImage => scoped.Count(entry => entry.Kind == ClipboardEntryKind.Image),
+                KindFiles => scoped.Count(entry => entry.Kind == ClipboardEntryKind.Files),
+                KindFavorite => scoped.Count(entry => entry.Favorite),
+                _ => 0
+            };
+        }
+    }
+
+    /// <summary>前 9 条给 Alt+1–9 快贴编号，和列表显示顺序一致。</summary>
+    private void UpdateQuickIndexes()
+    {
+        for (var index = 0; index < Items.Count; index++)
+            Items[index].QuickIndex = index < 9 ? index + 1 : 0;
+    }
+
+    /// <summary>状态栏：条数 / 配额 + 随队列变化的快捷键提示。</summary>
+    private void UpdateStatusBar()
+    {
+        var megabytes = _store.ApproximateBytes / (1024.0 * 1024);
+        var quota = _store.MaxBytes > 0
+            ? $"{megabytes:F1} MB / {_store.MaxBytes / (1024.0 * 1024):F0} MB"
+            : $"{megabytes:F1} MB";
+
+        StatusBarText = $"{_store.Count} / {_store.MaxEntries} 条 · {quota}";
+
+        StatusHint = HasQueue
+            ? $"队列 {Queue.Count} 条 · Ctrl+Alt+V 粘贴下一条"
+            : "Enter 粘贴 · Alt+1–9 快贴 · Ctrl+点击 队列 · Esc 关闭";
     }
 
     private bool Matches(ClipboardHistoryEntry entry)

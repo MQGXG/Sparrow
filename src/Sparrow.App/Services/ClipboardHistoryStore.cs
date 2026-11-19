@@ -97,6 +97,12 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
 
     public int Count => (int)Scalar("SELECT COUNT(*) FROM entries");
 
+    /// <summary>普通记录（不含收藏）的条数上限，用于状态栏显示配额。</summary>
+    public int MaxEntries => _maxEntries;
+
+    /// <summary>总容量上限（字节）；0 表示不限制。</summary>
+    public long MaxBytes => _maxBytes;
+
     /// <summary>历史占用的近似字节数：文本按字符数、图片按 PNG 字节数。</summary>
     public long ApproximateBytes => Scalar("SELECT COALESCE(SUM(byte_size), 0) FROM entries");
 

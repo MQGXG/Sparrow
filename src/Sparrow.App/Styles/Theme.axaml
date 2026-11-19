@@ -29,6 +29,8 @@
     <SolidColorBrush x:Key="AccentHoverBrush" Color="#F0B463" />
     <SolidColorBrush x:Key="AccentSoftBrush" Color="#2C2318" />
     <SolidColorBrush x:Key="AccentBorderBrush" Color="#5C4A26" />
+    <!-- 琥珀底上的文字色：主按钮、序号角标 -->
+    <SolidColorBrush x:Key="AccentOnBrush" Color="#1A1206" />
 
     <!-- 语义色 -->
     <SolidColorBrush x:Key="DangerBrush" Color="#F87171" />
@@ -146,7 +148,7 @@
   <Style Selector="Button.accent">
     <Setter Property="Background" Value="{StaticResource AccentGradientBrush}" />
     <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
-    <Setter Property="Foreground" Value="#1A1206" />
+    <Setter Property="Foreground" Value="{StaticResource AccentOnBrush}" />
     <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
 

@@ -183,6 +183,97 @@ public sealed class ClipboardPanelWindowTests
     }
 
     [AvaloniaFact]
+    public void 剪贴板面板_Alt数字直接复制对应条目()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"),
+                new NullLog());
+            store.AddText("第一条");
+            store.AddText("第二条");
+            store.AddText("第三条");
+
+            var clipboard = new FakeClipboard();
+            var viewModel = new ClipboardHistoryViewModel(store, clipboard);
+            var window = new ClipboardPanelWindow { DataContext = viewModel };
+            window.Show();
+            window.PrepareForShow();
+            Dispatcher.UIThread.RunJobs();
+
+            // 列表按时间倒序：第 1 条是最新的「第三条」
+            viewModel.Items[0].Preview.ShouldBe("第三条");
+
+            window.KeyPress(Key.D3, RawInputModifiers.Alt, PhysicalKey.None, null);
+
+            clipboard.Text.ShouldBe("第一条", "Alt+3 应复制列表第 3 条");
+            window.IsVisible.ShouldBeFalse("快贴后应收起面板");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [AvaloniaFact]
+    public void 剪贴板视图_类型计数与快贴序号()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"),
+                new NullLog());
+
+            for (var index = 1; index <= 10; index++)
+                store.AddText($"第 {index} 条");
+
+            store.SetFavorite(store.Recent(1)[0].Id, true);
+
+            var viewModel = new ClipboardHistoryViewModel(store, new FakeClipboard());
+
+            viewModel.Kinds.First(kind => kind.Name == "全部").Count.ShouldBe(10);
+            viewModel.Kinds.First(kind => kind.Name == "文本").Count.ShouldBe(10);
+            viewModel.Kinds.First(kind => kind.Name == "收藏").Count.ShouldBe(1);
+
+            // 前 9 条有快贴序号，第 10 条没有
+            viewModel.Items[0].QuickIndex.ShouldBe(1);
+            viewModel.Items[8].QuickIndex.ShouldBe(9);
+            viewModel.Items[9].QuickIndex.ShouldBe(0);
+            viewModel.Items[9].HasQuickIndex.ShouldBeFalse();
+
+            viewModel.StatusBarText.ShouldContain("10 /");
+            viewModel.StatusBarText.ShouldContain("条");
+            viewModel.StatusHint.ShouldContain("Alt+1");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [AvaloniaFact]
     public void 剪贴板面板_查看详情覆盖在面板上_Esc回到列表()
     {
         var directory = System.IO.Path.Combine(

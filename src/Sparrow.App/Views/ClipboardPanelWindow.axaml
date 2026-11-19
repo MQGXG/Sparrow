@@ -20,7 +20,7 @@
     <Border Background="{StaticResource DotGridBrush}" IsHitTestVisible="False" />
 
     <!-- 只有搜索 + 筛选 + 列表：不带主窗的品牌栏和切换行 -->
-    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto"
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto"
           RowSpacing="10"
           Margin="18,16,18,12">
 
@@ -54,20 +54,7 @@
                 Click="OnClearCancelClick" />
       </Grid>
 
-      <Grid Grid.Row="1" ColumnDefinitions="*,Auto">
-        <TextBlock Classes="num"
-                   Text="{Binding Summary}"
-                   VerticalAlignment="Center" />
-        <TextBlock Grid.Column="1"
-                   Text="{Binding StatusText}"
-                   IsVisible="{Binding HasStatus}"
-                   Margin="12,0,0,0"
-                   FontSize="10"
-                   Foreground="{StaticResource AccentBrush}"
-                   VerticalAlignment="Center" />
-      </Grid>
-
-      <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto">
+      <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto">
         <ItemsControl ItemsSource="{Binding Kinds}">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
@@ -81,7 +68,13 @@
                       Classes.selected="{Binding IsSelected}"
                       Tag="{Binding}"
                       Click="OnKindClick">
-                <TextBlock Text="{Binding Name}" />
+                <StackPanel Orientation="Horizontal" Spacing="5">
+                  <TextBlock Text="{Binding Name}" />
+                  <TextBlock Text="{Binding Count}"
+                             Classes="num"
+                             Opacity="0.75"
+                             VerticalAlignment="Center" />
+                </StackPanel>
               </Button>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
@@ -104,7 +97,7 @@
                   VerticalAlignment="Top" />
       </Grid>
 
-      <ItemsControl Grid.Row="3"
+      <ItemsControl Grid.Row="2"
                     ItemsSource="{Binding TagFilters}"
                     IsVisible="{Binding HasTagFilters}">
         <ItemsControl.ItemsPanel>
@@ -126,7 +119,7 @@
       </ItemsControl>
 
       <!-- 粘贴队列：和工作区剪贴板页同一套能力，Ctrl+点击行可增减 -->
-      <Border Grid.Row="4"
+      <Border Grid.Row="3"
               IsVisible="{Binding HasQueue}"
               Background="{StaticResource SurfaceBrush}"
               BorderBrush="{StaticResource LineBrush}"
@@ -177,7 +170,7 @@
         </Grid>
       </Border>
 
-      <Border Grid.Row="5"
+      <Border Grid.Row="4"
               Classes="panel"
               Padding="4">
         <Grid>
@@ -271,6 +264,22 @@
                                   <Image Source="{Binding Thumbnail, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
                                          Stretch="UniformToFill"
                                          IsVisible="{Binding HasThumbnail}" />
+
+                                  <!-- 快贴序号：Alt+1–9 直接贴这一条 -->
+                                  <Border Width="16"
+                                          Height="16"
+                                          CornerRadius="3"
+                                          Background="{StaticResource AccentBrush}"
+                                          HorizontalAlignment="Left"
+                                          VerticalAlignment="Top"
+                                          IsVisible="{Binding HasQuickIndex}">
+                                    <TextBlock Text="{Binding QuickIndex}"
+                                               FontSize="9"
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource AccentOnBrush}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                  </Border>
                                 </Panel>
                               </Border>
 
@@ -357,10 +366,24 @@
         </Grid>
       </Border>
 
-      <TextBlock Grid.Row="6"
-                 Classes="num"
-                 HorizontalAlignment="Center"
-                 Text="单击选中 · Ctrl+点击 加入队列 · 双击 / 回车 复制并关闭 · 查看 详情 · Esc 返回 / 关闭" />
+      <!-- 状态栏：条数 / 容量配额 + 随队列变化的快捷键提示 -->
+      <Grid Grid.Row="5" ColumnDefinitions="Auto,*,Auto">
+        <TextBlock Classes="num"
+                   Text="{Binding StatusBarText}"
+                   VerticalAlignment="Center" />
+        <TextBlock Grid.Column="1"
+                   Classes="num"
+                   Text="{Binding StatusText}"
+                   IsVisible="{Binding HasStatus}"
+                   Margin="12,0"
+                   Foreground="{StaticResource AccentBrush}"
+                   TextTrimming="CharacterEllipsis"
+                   VerticalAlignment="Center" />
+        <TextBlock Grid.Column="2"
+                   Classes="num"
+                   Text="{Binding StatusHint}"
+                   VerticalAlignment="Center" />
+      </Grid>
     </Grid>
 
     <!-- 详情覆盖层：盖住搜索和列表，← / Esc 回到列表；复制后整个面板收起 -->
