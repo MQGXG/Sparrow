@@ -658,8 +658,8 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
             : 0.03;
 
         StatusHint = HasQueue
-            ? $"队列 {Queue.Count} 条 · Ctrl+Alt+V 粘贴下一条"
-            : "Enter 粘贴 · Alt+1–9 快贴 · Ctrl+点击 队列 · Esc 关闭";
+            ? $"队列 {Queue.Count} 条 · Ctrl+Alt+V"
+            : "Enter 粘贴 · Alt+1–9 快贴";
     }
 
     private bool Matches(ClipboardHistoryEntry entry)
