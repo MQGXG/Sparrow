@@ -6,9 +6,9 @@
         x:Class="Sparrow.App.Views.ClipboardPanelWindow"
         x:DataType="vm:ClipboardHistoryViewModel"
         Title="麻雀 · 剪贴板"
-        Width="640"
+        Width="520"
         Height="560"
-        MinWidth="480"
+        MinWidth="440"
         MinHeight="400"
         RequestedThemeVariant="Dark"
         Icon="avares://Sparrow.App/Assets/sparrow-32.png"
@@ -20,7 +20,7 @@
     <Border Background="{StaticResource DotGridBrush}" IsHitTestVisible="False" />
 
     <!-- 只有搜索 + 筛选 + 列表：不带主窗的品牌栏和切换行 -->
-    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto"
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto"
           RowSpacing="8"
           Margin="14,12,14,10">
 
@@ -52,14 +52,22 @@
                 Margin="6,0,0,0"
                 IsVisible="{Binding IsClearConfirmVisible}"
                 Click="OnClearCancelClick" />
-        <Button Grid.Column="4"
+        <Button Grid.Column="5"
                 Classes="ghost small"
-                Content="{Binding ExclusionButtonLabel}"
-                IsEnabled="{Binding CanToggleExclusion}"
+                Content="⋯"
+                Width="30"
+                Padding="0"
                 Margin="8,0,0,0"
-                ToolTip.Tip="选中一个来源后，让它之后的复制不进历史"
-                Click="OnExclusionClick" />
-        <ComboBox Grid.Column="5"
+                ToolTip.Tip="更多：不记录某个来源的复制">
+          <Button.Flyout>
+            <MenuFlyout Placement="BottomEdgeAlignedRight">
+              <MenuItem Header="{Binding ExclusionButtonLabel}"
+                        IsEnabled="{Binding CanToggleExclusion}"
+                        Click="OnExclusionClick" />
+            </MenuFlyout>
+          </Button.Flyout>
+        </Button>
+        <ComboBox Grid.Column="4"
                   ItemsSource="{Binding SourceFilters}"
                   SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
                   MinWidth="96"
@@ -78,6 +86,7 @@
               <Button Classes="hud-chip"
                       Margin="0,0,6,6"
                       Classes.selected="{Binding IsSelected}"
+                      IsVisible="{Binding IsShown}"
                       Tag="{Binding}"
                       Click="OnKindClick">
                 <StackPanel Orientation="Horizontal" Spacing="5">
@@ -197,10 +206,12 @@
                     <ItemsControl ItemsSource="{Binding Items}">
                       <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:ClipboardEntryViewModel">
-                          <Border Margin="2,1"
-                                  Padding="7,5"
-                                  CornerRadius="8"
-                                  Background="Transparent"
+                          <Border Margin="0,3"
+                                  Padding="8,6"
+                                  CornerRadius="10"
+                                  Background="{StaticResource SurfaceBrush}"
+                                  BorderBrush="Transparent"
+                                  BorderThickness="1"
                                   Cursor="Hand"
                                   Classes="clip-row"
                                   Classes.selected="{Binding IsSelected}"
@@ -241,36 +252,65 @@
                             <Border.Styles>
                               <Style Selector="Border.clip-row:pointerover">
                                 <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
                               </Style>
                               <Style Selector="Border.clip-row.selected">
                                 <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
                               </Style>
-                              <Style Selector="Border.clip-row Button.row-action">
-                                <Setter Property="Opacity" Value="0.5" />
+                              <!-- 操作浮层：默认不可见，悬停或选中才出现 -->
+                              <Style Selector="Border.clip-row Border.row-actions">
+                                <Setter Property="IsVisible" Value="False" />
+                              </Style>
+                              <Style Selector="Border.clip-row:pointerover Border.row-actions">
+                                <Setter Property="IsVisible" Value="True" />
+                              </Style>
+                              <Style Selector="Border.clip-row.selected Border.row-actions">
+                                <Setter Property="IsVisible" Value="True" />
+                              </Style>
+
+                              <!-- 元信息行：默认收起，悬停或选中才展开 -->
+                              <Style Selector="Border.clip-row Border.row-meta">
+                                <Setter Property="Height" Value="0" />
+                                <Setter Property="Opacity" Value="0" />
+                                <Setter Property="ClipToBounds" Value="True" />
                                 <Setter Property="Transitions">
                                   <Transitions>
+                                    <DoubleTransition Property="Height" Duration="0:0:0.12" />
                                     <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
                                   </Transitions>
                                 </Setter>
                               </Style>
-                              <Style Selector="Border.clip-row:pointerover Button.row-action">
+                              <Style Selector="Border.clip-row:pointerover Border.row-meta">
+                                <Setter Property="Height" Value="14" />
                                 <Setter Property="Opacity" Value="1" />
                               </Style>
-                              <Style Selector="Border.clip-row.selected Button.row-action">
+                              <Style Selector="Border.clip-row.selected Border.row-meta">
+                                <Setter Property="Height" Value="14" />
                                 <Setter Property="Opacity" Value="1" />
                               </Style>
                             </Border.Styles>
 
-                            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="10">
-                              <Border Width="2"
-                                      Height="24"
-                                      CornerRadius="1"
-                                      Background="{StaticResource AccentBrush}"
-                                      VerticalAlignment="Center"
-                                      IsVisible="{Binding IsSelected}" />
+                            <Panel>
+                              <Grid ColumnDefinitions="18,Auto,*" ColumnSpacing="6">
+                                <!-- 快贴序号：Alt+1–9 直接贴这一条 -->
+                                <Border Width="17"
+                                        Height="17"
+                                        CornerRadius="5"
+                                        Background="{StaticResource AccentBrush}"
+                                        HorizontalAlignment="Left"
+                                        VerticalAlignment="Top"
+                                        IsVisible="{Binding HasQuickIndex}">
+                                  <TextBlock Text="{Binding QuickIndex}"
+                                             FontSize="9"
+                                             FontWeight="SemiBold"
+                                             Foreground="{StaticResource AccentOnBrush}"
+                                             HorizontalAlignment="Center"
+                                             VerticalAlignment="Center" />
+                                </Border>
 
-                              <Border Grid.Column="1"
-                                      Width="34"
+                                <Border Grid.Column="1"
+                                        Width="34"
                                       Height="34"
                                       CornerRadius="6"
                                       Background="{StaticResource SurfaceBrush}"
@@ -287,26 +327,10 @@
                                   <Image Source="{Binding Thumbnail, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
                                          Stretch="UniformToFill"
                                          IsVisible="{Binding HasThumbnail}" />
-
-                                  <!-- 快贴序号：Alt+1–9 直接贴这一条 -->
-                                  <Border Width="16"
-                                          Height="16"
-                                          CornerRadius="3"
-                                          Background="{StaticResource AccentBrush}"
-                                          HorizontalAlignment="Left"
-                                          VerticalAlignment="Top"
-                                          IsVisible="{Binding HasQuickIndex}">
-                                    <TextBlock Text="{Binding QuickIndex}"
-                                               FontSize="9"
-                                               FontWeight="SemiBold"
-                                               Foreground="{StaticResource AccentOnBrush}"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center" />
-                                  </Border>
                                 </Panel>
                               </Border>
 
-                              <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center">
+                              <StackPanel Grid.Column="2" Spacing="1" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding Preview}"
                                            FontSize="12"
                                            TextTrimming="CharacterEllipsis"
@@ -316,53 +340,61 @@
                                            TextTrimming="CharacterEllipsis"
                                            Foreground="{StaticResource AccentBrush}"
                                            IsVisible="{Binding HasTags}" />
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                  <TextBlock Text="{Binding TimeLabel}"
-                                             FontSize="10"
-                                             Foreground="{StaticResource TextMutedBrush}" />
-                                  <TextBlock Text="·"
-                                             FontSize="10"
-                                             IsVisible="{Binding HasSource}"
-                                             Foreground="{StaticResource TextMutedBrush}" />
-                                  <TextBlock Text="{Binding SourceLabel}"
-                                             FontSize="10"
-                                             TextTrimming="CharacterEllipsis"
-                                             IsVisible="{Binding HasSource}"
-                                             Foreground="{StaticResource TextMutedBrush}" />
-                                </StackPanel>
+                                <Border Classes="row-meta">
+                                  <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="{Binding TimeLabel}"
+                                               FontSize="10"
+                                               Foreground="{StaticResource TextMutedBrush}" />
+                                    <TextBlock Text="·"
+                                               FontSize="10"
+                                               IsVisible="{Binding HasSource}"
+                                               Foreground="{StaticResource TextMutedBrush}" />
+                                    <TextBlock Text="{Binding SourceLabel}"
+                                               FontSize="10"
+                                               TextTrimming="CharacterEllipsis"
+                                               IsVisible="{Binding HasSource}"
+                                               Foreground="{StaticResource TextMutedBrush}" />
+                                  </StackPanel>
+                                </Border>
                               </StackPanel>
 
-                              <Button Grid.Column="3"
-                                      Classes="ghost small"
-                                      Width="38"
-                                      Height="26"
-                                      Padding="0"
-                                      FontSize="10"
-                                      Content="查看"
-                                      ToolTip.Tip="在面板内查看详情"
-                                      Tag="{Binding}"
-                                      Click="OnOpenDetailClick" />
+                              </Grid>
 
-                              <Button Grid.Column="4"
-                                      Classes="ghost small row-action"
-                                      Width="26"
-                                      Height="26"
-                                      Padding="0"
-                                      Content="{Binding QueueBadge}"
-                                      ToolTip.Tip="加入 / 移出顺序粘贴队列"
-                                      Tag="{Binding}"
-                                      Click="OnQueueToggleClick" />
-
-                              <Button Grid.Column="5"
-                                      Classes="ghost small row-action"
-                                      Width="26"
-                                      Height="26"
-                                      Padding="0"
-                                      Content="{Binding FavoriteGlyph}"
-                                      ToolTip.Tip="收藏 / 取消收藏"
-                                      Tag="{Binding}"
-                                      Click="OnFavoriteClick" />
-                            </Grid>
+                              <!-- 悬停浮层：查看 / 队列 / 收藏，不占列表布局宽度 -->
+                              <Border Classes="row-actions"
+                                      HorizontalAlignment="Right"
+                                      VerticalAlignment="Top"
+                                      Background="{StaticResource SurfaceRaisedBrush}"
+                                      BorderBrush="{StaticResource LineBrush}"
+                                      BorderThickness="1"
+                                      CornerRadius="6"
+                                      Padding="3">
+                                <StackPanel Orientation="Horizontal" Spacing="2">
+                                  <Button Width="36"
+                                          Height="24"
+                                          Padding="0"
+                                          FontSize="10"
+                                          Content="查看"
+                                          ToolTip.Tip="在面板内查看详情"
+                                          Tag="{Binding}"
+                                          Click="OnOpenDetailClick" />
+                                  <Button Width="24"
+                                          Height="24"
+                                          Padding="0"
+                                          Content="{Binding QueueBadge}"
+                                          ToolTip.Tip="加入 / 移出顺序粘贴队列"
+                                          Tag="{Binding}"
+                                          Click="OnQueueToggleClick" />
+                                  <Button Width="24"
+                                          Height="24"
+                                          Padding="0"
+                                          Content="{Binding FavoriteGlyph}"
+                                          ToolTip.Tip="收藏 / 取消收藏"
+                                          Tag="{Binding}"
+                                          Click="OnFavoriteClick" />
+                                </StackPanel>
+                              </Border>
+                            </Panel>
                           </Border>
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
@@ -407,6 +439,18 @@
                    Text="{Binding StatusHint}"
                    VerticalAlignment="Center" />
       </Grid>
+
+      <!-- 容量条：最窄保留 3%，空库也能看出这条是进度 -->
+      <ProgressBar Grid.Row="6"
+                   Minimum="0"
+                   Maximum="1"
+                   Value="{Binding CapacityRatio}"
+                   Height="2"
+                   MinHeight="2"
+                   Margin="0,4,0,0"
+                   CornerRadius="1"
+                   Background="{StaticResource LineBrush}"
+                   Foreground="{StaticResource AccentBrush}" />
     </Grid>
 
     <!-- 详情覆盖层：盖住搜索和列表，← / Esc 回到列表；复制后整个面板收起 -->

@@ -23,6 +23,13 @@ public sealed partial class ClipboardFilterViewModel : ObservableObject
     /// <summary>「全部」/「全部标签」：不是具体筛选值。</summary>
     public bool IsAll { get; }
 
+    /// <summary>类型 chip 是否显示：全部、选中项、或有数量的分类才出现。</summary>
+    public bool IsShown => IsAll || IsSelected || Count > 0;
+
+    partial void OnCountChanged(int value) => OnPropertyChanged(nameof(IsShown));
+
+    partial void OnIsSelectedChanged(bool value) => OnPropertyChanged(nameof(IsShown));
+
     [ObservableProperty]
     private bool _isSelected;
 }
@@ -190,6 +197,10 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     /// <summary>状态栏右侧：随队列状态变化的快捷键提示。</summary>
     [ObservableProperty]
     private string _statusHint = string.Empty;
+
+    /// <summary>容量条比例；最窄 3%，避免空库看起来像没有进度条。</summary>
+    [ObservableProperty]
+    private double _capacityRatio = 0.03;
 
     [ObservableProperty]
     private string? _detailText;
@@ -641,6 +652,10 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
             : $"{megabytes:F1} MB";
 
         StatusBarText = $"{_store.Count} / {_store.MaxEntries} 条 · {quota}";
+
+        CapacityRatio = _store.MaxBytes > 0
+            ? Math.Clamp((double)_store.ApproximateBytes / _store.MaxBytes, 0.03, 1.0)
+            : 0.03;
 
         StatusHint = HasQueue
             ? $"队列 {Queue.Count} 条 · Ctrl+Alt+V 粘贴下一条"

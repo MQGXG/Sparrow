@@ -361,6 +361,46 @@ public sealed class ClipboardPanelWindowTests
     }
 
     [AvaloniaFact]
+    public void 类型chip_空分类隐藏_选中项始终显示()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"),
+                new NullLog());
+            store.AddText("只有文本");
+
+            var viewModel = new ClipboardHistoryViewModel(store, new FakeClipboard());
+
+            viewModel.Kinds.First(kind => kind.Name == "全部").IsShown.ShouldBeTrue();
+            viewModel.Kinds.First(kind => kind.Name == "文本").IsShown.ShouldBeTrue();
+            viewModel.Kinds.First(kind => kind.Name == "图片").IsShown.ShouldBeFalse("空分类不该占位置");
+            viewModel.Kinds.First(kind => kind.Name == "收藏").IsShown.ShouldBeFalse();
+
+            // 选中一个空分类时它必须留下，否则筛选无法取消
+            viewModel.SelectKind(viewModel.Kinds.First(kind => kind.Name == "图片"));
+            viewModel.Kinds.First(kind => kind.Name == "图片").IsShown.ShouldBeTrue();
+
+            viewModel.CapacityRatio.ShouldBe(0.03, "空库保留 3% 的可视进度");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [AvaloniaFact]
     public void 剪贴板面板_查看详情覆盖在面板上_Esc回到列表()
     {
         var directory = System.IO.Path.Combine(
