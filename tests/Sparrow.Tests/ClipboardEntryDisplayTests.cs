@@ -173,6 +173,80 @@ public sealed class ClipboardEntryDisplayTests
     }
 
     [Fact]
+    public void 文本路径可以用默认程序打开()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var file = System.IO.Path.Combine(directory, "笔记.txt");
+            File.WriteAllText(file, "内容");
+
+            var viewModel = Create(new ClipboardHistoryEntry
+            {
+                Id = "path-text",
+                Kind = ClipboardEntryKind.Text,
+                Preview = file,
+                Text = file,
+                CreatedAt = DateTimeOffset.Now
+            }, directory);
+
+            viewModel.IsLink.ShouldBeFalse();
+            viewModel.IsPath.ShouldBeTrue();
+            viewModel.CanOpen.ShouldBeTrue("存在的文件路径可以打开");
+            viewModel.ResolveOpenTarget().ShouldBe(file);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [Fact]
+    public void 文本目录路径也可以打开()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var viewModel = Create(new ClipboardHistoryEntry
+            {
+                Id = "path-dir",
+                Kind = ClipboardEntryKind.Text,
+                Preview = directory,
+                Text = directory,
+                CreatedAt = DateTimeOffset.Now
+            }, directory);
+
+            viewModel.IsPath.ShouldBeTrue();
+            viewModel.CanOpen.ShouldBeTrue("存在的目录也可以用资源管理器打开");
+            viewModel.ResolveOpenTarget().ShouldBe(directory);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [Fact]
     public void 文件条目显示文件名与剩余数量()
     {
         var directory = System.IO.Path.Combine(

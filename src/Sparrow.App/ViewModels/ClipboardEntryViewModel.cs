@@ -126,16 +126,26 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
     /// <summary>普通文本预览：图片、链接、文件各有专用布局。</summary>
     public bool ShowPlainPreview => !HasThumbnail && !IsLink && !IsFileSet;
 
-    /// <summary>链接、可访问的文件、图片都可以用默认程序打开。</summary>
+    /// <summary>文本里存的是一个存在的本地路径（文件或目录）。</summary>
+    public bool IsPath => Entry.Kind == ClipboardEntryKind.Text
+        && !IsLink
+        && IsExistingPath(FirstLineOf(Entry));
+
+    private static bool IsExistingPath(string text) =>
+        text.Length > 2
+        && (File.Exists(text) || Directory.Exists(text));
+
+    /// <summary>链接、存在的本地路径、可访问的文件、图片都可以用默认程序打开。</summary>
     public bool CanOpen => IsLink
+        || IsPath
         || (Entry.Kind == ClipboardEntryKind.Files
             && Entry.Paths.Count > 0
             && File.Exists(Entry.Paths[0]))
         || Entry.Kind == ClipboardEntryKind.Image;
 
     /// <summary>
-    /// 解析打开目标：链接 → URL；文件 → 现有路径；图片 → 写入临时 PNG 后返回路径。
-    /// 无法打开时返回 null。
+    /// 解析打开目标：链接 → URL；文本路径 → 路径；文件 → 现有路径；
+    /// 图片 → 写入临时 PNG 后返回路径。无法打开时返回 null。
     /// </summary>
     public string? ResolveOpenTarget()
     {
@@ -146,6 +156,12 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
                 && uri.Scheme is "http" or "https"
                 ? uri.AbsoluteUri
                 : null;
+        }
+
+        if (Entry.Kind == ClipboardEntryKind.Text)
+        {
+            var line = FirstLineOf(Entry);
+            return IsExistingPath(line) ? line : null;
         }
 
         if (Entry.Kind == ClipboardEntryKind.Files && Entry.Paths.Count > 0)
