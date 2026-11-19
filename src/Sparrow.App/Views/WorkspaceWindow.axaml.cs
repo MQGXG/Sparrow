@@ -16,7 +16,6 @@ public partial class WorkspaceWindow : Window
     private Point _clipboardDragOrigin;
     private bool _clipboardDragStarted;
     private bool _suppressClipboardClick;
-    private ClipboardDetailWindow? _clipboardDetail;
 
     public WorkspaceWindow()
     {
@@ -32,7 +31,7 @@ public partial class WorkspaceWindow : Window
         // 关窗只是藏起来，托盘还能再打开；详情窗口跟着一起收
         Closing += (_, e) =>
         {
-            CloseClipboardDetail();
+            HideClipboardDetail();
             e.Cancel = true;
             Hide();
         };
@@ -53,6 +52,14 @@ public partial class WorkspaceWindow : Window
         if (viewModel.IsImagePreviewVisible)
         {
             viewModel.HideImagePreview();
+            e.Handled = true;
+            return;
+        }
+
+        // 详情覆盖层：Esc 先退出详情，再谈其他
+        if (ClipboardDetailLayer.IsVisible)
+        {
+            HideClipboardDetail();
             e.Handled = true;
             return;
         }
@@ -255,7 +262,7 @@ public partial class WorkspaceWindow : Window
             DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
         {
             clipboard.SelectedItem = item;
-            ShowClipboardDetail(clipboard);
+            ShowClipboardDetail();
         }
 
         e.Handled = true;
@@ -271,29 +278,40 @@ public partial class WorkspaceWindow : Window
             DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
         {
             clipboard.SelectedItem = item;
-            ShowClipboardDetail(clipboard);
+            ShowClipboardDetail();
             e.Handled = true;
         }
     }
 
-    /// <summary>详情窗口全局只留一个；已开着就前置。</summary>
-    private void ShowClipboardDetail(ClipboardHistoryViewModel clipboard)
+    /// <summary>在剪贴板页内盖一层详情，和快捷键面板同一套交互。</summary>
+    private void ShowClipboardDetail()
     {
-        if (_clipboardDetail is { IsVisible: true })
-        {
-            _clipboardDetail.Activate();
-            return;
-        }
-
-        _clipboardDetail = new ClipboardDetailWindow { DataContext = clipboard };
-        _clipboardDetail.Closed += (_, _) => _clipboardDetail = null;
-        _clipboardDetail.Show(this);
+        ClipboardDetailLayer.IsVisible = true;
+        ClipboardDetailViewHost.FocusBackButton();
     }
 
-    private void CloseClipboardDetail()
+    private void HideClipboardDetail()
     {
-        _clipboardDetail?.Close();
-        _clipboardDetail = null;
+        if (!ClipboardDetailLayer.IsVisible)
+            return;
+
+        ClipboardDetailLayer.IsVisible = false;
+
+        // 焦点交还搜索框，Esc 之后可以直接继续找条目
+        if (ClipboardPage.IsVisible)
+            ClipboardSearchBox.Focus();
+    }
+
+    private void OnClipboardDetailCloseRequested(object? sender, EventArgs e) =>
+        HideClipboardDetail();
+
+    private void OnClipboardDetailCopied(object? sender, EventArgs e) =>
+        HideClipboardDetail();
+
+    private void OnClipboardDetailBackdropPressed(object? sender, PointerPressedEventArgs e)
+    {
+        HideClipboardDetail();
+        e.Handled = true;
     }
 
     private void OnClipboardQueueToggleClick(object? sender, RoutedEventArgs e)
@@ -491,7 +509,7 @@ public partial class WorkspaceWindow : Window
 
     private void OnShowRecentClick(object? sender, RoutedEventArgs e)
     {
-        CloseClipboardDetail();
+        HideClipboardDetail();
 
         if (DataContext is WorkspaceViewModel viewModel)
             viewModel.ShowRecent();
@@ -499,7 +517,7 @@ public partial class WorkspaceWindow : Window
 
     private void OnShowToolsClick(object? sender, RoutedEventArgs e)
     {
-        CloseClipboardDetail();
+        HideClipboardDetail();
 
         if (DataContext is WorkspaceViewModel viewModel)
             viewModel.ShowTools();
@@ -592,7 +610,7 @@ public partial class WorkspaceWindow : Window
 
     private void OnSettingsClick(object? sender, RoutedEventArgs e)
     {
-        CloseClipboardDetail();
+        HideClipboardDetail();
 
         if (DataContext is WorkspaceViewModel viewModel)
             viewModel.ShowSettings();
@@ -604,3 +622,4 @@ public partial class WorkspaceWindow : Window
             viewModel.HideSettings();
     }
 }
+

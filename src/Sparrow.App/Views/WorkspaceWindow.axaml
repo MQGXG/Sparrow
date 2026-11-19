@@ -463,12 +463,12 @@
           <!-- 剪贴板页：先只给列表，详情在单独的检视窗口里看 -->
           <Grid x:Name="ClipboardPage" IsVisible="{Binding IsClipboardVisible}">
             <Grid DataContext="{Binding Clipboard}">
-
               <!-- 左：搜索 / 反馈 / 筛选 / 队列 / 列表 -->
               <Grid Grid.Column="0" RowDefinitions="Auto,Auto,Auto,Auto,Auto,*" RowSpacing="10">
 
                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto">
-                  <TextBox Text="{Binding Query, Mode=TwoWay}"
+                  <TextBox x:Name="ClipboardSearchBox"
+                           Text="{Binding Query, Mode=TwoWay}"
                            PlaceholderText="搜索内容、标签、来源…" />
                   <Button Grid.Column="1"
                           Classes="ghost small"
@@ -757,7 +757,7 @@
                                         Padding="0"
                                         FontSize="10"
                                         Content="查看"
-                                        ToolTip.Tip="打开详情窗口（也可以双击这一行）"
+                                        ToolTip.Tip="在当前页查看详情（也可以双击这一行）"
                                         Tag="{Binding}"
                                         Click="OnClipboardOpenDetailClick" />
 
@@ -809,6 +809,24 @@
               </Grid>
 
             </Grid>
+
+            <!-- 剪贴板详情覆盖层：和快捷键面板一致，不再开独立窗口 -->
+            <Panel x:Name="ClipboardDetailLayer"
+                   IsVisible="False"
+                   DataContext="{Binding Clipboard}">
+              <Border Background="#CC07090B"
+                      PointerPressed="OnClipboardDetailBackdropPressed" />
+              <Border Margin="10"
+                      CornerRadius="10"
+                      BorderBrush="{StaticResource LineStrongBrush}"
+                      BorderThickness="1"
+                      ClipToBounds="True"
+                      Background="{StaticResource WindowBgGradientBrush}">
+                <views:ClipboardDetailView x:Name="ClipboardDetailViewHost"
+                                           CloseRequested="OnClipboardDetailCloseRequested"
+                                           Copied="OnClipboardDetailCopied" />
+              </Border>
+            </Panel>
           </Grid>
         </Grid>
 

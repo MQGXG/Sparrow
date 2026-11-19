@@ -2,6 +2,8 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using Shouldly;
 using Sparrow.App;
 using Sparrow.App.Plugins;
@@ -280,6 +282,69 @@ public sealed class WorkspaceWindowTests
         finally
         {
             catalog.Dispose();
+        }
+    }
+
+    [AvaloniaFact]
+    public void 剪贴板详情_在页内打开_Esc返回列表()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"),
+                new NullLog());
+            store.AddText("https://example.com");
+
+            var (window, viewModel, catalog) = Create(store);
+            try
+            {
+                viewModel.ShowClipboard();
+                window.UpdateLayout();
+
+                var button = window.GetVisualDescendants()
+                    .OfType<Button>()
+                    .FirstOrDefault(control => control.Content is "查看");
+
+                button.ShouldNotBeNull("列表行里应该有「查看」按钮");
+
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                var layer = window.FindControl<Panel>("ClipboardDetailLayer");
+                layer.ShouldNotBeNull();
+                layer.IsVisible.ShouldBeTrue("详情应该盖在剪贴板页上，而不是单独开窗");
+
+                window.OwnedWindows.ShouldBeEmpty();
+
+                var detail = window.FindControl<ClipboardDetailView>("ClipboardDetailViewHost");
+                detail.ShouldNotBeNull();
+                detail.DataContext.ShouldBeSameAs(viewModel.Clipboard);
+
+                viewModel.Clipboard!.SelectedItem.ShouldNotBeNull();
+
+                window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.None, null);
+
+                layer.IsVisible.ShouldBeFalse("Esc 先退出详情");
+                window.IsVisible.ShouldBeTrue("退出详情不等于关掉工具台");
+            }
+            finally
+            {
+                catalog.Dispose();
+            }
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录可能被系统占用
+            }
         }
     }
 }
