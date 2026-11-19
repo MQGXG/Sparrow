@@ -99,7 +99,47 @@ public sealed class ClipboardEntryDisplayTests
     }
 
     [Fact]
-    public void 文件条目显示文件名与剩余数量()
+    public void 图片条目写临时文件后用默认程序打开()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            // 1×1 的最小 PNG
+            var png = Convert.FromBase64String(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"), new NullLog());
+            store.AddImage(png);
+
+            var entry = store.Recent(1)[0];
+            var viewModel = new ClipboardEntryViewModel(entry, store);
+
+            viewModel.CanOpen.ShouldBeTrue("图片可以写临时文件后用默认程序打开");
+
+            var target = viewModel.ResolveOpenTarget();
+            target.ShouldNotBeNull();
+            File.Exists(target).ShouldBeTrue("应写出临时 PNG");
+            new FileInfo(target!).Length.ShouldBe(png.Length);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [Fact]
+    public void 文件不存在时不能打开()
     {
         var directory = System.IO.Path.Combine(
             System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
@@ -109,10 +149,49 @@ public sealed class ClipboardEntryDisplayTests
         {
             var viewModel = Create(new ClipboardHistoryEntry
             {
+                Id = "missing",
+                Kind = ClipboardEntryKind.Files,
+                Preview = "1 个文件",
+                Paths = [System.IO.Path.Combine(directory, "已经删掉.pdf")],
+                CreatedAt = DateTimeOffset.Now
+            }, directory);
+
+            viewModel.CanOpen.ShouldBeFalse();
+            viewModel.ResolveOpenTarget().ShouldBeNull();
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [Fact]
+    public void 文件条目显示文件名与剩余数量()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var first = System.IO.Path.Combine(directory, "报告.docx");
+            var second = System.IO.Path.Combine(directory, "截图.png");
+            File.WriteAllText(first, "doc");
+            File.WriteAllText(second, "png");
+
+            var viewModel = Create(new ClipboardHistoryEntry
+            {
                 Id = "files",
                 Kind = ClipboardEntryKind.Files,
                 Preview = "2 个文件",
-                Paths = [@"C:\a\报告.docx", @"C:\a\截图.png"],
+                Paths = [first, second],
                 CreatedAt = DateTimeOffset.Now
             }, directory);
 
@@ -122,7 +201,8 @@ public sealed class ClipboardEntryDisplayTests
             viewModel.HasFileSubtitle.ShouldBeTrue();
             viewModel.ShowPlainPreview.ShouldBeFalse();
             viewModel.ShowTagLine.ShouldBeFalse();
-            viewModel.CanOpen.ShouldBeTrue("文件可以在资源管理器里定位");
+            viewModel.CanOpen.ShouldBeTrue("存在的文件可以用默认程序打开");
+            viewModel.ResolveOpenTarget().ShouldBe(first, "默认程序打开第一个文件");
         }
         finally
         {
@@ -137,5 +217,6 @@ public sealed class ClipboardEntryDisplayTests
         }
     }
 }
+
 
 

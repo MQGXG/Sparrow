@@ -10,11 +10,13 @@ namespace Sparrow.App.ViewModels;
 /// </summary>
 public sealed partial class ClipboardEntryViewModel : ObservableObject
 {
+    private readonly ClipboardHistoryStore _store;
     private readonly Lazy<byte[]?> _thumbnail;
 
     public ClipboardEntryViewModel(ClipboardHistoryEntry entry, ClipboardHistoryStore store)
     {
         Entry = entry;
+        _store = store;
         LinkHost = ExtractHost(entry);
         _thumbnail = new Lazy<byte[]?>(() =>
             entry.Kind == ClipboardEntryKind.Image ? store.LoadImage(entry) : null);
@@ -23,15 +25,11 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
     /// <summary>从 http(s) 链接里取域名（去掉 www.），失败返回空串。</summary>
     private static string ExtractHost(ClipboardHistoryEntry entry)
     {
-        if (entry.Kind != ClipboardEntryKind.Text || entry.Text is not { Length: > 0 } text)
+        var firstLine = FirstLineOf(entry);
+        if (firstLine.Length == 0)
             return string.Empty;
 
-        var firstLine = text.TrimStart();
-        var end = firstLine.IndexOfAny(['\r', '\n']);
-        if (end >= 0)
-            firstLine = firstLine[..end];
-
-        if (!Uri.TryCreate(firstLine.Trim(), UriKind.Absolute, out var uri))
+        if (!Uri.TryCreate(firstLine, UriKind.Absolute, out var uri))
             return string.Empty;
 
         if (uri.Scheme is not ("http" or "https"))
@@ -39,6 +37,17 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
 
         var host = uri.Host;
         return host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? host[4..] : host;
+    }
+
+    /// <summary>文本条目的第一行（去掉首尾空白）；非文本返回空串。</summary>
+    private static string FirstLineOf(ClipboardHistoryEntry entry)
+    {
+        if (entry.Kind != ClipboardEntryKind.Text || entry.Text is not { Length: > 0 } text)
+            return string.Empty;
+
+        var firstLine = text.TrimStart();
+        var end = firstLine.IndexOfAny(['\r', '\n']);
+        return (end >= 0 ? firstLine[..end] : firstLine).Trim();
     }
 
     public ClipboardHistoryEntry Entry { get; }
@@ -117,41 +126,82 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
     /// <summary>普通文本预览：图片、链接、文件各有专用布局。</summary>
     public bool ShowPlainPreview => !HasThumbnail && !IsLink && !IsFileSet;
 
-    /// <summary>文件或链接可以直接用系统默认程序打开。</summary>
+    /// <summary>链接、可访问的文件、图片都可以用默认程序打开。</summary>
     public bool CanOpen => IsLink
-        || (Entry.Kind == ClipboardEntryKind.Files && Entry.Paths.Count > 0);
+        || (Entry.Kind == ClipboardEntryKind.Files
+            && Entry.Paths.Count > 0
+            && File.Exists(Entry.Paths[0]))
+        || Entry.Kind == ClipboardEntryKind.Image;
 
     /// <summary>
-    /// 打开条目：链接交给默认浏览器，文件在资源管理器里选中。
-    /// 只接受 http/https，避免把任意字符串当命令执行。
+    /// 解析打开目标：链接 → URL；文件 → 现有路径；图片 → 写入临时 PNG 后返回路径。
+    /// 无法打开时返回 null。
     /// </summary>
-    public void Open()
+    public string? ResolveOpenTarget()
     {
-        if (IsLink && Entry.Text is { Length: > 0 } text)
+        if (IsLink)
         {
-            var firstLine = text.TrimStart();
-            var end = firstLine.IndexOfAny(['\r', '\n']);
-            if (end >= 0)
-                firstLine = firstLine[..end];
-
-            if (Uri.TryCreate(firstLine.Trim(), UriKind.Absolute, out var uri)
-                && uri.Scheme is "http" or "https")
-            {
-                System.Diagnostics.Process.Start(
-                    new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
-            }
-
-            return;
+            var firstLine = FirstLineOf(Entry);
+            return Uri.TryCreate(firstLine, UriKind.Absolute, out var uri)
+                && uri.Scheme is "http" or "https"
+                ? uri.AbsoluteUri
+                : null;
         }
 
         if (Entry.Kind == ClipboardEntryKind.Files && Entry.Paths.Count > 0)
+            return File.Exists(Entry.Paths[0]) ? Entry.Paths[0] : null;
+
+        if (Entry.Kind == ClipboardEntryKind.Image)
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-                "explorer.exe",
-                $"/select,\"{Entry.Paths[0]}\"")
+            var png = _store.LoadImage(Entry);
+            if (png is not { Length: > 0 })
+                return null;
+
+            var directory = Path.Combine(Path.GetTempPath(), "Sparrow", "open");
+            Directory.CreateDirectory(directory);
+            CleanupOldOpenFiles(directory);
+
+            var path = Path.Combine(directory, $"{Entry.Id}.png");
+            File.WriteAllBytes(path, png);
+            return path;
+        }
+
+        return null;
+    }
+
+    /// <summary>用系统默认程序打开条目。</summary>
+    public void Open()
+    {
+        var target = ResolveOpenTarget();
+        if (target is null)
+            return;
+
+        System.Diagnostics.Process.Start(
+            new System.Diagnostics.ProcessStartInfo(target) { UseShellExecute = true });
+    }
+
+    /// <summary>清掉一天前为「打开」写出的临时图片。</summary>
+    private static void CleanupOldOpenFiles(string directory)
+    {
+        try
+        {
+            var cutoff = DateTime.UtcNow.AddDays(-1);
+            foreach (var file in Directory.EnumerateFiles(directory, "*.png"))
             {
-                UseShellExecute = true
-            });
+                try
+                {
+                    if (File.GetLastWriteTimeUtc(file) < cutoff)
+                        File.Delete(file);
+                }
+                catch
+                {
+                    // 文件仍被看图程序占用：下次再清
+                }
+            }
+        }
+        catch
+        {
+            // 临时目录不可用不影响打开
         }
     }
 
