@@ -110,7 +110,11 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
     public event Action? Changed;
 
     /// <summary>记录一段文本。与历史中的重复内容合并并刷新时间戳；收藏与标签跟着保留。</summary>
-    public void AddText(string text, string? sourceApp = null)
+    public void AddText(
+        string text,
+        string? sourceApp = null,
+        byte[]? html = null,
+        byte[]? rtf = null)
     {
         if (string.IsNullOrWhiteSpace(text))
             return;
@@ -142,7 +146,9 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
                     previous?.Favorite ?? false,
                     previous?.Tags ?? [],
                     autoTags,
-                    sourceApp));
+                    sourceApp,
+                    html,
+                    rtf));
 
                 Trim(connection, transaction, removedImages);
                 transaction.Commit();
@@ -366,6 +372,30 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
 
         command.Parameters.AddWithValue("$count", count);
         return ReadEntries(command);
+    }
+
+    /// <summary>取回文本条目的原始 HTML / RTF；没有则为 null。</summary>
+    public (byte[]? Html, byte[]? Rtf) LoadRichText(string id)
+    {
+        try
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT html, rtf FROM entries WHERE id = $id";
+            command.Parameters.AddWithValue("$id", id);
+
+            using var reader = command.ExecuteReader();
+            if (!reader.Read())
+                return (null, null);
+
+            var html = reader.IsDBNull(0) ? null : (byte[])reader.GetValue(0);
+            var rtf = reader.IsDBNull(1) ? null : (byte[])reader.GetValue(1);
+            return (html, rtf);
+        }
+        catch
+        {
+            return (null, null);
+        }
     }
 
     public byte[]? LoadImage(ClipboardHistoryEntry entry)
@@ -673,16 +703,40 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
                     favorite     INTEGER NOT NULL DEFAULT 0,
                     tags         TEXT NOT NULL DEFAULT '[]',
                     auto_tags    TEXT NOT NULL DEFAULT '[]',
-                    source_app   TEXT
+                    source_app   TEXT,
+                    html         BLOB,
+                    rtf          BLOB
                 );
 
                 CREATE INDEX IF NOT EXISTS ix_entries_created ON entries(created_at DESC);
                 CREATE INDEX IF NOT EXISTS ix_entries_hash ON entries(kind, content_hash);
                 CREATE INDEX IF NOT EXISTS ix_entries_favorite ON entries(favorite);
-
-                PRAGMA user_version = 1;
                 """;
             schema.ExecuteNonQuery();
+        }
+
+        // user_version 1 的库没有富文本列：补列后升到 2
+        using (var version = connection.CreateCommand())
+        {
+            version.CommandText = "PRAGMA user_version;";
+            var current = Convert.ToInt64(version.ExecuteScalar() ?? 0L);
+
+            if (current < 2)
+            {
+                if (current > 0)
+                {
+                    using var alter = connection.CreateCommand();
+                    alter.CommandText = """
+                        ALTER TABLE entries ADD COLUMN html BLOB;
+                        ALTER TABLE entries ADD COLUMN rtf BLOB;
+                        """;
+                    alter.ExecuteNonQuery();
+                }
+
+                using var bump = connection.CreateCommand();
+                bump.CommandText = "PRAGMA user_version = 2;";
+                bump.ExecuteNonQuery();
+            }
         }
 
         return TryCreateFullTextIndex(connection);
@@ -822,10 +876,12 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
         command.CommandText = """
             INSERT INTO entries (
                 id, kind, preview, text, image_file, paths,
-                content_hash, byte_size, created_at, favorite, tags, auto_tags, source_app)
+                content_hash, byte_size, created_at, favorite, tags, auto_tags, source_app,
+                html, rtf)
             VALUES (
                 $id, $kind, $preview, $text, $image, $paths,
-                $hash, $size, $created, $favorite, $tags, $auto, $source)
+                $hash, $size, $created, $favorite, $tags, $auto, $source,
+                $html, $rtf)
             """;
 
         command.Parameters.AddWithValue("$id", row.Id);
@@ -841,6 +897,8 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
         command.Parameters.AddWithValue("$tags", Serialize(row.Tags));
         command.Parameters.AddWithValue("$auto", Serialize(row.AutoTags));
         command.Parameters.AddWithValue("$source", (object?)row.SourceApp ?? DBNull.Value);
+        command.Parameters.AddWithValue("$html", (object?)row.Html ?? DBNull.Value);
+        command.Parameters.AddWithValue("$rtf", (object?)row.Rtf ?? DBNull.Value);
 
         command.ExecuteNonQuery();
     }
@@ -1220,7 +1278,9 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
         bool Favorite,
         string[] Tags,
         string[] AutoTags,
-        string? SourceApp);
+        string? SourceApp,
+        byte[]? Html = null,
+        byte[]? Rtf = null);
 
     private sealed record PreviousEntry(bool Favorite, string[] Tags);
 

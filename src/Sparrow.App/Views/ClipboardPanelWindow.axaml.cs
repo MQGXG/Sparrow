@@ -318,6 +318,18 @@ public partial class ClipboardPanelWindow : Window
         e.Handled = true;
     }
 
+    /// <summary>右键菜单的「复制为纯文本」：丢掉 HTML / RTF，只留文字。</summary>
+    private void OnMenuCopyPlain(object? sender, RoutedEventArgs e)
+    {
+        if (ItemFromMenu(sender) is not { } item || History is not { } history)
+            return;
+
+        history.SelectedItem = item;
+        history.CopyPlainText(item);
+        HidePanel();
+        e.Handled = true;
+    }
+
     /// <summary>右键菜单的「复制为…」：按 Tag 指定的变换复制文本，非文本条目退回普通复制。</summary>
     private void OnMenuTransform(object? sender, RoutedEventArgs e)
     {

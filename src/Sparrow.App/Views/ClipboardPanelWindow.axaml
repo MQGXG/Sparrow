@@ -227,8 +227,7 @@
                                           Click="OnMenuCopy" />
                                 <Separator />
                                 <MenuItem Header="复制为纯文本"
-                                          Tag="PlainText"
-                                          Click="OnMenuTransform" />
+                                          Click="OnMenuCopyPlain" />
                                 <MenuItem Header="全部大写"
                                           Tag="Upper"
                                           Click="OnMenuTransform" />

@@ -27,6 +27,12 @@ public sealed class ClipboardMonitor : IDisposable
     /// <summary>Windows 约定的「不要写入剪贴板历史」格式；密码管理器会设置它。</summary>
     private static readonly uint IgnoreFormatId = RegisterClipboardFormat("Clipboard Viewer Ignore");
 
+    /// <summary>HTML 片段；原样保存，复制时原样写回。</summary>
+    private static readonly uint CfHtml = RegisterClipboardFormat("HTML Format");
+
+    /// <summary>RTF；原样保存。</summary>
+    private static readonly uint CfRtf = RegisterClipboardFormat("Rich Text Format");
+
     private readonly ClipboardHistoryStore _store;
     private readonly IAppLog _log;
     private readonly WndProcDelegate _wndProc;
@@ -222,7 +228,7 @@ public sealed class ClipboardMonitor : IDisposable
             var text = ReadText();
             if (!string.IsNullOrEmpty(text))
             {
-                _store.AddText(text, sourceApp);
+                _store.AddText(text, sourceApp, ReadHtml(), ReadRtf());
                 return;
             }
 
@@ -285,6 +291,42 @@ public sealed class ClipboardMonitor : IDisposable
         try
         {
             return Marshal.PtrToStringUni(pointer);
+        }
+        finally
+        {
+            GlobalUnlock(handle);
+        }
+    }
+
+    /// <summary>读取 HTML 格式的原始字节；没有则 null。</summary>
+    private byte[]? ReadHtml() => ReadFormatBytes(CfHtml);
+
+    /// <summary>读取 RTF 格式的原始字节；没有则 null。</summary>
+    private byte[]? ReadRtf() => ReadFormatBytes(CfRtf);
+
+    /// <summary>按格式读原始字节；调用方已经打开剪贴板。</summary>
+    private static byte[]? ReadFormatBytes(uint format)
+    {
+        if (format == 0 || !IsClipboardFormatAvailable(format))
+            return null;
+
+        var handle = GetClipboardData(format);
+        if (handle == IntPtr.Zero)
+            return null;
+
+        var size = (int)GlobalSize(handle);
+        if (size <= 0)
+            return null;
+
+        var pointer = GlobalLock(handle);
+        if (pointer == IntPtr.Zero)
+            return null;
+
+        try
+        {
+            var bytes = new byte[size];
+            Marshal.Copy(pointer, bytes, 0, size);
+            return bytes;
         }
         finally
         {

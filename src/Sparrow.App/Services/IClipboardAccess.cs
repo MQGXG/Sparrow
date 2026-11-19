@@ -20,6 +20,12 @@ public interface IClipboardAccess
     bool SetText(string text);
 
     /// <summary>
+    /// 写回文本并附带原始 HTML / RTF；目标应用优先取富文本，纯文本编辑器仍能取到文字。
+    /// 默认实现退化为纯文本，方便测试替身。
+    /// </summary>
+    bool SetRichText(string text, byte[]? html, byte[]? rtf) => SetText(text);
+
+    /// <summary>
     /// 写入 PNG 图片（内部转 CF_DIB）。返回 false 表示失败。
     /// 图片工具的结果要能「复制走」，与写文本同一条接口约定。
     /// </summary>

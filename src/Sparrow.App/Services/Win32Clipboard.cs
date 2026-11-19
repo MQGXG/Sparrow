@@ -17,9 +17,58 @@ public sealed class Win32Clipboard : IClipboardAccess
     private const uint CfDib = 8;
     private const uint GmemMoveable = 0x0002;
 
+    /// <summary>「HTML Format」：剪贴板里的 HTML 片段（带 header，原样保存）。</summary>
+    private static readonly uint CfHtml = RegisterClipboardFormat("HTML Format");
+
+    /// <summary>「Rich Text Format」：RTF 原始字节。</summary>
+    private static readonly uint CfRtf = RegisterClipboardFormat("Rich Text Format");
+
     private readonly IAppLog? _log;
 
     public Win32Clipboard(IAppLog? log = null) => _log = log;
+
+    /// <summary>读取 HTML 格式的原始字节；没有或读失败返回 null。</summary>
+    public byte[]? GetHtml() => GetFormatBytes(CfHtml);
+
+    /// <summary>读取 RTF 格式的原始字节。</summary>
+    public byte[]? GetRtf() => GetFormatBytes(CfRtf);
+
+    /// <summary>按格式顺序读任意剪贴板格式的原始字节。</summary>
+    private byte[]? GetFormatBytes(uint format)
+    {
+        if (format == 0 || !TryOpenClipboard())
+            return null;
+
+        try
+        {
+            var handle = GetClipboardData(format);
+            if (handle == IntPtr.Zero)
+                return null;
+
+            var size = (int)GlobalSize(handle);
+            if (size <= 0)
+                return null;
+
+            var pointer = GlobalLock(handle);
+            if (pointer == IntPtr.Zero)
+                return null;
+
+            try
+            {
+                var bytes = new byte[size];
+                Marshal.Copy(pointer, bytes, 0, size);
+                return bytes;
+            }
+            finally
+            {
+                GlobalUnlock(handle);
+            }
+        }
+        finally
+        {
+            CloseClipboard();
+        }
+    }
 
     public string? GetText()
     {
@@ -280,38 +329,33 @@ public sealed class Win32Clipboard : IClipboardAccess
 
         try
         {
-            if (!EmptyClipboard())
+            return EmptyClipboard() && WriteUnicodeText(text);
+        }
+        finally
+        {
+            CloseClipboard();
+        }
+    }
+
+    /// <summary>
+    /// 写回文本并附带原始 HTML / RTF：目标应用优先取富文本，纯文本编辑器仍能取到文字。
+    /// 富文本写失败不影响文本本身。
+    /// </summary>
+    public bool SetRichText(string text, byte[]? html, byte[]? rtf)
+    {
+        if (!TryOpenClipboard())
+            return false;
+
+        try
+        {
+            if (!EmptyClipboard() || !WriteUnicodeText(text))
                 return false;
 
-            // +1 是结尾的 UTF-16 空字符
-            var byteCount = (text.Length + 1) * sizeof(char);
-            var handle = GlobalAlloc(GmemMoveable, (nuint)byteCount);
-            if (handle == IntPtr.Zero)
-                return false;
+            if (html is { Length: > 0 })
+                WriteFormatBytes(CfHtml, html);
 
-            var pointer = GlobalLock(handle);
-            if (pointer == IntPtr.Zero)
-            {
-                GlobalFree(handle);
-                return false;
-            }
-
-            try
-            {
-                Marshal.Copy(text.ToCharArray(), 0, pointer, text.Length);
-                Marshal.WriteInt16(pointer, text.Length * sizeof(char), 0);
-            }
-            finally
-            {
-                GlobalUnlock(handle);
-            }
-
-            // 成功后所有权移交给系统，不能自己 GlobalFree；失败则自己释放
-            if (SetClipboardData(CfUnicodeText, handle) == IntPtr.Zero)
-            {
-                GlobalFree(handle);
-                return false;
-            }
+            if (rtf is { Length: > 0 })
+                WriteFormatBytes(CfRtf, rtf);
 
             return true;
         }
@@ -319,6 +363,74 @@ public sealed class Win32Clipboard : IClipboardAccess
         {
             CloseClipboard();
         }
+    }
+
+    /// <summary>写入 CF_UNICODETEXT；调用方负责已打开剪贴板。</summary>
+    private static bool WriteUnicodeText(string text)
+    {
+        // +1 是结尾的 UTF-16 空字符
+        var byteCount = (text.Length + 1) * sizeof(char);
+        var handle = GlobalAlloc(GmemMoveable, (nuint)byteCount);
+        if (handle == IntPtr.Zero)
+            return false;
+
+        var pointer = GlobalLock(handle);
+        if (pointer == IntPtr.Zero)
+        {
+            GlobalFree(handle);
+            return false;
+        }
+
+        try
+        {
+            Marshal.Copy(text.ToCharArray(), 0, pointer, text.Length);
+            Marshal.WriteInt16(pointer, text.Length * sizeof(char), 0);
+        }
+        finally
+        {
+            GlobalUnlock(handle);
+        }
+
+        // 成功后所有权移交给系统，不能自己 GlobalFree；失败则自己释放
+        if (SetClipboardData(CfUnicodeText, handle) == IntPtr.Zero)
+        {
+            GlobalFree(handle);
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>按原样写入某个格式的字节；调用方负责已打开剪贴板。</summary>
+    private static bool WriteFormatBytes(uint format, byte[] data)
+    {
+        var handle = GlobalAlloc(GmemMoveable, (nuint)data.Length);
+        if (handle == IntPtr.Zero)
+            return false;
+
+        var pointer = GlobalLock(handle);
+        if (pointer == IntPtr.Zero)
+        {
+            GlobalFree(handle);
+            return false;
+        }
+
+        try
+        {
+            Marshal.Copy(data, 0, pointer, data.Length);
+        }
+        finally
+        {
+            GlobalUnlock(handle);
+        }
+
+        if (SetClipboardData(format, handle) == IntPtr.Zero)
+        {
+            GlobalFree(handle);
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -353,6 +465,9 @@ public sealed class Win32Clipboard : IClipboardAccess
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool EmptyClipboard();
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern uint RegisterClipboardFormat(string format);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr GetClipboardData(uint format);

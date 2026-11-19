@@ -365,7 +365,11 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
         switch (item.Entry.Kind)
         {
             case ClipboardEntryKind.Text when item.Entry.Text is { } text:
-                _clipboard.SetText(text);
+                var (html, rtf) = _store.LoadRichText(item.Id);
+                if (html is not null || rtf is not null)
+                    _clipboard.SetRichText(text, html, rtf);
+                else
+                    _clipboard.SetText(text);
                 break;
 
             case ClipboardEntryKind.Image when _store.LoadImage(item.Entry) is { } png:
@@ -376,6 +380,15 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
                 _clipboard.SetText(string.Join(Environment.NewLine, item.Entry.Paths));
                 break;
         }
+    }
+
+    /// <summary>只复制文本内容，丢掉 HTML / RTF 格式。</summary>
+    public void CopyPlainText(ClipboardEntryViewModel item)
+    {
+        if (item.Entry.Kind == ClipboardEntryKind.Text && item.Entry.Text is { } text)
+            _clipboard.SetText(text);
+        else
+            Copy(item);
     }
 
     /// <summary>按指定变换复制文本；非文本条目忽略变换，仍走普通复制。</summary>
