@@ -9,6 +9,19 @@
     注意：插件不通过 App 的 ProjectReference 构建，所以开发时需要
     `dotnet build`（整个解决方案）而不是只 build App。
   -->
+  <!--
+    插件只能引用 Sparrow.Plugin.Sdk。
+    一旦某个插件项目引用了宿主，宿主类型就会被带进插件程序集，
+    「目录即插件」会静默退化成「编译期内置」——这里直接让构建失败。
+  -->
+  <Target Name="ForbidHostReference" BeforeTargets="ResolveProjectReferences">
+    <PropertyGroup>
+      <_ReferencedProjects>@(ProjectReference->'%(Filename)','|')</_ReferencedProjects>
+    </PropertyGroup>
+    <Error Condition="$([System.String]::Copy('$(_ReferencedProjects)').Contains('Sparrow.App'))"
+           Text="插件 $(MSBuildProjectName) 不得引用 Sparrow.App，只能引用 Sparrow.Plugin.Sdk。" />
+  </Target>
+
   <Target Name="CopyPluginToHost"
           AfterTargets="Build"
           Condition="'$(PluginId)' != ''">

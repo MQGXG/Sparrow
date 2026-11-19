@@ -490,6 +490,19 @@ M0 的 3 个工具同样以插件形式存在，随安装包分发到 `plugins/`
 2. **插件不得依赖宿主内部实现**（内部类型、静态状态、私有文件）。可以 P/Invoke 系统 API——插件必须可信（ADR-006），但系统能力不是宿主能力。
 3. **遇到缺口先补契约，不补内置。** 补完契约后，功能仍以插件目录形态存在，随包分发也走同一条加载路径。
 
+### 自动守护（2026-11-19）
+
+三条红线不靠自觉，由构建与测试强制：
+
+| 守护 | 位置 | 作用 |
+|---|---|---|
+| `ForbidHostReference` | `plugins/Directory.Build.targets` | 插件项目引用 `Sparrow.App` 时构建直接失败 |
+| `PluginBoundaryTests.宿主不得硬编码具体工具ID` | `tests/Sparrow.Tests` | 宿主源码出现 `"sparrow.<分类>.<动作>"` 字面量即失败（行注释除外） |
+| `PluginBoundaryTests.宿主不得引用插件里的命名空间` | 同上 | 宿主出现 `Sparrow.Plugin.*`（`Sparrow.Plugin.Sdk` 除外）即失败 |
+| `PluginBoundaryTests.插件项目不得引用宿主` | 同上 | 任何插件 csproj 出现 `Sparrow.App` 即失败 |
+
+新功能评审时先跑这三条；要绕过它们，说明设计已经越界。
+
 ---
 
 ## 十三、插件清单规范（给将来的自己看）
