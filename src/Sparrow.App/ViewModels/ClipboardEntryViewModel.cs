@@ -243,8 +243,6 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
     public string TagLine => string.Join("  ",
         Entry.Tags.Concat(Entry.AutoTags).Distinct(StringComparer.OrdinalIgnoreCase));
 
-    public string FavoriteGlyph => IsFavorite ? "★" : "☆";
-
     /// <summary>来源进程名；拿不到时为空串（界面隐藏）。</summary>
     public string SourceLabel => Entry.SourceApp ?? string.Empty;
 

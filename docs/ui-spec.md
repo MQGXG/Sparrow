@@ -224,21 +224,32 @@ Windows 原生标题栏通过 DWM 切成深色（`WindowChrome`），避免深�
 
 ### 4.1 图标
 
-分类 → 线性图标，映射在 `src/Sparrow.App/Converters/IconGeometryConverter.cs`。
+界面里所有「动作 / 状态」图标只有一份来源：`src/Sparrow.App/Styles/Icons.axaml`。
+XAML 只引用 key（`{StaticResource IconEye}`），**不再内联 path 数据**；分类图标走
+`src/Sparrow.App/Converters/IconGeometryConverter.cs`。两边共用同一套画法：
 
 ```text
-画布      24×24，使用时缩到 18px（面板）/ 15px（工作区）
-线宽      1.5，圆头圆角，只用 stroke 不填充
-颜色      常态 TextSecondary；选中变 Accent
+画布      24×24，安全区 20×20（四周留 2px）
+线宽      1.5，圆头圆角，只用 stroke 不填充；圆角半径 2
+颜色      Path.icon 统一给，常态 TextSecondary；选中 / 悬停变 Accent
+尺寸      只用 icon-xs 13 · icon-sm 16 · icon-md 18 · icon-lg 20 · icon-xl 24
+          不要在控件上散写 Width/Height
 映射      json → {}    dev → <>    ocr → 扫描框+文本行
-          text → 文本行    format → 层叠方块    clipboard → 板夹+勾
+          text → 文本行    format → 层叠方块    clipboard → 板夹
           ai → 四角星    image → 山与日    data → 数据库    file → 折角纸
+          window → 标题栏窗口
 未知分类  退回默认方块，新插件不改宿主也有图标
 ```
+
+收藏星既是状态也是动作：统一用 `IconStar` + `Path.star`，收藏后加
+`Classes.favorite` switch 成实心琥珀。**不要再用 ★/☆ 字符**——字符会随字体变形状、
+基线和大小也压不准。
 
 图标是视觉标识，不属于业务数据，所以**不放进 ViewModel**；ViewModel 只提供
 插件声明的 `Category`。XAML 用 `{x:Static IconGeometryConverter.Instance}` 引用转换器——
 放在 `Styles.Resources` 里的 `StaticResource` 在 DataTemplate 里解析不到。
+纯图标按钮必须补 `AutomationProperties.Name`（与 `ToolTip.Tip` 同文案），
+否则读屏软件只念出「按钮」。
 
 ---
 
@@ -382,8 +393,9 @@ Windows 原生标题栏通过 DWM 切成深色（`WindowChrome`），避免深�
 ## 七、托盘
 
 ```text
-图标：琥珀圆角底 + 深色麻雀剪影（Assets/sparrow.ico，托盘用 32px PNG）
-      exe 图标、任务栏、窗口标题栏共用同一套资源
+图标：深蓝圆角底 + 白色飞鸟（主图见 docs/branding/）
+      exe 用多尺寸 sparrow.ico；托盘 32px PNG、窗口 64px PNG
+      界面里 22/30/56px 的展示各取对应尺寸，不拉伸小图
 左键单击：唤出命令面板
 右键菜单：
   ├ 搜索工具…            Ctrl+Alt+S

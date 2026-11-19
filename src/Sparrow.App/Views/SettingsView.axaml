@@ -289,7 +289,7 @@
           <StackPanel>
             <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,14">
               <Border Classes="hud-icon">
-                <Path Data="M12 3v8M6.2 6.6A8 8 0 1 0 17.8 6.6" />
+                <Path Data="{StaticResource IconPower}" />
               </Border>
               <StackPanel Grid.Column="1" Spacing="3" Margin="12,0,12,0" VerticalAlignment="Center">
                 <TextBlock Text="开机自启"
@@ -311,7 +311,7 @@
 
             <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,14">
               <Border Classes="hud-icon">
-                <Path Data="M9 4h6v3H9zM9 5H7a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2" />
+                <Path Data="{StaticResource IconClipboard}" />
               </Border>
               <StackPanel Grid.Column="1" Spacing="3" Margin="12,0,12,0" VerticalAlignment="Center">
                 <TextBlock Text="剪贴板历史"
@@ -333,7 +333,7 @@
 
             <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,14">
               <Border Classes="hud-icon">
-                <Path Data="M5 6h14v14H5zM5 10h14M9 3v5M15 3v5" />
+                <Path Data="{StaticResource IconCalendar}" />
               </Border>
               <StackPanel Grid.Column="1" Spacing="3" Margin="12,0,12,0" VerticalAlignment="Center">
                 <TextBlock Text="剪贴板保留（天）"
@@ -358,7 +358,7 @@
 
             <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,14">
               <Border Classes="hud-icon">
-                <Path Data="M4 6h16v4H4zM4 14h16v4H4z" />
+                <Path Data="{StaticResource IconStorage}" />
               </Border>
               <StackPanel Grid.Column="1" Spacing="3" Margin="12,0,12,0" VerticalAlignment="Center">
                 <TextBlock Text="剪贴板总容量（MB）"
@@ -383,7 +383,7 @@
 
             <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,14">
               <Border Classes="hud-icon">
-                <Path Data="M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16M12 8v4l3 2" />
+                <Path Data="{StaticResource IconClock}" />
               </Border>
               <StackPanel Grid.Column="1" Spacing="3" Margin="12,0,12,0" VerticalAlignment="Center">
                 <TextBlock Text="历史最多保留（条）"
@@ -408,7 +408,7 @@
 
             <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,14">
               <Border Classes="hud-icon">
-                <Path Data="M5 6h14v14H5zM5 10h14M9 3v5M15 3v5" />
+                <Path Data="{StaticResource IconCalendar}" />
               </Border>
               <StackPanel Grid.Column="1" Spacing="3" Margin="12,0,12,0" VerticalAlignment="Center">
                 <TextBlock Text="历史保留（天）"
@@ -449,7 +449,7 @@
           <StackPanel>
             <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,14">
               <Border Classes="hud-icon">
-                <Path Data="M8 8h8v8H8zM12 4v4M12 16v4M4 12h4M16 12h4" />
+                <Path Data="{StaticResource IconSparkle}" />
               </Border>
               <StackPanel Grid.Column="1" Spacing="3" Margin="12,0,12,0" VerticalAlignment="Center">
                 <TextBlock Text="启用模型"

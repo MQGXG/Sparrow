@@ -10,7 +10,7 @@
         Height="730"
         RequestedThemeVariant="Dark"
         DragDrop.AllowDrop="True"
-        Icon="avares://Sparrow.App/Assets/sparrow-32.png"
+        Icon="avares://Sparrow.App/Assets/sparrow-64.png"
         MinWidth="920"
         MinHeight="600"
         WindowStartupLocation="CenterScreen">
@@ -180,24 +180,18 @@
                                      Text="{Binding Tools.Count}"
                                      Margin="4,0,0,0"
                                      VerticalAlignment="Center" />
-                          <Path Width="8" Height="5"
+                          <Path Classes="icon icon-xs"
                                 Margin="6,0,0,0"
                                 VerticalAlignment="Center"
-                                Stroke="{StaticResource TextMutedBrush}"
-                                StrokeThickness="1.5"
-                                StrokeLineCap="Round"
-                                StrokeJoin="Round"
+                                Stroke="{DynamicResource TextMutedBrush}"
                                 IsVisible="{Binding IsExpanded}"
-                                Data="M0,0 L4,4 L8,0" />
-                          <Path Width="5" Height="8"
+                                Data="{StaticResource IconChevronDown}" />
+                          <Path Classes="icon icon-xs"
                                 Margin="6,0,0,0"
                                 VerticalAlignment="Center"
-                                Stroke="{StaticResource TextMutedBrush}"
-                                StrokeThickness="1.5"
-                                StrokeLineCap="Round"
-                                StrokeJoin="Round"
+                                Stroke="{DynamicResource TextMutedBrush}"
                                 IsVisible="{Binding !IsExpanded}"
-                                Data="M0,0 L4,4 L0,8" />
+                                Data="{StaticResource IconChevronRight}" />
                         </StackPanel>
                       </Button>
 
@@ -234,9 +228,7 @@
                                             CornerRadius="2"
                                             Background="{StaticResource AccentSoftBrush}"
                                             VerticalAlignment="Center">
-                                      <Path Classes="icon"
-                                            Width="20"
-                                            Height="20"
+                                      <Path Classes="icon icon-lg"
                                             HorizontalAlignment="Center"
                                             VerticalAlignment="Center"
                                             Data="{Binding CategoryLabel, Converter={x:Static converters:IconGeometryConverter.Instance}}" />
@@ -295,7 +287,7 @@
                   <Path Stroke="{StaticResource LineStrongBrush}" StrokeThickness="2"
                         HorizontalAlignment="Right" VerticalAlignment="Bottom"
                         Data="M11,0 L11,11 L0,11" />
-                  <Image Source="avares://Sparrow.App/Assets/sparrow-32.png"
+                  <Image Source="avares://Sparrow.App/Assets/sparrow-64.png"
                          Width="56" Height="56"
                          HorizontalAlignment="Center" VerticalAlignment="Center"
                          Opacity="0.9" />
@@ -370,9 +362,7 @@
                                     CornerRadius="2"
                                     Background="{StaticResource AccentSoftBrush}"
                                     VerticalAlignment="Center">
-                              <Path Classes="icon"
-                                    Width="18"
-                                    Height="18"
+                              <Path Classes="icon icon-md"
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
                                     Data="{Binding Tool.CategoryLabel, Converter={x:Static converters:IconGeometryConverter.Instance}}" />
@@ -693,6 +683,10 @@
                                 <Style Selector="Border.clip-row.selected Button.row-action">
                                   <Setter Property="Opacity" Value="1" />
                                 </Style>
+                                <!-- 和快取面板一致：悬停时图标转琥珀 -->
+                                <Style Selector="Border.clip-row Button.row-action:pointerover Path.icon">
+                                  <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+                                </Style>
                               </Border.Styles>
                               <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="10">
                                 <!-- 选中标记：左侧 2px 琥珀竖条 -->
@@ -766,20 +760,31 @@
                                         Width="26"
                                         Height="26"
                                         Padding="0"
-                                        Content="{Binding QueueBadge}"
                                         ToolTip.Tip="加入 / 移出顺序粘贴队列（Ctrl+点击整行也可以）"
+                                        AutomationProperties.Name="顺序粘贴队列"
                                         Tag="{Binding}"
-                                        Click="OnClipboardQueueToggleClick" />
+                                        Click="OnClipboardQueueToggleClick">
+                                  <TextBlock Classes="num"
+                                             Text="{Binding QueueBadge}"
+                                             FontSize="11"
+                                             Foreground="{DynamicResource TextSecondaryBrush}"
+                                             HorizontalAlignment="Center"
+                                             VerticalAlignment="Center" />
+                                </Button>
 
                                 <Button Grid.Column="5"
                                         Classes="ghost small row-action"
                                         Width="26"
                                         Height="26"
                                         Padding="0"
-                                        Content="{Binding FavoriteGlyph}"
                                         ToolTip.Tip="收藏 / 取消收藏"
+                                        AutomationProperties.Name="收藏"
                                         Tag="{Binding}"
-                                        Click="OnClipboardFavoriteClick" />
+                                        Click="OnClipboardFavoriteClick">
+                                  <Path Classes="icon icon-xs star"
+                                        Classes.favorite="{Binding IsFavorite}"
+                                        Data="{StaticResource IconStar}" />
+                                </Button>
                               </Grid>
                             </Border>
                                   </DataTemplate>
@@ -837,15 +842,18 @@
             <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
               <StackPanel Orientation="Horizontal" Spacing="10">
                 <Button Classes="ghost small"
-                        Content="‹ 返回"
                         Click="OnBackToWallClick"
-                        VerticalAlignment="Center" />
+                        VerticalAlignment="Center">
+                  <StackPanel Orientation="Horizontal" Spacing="3">
+                    <Path Classes="icon icon-xs"
+                          Data="{StaticResource IconChevronLeft}" />
+                    <TextBlock Text="返回" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
 
-                <Path Classes="icon"
-                      Width="18"
-                      Height="18"
+                <Path Classes="icon icon-md"
                       VerticalAlignment="Center"
-                      Stroke="{StaticResource AccentBrush}"
+                      Stroke="{DynamicResource AccentBrush}"
                       Data="{Binding SelectedTool.CategoryLabel, Converter={x:Static converters:IconGeometryConverter.Instance}}" />
 
                 <TextBlock Classes="title"
@@ -985,7 +993,6 @@
                                      TextTrimming="CharacterEllipsis"
                                      Foreground="{StaticResource TextMutedBrush}" />
                           <Button Grid.Row="0"
-                                  Content="×"
                                   Classes="ghost small"
                                   Width="20"
                                   Height="20"
@@ -994,8 +1001,12 @@
                                   VerticalAlignment="Top"
                                   Margin="2"
                                   ToolTip.Tip="移除这张图片"
+                                  AutomationProperties.Name="移除这张图片"
                                   Click="OnRemoveInputImageClick"
-                                  Tag="{Binding}" />
+                                  Tag="{Binding}">
+                            <Path Classes="icon icon-xs"
+                                  Data="{StaticResource IconClose}" />
+                          </Button>
                         </Grid>
                       </Border>
                     </DataTemplate>

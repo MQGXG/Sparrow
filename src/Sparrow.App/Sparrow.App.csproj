@@ -12,7 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- 图标资源：托盘加载 avares://Sparrow.App/Assets/sparrow-32.png -->
+    <!-- 图标资源：托盘用 32px，窗口 / 空态用 64px；exe 用多尺寸 sparrow.ico -->
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 

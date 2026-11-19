@@ -3,6 +3,15 @@
              x:Class="Sparrow.App.App"
              RequestedThemeVariant="Dark">
 
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <!-- 图标几何：放 Application.Resources，DataTemplate 里也能 StaticResource 到 -->
+        <ResourceInclude Source="avares://Sparrow.App/Styles/Icons.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+
   <Application.Styles>
     <FluentTheme />
     <!-- 放在 Fluent 之后：同优先级下后加载的样式覆盖默认外观 -->

@@ -11,7 +11,7 @@
         MinWidth="380"
         MinHeight="480"
         RequestedThemeVariant="Dark"
-        Icon="avares://Sparrow.App/Assets/sparrow-32.png"
+        Icon="avares://Sparrow.App/Assets/sparrow-64.png"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterScreen">
 
@@ -54,11 +54,13 @@
                 Click="OnClearCancelClick" />
         <Button Grid.Column="5"
                 Classes="ghost small"
-                Content="⋯"
                 Width="30"
                 Padding="0"
                 Margin="8,0,0,0"
-                ToolTip.Tip="更多：不记录某个来源的复制">
+                ToolTip.Tip="更多：不记录某个来源的复制"
+                AutomationProperties.Name="更多">
+          <Path Classes="icon icon-xs icon-dot"
+                Data="{StaticResource IconMore}" />
           <Button.Flyout>
             <MenuFlyout Placement="BottomEdgeAlignedRight">
               <MenuItem Header="{Binding ExclusionButtonLabel}"
@@ -271,13 +273,6 @@
                               <Style Selector="Button.row-icon:pointerover /template/ ContentPresenter#PART_ContentPresenter">
                                 <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
                               </Style>
-                              <Style Selector="Button.row-icon Path">
-                                <Setter Property="Stroke" Value="{DynamicResource TextSecondaryBrush}" />
-                                <Setter Property="StrokeThickness" Value="1.4" />
-                                <Setter Property="Width" Value="13" />
-                                <Setter Property="Height" Value="13" />
-                                <Setter Property="Stretch" Value="Uniform" />
-                              </Style>
                               <Style Selector="Button.row-icon:pointerover Path">
                                 <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
                               </Style>
@@ -420,115 +415,66 @@
                                       Padding="2">
                                 <StackPanel Orientation="Horizontal" Spacing="1">
                                   <Button Classes="row-icon"
-                                          Width="22"
-                                          Height="22"
-                                          Padding="0"
-                                          Background="Transparent"
-                                          BorderThickness="0"
                                           ToolTip.Tip="在面板内查看详情"
+                                          AutomationProperties.Name="查看详情"
                                           Tag="{Binding}"
                                           Click="OnOpenDetailClick">
-                                    <Path Width="13"
-                                          Height="13"
-                                          Stretch="Uniform"
-                                          Stroke="{DynamicResource TextSecondaryBrush}"
-                                          StrokeThickness="1.4"
-                                          Data="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z M8 6.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" />
+                                    <Path Classes="icon icon-xs"
+                                          Data="{StaticResource IconEye}" />
                                   </Button>
                                   <Button Classes="row-icon"
-                                          Width="22"
-                                          Height="22"
-                                          Padding="0"
-                                          Background="Transparent"
-                                          BorderThickness="0"
                                           ToolTip.Tip="复制"
+                                          AutomationProperties.Name="复制"
                                           Tag="{Binding}"
                                           Click="OnRowCopyClick">
-                                    <Path Width="13"
-                                          Height="13"
-                                          Stretch="Uniform"
-                                          Stroke="{DynamicResource TextSecondaryBrush}"
-                                          StrokeThickness="1.4"
-                                          Data="M5.5 5.5V3.5h7v7h-2M3.5 5.5h7v7h-7z" />
+                                    <Path Classes="icon icon-xs"
+                                          Data="{StaticResource IconCopy}" />
                                   </Button>
                                   <Button Classes="row-icon"
-                                          Width="22"
-                                          Height="22"
-                                          Padding="0"
-                                          Background="Transparent"
-                                          BorderThickness="0"
                                           ToolTip.Tip="粘贴到刚才的应用"
+                                          AutomationProperties.Name="粘贴到刚才的应用"
                                           Tag="{Binding}"
                                           Click="OnRowPasteClick">
-                                    <Path Width="13"
-                                          Height="13"
-                                          Stretch="Uniform"
-                                          Stroke="{DynamicResource TextSecondaryBrush}"
-                                          StrokeThickness="1.4"
-                                          Data="M8 2v9M4.5 7.5 8 11l3.5-3.5M3.5 13.5h9" />
+                                    <Path Classes="icon icon-xs"
+                                          Data="{StaticResource IconPaste}" />
                                   </Button>
                                   <Button Classes="row-icon"
-                                          Width="22"
-                                          Height="22"
-                                          Padding="0"
-                                          Background="Transparent"
-                                          BorderThickness="0"
                                           ToolTip.Tip="用默认程序打开"
+                                          AutomationProperties.Name="打开"
                                           IsVisible="{Binding CanOpen}"
                                           Tag="{Binding}"
                                           Click="OnRowOpenClick">
-                                    <Path Width="13"
-                                          Height="13"
-                                          Stretch="Uniform"
-                                          Stroke="{DynamicResource TextSecondaryBrush}"
-                                          StrokeThickness="1.4"
-                                          Data="M9.5 3.5h3v3M12.5 3.5 7 9M11 9.5v3h-7v-7h3" />
+                                    <Path Classes="icon icon-xs"
+                                          Data="{StaticResource IconOpen}" />
                                   </Button>
                                   <Button Classes="row-icon"
-                                          Width="22"
-                                          Height="22"
-                                          Padding="0"
-                                          Background="Transparent"
-                                          BorderThickness="0"
                                           ToolTip.Tip="加入 / 移出顺序粘贴队列"
+                                          AutomationProperties.Name="顺序粘贴队列"
                                           Tag="{Binding}"
                                           Click="OnQueueToggleClick">
-                                    <TextBlock Text="{Binding QueueBadge}"
+                                    <TextBlock Classes="num"
+                                               Text="{Binding QueueBadge}"
                                                FontSize="11"
                                                Foreground="{DynamicResource TextSecondaryBrush}"
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center" />
                                   </Button>
                                   <Button Classes="row-icon"
-                                          Width="22"
-                                          Height="22"
-                                          Padding="0"
-                                          Background="Transparent"
-                                          BorderThickness="0"
                                           ToolTip.Tip="收藏 / 取消收藏"
+                                          AutomationProperties.Name="收藏"
                                           Tag="{Binding}"
                                           Click="OnFavoriteClick">
-                                    <TextBlock Text="{Binding FavoriteGlyph}"
-                                               FontSize="11"
-                                               Foreground="{DynamicResource TextSecondaryBrush}"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center" />
+                                    <Path Classes="icon icon-xs star"
+                                          Classes.favorite="{Binding IsFavorite}"
+                                          Data="{StaticResource IconStar}" />
                                   </Button>
                                   <Button Classes="row-icon"
-                                          Width="22"
-                                          Height="22"
-                                          Padding="0"
-                                          Background="Transparent"
-                                          BorderThickness="0"
                                           ToolTip.Tip="删除（可撤销）"
+                                          AutomationProperties.Name="删除"
                                           Tag="{Binding}"
                                           Click="OnRowDeleteClick">
-                                    <Path Width="13"
-                                          Height="13"
-                                          Stretch="Uniform"
-                                          Stroke="{DynamicResource TextSecondaryBrush}"
-                                          StrokeThickness="1.4"
-                                          Data="M2.5 4.5h11M6 4.5v-2h4v2M4 4.5l.8 9h6.4l.8-9M6.5 7v4M9.5 7v4" />
+                                    <Path Classes="icon icon-xs"
+                                          Data="{StaticResource IconTrash}" />
                                   </Button>
                                 </StackPanel>
                               </Border>

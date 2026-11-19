@@ -356,26 +356,72 @@
     <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
   </Style>
 
-  <!-- 线性图标：stroke 统一，选中时变主色 -->
+  <!--
+    线性图标：几何统一在 Styles/Icons.axaml（24×24、stroke-only、1.5、圆头圆角）。
+    这里只管「怎么画」：颜色走 DynamicResource，浅色主题切换时不用改样式。
+    尺寸用 icon-xs/sm/md/lg/xl 五个档，不要在控件上散写 Width/Height。
+  -->
   <Style Selector="Path.icon">
-    <Setter Property="Stroke" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource TextSecondaryBrush}" />
     <Setter Property="StrokeThickness" Value="1.5" />
     <Setter Property="StrokeLineCap" Value="Round" />
     <Setter Property="StrokeJoin" Value="Round" />
     <Setter Property="Stretch" Value="Uniform" />
   </Style>
 
+  <!-- 尺寸档：必须排在 Path.icon 之后，同优先级时后写的赢 -->
+  <Style Selector="Path.icon-xs">
+    <Setter Property="Width" Value="13" />
+    <Setter Property="Height" Value="13" />
+  </Style>
+
+  <Style Selector="Path.icon-sm">
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+  </Style>
+
+  <Style Selector="Path.icon-md">
+    <Setter Property="Width" Value="18" />
+    <Setter Property="Height" Value="18" />
+  </Style>
+
+  <Style Selector="Path.icon-lg">
+    <Setter Property="Width" Value="20" />
+    <Setter Property="Height" Value="20" />
+  </Style>
+
+  <Style Selector="Path.icon-xl">
+    <Setter Property="Width" Value="24" />
+    <Setter Property="Height" Value="24" />
+  </Style>
+
+  <!-- 省略号这类实心点：填充和描边同色，缩放后仍是一个圆点而不是细线 -->
+  <Style Selector="Path.icon-dot">
+    <Setter Property="Fill" Value="{DynamicResource TextSecondaryBrush}" />
+  </Style>
+
   <Style Selector="ListBoxItem:selected Path.icon">
-    <Setter Property="Stroke" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
   </Style>
 
   <Style Selector="Button.selected Path.icon">
-    <Setter Property="Stroke" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
   </Style>
 
   <!-- 卡片图标：琥珀线稿（必须放在 Path.icon 通用样式之后才会覆盖它） -->
   <Style Selector="Button.tool-card Path.icon">
-    <Setter Property="Stroke" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+  </Style>
+
+  <!-- 收藏星：未收藏只描边，收藏后实心琥珀。两类共用同一份几何 -->
+  <Style Selector="Path.star">
+    <Setter Property="Fill" Value="Transparent" />
+    <Setter Property="Stroke" Value="{DynamicResource TextSecondaryBrush}" />
+  </Style>
+
+  <Style Selector="Path.star.favorite">
+    <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
   </Style>
 
   <!-- 分类标签：小、方、低对比 -->

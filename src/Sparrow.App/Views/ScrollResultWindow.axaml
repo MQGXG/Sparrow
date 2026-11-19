@@ -6,7 +6,7 @@
         Height="660"
         MinWidth="480"
         MinHeight="400"
-        Icon="avares://Sparrow.App/Assets/sparrow-32.png"
+        Icon="avares://Sparrow.App/Assets/sparrow-64.png"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BgBrush}">
 

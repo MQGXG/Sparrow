@@ -8,7 +8,7 @@
         Title="Sparrow"
         Width="660"
         MaxHeight="560"
-        Icon="avares://Sparrow.App/Assets/sparrow-32.png"
+        Icon="avares://Sparrow.App/Assets/sparrow-64.png"
         SizeToContent="Height"
         WindowDecorations="None"
         CanResize="False"
@@ -55,14 +55,11 @@
       <!-- 搜索行：图标 + 无边框输入框 -->
       <Grid ColumnDefinitions="Auto,*,Auto" Margin="16,16,16,12">
         <Path Grid.Column="0"
-              Width="16"
-              Height="16"
+              Classes="icon icon-sm"
               Margin="0,0,12,0"
               VerticalAlignment="Center"
-              Stroke="{StaticResource TextMutedBrush}"
-              StrokeThickness="1.6"
-              StrokeLineCap="Round"
-              Data="M9 3a6 6 0 1 0 0 12 6 6 0 0 0 0-12 M13.2 13.2 L17 17" />
+              Stroke="{DynamicResource TextMutedBrush}"
+              Data="{StaticResource IconSearch}" />
 
         <TextBox x:Name="SearchBox"
                  Grid.Column="1"
@@ -99,9 +96,7 @@
             <DataTemplate x:DataType="vm:ToolItemViewModel">
               <Grid ColumnDefinitions="Auto,*,Auto" Margin="12,8">
                 <Path Grid.Column="0"
-                      Classes="icon"
-                      Width="18"
-                      Height="18"
+                      Classes="icon icon-md"
                       Margin="0,1,10,0"
                       VerticalAlignment="Top"
                       Data="{Binding CategoryLabel, Converter={x:Static converters:IconGeometryConverter.Instance}}" />
@@ -136,14 +131,11 @@
                     Margin="0,24,0,24"
                     Spacing="8"
                     HorizontalAlignment="Center">
-          <Path Width="26"
-                Height="26"
+          <Path Classes="icon icon-xl"
                 HorizontalAlignment="Center"
                 Opacity="0.55"
-                Stroke="{StaticResource TextMutedBrush}"
-                StrokeThickness="1.4"
-                StrokeLineCap="Round"
-                Data="M9 3a6 6 0 1 0 0 12 6 6 0 0 0 0-12 M13.2 13.2 L17 17" />
+                Stroke="{DynamicResource TextMutedBrush}"
+                Data="{StaticResource IconSearch}" />
           <TextBlock Text="没有匹配的工具"
                      FontSize="13"
                      Foreground="{StaticResource TextSecondaryBrush}"

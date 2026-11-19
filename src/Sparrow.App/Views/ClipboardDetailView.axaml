@@ -22,10 +22,16 @@
           <StackPanel Orientation="Horizontal" Spacing="7">
             <Button x:Name="BackButton"
                     Classes="ghost small"
-                    Padding="8,3"
-                    Content="返回"
+                    Padding="6,3"
                     ToolTip.Tip="返回列表"
-                    Click="OnCloseClick" />
+                    AutomationProperties.Name="返回列表"
+                    Click="OnCloseClick">
+              <StackPanel Orientation="Horizontal" Spacing="3">
+                <Path Classes="icon icon-xs"
+                      Data="{StaticResource IconChevronLeft}" />
+                <TextBlock Text="返回" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
             <TextBlock Classes="section"
                        Text="详情"
                        VerticalAlignment="Center" />
@@ -48,10 +54,14 @@
                     IsVisible="{Binding HasDetail}">
           <Button Classes="ghost small"
                   Padding="8,3"
-                  Content="{Binding SelectedItem.FavoriteGlyph}"
                   Tag="{Binding SelectedItem}"
                   ToolTip.Tip="收藏 / 取消收藏"
-                  Click="OnFavoriteClick" />
+                  AutomationProperties.Name="收藏"
+                  Click="OnFavoriteClick">
+            <Path Classes="icon icon-xs star"
+                  Classes.favorite="{Binding SelectedItem.IsFavorite}"
+                  Data="{StaticResource IconStar}" />
+          </Button>
           <Button Classes="ghost small danger"
                   Padding="8,3"
                   Content="删除"
@@ -157,16 +167,9 @@
                 BorderBrush="{StaticResource LineBrush}"
                 BorderThickness="1"
                 HorizontalAlignment="Center">
-          <Path Width="24"
-                Height="24"
-                Stretch="Uniform"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
+          <Path Classes="icon icon-xl"
                 Stroke="{StaticResource LineStrongBrush}"
-                StrokeThickness="1.5"
-                StrokeLineCap="Round"
-                StrokeJoin="Round"
-                Data="M9 3h6v3H9z M8 6H5v14h14V6h-3" />
+                Data="{StaticResource IconClipboard}" />
         </Border>
         <TextBlock Text="没有可显示的记录"
                    HorizontalAlignment="Center"
