@@ -206,8 +206,8 @@
                     <ItemsControl ItemsSource="{Binding Items}">
                       <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:ClipboardEntryViewModel">
-                          <Border Margin="0,3"
-                                  Padding="8,6"
+                          <Border Margin="0,5"
+                                  Padding="8,8"
                                   CornerRadius="10"
                                   Background="{StaticResource SurfaceBrush}"
                                   BorderBrush="{StaticResource LineBrush}"
@@ -296,7 +296,7 @@
                             </Border.Styles>
 
                             <Panel>
-                              <StackPanel Spacing="4">
+                              <StackPanel Spacing="6">
                                 <!-- 元信息常驻：类型 · 字数/尺寸 · 时间 · 来源 -->
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                   <TextBlock Text="{Binding KindLabel}"
@@ -333,12 +333,74 @@
                                          HorizontalAlignment="Center" />
                                 </Border>
 
-                                <!-- 文本条目：单行预览 -->
+                                <!-- 链接条目：首字母色块 + 域名 + URL -->
+                                <StackPanel IsVisible="{Binding IsLink}"
+                                            Orientation="Horizontal"
+                                            Spacing="10">
+                                  <Border Width="36"
+                                          Height="36"
+                                          CornerRadius="6"
+                                          Background="{StaticResource AccentSoftBrush}"
+                                          VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding LinkInitial}"
+                                               FontSize="15"
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource AccentBrush}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                  </Border>
+                                  <StackPanel Spacing="2"
+                                              VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding LinkHost}"
+                                               FontSize="12"
+                                               FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{StaticResource TextPrimaryBrush}" />
+                                    <TextBlock Text="{Binding Preview}"
+                                               FontSize="11"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{StaticResource TextSecondaryBrush}" />
+                                  </StackPanel>
+                                </StackPanel>
+
+                                <!-- 文件条目：文件图标 + 文件名 -->
+                                <StackPanel IsVisible="{Binding IsFileSet}"
+                                            Orientation="Horizontal"
+                                            Spacing="10">
+                                  <Border Width="36"
+                                          Height="36"
+                                          CornerRadius="6"
+                                          Background="{StaticResource SurfaceRaisedBrush}"
+                                          BorderBrush="{StaticResource LineBrush}"
+                                          BorderThickness="1"
+                                          VerticalAlignment="Center">
+                                    <TextBlock Text="件"
+                                               FontSize="13"
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                  </Border>
+                                  <StackPanel Spacing="2"
+                                              VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding FileTitle}"
+                                               FontSize="12"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{StaticResource TextPrimaryBrush}" />
+                                    <TextBlock Text="{Binding FileSubtitle}"
+                                               FontSize="10"
+                                               IsVisible="{Binding HasFileSubtitle}"
+                                               Foreground="{StaticResource TextMutedBrush}" />
+                                  </StackPanel>
+                                </StackPanel>
+
+                                <!-- 文本条目：最多两行 -->
                                 <TextBlock Text="{Binding Preview}"
                                            FontSize="12"
+                                           TextWrapping="Wrap"
+                                           MaxLines="2"
                                            TextTrimming="CharacterEllipsis"
                                            Foreground="{StaticResource TextPrimaryBrush}"
-                                           IsVisible="{Binding !HasThumbnail}" />
+                                           IsVisible="{Binding ShowPlainPreview}" />
 
                                 <!-- 标签：图片条目已有「图片」类型，不再重复自动标签 -->
                                 <TextBlock Text="{Binding TagLine}"

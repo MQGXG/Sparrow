@@ -15,8 +15,30 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
     public ClipboardEntryViewModel(ClipboardHistoryEntry entry, ClipboardHistoryStore store)
     {
         Entry = entry;
+        LinkHost = ExtractHost(entry);
         _thumbnail = new Lazy<byte[]?>(() =>
             entry.Kind == ClipboardEntryKind.Image ? store.LoadImage(entry) : null);
+    }
+
+    /// <summary>从 http(s) 链接里取域名（去掉 www.），失败返回空串。</summary>
+    private static string ExtractHost(ClipboardHistoryEntry entry)
+    {
+        if (entry.Kind != ClipboardEntryKind.Text || entry.Text is not { Length: > 0 } text)
+            return string.Empty;
+
+        var firstLine = text.TrimStart();
+        var end = firstLine.IndexOfAny(['\r', '\n']);
+        if (end >= 0)
+            firstLine = firstLine[..end];
+
+        if (!Uri.TryCreate(firstLine.Trim(), UriKind.Absolute, out var uri))
+            return string.Empty;
+
+        if (uri.Scheme is not ("http" or "https"))
+            return string.Empty;
+
+        var host = uri.Host;
+        return host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? host[4..] : host;
     }
 
     public ClipboardHistoryEntry Entry { get; }
@@ -42,7 +64,9 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
 
     public string Preview => Entry.Preview;
 
-    public string KindLabel => Entry.Kind switch
+    public string KindLabel => IsLink
+        ? "链接"
+        : Entry.Kind switch
     {
         ClipboardEntryKind.Text => "文本",
         ClipboardEntryKind.Image => "图片",
@@ -63,8 +87,35 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
 
     public bool HasTags => TagLine.Length > 0;
 
-    /// <summary>图片条目已有「图片」类型，不再重复显示自动标签行。</summary>
-    public bool ShowTagLine => HasTags && !HasThumbnail;
+    /// <summary>图片、链接、文件各有专用布局，不再重复显示自动标签。</summary>
+    public bool ShowTagLine => HasTags && !HasThumbnail && !IsFileSet && !IsLink;
+
+    /// <summary>链接条目：显示 favicon、域名和 URL 分层。</summary>
+    public bool IsLink => LinkHost.Length > 0;
+
+    /// <summary>链接域名，如 github.com。</summary>
+    public string LinkHost { get; }
+
+    /// <summary>favicon 占位字母（域名首字母大写）。</summary>
+    public string LinkInitial => LinkHost.Length > 0
+        ? LinkHost[..1].ToUpperInvariant()
+        : "?";
+
+    /// <summary>文件条目：显示文件名和数量。</summary>
+    public bool IsFileSet => Entry.Kind == ClipboardEntryKind.Files;
+
+    public string FileTitle => Entry.Paths.Count > 0
+        ? System.IO.Path.GetFileName(Entry.Paths[0])
+        : "文件";
+
+    public string FileSubtitle => Entry.Paths.Count > 1
+        ? $"+{Entry.Paths.Count - 1} 个文件"
+        : string.Empty;
+
+    public bool HasFileSubtitle => FileSubtitle.Length > 0;
+
+    /// <summary>普通文本预览：图片、链接、文件各有专用布局。</summary>
+    public bool ShowPlainPreview => !HasThumbnail && !IsLink && !IsFileSet;
 
     public string TagLine => string.Join("  ",
         Entry.Tags.Concat(Entry.AutoTags).Distinct(StringComparer.OrdinalIgnoreCase));
