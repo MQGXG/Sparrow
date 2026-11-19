@@ -63,6 +63,9 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
 
     public bool HasTags => TagLine.Length > 0;
 
+    /// <summary>图片条目已有「图片」类型，不再重复显示自动标签行。</summary>
+    public bool ShowTagLine => HasTags && !HasThumbnail;
+
     public string TagLine => string.Join("  ",
         Entry.Tags.Concat(Entry.AutoTags).Distinct(StringComparer.OrdinalIgnoreCase));
 

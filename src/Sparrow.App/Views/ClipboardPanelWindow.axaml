@@ -210,7 +210,7 @@
                                   Padding="8,6"
                                   CornerRadius="10"
                                   Background="{StaticResource SurfaceBrush}"
-                                  BorderBrush="Transparent"
+                                  BorderBrush="{StaticResource LineBrush}"
                                   BorderThickness="1"
                                   Cursor="Hand"
                                   Classes="clip-row"
@@ -293,80 +293,60 @@
                               <Style Selector="Border.clip-row.selected Border.row-actions">
                                 <Setter Property="IsVisible" Value="True" />
                               </Style>
-
-                              <!-- 元信息行：默认收起，悬停或选中才展开 -->
-                              <Style Selector="Border.clip-row Border.row-meta">
-                                <Setter Property="Height" Value="0" />
-                                <Setter Property="Opacity" Value="0" />
-                                <Setter Property="ClipToBounds" Value="True" />
-                                <Setter Property="Transitions">
-                                  <Transitions>
-                                    <DoubleTransition Property="Height" Duration="0:0:0.12" />
-                                    <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
-                                  </Transitions>
-                                </Setter>
-                              </Style>
-                              <Style Selector="Border.clip-row:pointerover Border.row-meta">
-                                <Setter Property="Height" Value="14" />
-                                <Setter Property="Opacity" Value="1" />
-                              </Style>
-                              <Style Selector="Border.clip-row.selected Border.row-meta">
-                                <Setter Property="Height" Value="14" />
-                                <Setter Property="Opacity" Value="1" />
-                              </Style>
                             </Border.Styles>
 
                             <Panel>
-                              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                                <Border Width="34"
-                                      Height="34"
-                                      CornerRadius="6"
-                                      Background="{StaticResource SurfaceBrush}"
-                                      BorderBrush="{StaticResource LineBrush}"
-                                      BorderThickness="1"
-                                      ClipToBounds="True">
-                                <Panel>
-                                  <TextBlock Text="{Binding KindGlyph}"
-                                             FontSize="13"
-                                             Foreground="{StaticResource TextMutedBrush}"
-                                             HorizontalAlignment="Center"
-                                             VerticalAlignment="Center"
-                                             IsVisible="{Binding !HasThumbnail}" />
-                                  <Image Source="{Binding Thumbnail, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
-                                         Stretch="UniformToFill"
-                                         IsVisible="{Binding HasThumbnail}" />
-                                </Panel>
-                              </Border>
+                              <StackPanel Spacing="4">
+                                <!-- 元信息常驻：类型 · 字数/尺寸 · 时间 · 来源 -->
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                  <TextBlock Text="{Binding KindLabel}"
+                                             FontSize="10"
+                                             Foreground="{StaticResource TextMutedBrush}" />
+                                  <TextBlock Text="{Binding SizeLabel}"
+                                             FontSize="10"
+                                             Foreground="{StaticResource TextMutedBrush}" />
+                                  <TextBlock Text="·"
+                                             FontSize="10"
+                                             Foreground="{StaticResource TextMutedBrush}" />
+                                  <TextBlock Text="{Binding TimeLabel}"
+                                             FontSize="10"
+                                             Foreground="{StaticResource TextMutedBrush}" />
+                                  <TextBlock Text="·"
+                                             FontSize="10"
+                                             IsVisible="{Binding HasSource}"
+                                             Foreground="{StaticResource TextMutedBrush}" />
+                                  <TextBlock Text="{Binding SourceLabel}"
+                                             FontSize="10"
+                                             TextTrimming="CharacterEllipsis"
+                                             IsVisible="{Binding HasSource}"
+                                             Foreground="{StaticResource TextMutedBrush}" />
+                                </StackPanel>
 
-                              <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                <!-- 图片条目：缩略图按比例，限高 120 -->
+                                <Border IsVisible="{Binding HasThumbnail}"
+                                        MaxHeight="120"
+                                        CornerRadius="6"
+                                        ClipToBounds="True">
+                                  <Image Source="{Binding Thumbnail, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
+                                         MaxHeight="120"
+                                         Stretch="Uniform"
+                                         HorizontalAlignment="Center" />
+                                </Border>
+
+                                <!-- 文本条目：单行预览 -->
                                 <TextBlock Text="{Binding Preview}"
                                            FontSize="12"
                                            TextTrimming="CharacterEllipsis"
-                                           Foreground="{StaticResource TextPrimaryBrush}" />
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           IsVisible="{Binding !HasThumbnail}" />
+
+                                <!-- 标签：图片条目已有「图片」类型，不再重复自动标签 -->
                                 <TextBlock Text="{Binding TagLine}"
                                            FontSize="10"
                                            TextTrimming="CharacterEllipsis"
                                            Foreground="{StaticResource AccentBrush}"
-                                           IsVisible="{Binding HasTags}" />
-                                <Border Classes="row-meta">
-                                  <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <TextBlock Text="{Binding TimeLabel}"
-                                               FontSize="10"
-                                               Foreground="{StaticResource TextMutedBrush}" />
-                                    <TextBlock Text="·"
-                                               FontSize="10"
-                                               IsVisible="{Binding HasSource}"
-                                               Foreground="{StaticResource TextMutedBrush}" />
-                                    <TextBlock Text="{Binding SourceLabel}"
-                                               FontSize="10"
-                                               TextTrimming="CharacterEllipsis"
-                                               IsVisible="{Binding HasSource}"
-                                               Foreground="{StaticResource TextMutedBrush}" />
-                                  </StackPanel>
-                                </Border>
+                                           IsVisible="{Binding ShowTagLine}" />
                               </StackPanel>
-
-                              </Grid>
 
                               <!-- 悬停浮层：查看 / 队列 / 收藏，三个等宽图标 -->
                               <Border Classes="row-actions"
