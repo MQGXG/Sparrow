@@ -17,6 +17,12 @@ namespace Sparrow.App.Views;
 /// </summary>
 public partial class ClipboardPanelWindow : Window
 {
+    /// <summary>
+    /// 面板呼出前列表的搜索词。面板和工作区共用同一个 ViewModel，
+    /// 呼出时清空搜索不能让工作区页跟着丢状态，收起时原样还回去。
+    /// </summary>
+    private string _savedQuery = string.Empty;
+
     public ClipboardPanelWindow()
     {
         InitializeComponent();
@@ -37,6 +43,7 @@ public partial class ClipboardPanelWindow : Window
     public void PrepareForShow()
     {
         HideDetail(focusSearch: false);
+        _savedQuery = History?.Query ?? string.Empty;
         SearchBox.Text = string.Empty;
         SearchBox.Focus();
         SearchBox.SelectAll();
@@ -46,6 +53,11 @@ public partial class ClipboardPanelWindow : Window
     public void HidePanel()
     {
         HideDetail(focusSearch: false);
+
+        // 面板和工作区页共用一个 Query：面板的清空只是本地行为，收起时把搜索词还回去
+        if (History is { } history && history.Query != _savedQuery)
+            history.Query = _savedQuery;
+
         Hide();
     }
 
@@ -166,6 +178,28 @@ public partial class ClipboardPanelWindow : Window
         if (sender is Button { Tag: ClipboardEntryViewModel item } && History is { } clipboard)
             clipboard.ToggleQueue(item);
 
+        e.Handled = true;
+    }
+
+    /// <summary>队列条上点某一条 = 移出队列。</summary>
+    private void OnQueueRemoveClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: ClipboardQueueItemViewModel item } && History is { } clipboard)
+            clipboard.RemoveQueueItem(item);
+
+        e.Handled = true;
+    }
+
+    /// <summary>「复制下一条」：只写剪贴板，不模拟按键，用户自己在目标应用粘贴。</summary>
+    private void OnCopyNextClick(object? sender, RoutedEventArgs e)
+    {
+        History?.PasteNext(simulate: false);
+        e.Handled = true;
+    }
+
+    private void OnQueueClearClick(object? sender, RoutedEventArgs e)
+    {
+        History?.ClearQueue();
         e.Handled = true;
     }
 

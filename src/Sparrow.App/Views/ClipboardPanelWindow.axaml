@@ -20,7 +20,7 @@
     <Border Background="{StaticResource DotGridBrush}" IsHitTestVisible="False" />
 
     <!-- 只有搜索 + 筛选 + 列表：不带主窗的品牌栏和切换行 -->
-    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto"
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto"
           RowSpacing="10"
           Margin="18,16,18,12">
 
@@ -125,7 +125,59 @@
         </ItemsControl.ItemTemplate>
       </ItemsControl>
 
+      <!-- 粘贴队列：和工作区剪贴板页同一套能力，Ctrl+点击行可增减 -->
       <Border Grid.Row="4"
+              IsVisible="{Binding HasQueue}"
+              Background="{StaticResource SurfaceBrush}"
+              BorderBrush="{StaticResource LineBrush}"
+              BorderThickness="1"
+              CornerRadius="8"
+              Padding="10,7">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <Border Classes="hud-tick" Height="11" />
+            <TextBlock Text="粘贴队列"
+                       Classes="section"
+                       VerticalAlignment="Center" />
+          </StackPanel>
+
+          <ScrollViewer Grid.Column="1"
+                        Margin="10,0"
+                        VerticalScrollBarVisibility="Disabled"
+                        HorizontalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding Queue}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Orientation="Horizontal" Spacing="6" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ClipboardQueueItemViewModel">
+                  <Button Classes="hud-chip"
+                          Content="{Binding Label}"
+                          Tag="{Binding}"
+                          ToolTip.Tip="点击移出队列"
+                          Click="OnQueueRemoveClick" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+            <Button x:Name="QueueCopyNextButton"
+                    Classes="ghost small"
+                    Content="复制下一条"
+                    ToolTip.Tip="写入剪贴板，自己在目标应用按 Ctrl+V"
+                    Click="OnCopyNextClick" />
+            <Button x:Name="QueueClearButton"
+                    Classes="ghost small"
+                    Content="清空"
+                    Click="OnQueueClearClick" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <Border Grid.Row="5"
               Classes="panel"
               Padding="4">
         <Grid>
@@ -302,10 +354,10 @@
         </Grid>
       </Border>
 
-      <TextBlock Grid.Row="5"
+      <TextBlock Grid.Row="6"
                  Classes="num"
                  HorizontalAlignment="Center"
-                 Text="单击选中 · 双击 / 回车 复制并关闭 · 查看 详情 · Esc 返回 / 关闭" />
+                 Text="单击选中 · Ctrl+点击 加入队列 · 双击 / 回车 复制并关闭 · 查看 详情 · Esc 返回 / 关闭" />
     </Grid>
 
     <!-- 详情覆盖层：盖住搜索和列表，← / Esc 回到列表；复制后整个面板收起 -->
