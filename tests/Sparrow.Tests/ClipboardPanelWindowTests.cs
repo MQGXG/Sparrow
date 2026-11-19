@@ -274,6 +274,93 @@ public sealed class ClipboardPanelWindowTests
     }
 
     [AvaloniaFact]
+    public void 剪贴板视图_按变换复制文本()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"),
+                new NullLog());
+            store.AddText("hello world again");
+
+            var clipboard = new FakeClipboard();
+            var viewModel = new ClipboardHistoryViewModel(store, clipboard);
+
+            viewModel.CopyTransformed(viewModel.Items[0], PasteTransform.Camel).ShouldBeTrue();
+            clipboard.Text.ShouldBe("helloWorldAgain");
+
+            viewModel.CopyTransformed(viewModel.Items[0], PasteTransform.Upper).ShouldBeTrue();
+            clipboard.Text.ShouldBe("HELLO WORLD AGAIN");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [AvaloniaFact]
+    public void 面板行右键菜单提供复制变换()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"),
+                new NullLog());
+            store.AddText("hello world again");
+
+            var viewModel = new ClipboardHistoryViewModel(store, new FakeClipboard());
+            var window = new ClipboardPanelWindow { DataContext = viewModel };
+            window.Show();
+            window.PrepareForShow();
+            Dispatcher.UIThread.RunJobs();
+
+            var row = window.GetVisualDescendants()
+                .OfType<Border>()
+                .FirstOrDefault(border => border.Classes.Contains("clip-row"));
+
+            row.ShouldNotBeNull("列表行应该渲染出来");
+            row!.ContextMenu.ShouldNotBeNull("行上应挂复制/变换菜单");
+
+            var headers = row.ContextMenu!.Items
+                .OfType<MenuItem>()
+                .Select(menuItem => menuItem.Header as string)
+                .ToList();
+
+            headers.ShouldContain("复制");
+            headers.ShouldContain("复制为纯文本");
+            headers.ShouldContain("全部大写");
+            headers.ShouldContain("驼峰命名");
+            headers.Count.ShouldBe(8, "复制 + 7 种变换");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [AvaloniaFact]
     public void 剪贴板面板_查看详情覆盖在面板上_Esc回到列表()
     {
         var directory = System.IO.Path.Combine(

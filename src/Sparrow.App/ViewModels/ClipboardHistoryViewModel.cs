@@ -368,6 +368,19 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
         }
     }
 
+    /// <summary>按指定变换复制文本；非文本条目忽略变换，仍走普通复制。</summary>
+    public bool CopyTransformed(ClipboardEntryViewModel item, PasteTransform transform)
+    {
+        if (item.Entry.Kind != ClipboardEntryKind.Text || item.Entry.Text is not { Length: > 0 } text)
+        {
+            Copy(item);
+            return false;
+        }
+
+        _clipboard.SetText(PasteTransforms.Apply(text, transform));
+        return true;
+    }
+
     /// <summary>加入 / 移出顺序粘贴队列。</summary>
     public void ToggleQueue(ClipboardEntryViewModel item)
     {

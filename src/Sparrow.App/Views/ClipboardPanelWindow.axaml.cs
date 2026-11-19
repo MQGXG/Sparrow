@@ -321,6 +321,56 @@ public partial class ClipboardPanelWindow : Window
         e.Handled = true;
     }
 
+    /// <summary>右键菜单的「复制」：复制被右键的条目并收起。</summary>
+    private void OnMenuCopy(object? sender, RoutedEventArgs e)
+    {
+        if (ItemFromMenu(sender) is not { } item || History is not { } history)
+            return;
+
+        history.SelectedItem = item;
+        history.Copy(item);
+        HidePanel();
+        e.Handled = true;
+    }
+
+    /// <summary>右键菜单的「复制为…」：按 Tag 指定的变换复制文本，非文本条目退回普通复制。</summary>
+    private void OnMenuTransform(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: string tag }
+            || !Enum.TryParse<PasteTransform>(tag, out var transform)
+            || ItemFromMenu(sender) is not { } item
+            || History is not { } history)
+        {
+            return;
+        }
+
+        history.SelectedItem = item;
+        history.CopyTransformed(item, transform);
+        HidePanel();
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// 右键菜单挂在弹出层里，DataContext 有时取不到条目；
+    /// 先读 MenuItem 自己，再回退到 ContextMenu 的 PlacementTarget。
+    /// </summary>
+    private static ClipboardEntryViewModel? ItemFromMenu(object? sender)
+    {
+        if (sender is not MenuItem menuItem)
+            return null;
+
+        if (menuItem.DataContext is ClipboardEntryViewModel direct)
+            return direct;
+
+        if (menuItem.Parent is ContextMenu { PlacementTarget: Control target }
+            && target.DataContext is ClipboardEntryViewModel fromTarget)
+        {
+            return fromTarget;
+        }
+
+        return null;
+    }
+
     private void OnFavoriteClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: ClipboardEntryViewModel item } && History is { } clipboard)
