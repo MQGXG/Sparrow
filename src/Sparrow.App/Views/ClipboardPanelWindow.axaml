@@ -700,8 +700,13 @@
                    Foreground="{StaticResource AccentBrush}" />
     </Grid>
 
-    <!-- 详情覆盖层：盖住搜索和列表，← / Esc 回到列表；复制后整个面板收起 -->
-    <Panel x:Name="DetailLayer" IsVisible="False">
+    <!-- 详情覆盖层：盖住搜索和列表，← / Esc 回到列表；复制后整个面板收起。
+         必须 RowSpan=2：它在标题行+内容这个两行 Grid 里，不跨行就只落在 Auto 那一行，
+         高度由详情内容撑开，拉伸面板时下面会露出列表。 -->
+    <Panel x:Name="DetailLayer"
+           IsVisible="False"
+           Grid.Row="0"
+           Grid.RowSpan="2">
       <!-- 必须完全不透明：详情内容比面板短时，半透明会让下面的列表透出来 -->
       <Border Background="#FF07090B"
               PointerPressed="OnDetailBackdropPressed" />

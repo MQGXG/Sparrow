@@ -816,6 +816,56 @@ public sealed class ClipboardPanelWindowTests
     }
 
     [AvaloniaFact]
+    public void 拉伸窗口后详情层仍覆盖整个面板()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"),
+                new NullLog());
+            store.AddText("hello world");
+
+            var viewModel = new ClipboardHistoryViewModel(store, new FakeClipboard());
+            var window = new ClipboardPanelWindow { DataContext = viewModel };
+            window.Show();
+            window.PrepareForShow();
+            Dispatcher.UIThread.RunJobs();
+
+            // 模拟「详情已打开」
+            var layer = window.FindControl<Panel>("DetailLayer")!;
+            layer.IsVisible = true;
+
+            window.Width = 700;
+            window.Height = 900;
+            window.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
+
+            // 详情层在 Shell 内部，比 Shell 少 2px 边框，所以和父容器比
+            var host = (Control)layer.Parent!;
+
+            layer.Bounds.Height.ShouldBe(
+                host.Bounds.Height,
+                "详情层必须跟着面板一起变高，否则拉伸后下方会露出列表");
+            layer.Bounds.Width.ShouldBe(host.Bounds.Width);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [AvaloniaFact]
     public void 类型chip_空分类隐藏_选中项始终显示()
     {
         var directory = System.IO.Path.Combine(
