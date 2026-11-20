@@ -634,6 +634,15 @@ public partial class WorkspaceWindow : Window
             viewModel.CopyResult();
     }
 
+    /// <summary>左侧轮播图：显示 / 隐藏当前图的识别框。</summary>
+    private void OnToggleCurrentBoxesClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel { CurrentSection: { } section })
+            section.ShowBoxes = !section.ShowBoxes;
+
+        e.Handled = true;
+    }
+
     /// <summary>结果区：只看当前这张图。</summary>
     private void OnShowCurrentSectionClick(object? sender, RoutedEventArgs e)
     {
@@ -657,15 +666,6 @@ public partial class WorkspaceWindow : Window
     {
         if (sender is Button { Tag: TextSectionViewModel section })
             section.IsExpanded = !section.IsExpanded;
-
-        e.Handled = true;
-    }
-
-    /// <summary>多图结果：显示 / 隐藏识别框，方便对照原图和文字。</summary>
-    private void OnToggleBoxesClick(object? sender, RoutedEventArgs e)
-    {
-        if (sender is Button { Tag: TextSectionViewModel section })
-            section.ShowBoxes = !section.ShowBoxes;
 
         e.Handled = true;
     }

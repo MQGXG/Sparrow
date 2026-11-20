@@ -1083,12 +1083,45 @@
               <Grid RowDefinitions="*,Auto,Auto,Auto" RowSpacing="8">
                 <!-- 当前图：原图按比例铺满，左右箭头切换 -->
                 <Panel Grid.Row="0" IsVisible="{Binding IsImagesInput}">
-                  <Image Source="{Binding CurrentImage.PreviewBytes, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
-                         Stretch="Uniform"
-                         Cursor="Hand"
-                         ToolTip.Tip="点击全屏查看"
-                         Tag="{Binding CurrentImage}"
-                         Tapped="OnPreviewInputImageClick" />
+                  <!-- Viewbox 负责缩放；Canvas 用原图尺寸，框坐标直接用原图像素 -->
+                  <Viewbox Stretch="Uniform">
+                    <Canvas Width="{Binding CurrentImage.Input.Width}"
+                            Height="{Binding CurrentImage.Input.Height}">
+                      <Image Source="{Binding CurrentImage.PreviewBytes, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
+                             Width="{Binding CurrentImage.Input.Width}"
+                             Height="{Binding CurrentImage.Input.Height}"
+                             Stretch="Fill"
+                             Cursor="Hand"
+                             ToolTip.Tip="点击全屏查看"
+                             Tag="{Binding CurrentImage}"
+                             Tapped="OnPreviewInputImageClick" />
+
+                      <!-- 识别框画在当前图对应的那段结果上 -->
+                      <ItemsControl Canvas.Left="0"
+                                    Canvas.Top="0"
+                                    Width="{Binding CurrentImage.Input.Width}"
+                                    Height="{Binding CurrentImage.Input.Height}"
+                                    ItemsSource="{Binding CurrentSection.Lines}"
+                                    IsVisible="{Binding CurrentSection.ShowBoxes}">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate>
+                            <Canvas />
+                          </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate>
+                            <Rectangle Canvas.Left="{Binding X}"
+                                       Canvas.Top="{Binding Y}"
+                                       Width="{Binding Width}"
+                                       Height="{Binding Height}"
+                                       Stroke="{StaticResource AccentBrush}"
+                                       StrokeThickness="2"
+                                       Fill="#28FFB020" />
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </Canvas>
+                  </Viewbox>
 
                   <Button Classes="ghost"
                           Width="28"
@@ -1116,6 +1149,22 @@
                           Click="OnNextImageClick">
                     <Path Classes="icon icon-xs"
                           Data="{StaticResource IconChevronRight}" />
+                  </Button>
+
+                  <!-- 识别框开关：有识别结果且带行框时才出现 -->
+                  <Button Classes="ghost small"
+                          Width="24"
+                          Padding="0"
+                          HorizontalAlignment="Right"
+                          VerticalAlignment="Top"
+                          Margin="2,2,30,2"
+                          Classes.selected="{Binding CurrentSection.ShowBoxes}"
+                          IsVisible="{Binding CurrentSection.HasLines}"
+                          ToolTip.Tip="显示 / 隐藏识别框"
+                          AutomationProperties.Name="识别框"
+                          Click="OnToggleCurrentBoxesClick">
+                    <Path Classes="icon icon-xs"
+                          Data="{StaticResource IconEye}" />
                   </Button>
 
                   <Button Classes="ghost small"
@@ -1338,8 +1387,8 @@
                                 BorderBrush="{StaticResource LineBrush}"
                                 BorderThickness="1">
                           <StackPanel Spacing="6">
-                            <!-- 标题行：名称 + 展开 + 识别框开关 -->
-                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
+                            <!-- 标题行：名称 + 展开（识别框开关在左侧轮播图上） -->
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
                               <TextBlock Text="{Binding Title}"
                                          VerticalAlignment="Center"
                                          FontSize="12"
@@ -1358,20 +1407,6 @@
                                 <Path Classes="icon icon-xs"
                                       Data="{StaticResource IconChevronDown}" />
                               </Button>
-
-                              <Button Grid.Column="2"
-                                      Classes="ghost small"
-                                      Classes.selected="{Binding ShowBoxes}"
-                                      Width="24"
-                                      Padding="0"
-                                      IsVisible="{Binding HasLines}"
-                                      ToolTip.Tip="显示 / 隐藏识别框"
-                                      AutomationProperties.Name="识别框"
-                                      Tag="{Binding}"
-                                      Click="OnToggleBoxesClick">
-                                <Path Classes="icon icon-xs"
-                                      Data="{StaticResource IconEye}" />
-                              </Button>
                             </Grid>
 
                             <!-- 折叠态：一行摘要 -->
@@ -1381,43 +1416,8 @@
                                                  TextWrapping="Wrap"
                                                  Foreground="{StaticResource TextSecondaryBrush}" />
 
-                            <!-- 展开态：原图（可叠识别框）+ 全文 -->
+                            <!-- 展开态：全文（原图和识别框看左侧轮播，右侧不重复显示图片） -->
                             <StackPanel IsVisible="{Binding IsExpanded}" Spacing="8">
-                              <!-- Viewbox 负责把原图尺寸缩放到可用宽度，框坐标直接用原图像素 -->
-                              <Viewbox Stretch="Uniform"
-                                       MaxHeight="320"
-                                       HorizontalAlignment="Center"
-                                       IsVisible="{Binding HasImage}">
-                                <Canvas Width="{Binding ImageWidth}" Height="{Binding ImageHeight}">
-                                  <Image Source="{Binding ImagePng, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
-                                         Width="{Binding ImageWidth}"
-                                         Height="{Binding ImageHeight}"
-                                         Stretch="Fill" />
-
-                                  <ItemsControl Canvas.Left="0"
-                                                Canvas.Top="0"
-                                                ItemsSource="{Binding Lines}"
-                                                IsVisible="{Binding ShowBoxes}">
-                                    <ItemsControl.ItemsPanel>
-                                      <ItemsPanelTemplate>
-                                        <Canvas />
-                                      </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                      <DataTemplate>
-                                        <Rectangle Canvas.Left="{Binding X}"
-                                                   Canvas.Top="{Binding Y}"
-                                                   Width="{Binding Width}"
-                                                   Height="{Binding Height}"
-                                                   Stroke="{StaticResource AccentBrush}"
-                                                   StrokeThickness="1.5"
-                                                   Fill="#20FFB020" />
-                                      </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                  </ItemsControl>
-                                </Canvas>
-                              </Viewbox>
-
                               <SelectableTextBlock Text="{Binding Text}"
                                                    IsVisible="{Binding !IsFailed}"
                                                    FontSize="12"
