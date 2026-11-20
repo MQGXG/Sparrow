@@ -890,8 +890,9 @@ public partial class WorkspaceViewModel : ObservableObject
                         await ShowSvgResultAsync(entry, context, svgPayload, elapsed);
                         return;
 
-                    case OcrResultPayload ocrPayload when ocrPayload.Sections is { Count: > 1 } sections:
-                        // 多图识别：渲染成分段列表，每段能对上是哪张图
+                    case OcrResultPayload ocrPayload when ocrPayload.Sections is { Count: > 0 } sections:
+                        // 单张也走这里：右侧仍是纯文本（HasSections 会是 false），
+                        // 但 ResultSections 要有数据——左侧的识别框靠 CurrentSection 拿行框
                         ShowSectionResult(entry, context, ocrPayload, sections, elapsed);
                         return;
 
@@ -990,7 +991,14 @@ public partial class WorkspaceViewModel : ObservableObject
             ResultSections.Add(new TextSectionViewModel(section, source));
         }
 
-        HasSections = true;
+        // 只有多段才渲染列表；单张仍显示纯文本，但段数据保留给左侧的识别框
+        HasSections = sections.Count > 1;
+
+        // HasSections 从 false 到 false 时不会触发变更通知（单张场景），
+        // 但 ResultSections 内容已经换了，依赖它的派生属性要手动通知一次
+        OnPropertyChanged(nameof(CurrentSection));
+        OnPropertyChanged(nameof(VisibleSections));
+        OnPropertyChanged(nameof(CanSwitchSectionView));
 
         // 新结果出来时回到「只看当前这张」，用户刚识别完通常要逐张核对
         ShowAllSections = false;
