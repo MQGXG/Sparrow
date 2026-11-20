@@ -1116,7 +1116,10 @@
                                        Height="{Binding Height}"
                                        Stroke="{StaticResource AccentBrush}"
                                        StrokeThickness="2"
-                                       Fill="#28FFB020">
+                                       Fill="#28FFB020"
+                                       Cursor="Hand"
+                                       ToolTip.Tip="点击复制这一行"
+                                       Tapped="OnOcrBoxTapped">
                               <Rectangle.RenderTransform>
                                 <TranslateTransform X="{Binding X}" Y="{Binding Y}" />
                               </Rectangle.RenderTransform>

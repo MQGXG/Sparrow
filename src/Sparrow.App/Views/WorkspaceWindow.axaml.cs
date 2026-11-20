@@ -6,6 +6,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
 using Sparrow.App.Services;
 using Sparrow.App.ViewModels;
+using Sparrow.Plugin.Sdk.Payloads;
 
 namespace Sparrow.App.Views;
 
@@ -664,6 +665,21 @@ public partial class WorkspaceWindow : Window
     {
         if (DataContext is WorkspaceViewModel viewModel)
             viewModel.ShowAllSections = true;
+
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// 点左侧轮播图上的识别框：把这一行的文字复制到剪贴板。
+    /// 吃掉事件，避免继续冒泡触发图片的全屏预览。
+    /// </summary>
+    private void OnOcrBoxTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is Control { DataContext: OcrTextLine line } &&
+            DataContext is WorkspaceViewModel viewModel)
+        {
+            viewModel.CopyText(line.Text);
+        }
 
         e.Handled = true;
     }

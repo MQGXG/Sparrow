@@ -1089,6 +1089,16 @@ public partial class WorkspaceViewModel : ObservableObject
             CurrentImageIndex = section.SourceIndex;
     }
 
+    /// <summary>复制一段纯文字（点识别框复制该行用）。</summary>
+    public void CopyText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return;
+
+        if (_clipboard.SetText(text))
+            _log.Info($"已复制一行：{text.Length} 字");
+    }
+
     /// <summary>复制某一段的识别结果（含译文，如果选了翻译）。</summary>
     public void CopySectionText(TextSectionViewModel section)
     {

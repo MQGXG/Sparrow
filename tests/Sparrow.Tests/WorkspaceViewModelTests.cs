@@ -435,6 +435,20 @@ public sealed class WorkspaceViewModelTests
     }
 
     [Fact]
+    public async Task 点框复制的一行写入剪贴板()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var clipboard = new FakeClipboard();
+        var viewModel = Create(catalog, new FakeHistory(), clipboard: clipboard);
+        await viewModel.ReloadAsync();
+
+        viewModel.CopyText("雀虽小，五脏俱全");
+
+        clipboard.Text.ShouldBe("雀虽小，五脏俱全");
+    }
+
+    [Fact]
     public async Task 拖入多张图片_合并进图片集并切到OCRTool()
     {
         using var root = new TempPluginRoot();
