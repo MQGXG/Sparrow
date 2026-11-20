@@ -64,8 +64,18 @@ public static class FileIconProvider
             return null;
 
         cache[key] = png;
+
+        // 图标缓存不设字节上限，但条数要有：.exe / .lnk 按完整路径存，
+        // 长期运行会只增不减。LumaShot 是 16 条整表清（file_icons.h:18），
+        // 我们的图标小得多，放宽到 256；清掉只是下次重新解码，不影响已显示的。
+        if (perFile && ByPath.Count > MaxPathEntries)
+            ByPath.Clear();
+
         return png;
     }
+
+    /// <summary>按路径缓存的条数上限（只约束 .exe / .lnk 这类每文件图标不同的）。</summary>
+    private const int MaxPathEntries = 256;
 
     private static byte[]? Resolve(string path)
     {

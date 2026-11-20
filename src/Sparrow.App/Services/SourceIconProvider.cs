@@ -46,8 +46,16 @@ public static class SourceIconProvider
         }
 
         Cache[name] = png;
+
+        // 进程名通常只有几十个，但同样给个上限兜底，避免长期运行只增不减
+        if (Cache.Count > MaxCacheEntries)
+            Cache.Clear();
+
         return png;
     }
+
+    /// <summary>进程名缓存条数上限。</summary>
+    private const int MaxCacheEntries = 256;
 
     private static byte[]? Resolve(string processName)
     {

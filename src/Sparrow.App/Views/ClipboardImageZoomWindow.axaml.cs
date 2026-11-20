@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
+using Sparrow.App.Services;
 
 namespace Sparrow.App.Views;
 
@@ -14,6 +15,10 @@ namespace Sparrow.App.Views;
 /// </summary>
 public partial class ClipboardImageZoomWindow : Window
 {
+    /// <summary>灯箱要看原始细节，所以走原尺寸解码；关闭时必须自己释放——
+    /// native 内存不归 GC 管，这是当初工作集涨上去的漏点之一。</summary>
+    private Bitmap? _bitmap;
+
     public ClipboardImageZoomWindow()
     {
         InitializeComponent();
@@ -23,10 +28,20 @@ public partial class ClipboardImageZoomWindow : Window
 
     public ClipboardImageZoomWindow(byte[] png, Window owner) : this()
     {
-        using var stream = new MemoryStream(png);
-        Preview.Source = new Bitmap(stream);
+        _bitmap = ImageCache.DecodeOriginal(png);
+        Preview.Source = _bitmap;
 
         PlaceOnOwnerScreen(owner);
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        base.OnClosed(e);
+
+        // 先断开引用再释放，避免窗口关闭瞬间还在渲染一张已释放的位图
+        Preview.Source = null;
+        _bitmap?.Dispose();
+        _bitmap = null;
     }
 
     /// <summary>铺满详情窗口所在屏幕的工作区（逻辑坐标，按缩放换算）。</summary>

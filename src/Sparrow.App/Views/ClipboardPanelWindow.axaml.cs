@@ -102,6 +102,13 @@ public partial class ClipboardPanelWindow : Window
             history.Query = _savedQuery;
 
         Hide();
+
+        // 记一笔缓存现状：下次再觉得内存高，看日志就行，不用翻代码算解码尺寸
+        var stats = ImageCache.Instance.Stats();
+        App.Log.Info(
+            $"图片缓存：缩略图 {stats.ThumbnailEntries} 张 / {stats.ThumbnailBytes / (1024 * 1024)} MB"
+            + $"，详情 {stats.DetailEntries} 张 / {stats.DetailBytes / (1024 * 1024)} MB"
+            + $"，解码失败 {stats.Failed} 张");
     }
 
     /// <summary>无边框窗口没有系统标题栏，标题行就是拖动区。</summary>

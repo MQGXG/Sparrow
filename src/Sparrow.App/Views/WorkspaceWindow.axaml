@@ -756,7 +756,7 @@
                                            IsVisible="{Binding HasFileIcon}"
                                            Stretch="Uniform"
                                            Margin="4" />
-                                    <Image Source="{Binding Thumbnail, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
+                                    <Image Source="{Binding Thumbnail, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}, ConverterParameter=thumb}"
                                            Stretch="UniformToFill"
                                            IsVisible="{Binding HasThumbnail}" />
                                   </Panel>

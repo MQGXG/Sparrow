@@ -430,7 +430,7 @@
                                         MaxHeight="120"
                                         CornerRadius="6"
                                         ClipToBounds="True">
-                                  <Image Source="{Binding Thumbnail, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
+                                  <Image Source="{Binding Thumbnail, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}, ConverterParameter=thumb}"
                                          MaxHeight="120"
                                          Stretch="Uniform"
                                          HorizontalAlignment="Center" />
