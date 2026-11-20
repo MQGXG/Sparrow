@@ -139,6 +139,22 @@ public sealed class OcrImageToolTests
     }
 
     [Fact]
+    public void 语言参数列出全部内置语言()
+    {
+        var language = new OcrImageTool().Descriptor.Parameters
+            .Single(parameter => parameter.Key == "language");
+
+        // 模型包本来就带 12 类，之前只暴露了 16 个代码，现在补齐
+        language.Choices.Length.ShouldBe(24);
+        language.Choices.ShouldContain("it");
+        language.Choices.ShouldContain("te");
+
+        language.ChoiceLabels.ShouldNotBeNull();
+        language.ChoiceLabels!["it"].ShouldBe("意大利语（it）");
+        language.ChoiceLabels["te"].ShouldBe("泰卢固语（te）");
+    }
+
+    [Fact]
     public void 描述符_声明图片集输入与Ocr能力()
     {
         var descriptor = new OcrImageTool().Descriptor;

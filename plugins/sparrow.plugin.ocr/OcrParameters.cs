@@ -25,7 +25,13 @@ internal static class OcrParameters
         Key = LanguageKey,
         Label = "语言",
         Kind = ParameterKind.Choice,
-        Choices = ["ch", "en", "ja", "ko", "ru", "uk", "ar", "fa", "bg", "sr", "hi", "th", "el", "fr", "de", "es"],
+        Choices = [
+            "ch", "en", "ja", "ko", "ru", "uk", "ar", "fa",
+            "bg", "sr", "hi", "th", "el", "fr", "de", "es",
+            // 下面这些模型早就内置在 Models.LocalV5 里，只是之前没暴露给下拉：
+            // it/pt/nl/pl/tr/vi 和 fr/de/es 共用 LatinV5，te/ta 是独立模型
+            "it", "pt", "nl", "pl", "tr", "vi", "te", "ta"
+        ],
         // 值是 PaddleOCR 的模型代码，直接显示对中文用户没有意义；
         // 值不变，只是界面显示中文名（代码放在括号里方便对照）
         ChoiceLabels = new Dictionary<string, string>
@@ -45,7 +51,15 @@ internal static class OcrParameters
             ["el"] = "希腊语（el）",
             ["fr"] = "法语（fr）",
             ["de"] = "德语（de）",
-            ["es"] = "西班牙语（es）"
+            ["es"] = "西班牙语（es）",
+            ["it"] = "意大利语（it）",
+            ["pt"] = "葡萄牙语（pt）",
+            ["nl"] = "荷兰语（nl）",
+            ["pl"] = "波兰语（pl）",
+            ["tr"] = "土耳其语（tr）",
+            ["vi"] = "越南语（vi）",
+            ["te"] = "泰卢固语（te）",
+            ["ta"] = "泰米尔语（ta）"
         },
         Default = "ch",
         Hint = "ch 包含简体、繁体、拼音、英日；ru 覆盖俄语/乌克兰/白俄"
