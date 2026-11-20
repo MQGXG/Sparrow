@@ -3,6 +3,7 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Shouldly;
 using Sparrow.App;
@@ -247,6 +248,78 @@ public sealed class WorkspaceWindowTests
 
                 viewModel.Clipboard!.Items.ShouldHaveSingleItem()
                     .Preview.ShouldBe("https://example.com");
+            }
+            finally
+            {
+                catalog.Dispose();
+            }
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [AvaloniaFact]
+    public void 剪贴板页_行按钮与右键菜单对齐面板()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"),
+                new NullLog());
+            store.AddText("hello world");
+
+            var (window, viewModel, catalog) = Create(store);
+            try
+            {
+                viewModel.ShowClipboard();
+                Dispatcher.UIThread.RunJobs();
+
+                var page = window.FindControl<Grid>("ClipboardPage")!;
+                var row = page.GetVisualDescendants()
+                    .OfType<Border>()
+                    .First(border => border.Classes.Contains("clip-row"));
+
+                row.ContextMenu.ShouldNotBeNull("工作区的行应挂上共享右键菜单");
+
+                var headers = row.ContextMenu!.Items
+                    .OfType<MenuItem>()
+                    .Select(item => item.Header as string)
+                    .ToList();
+
+                headers.ShouldContain("复制");
+                headers.ShouldContain("复制为纯文本");
+                headers.ShouldContain("复制为");
+                headers.ShouldContain("打开");
+                headers.ShouldContain("打开所在位置");
+                headers.ShouldContain("查看详情");
+                headers.ShouldContain("删除");
+                headers.ShouldNotContain(
+                    "粘贴到刚才的应用",
+                    "工作区窗口本身在前台，没有「刚才的应用」可粘贴");
+
+                var tips = row.GetVisualDescendants()
+                    .OfType<Button>()
+                    .Select(button => button.GetValue(ToolTip.TipProperty)?.ToString())
+                    .ToList();
+
+                tips.ShouldContain("复制", "行内也要能直接复制");
+                tips.ShouldContain("删除（可撤销）", "行内也要能直接删除");
+                tips.ShouldContain(
+                    "加入 / 移出顺序粘贴队列（Ctrl+点击整行也可以）",
+                    "原有的队列按钮不能被挤掉");
             }
             finally
             {

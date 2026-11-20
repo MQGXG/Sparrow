@@ -17,9 +17,25 @@ public partial class WorkspaceWindow : Window
     private bool _clipboardDragStarted;
     private bool _suppressClipboardClick;
 
+    /// <summary>
+    /// 右键菜单：与快速面板共用同一套结构。
+    /// 差异只有两处——复制后不收起窗口、不提供「粘贴到刚才的应用」（本窗就在前台）。
+    /// </summary>
+    private readonly ClipboardEntryMenu _entryMenu;
+
     public WorkspaceWindow()
     {
         InitializeComponent();
+
+        _entryMenu = new ClipboardEntryMenu(
+            () => (DataContext as WorkspaceViewModel)?.Clipboard,
+            showDetail: item =>
+            {
+                if ((DataContext as WorkspaceViewModel)?.Clipboard is { } history)
+                    history.SelectedItem = item;
+                ShowClipboardDetail();
+            },
+            includePaste: false);
 
         // 拖入图片/文本文件是工作区的输入来源之一
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
@@ -269,6 +285,49 @@ public partial class WorkspaceWindow : Window
     }
 
     /// <summary>双击整行 = 查看详情；按钮上的双击不抢。</summary>
+    /// <summary>行挂上共享右键菜单：模板每次实例化都会走到这里。</summary>
+    private void OnClipboardRowLoaded(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control row)
+            ClipboardEntryMenu.Attach(row, _entryMenu);
+
+        e.Handled = true;
+    }
+
+    /// <summary>行内「复制」：写剪贴板，用户自己切窗口粘贴。</summary>
+    private void OnClipboardRowCopyClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: ClipboardEntryViewModel item } &&
+            DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
+        {
+            clipboard.SelectedItem = item;
+            clipboard.Copy(item);
+        }
+
+        e.Handled = true;
+    }
+
+    /// <summary>行内「打开」：链接走浏览器、路径与文件走默认程序、图片转临时文件。</summary>
+    private void OnClipboardRowOpenClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: ClipboardEntryViewModel item })
+            item.Open();
+
+        e.Handled = true;
+    }
+
+    /// <summary>行内「删除」：删掉后留在列表，可撤销。</summary>
+    private void OnClipboardRowDeleteClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: ClipboardEntryViewModel item } &&
+            DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
+        {
+            clipboard.Delete(item);
+        }
+
+        e.Handled = true;
+    }
+
     private void OnClipboardItemDoubleTapped(object? sender, TappedEventArgs e)
     {
         if (IsInsideButton(e.Source))

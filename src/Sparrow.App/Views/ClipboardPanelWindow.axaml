@@ -218,63 +218,12 @@
                                   Classes="clip-row"
                                   Classes.selected="{Binding IsSelected}"
                                   Tag="{Binding}"
+                                  Loaded="OnRowLoaded"
                                   Tapped="OnItemClick"
                                   DoubleTapped="OnItemDoubleTapped"
                                   PointerPressed="OnItemPointerPressed"
                                   PointerMoved="OnItemPointerMoved"
                                   PointerReleased="OnItemPointerReleased">
-                            <Border.ContextMenu>
-                              <!-- 与悬停工具条能力对齐；打开 / 定位 / 队列文案在 Opened 里按条目刷新 -->
-                              <ContextMenu Opened="OnMenuOpened">
-                                <MenuItem Header="复制"
-                                          Click="OnMenuCopy" />
-                                <MenuItem Header="粘贴到刚才的应用"
-                                          Click="OnMenuPaste" />
-                                <MenuItem Tag="cmd:copy-plain"
-                                          Header="复制为纯文本"
-                                          Click="OnMenuCopyPlain" />
-                                <MenuItem Tag="cmd:transforms"
-                                          Header="复制为">
-                                  <MenuItem Header="全部大写"
-                                            Tag="Upper"
-                                            Click="OnMenuTransform" />
-                                  <MenuItem Header="全部小写"
-                                            Tag="Lower"
-                                            Click="OnMenuTransform" />
-                                  <MenuItem Header="每词首字母大写"
-                                            Tag="Capitalize"
-                                            Click="OnMenuTransform" />
-                                  <MenuItem Header="句首大写"
-                                            Tag="Sentence"
-                                            Click="OnMenuTransform" />
-                                  <MenuItem Header="驼峰命名"
-                                            Tag="Camel"
-                                            Click="OnMenuTransform" />
-                                  <MenuItem Header="去掉首尾空白"
-                                            Tag="Trim"
-                                            Click="OnMenuTransform" />
-                                </MenuItem>
-                                <Separator />
-                                <MenuItem Tag="cmd:open"
-                                          Header="打开"
-                                          Click="OnMenuOpen" />
-                                <MenuItem Tag="cmd:reveal"
-                                          Header="打开所在位置"
-                                          Click="OnMenuReveal" />
-                                <Separator />
-                                <MenuItem Tag="cmd:queue"
-                                          Header="加入顺序粘贴队列"
-                                          Click="OnMenuQueueToggle" />
-                                <MenuItem Tag="cmd:favorite"
-                                          Header="收藏"
-                                          Click="OnMenuFavorite" />
-                                <Separator />
-                                <MenuItem Header="查看详情"
-                                          Click="OnMenuDetail" />
-                                <MenuItem Header="删除"
-                                          Click="OnMenuDelete" />
-                              </ContextMenu>
-                            </Border.ContextMenu>
                             <Border.Styles>
                               <Style Selector="Border.clip-row:pointerover">
                                 <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />

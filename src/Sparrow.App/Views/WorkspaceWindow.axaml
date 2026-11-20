@@ -656,6 +656,7 @@
                                     Classes="clip-row"
                                     Classes.selected="{Binding IsSelected}"
                                     Tag="{Binding}"
+                                    Loaded="OnClipboardRowLoaded"
                                     Tapped="OnClipboardItemClick"
                                     DoubleTapped="OnClipboardItemDoubleTapped"
                                     PointerPressed="OnClipboardItemPointerPressed"
@@ -688,7 +689,7 @@
                                   <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
                                 </Style>
                               </Border.Styles>
-                              <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="10">
+                              <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="10">
                                 <!-- 选中标记：左侧 2px 琥珀竖条 -->
                                 <Border Width="2"
                                         Height="24"
@@ -760,6 +761,33 @@
                                         Width="26"
                                         Height="26"
                                         Padding="0"
+                                        ToolTip.Tip="复制"
+                                        AutomationProperties.Name="复制"
+                                        Tag="{Binding}"
+                                        Click="OnClipboardRowCopyClick">
+                                  <Path Classes="icon icon-xs"
+                                        Data="{StaticResource IconCopy}" />
+                                </Button>
+
+                                <Button Grid.Column="5"
+                                        Classes="ghost small row-action"
+                                        Width="26"
+                                        Height="26"
+                                        Padding="0"
+                                        IsVisible="{Binding CanOpen}"
+                                        ToolTip.Tip="用默认程序打开"
+                                        AutomationProperties.Name="打开"
+                                        Tag="{Binding}"
+                                        Click="OnClipboardRowOpenClick">
+                                  <Path Classes="icon icon-xs"
+                                        Data="{StaticResource IconOpen}" />
+                                </Button>
+
+                                <Button Grid.Column="6"
+                                        Classes="ghost small row-action"
+                                        Width="26"
+                                        Height="26"
+                                        Padding="0"
                                         ToolTip.Tip="加入 / 移出顺序粘贴队列（Ctrl+点击整行也可以）"
                                         AutomationProperties.Name="顺序粘贴队列"
                                         Tag="{Binding}"
@@ -772,7 +800,7 @@
                                              VerticalAlignment="Center" />
                                 </Button>
 
-                                <Button Grid.Column="5"
+                                <Button Grid.Column="7"
                                         Classes="ghost small row-action"
                                         Width="26"
                                         Height="26"
@@ -784,6 +812,19 @@
                                   <Path Classes="icon icon-xs star"
                                         Classes.favorite="{Binding IsFavorite}"
                                         Data="{StaticResource IconStar}" />
+                                </Button>
+
+                                <Button Grid.Column="8"
+                                        Classes="ghost small row-action"
+                                        Width="26"
+                                        Height="26"
+                                        Padding="0"
+                                        ToolTip.Tip="删除（可撤销）"
+                                        AutomationProperties.Name="删除"
+                                        Tag="{Binding}"
+                                        Click="OnClipboardRowDeleteClick">
+                                  <Path Classes="icon icon-xs"
+                                        Data="{StaticResource IconTrash}" />
                                 </Button>
                               </Grid>
                             </Border>
