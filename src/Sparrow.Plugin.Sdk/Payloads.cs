@@ -30,14 +30,51 @@ public sealed record OcrTextLine(
     double Width,
     double Height);
 
+/// <summary>一段结果的状态。</summary>
+public enum TextSectionStatus
+{
+    /// <summary>识别成功。</summary>
+    Ok,
+
+    /// <summary>识别成功但没拿到文字。</summary>
+    Empty,
+
+    /// <summary>识别失败（解码错误 / worker 异常）。</summary>
+    Failed
+}
+
+/// <summary>
+/// 结构化结果里的一段（多图识别时每张图一段）。
+///
+/// 宿主按段渲染：只有一段时当纯文本，多段时渲染成可展开的列表。
+/// <see cref="Lines"/> 是可选的行框，宿主拿它在原图上叠识别框。
+/// </summary>
+public sealed record TextSection
+{
+    /// <summary>标题，通常是「1. 文件名（1200×800）」。</summary>
+    public required string Title { get; init; }
+
+    /// <summary>正文；失败时为空。</summary>
+    public string Text { get; init; } = string.Empty;
+
+    public TextSectionStatus Status { get; init; } = TextSectionStatus.Ok;
+
+    /// <summary>这段文字在源图片里的行框；没有就为 null。</summary>
+    public IReadOnlyList<OcrTextLine>? Lines { get; init; }
+}
+
 /// <summary>
 /// OCR 结果：完整文本 + 行框。
 ///
 /// 只关心文本的调用方读 <see cref="Text"/> 即可；
-/// 需要「就地识别」的宿主再读 <see cref="Lines"/> 画框。
+/// 需要「就地识别」的宿主再读 <see cref="Lines"/> 画框；
+/// <see cref="Sections"/> 是多图识别的结构化版本（每张图一段，带状态和行框）。
 /// 第三方 OCR 插件仍可返回 <see cref="TextPayload"/>，宿主会回退到面板展示。
 /// </summary>
-public sealed record OcrResultPayload(string Text, IReadOnlyList<OcrTextLine> Lines) : IToolPayload
+public sealed record OcrResultPayload(
+    string Text,
+    IReadOnlyList<OcrTextLine> Lines,
+    IReadOnlyList<TextSection>? Sections = null) : IToolPayload
 {
     public static OcrResultPayload Empty { get; } = new(string.Empty, Array.Empty<OcrTextLine>());
 }

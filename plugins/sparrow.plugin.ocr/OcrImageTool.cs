@@ -67,7 +67,7 @@ public sealed class OcrImageTool : ITool
         var layout = OcrParameters.ResolveLayout(context);
         var translateTo = context.GetParameter(OcrParameters.TranslateKey, OcrParameters.TranslateNone);
 
-        var sections = new List<(string Name, string Text)>();
+        var sections = new List<TextSection>();
         var lines = new List<OcrTextLine>();
 
         try
@@ -87,7 +87,11 @@ public sealed class OcrImageTool : ITool
 
                 if (image.ByteSize == 0)
                 {
-                    sections.Add((name, string.Empty));
+                    sections.Add(new TextSection
+                    {
+                        Title = FormatTitle(image, index),
+                        Status = TextSectionStatus.Failed
+                    });
                     continue;
                 }
 
@@ -99,7 +103,11 @@ public sealed class OcrImageTool : ITool
                     if (error is not null)
                     {
                         context.Host.Logger.LogWarning("OCR：{Name} 失败：{Error}", name, error);
-                        sections.Add((name, string.Empty));
+                        sections.Add(new TextSection
+                        {
+                            Title = FormatTitle(image, index),
+                            Status = TextSectionStatus.Failed
+                        });
                         continue;
                     }
 
@@ -108,7 +116,13 @@ public sealed class OcrImageTool : ITool
                     // 多图时标题带序号和尺寸，「这段字是哪张图」一眼能对上；
                     // 选了翻译就把原文和译文对照着放进同一段
                     var sectionText = await MaybeTranslateAsync(context, payload.Text, translateTo, cancellationToken);
-                    sections.Add((FormatTitle(image, index), sectionText));
+                    sections.Add(new TextSection
+                    {
+                        Title = FormatTitle(image, index),
+                        Text = sectionText,
+                        Status = TextSectionStatus.Ok,
+                        Lines = payload.Lines
+                    });
 
                     // 行框只对单张有意义：截图叠加层用它做「点行复制」
                     if (set.Images.Count == 1)
@@ -118,7 +132,11 @@ public sealed class OcrImageTool : ITool
                 {
                     // 单张失败不能让整批停下
                     context.Host.Logger.LogWarning("OCR：{Name} 失败：{Error}", name, ex.Message);
-                    sections.Add((name, string.Empty));
+                    sections.Add(new TextSection
+                    {
+                        Title = FormatTitle(image, index),
+                        Status = TextSectionStatus.Failed
+                    });
                 }
             }
         }
@@ -133,7 +151,8 @@ public sealed class OcrImageTool : ITool
             return ToolResult.Failed("OCR 执行失败", ex.Message);
         }
 
-        var recognized = sections.Count(section => !string.IsNullOrWhiteSpace(section.Text));
+        var recognized = sections.Count(section =>
+            section.Status == TextSectionStatus.Ok && !string.IsNullOrWhiteSpace(section.Text));
         if (recognized == 0)
             return ToolResult.Failed("没有识别到文字", "图片无法解码、没有文字或 worker 异常");
 
@@ -144,32 +163,32 @@ public sealed class OcrImageTool : ITool
             ? sections[0].Text.Trim()
             : ComposeBatchText(sections);
 
-        return ToolResult.Ok(new OcrResultPayload(text, lines));
+        return ToolResult.Ok(new OcrResultPayload(text, lines, sections));
     }
 
     /// <summary>
     /// 多张图拼成一份可读文本：识别成功的按文件分节，失败的集中在末尾说明。
     /// 纯函数，便于单测。
     /// </summary>
-    public static string ComposeBatchText(IReadOnlyList<(string Name, string Text)> sections)
+    public static string ComposeBatchText(IReadOnlyList<TextSection> sections)
     {
         var builder = new StringBuilder();
         var failed = new List<string>();
 
-        foreach (var (name, text) in sections)
+        foreach (var section in sections)
         {
-            if (string.IsNullOrWhiteSpace(text))
+            if (section.Status != TextSectionStatus.Ok || string.IsNullOrWhiteSpace(section.Text))
             {
-                failed.Add(name);
+                failed.Add(section.Title);
                 continue;
             }
 
             if (builder.Length > 0)
                 builder.AppendLine();
 
-            builder.Append("## ").AppendLine(name);
+            builder.Append("## ").AppendLine(section.Title);
             builder.AppendLine();
-            builder.AppendLine(text.TrimEnd());
+            builder.AppendLine(section.Text.TrimEnd());
         }
 
         if (failed.Count > 0)
@@ -179,8 +198,8 @@ public sealed class OcrImageTool : ITool
 
             builder.AppendLine("---");
             builder.Append("未识别：").Append(failed.Count).AppendLine(" 个文件");
-            foreach (var name in failed)
-                builder.Append("- ").AppendLine(name);
+            foreach (var title in failed)
+                builder.Append("- ").AppendLine(title);
         }
 
         return builder.ToString().TrimEnd();

@@ -303,7 +303,7 @@ public sealed class OcrImageToolTests
         var text = result.Payload.ShouldBeOfType<OcrResultPayload>().Text;
         text.ShouldContain("第二张");
         text.ShouldContain("未识别：1 个文件");
-        text.ShouldContain("- a.png");
+        text.ShouldContain("- 1. a.png");
     }
 
     [Fact]
@@ -327,7 +327,11 @@ public sealed class OcrImageToolTests
     public void 多图拼接_关闭失败项只留正文()
     {
         var text = OcrImageTool.ComposeBatchText(
-            [("a.png", "一"), ("b.png", ""), ("c.png", "三")]);
+        [
+            new TextSection { Title = "a.png", Text = "一" },
+            new TextSection { Title = "b.png", Status = TextSectionStatus.Failed },
+            new TextSection { Title = "c.png", Text = "三" }
+        ]);
 
         text.ShouldContain("## a.png");
         text.ShouldContain("## c.png");

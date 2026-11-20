@@ -378,6 +378,14 @@ public partial class WorkspaceViewModel : ObservableObject
     [ObservableProperty]
     private string? _resultText;
 
+    /// <summary>
+    /// 多图识别的分段结果。只有一段时不渲染列表——单张图套个列表反而比纯文本难读。
+    /// </summary>
+    public ObservableCollection<TextSectionViewModel> ResultSections { get; } = [];
+
+    [ObservableProperty]
+    private bool _hasSections;
+
     /// <summary>SVG 源码；非空表示当前结果需要预览/源码双视图。</summary>
     [ObservableProperty]
     private string? _svgSource;
@@ -399,7 +407,7 @@ public partial class WorkspaceViewModel : ObservableObject
 
     public bool IsSvgSourceVisible => HasSvgResult && ShowSvgSource;
 
-    public bool IsTextResultVisible => !HasSvgResult && !HasImageResult;
+    public bool IsTextResultVisible => !HasSvgResult && !HasImageResult && !HasSections;
 
     /// <summary>图片结果（缩放 / 格式转换）；非空时结果区显示位图预览。</summary>
     [ObservableProperty]
@@ -426,6 +434,8 @@ public partial class WorkspaceViewModel : ObservableObject
     }
 
     partial void OnHasImageResultChanged(bool value) => OnPropertyChanged(nameof(IsTextResultVisible));
+
+    partial void OnHasSectionsChanged(bool value) => OnPropertyChanged(nameof(IsTextResultVisible));
 
     /// <summary>图片结果的规格摘要，用作历史记录与复制提示。</summary>
     public static string SummarizeImage(ImagePayload payload) =>
@@ -789,6 +799,11 @@ public partial class WorkspaceViewModel : ObservableObject
                         await ShowSvgResultAsync(entry, context, svgPayload, elapsed);
                         return;
 
+                    case OcrResultPayload ocrPayload when ocrPayload.Sections is { Count: > 1 } sections:
+                        // 多图识别：渲染成分段列表，每段能对上是哪张图
+                        ShowSectionResult(entry, context, ocrPayload, sections, elapsed);
+                        return;
+
                     case TextPayload or OcrResultPayload:
                         var text = result.Payload switch
                         {
@@ -845,12 +860,45 @@ public partial class WorkspaceViewModel : ObservableObject
         HasImageResult = false;
         ImageResultPng = null;
 
+        // 单段结果或普通文本：清掉上一次的分段列表，避免列表残留
+        ResultSections.Clear();
+        HasSections = false;
+
         ResultText = text;
         HasResult = true;
         HasError = false;
         ErrorText = null;
 
         AddHistory(entry, context, text, elapsed);
+    }
+
+    /// <summary>
+    /// 多图识别的分段结果。列表负责「哪张图 / 哪段文字 / 哪张失败」，
+    /// 纯文本仍留在 <see cref="ResultText"/> 里——复制全部和历史用的就是它。
+    /// </summary>
+    private void ShowSectionResult(
+        ToolEntry entry,
+        ToolContext context,
+        OcrResultPayload payload,
+        IReadOnlyList<TextSection> sections,
+        long elapsed)
+    {
+        ClearSvgResult();
+        HasImageResult = false;
+        ImageResultPng = null;
+
+        ResultSections.Clear();
+        foreach (var section in sections)
+            ResultSections.Add(new TextSectionViewModel(section));
+
+        HasSections = true;
+
+        ResultText = payload.Text;
+        HasResult = true;
+        HasError = false;
+        ErrorText = null;
+
+        AddHistory(entry, context, payload.Text, elapsed);
     }
 
     /// <summary>
@@ -1360,6 +1408,9 @@ public partial class WorkspaceViewModel : ObservableObject
         ErrorText = null;
         HasResult = false;
         HasError = false;
+
+        ResultSections.Clear();
+        HasSections = false;
     }
 
     private void ClearSvgResult()

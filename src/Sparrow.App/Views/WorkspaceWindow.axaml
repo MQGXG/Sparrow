@@ -1267,6 +1267,44 @@
                   </Grid>
                 </Border>
 
+                <!-- 多图识别：分段列表，每段能对上是哪张图 -->
+                <ScrollViewer Grid.Row="2" IsVisible="{Binding HasSections}">
+                  <ItemsControl ItemsSource="{Binding ResultSections}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:TextSectionViewModel">
+                        <Border Margin="0,0,0,8"
+                                Padding="12,10"
+                                CornerRadius="8"
+                                Background="{StaticResource SurfaceRaisedBrush}"
+                                BorderBrush="{StaticResource LineBrush}"
+                                BorderThickness="1">
+                          <StackPanel Spacing="6">
+                            <TextBlock Text="{Binding Title}"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" />
+
+                            <!-- 成功：可选中的正文 -->
+                            <SelectableTextBlock Text="{Binding Text}"
+                                                 IsVisible="{Binding !IsFailed}"
+                                                 FontSize="12"
+                                                 LineHeight="18"
+                                                 TextWrapping="Wrap"
+                                                 Foreground="{StaticResource TextSecondaryBrush}" />
+
+                            <!-- 失败：给一句可读的原因，而不是空白 -->
+                            <TextBlock Text="{Binding Body}"
+                                       IsVisible="{Binding IsFailed}"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Foreground="{StaticResource DangerBrush}" />
+                          </StackPanel>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+
                 <!-- 文本 / OCR 结果 -->
                 <ScrollViewer Grid.Row="2" IsVisible="{Binding IsTextResultVisible}">
                   <SelectableTextBlock Text="{Binding ResultText}"
