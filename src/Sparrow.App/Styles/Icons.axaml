@@ -34,6 +34,8 @@
   <StreamGeometry x:Key="IconUndo">M8 5.5 4 9.5l4 4 M4.5 9.5h9.5a5.5 5.5 0 0 1 0 11h-3</StreamGeometry>
   <StreamGeometry x:Key="IconPlus">M12 5.5v13 M5.5 12h13</StreamGeometry>
   <StreamGeometry x:Key="IconCheck">M5 12.5 10 17.5 19 7</StreamGeometry>
+  <!-- 图钉：钉帽 + 钉身，用于把快速面板置顶 -->
+  <StreamGeometry x:Key="IconPin">M12 17.5V22 M9 10.5V5.5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v5a3 3 0 0 0 .8 2l1 1a1 1 0 0 1-.7 1.7H7.9a1 1 0 0 1-.7-1.7l1-1a3 3 0 0 0 .8-2z</StreamGeometry>
 
   <!-- ============ 类型标识（与工具墙的取景框语言一致，只画轮廓） ============ -->
   <StreamGeometry x:Key="IconLink">M10.5 13.5a4.5 4.5 0 0 0 6.36 0l3-3a4.5 4.5 0 0 0-6.36-6.36l-1.5 1.5 M13.5 10.5a4.5 4.5 0 0 0-6.36 0l-3 3a4.5 4.5 0 0 0 6.36 6.36l1.5-1.5</StreamGeometry>

@@ -19,6 +19,16 @@
         TransparencyLevelHint="Transparent"
         WindowStartupLocation="CenterScreen">
 
+  <Window.Styles>
+    <!-- 标题行的两个开关态：置顶 / 搜索展开时图标转琥珀 -->
+    <Style Selector="Path.icon.pinned">
+      <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="Path.icon.active">
+      <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+    </Style>
+  </Window.Styles>
+
   <!-- 无边框 + 自绘圆角：Windows 10 没有 DWM 圆角属性，只能这样画 -->
   <Border x:Name="Shell"
           Background="{StaticResource WindowBgGradientBrush}"
@@ -34,10 +44,13 @@
 
       <Grid RowDefinitions="Auto,*">
 
-        <!-- 无边框窗口的拖动区与关闭入口 -->
+        <!-- 无边框窗口的拖动区与关闭入口。
+             Background 必须给：没有背景的 Grid 不参与命中测试，事件会穿透到底下的 Shell -->
         <Grid Grid.Row="0"
               ColumnDefinitions="Auto,*,Auto"
-              Margin="14,9,10,0"
+              Height="26"
+              Margin="14,6,10,0"
+              Background="Transparent"
               PointerPressed="OnTitleBarPointerPressed">
           <StackPanel Grid.Column="0"
                       Orientation="Horizontal"
@@ -52,17 +65,45 @@
                        VerticalAlignment="Center" />
           </StackPanel>
 
-          <Button Grid.Column="2"
-                  Classes="ghost"
-                  Width="24"
-                  Height="20"
-                  Padding="0"
-                  ToolTip.Tip="收起面板（Esc）"
-                  AutomationProperties.Name="关闭"
-                  Click="OnTitleCloseClick">
-            <Path Classes="icon icon-xs"
-                  Data="{StaticResource IconClose}" />
-          </Button>
+          <StackPanel Grid.Column="2"
+                      Orientation="Horizontal"
+                      Spacing="2"
+                      VerticalAlignment="Center">
+            <Button x:Name="SearchToggle"
+                    Classes="ghost"
+                    Width="24"
+                    Height="20"
+                    Padding="0"
+                    ToolTip.Tip="搜索"
+                    AutomationProperties.Name="搜索"
+                    Click="OnTitleSearchClick">
+              <Path x:Name="SearchToggleIcon"
+                    Classes="icon icon-xs"
+                    Data="{StaticResource IconSearch}" />
+            </Button>
+            <Button x:Name="PinButton"
+                    Classes="ghost"
+                    Width="24"
+                    Height="20"
+                    Padding="0"
+                    ToolTip.Tip="把面板置顶（不被其他窗口盖住）"
+                    AutomationProperties.Name="置顶"
+                    Click="OnTitlePinClick">
+              <Path x:Name="PinIcon"
+                    Classes="icon icon-xs"
+                    Data="{StaticResource IconPin}" />
+            </Button>
+            <Button Classes="ghost"
+                    Width="24"
+                    Height="20"
+                    Padding="0"
+                    ToolTip.Tip="收起面板（Esc）"
+                    AutomationProperties.Name="关闭"
+                    Click="OnTitleCloseClick">
+              <Path Classes="icon icon-xs"
+                    Data="{StaticResource IconClose}" />
+            </Button>
+          </StackPanel>
         </Grid>
 
         <Grid Grid.Row="1"
@@ -70,7 +111,11 @@
               RowSpacing="8"
               Margin="14,10,14,10">
 
-      <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto">
+      <!-- 搜索行默认收起，点标题行的 🔍 才展开 -->
+      <Grid x:Name="SearchRow"
+            Grid.Row="0"
+            ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto"
+            IsVisible="False">
         <TextBox x:Name="SearchBox"
                  Text="{Binding Query, Mode=TwoWay}"
                  PlaceholderText="搜索内容、标签、来源…">

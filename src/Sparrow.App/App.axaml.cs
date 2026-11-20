@@ -34,6 +34,8 @@ public partial class App : Application
     private WorkspaceWindow? _workspace;
     private WorkspaceViewModel? _workspaceViewModel;
     private ClipboardPanelWindow? _clipboardPanel;
+    private SettingsStore? _settingsStore;
+    private AppSettings _appSettings = new();
     private ToolParameterStore? _parameterStore;
     private IHistoryStore? _history;
     private WindowOverlay? _windowOverlay;
@@ -78,6 +80,10 @@ public partial class App : Application
         var settingsStore = new SettingsStore(settingsPath, log);
         var isFirstRun = !File.Exists(settingsPath);
         var settings = settingsStore.Load();
+
+        // 面板的置顶状态要写回同一份 settings
+        _settingsStore = settingsStore;
+        _appSettings = settings;
 
         // 工具热键：settings.json 的 toolHotkeys（工具 ID → 热键），格式错误只会跳过该条
         var toolHotkeyPlans = ToolHotkeyPlanner.Build(settings.ToolHotkeys, log);
@@ -343,7 +349,12 @@ public partial class App : Application
             return;
         }
 
-        _clipboardPanel ??= new ClipboardPanelWindow { DataContext = clipboard };
+        _clipboardPanel ??= new ClipboardPanelWindow
+        {
+            DataContext = clipboard,
+            SettingsStore = _settingsStore,
+            Settings = _appSettings,
+        };
 
         clipboard.Refresh();
         _clipboardPanel.Show();

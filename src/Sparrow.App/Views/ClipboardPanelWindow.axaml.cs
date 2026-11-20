@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using Sparrow.App.Services;
+using Sparrow.App.Settings;
 using Sparrow.App.ViewModels;
 
 namespace Sparrow.App.Views;
@@ -32,6 +33,14 @@ public partial class ClipboardPanelWindow : Window
     /// <summary>拖动结束后要吃掉那一次 Tapped，避免顺带改变选中或复制。</summary>
     private bool _suppressClick;
 
+    /// <summary>搜索行是否展开：默认收起，点标题行的 🔍 才占这一行。</summary>
+    private bool _isSearchOpen;
+
+    /// <summary>置顶状态的持久化；不给就只在会话内生效。</summary>
+    internal SettingsStore? SettingsStore { get; set; }
+
+    internal AppSettings Settings { get; set; } = new();
+
     /// <summary>右键菜单：与工作区页共用同一套结构，差异只有复制后是否收起。</summary>
     private readonly ClipboardEntryMenu _entryMenu;
 
@@ -59,16 +68,28 @@ public partial class ClipboardPanelWindow : Window
     {
         base.OnOpened(e);
         WindowChrome.TryApplyDarkTitleBar(this);
+
+        // 恢复上次的置顶状态
+        if (Settings.ClipboardPanelTopmost)
+        {
+            Topmost = true;
+            PinIcon.Classes.Add("pinned");
+        }
     }
 
-    /// <summary>每次呼出都从干净状态开始：收起详情、清空搜索、光标落到搜索框。</summary>
+    /// <summary>每次呼出都从干净状态开始：收起详情、清空搜索；搜索行按上次状态展开。</summary>
     public void PrepareForShow()
     {
         HideDetail(focusSearch: false);
         _savedQuery = History?.Query ?? string.Empty;
         SearchBox.Text = string.Empty;
-        SearchBox.Focus();
-        SearchBox.SelectAll();
+
+        // 搜索行收起时不能 Focus，否则焦点落在不可见控件上，键盘没反应
+        if (_isSearchOpen)
+        {
+            SearchBox.Focus();
+            SearchBox.SelectAll();
+        }
     }
 
     /// <summary>收起面板；顺手收起覆盖层，避免下次呼出还停在上一条详情。</summary>
@@ -86,9 +107,63 @@ public partial class ClipboardPanelWindow : Window
     /// <summary>无边框窗口没有系统标题栏，标题行就是拖动区。</summary>
     private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        // 标题行上的按钮会自己处理按下，冒泡到这里就只剩空白区
+        // 关闭按钮按下时不要顺带把窗口拖走
+        if (e.Source is Visual source
+            && (source is Button || source.FindAncestorOfType<Button>() is not null))
+        {
+            return;
+        }
+
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             BeginMoveDrag(e);
+    }
+
+    /// <summary>标题行的搜索开关：默认收起，省出一行给列表。</summary>
+    private void OnTitleSearchClick(object? sender, RoutedEventArgs e)
+    {
+        SetSearchOpen(!_isSearchOpen);
+        e.Handled = true;
+    }
+
+    private void SetSearchOpen(bool open)
+    {
+        _isSearchOpen = open;
+        SearchRow.IsVisible = open;
+        ToggleClass(SearchToggleIcon, "active", open);
+
+        if (open)
+        {
+            SearchBox.Focus();
+            SearchBox.SelectAll();
+            return;
+        }
+
+        // 收起时把搜索词还给工作区页，和收起面板同一条规则
+        if (History is { } history && history.Query != _savedQuery)
+            history.Query = _savedQuery;
+    }
+
+    /// <summary>标题行的图钉：切换面板是否常驻最前。</summary>
+    private void OnTitlePinClick(object? sender, RoutedEventArgs e)
+    {
+        Topmost = !Topmost;
+        ToggleClass(PinIcon, "pinned", Topmost);
+
+        Settings = Settings with { ClipboardPanelTopmost = Topmost };
+        SettingsStore?.Save(Settings);
+
+        e.Handled = true;
+    }
+
+    private static void ToggleClass(AvaloniaObject element, string name, bool on)
+    {
+        if (element is not StyledElement styled)
+            return;
+
+        if (on)
+            styled.Classes.Add(name);
+        else
+            styled.Classes.Remove(name);
     }
 
     /// <summary>标题行的关闭按钮：与 Esc 同一条路径，顺带把搜索词还回去。</summary>
@@ -111,6 +186,11 @@ public partial class ClipboardPanelWindow : Window
         {
             if (DetailLayer.IsVisible)
                 HideDetail();
+            else if (_isSearchOpen)
+            {
+                // 先收搜索行并把列表还原，再按一次才关面板
+                SetSearchOpen(false);
+            }
             else
                 HidePanel();
 

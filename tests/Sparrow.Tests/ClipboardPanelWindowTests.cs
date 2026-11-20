@@ -480,6 +480,111 @@ public sealed class ClipboardPanelWindowTests
     }
 
     [AvaloniaFact]
+    public void 搜索行默认收起_点标题行搜索才展开()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"),
+                new NullLog());
+            store.AddText("hello world");
+
+            var viewModel = new ClipboardHistoryViewModel(store, new FakeClipboard());
+            var window = new ClipboardPanelWindow { DataContext = viewModel };
+            window.Show();
+            window.PrepareForShow();
+            Dispatcher.UIThread.RunJobs();
+
+            var searchRow = window.FindControl<Grid>("SearchRow");
+            searchRow.ShouldNotBeNull("搜索行要有名字，测试和焦点逻辑都靠它");
+            searchRow.IsVisible.ShouldBeFalse("默认收起，这一行留给列表");
+
+            var toggle = window.FindControl<Button>("SearchToggle");
+            toggle.ShouldNotBeNull("标题行要有搜索开关");
+
+            toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            searchRow.IsVisible.ShouldBeTrue("点一次展开");
+
+            toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            searchRow.IsVisible.ShouldBeFalse("再点收起");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [AvaloniaFact]
+    public void 图钉切换面板置顶并写回设置()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var settingsPath = System.IO.Path.Combine(directory, "settings.json");
+            var settingsStore = new Sparrow.App.Settings.SettingsStore(settingsPath, new NullLog());
+
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"),
+                new NullLog());
+            store.AddText("hello");
+
+            var viewModel = new ClipboardHistoryViewModel(store, new FakeClipboard());
+            var window = new ClipboardPanelWindow
+            {
+                DataContext = viewModel,
+                SettingsStore = settingsStore,
+                Settings = settingsStore.Load(),
+            };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            window.Topmost.ShouldBeFalse("默认不置顶");
+
+            var pin = window.FindControl<Button>("PinButton");
+            pin.ShouldNotBeNull("标题行要有图钉");
+
+            pin.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+
+            window.Topmost.ShouldBeTrue("点一下置顶");
+            settingsStore.Load().ClipboardPanelTopmost.ShouldBeTrue("置顶要写回 settings.json");
+
+            pin.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+
+            window.Topmost.ShouldBeFalse("再点取消");
+            settingsStore.Load().ClipboardPanelTopmost.ShouldBeFalse();
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [AvaloniaFact]
     public void 类型chip_空分类隐藏_选中项始终显示()
     {
         var directory = System.IO.Path.Combine(
