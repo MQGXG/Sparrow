@@ -19,6 +19,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
     private readonly StartupService _startup;
     private readonly AiClient? _ai;
     private readonly AiSecretStore? _secrets;
+    private readonly ILocalModels? _localModels;
     private AppSettings _settings;
 
     public SettingsViewModel(
@@ -27,7 +28,8 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         StartupService startup,
         AppSettings settings,
         AiClient? ai = null,
-        AiSecretStore? secrets = null)
+        AiSecretStore? secrets = null,
+        ILocalModels? localModels = null)
     {
         _catalog = catalog;
         _store = store;
@@ -35,6 +37,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _settings = settings;
         _ai = ai;
         _secrets = secrets;
+        _localModels = localModels;
 
         _searchHotkey = settings.SearchHotkey;
         _captureHotkey = settings.CaptureHotkey;
@@ -53,6 +56,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _aiTemperature = settings.AiTemperature;
         _aiMaxTokens = settings.AiMaxTokens;
 
+        ReloadLocalModels();
         Reload();
     }
 
@@ -108,6 +112,30 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
     }
 
     public ObservableCollection<PluginItemViewModel> Plugins { get; } = [];
+
+    /// <summary>离线模型清单；宿主没注入时为空（测试或精简宿主）。</summary>
+    public ObservableCollection<LocalModelItemViewModel> LocalModels { get; } = [];
+
+    public bool HasLocalModels => LocalModels.Count > 0;
+
+    /// <summary>设置页「模型」分段的离线模型列表。</summary>
+    private void ReloadLocalModels()
+    {
+        LocalModels.Clear();
+
+        if (_localModels is null)
+            return;
+
+        foreach (var info in _localModels.All)
+        {
+            LocalModels.Add(new LocalModelItemViewModel(
+                info,
+                _localModels,
+                message => StatusMessage = message));
+        }
+
+        OnPropertyChanged(nameof(HasLocalModels));
+    }
 
     /// <summary>工具热键编辑行：工具全集 + 已配置的热键。空文本 = 不绑定。</summary>
     public ObservableCollection<ToolHotkeyRowViewModel> ToolHotkeys { get; } = [];

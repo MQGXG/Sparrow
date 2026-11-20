@@ -139,6 +139,125 @@
           </StackPanel>
         </Border>
 
+        <!-- ============ 离线模型 ============ -->
+        <Border Classes="panel" Padding="0" IsVisible="{Binding IsModelSelected}">
+          <StackPanel>
+            <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,14">
+              <Border Classes="hud-icon">
+                <Path Data="{StaticResource IconStorage}" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="3" Margin="12,0,12,0" VerticalAlignment="Center">
+                <TextBlock Text="离线模型"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="下载后无需 API Key、不需要联网；只在工具使用时加载"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}"
+                           TextWrapping="Wrap" />
+              </StackPanel>
+              <TextBlock Grid.Column="2"
+                         Classes="num"
+                         Text="// LOCAL"
+                         VerticalAlignment="Center" />
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <ItemsControl ItemsSource="{Binding LocalModels}"
+                          Margin="20,12,20,0"
+                          IsVisible="{Binding HasLocalModels}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:LocalModelItemViewModel">
+                  <Border Background="{StaticResource SurfaceRaisedBrush}"
+                          CornerRadius="2"
+                          Padding="14,12"
+                          Margin="0,0,0,8">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <StackPanel Spacing="5">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                          <TextBlock Text="{Binding Name}"
+                                     FontSize="13"
+                                     FontWeight="SemiBold"
+                                     Foreground="{StaticResource TextPrimaryBrush}"
+                                     VerticalAlignment="Center" />
+                          <Border Background="{StaticResource AccentSoftBrush}"
+                                  BorderBrush="{StaticResource AccentBorderBrush}"
+                                  BorderThickness="1"
+                                  CornerRadius="2"
+                                  Padding="6,1"
+                                  IsVisible="{Binding IsInstalled}"
+                                  VerticalAlignment="Center">
+                            <TextBlock Text="已下载"
+                                       FontSize="10"
+                                       Foreground="{StaticResource AccentBrush}" />
+                          </Border>
+                        </StackPanel>
+
+                        <TextBlock Text="{Binding Description}"
+                                   FontSize="11"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   TextWrapping="Wrap" />
+
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <TextBlock Text="{Binding SizeText}"
+                                     FontSize="11"
+                                     Foreground="{StaticResource TextMutedBrush}" />
+                          <TextBlock Text="·"
+                                     FontSize="11"
+                                     Foreground="{StaticResource TextMutedBrush}" />
+                          <TextBlock Text="{Binding MemoryText}"
+                                     FontSize="11"
+                                     Foreground="{StaticResource TextMutedBrush}" />
+                          <TextBlock Text="·"
+                                     FontSize="11"
+                                     Foreground="{StaticResource TextMutedBrush}" />
+                          <TextBlock Text="{Binding StateText}"
+                                     FontSize="11"
+                                     Foreground="{StaticResource TextMutedBrush}" />
+                        </StackPanel>
+
+                        <TextBlock Text="{Binding License}"
+                                   FontSize="10"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   TextWrapping="Wrap" />
+                      </StackPanel>
+
+                      <StackPanel Grid.Column="1"
+                                  Spacing="4"
+                                  Margin="12,0,0,0"
+                                  VerticalAlignment="Center">
+                        <Button Classes="accent small"
+                                Content="下载"
+                                IsVisible="{Binding ShowDownload}"
+                                IsEnabled="{Binding IsIdle}"
+                                Click="OnDownloadLocalModelClick" />
+                        <Button Classes="ghost small"
+                                Content="删除"
+                                IsVisible="{Binding ShowDelete}"
+                                IsEnabled="{Binding IsIdle}"
+                                Click="OnDeleteLocalModelClick" />
+                        <ProgressBar Value="{Binding ProgressPercent}"
+                                     Maximum="100"
+                                     Height="3"
+                                     Width="72"
+                                     IsVisible="{Binding IsBusy}" />
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Margin="20,0,20,14"
+                       FontSize="11"
+                       Foreground="{StaticResource TextMutedBrush}"
+                       TextWrapping="Wrap"
+                       IsVisible="{Binding HasLocalModels}"
+                       Text="模型存放在 %LocalAppData%\Sparrow\models，删除会释放磁盘空间。" />
+          </StackPanel>
+        </Border>
+
         <!-- ============ 热键 ============ -->
         <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,10,0,10" IsVisible="{Binding IsHotkeysSelected}">
           <Border Classes="hud-tick" />

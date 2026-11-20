@@ -84,6 +84,19 @@ public partial class SettingsView : UserControl
             viewModel.ClearAiKey();
     }
 
+    // 离线模型：下载 / 删除都在宿主完成，这里只转发给行 VM
+    private async void OnDownloadLocalModelClick(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is LocalModelItemViewModel item)
+            await item.EnsureAsync();
+    }
+
+    private async void OnDeleteLocalModelClick(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is LocalModelItemViewModel item)
+            await item.DeleteAsync();
+    }
+
     private static string LocalAppData =>
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 

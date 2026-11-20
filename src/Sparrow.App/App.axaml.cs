@@ -157,7 +157,7 @@ public partial class App : Application
 
         // 工作区与面板共用同一个 ToolCatalog：插件只加载一次
         var startup = new StartupService(log);
-        var settingsViewModel = new SettingsViewModel(_catalog, settingsStore, startup, settings, ai, aiSecrets);
+        var settingsViewModel = new SettingsViewModel(_catalog, settingsStore, startup, settings, ai, aiSecrets, _localModels);
         _settingsViewModel = settingsViewModel;
 
         // 设置页的状态提示统一转成 toast（页面本身不再常驻一行文字）

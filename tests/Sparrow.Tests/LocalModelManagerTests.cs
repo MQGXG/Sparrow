@@ -1,6 +1,9 @@
 using Shouldly;
 using Sparrow.App;
+using Sparrow.App.Plugins;
 using Sparrow.App.Services;
+using Sparrow.App.Settings;
+using Sparrow.App.ViewModels;
 using Xunit;
 
 namespace Sparrow.Tests;
@@ -76,5 +79,61 @@ public sealed class LocalModelManagerTests
         (await manager.DeleteAsync(
             "hy-mt-1.8b",
             TestContext.Current.CancellationToken)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void 设置页列出离线模型并按磁盘状态区分按钮()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+
+        var log = new NullLog();
+        var manager = new LocalModelManager(log, root);
+
+        // 造一个已下载的模型文件，状态必须来自文件系统而不是缓存
+        var installed = manager.PathFor("hy-mt-1.8b");
+        Directory.CreateDirectory(Path.GetDirectoryName(installed)!);
+        File.WriteAllBytes(installed, [0]);
+
+        var store = new SettingsStore(Path.Combine(root, "settings.json"), log);
+        var catalog = new ToolCatalog(root, log, new AppSettings());
+        var viewModel = new SettingsViewModel(
+            catalog,
+            store,
+            new StartupService(log),
+            new AppSettings(),
+            localModels: manager);
+
+        viewModel.HasLocalModels.ShouldBeTrue();
+        viewModel.LocalModels.Count.ShouldBe(3);
+
+        var downloaded = viewModel.LocalModels.Single(item => item.Info.Id == "hy-mt-1.8b");
+        downloaded.IsInstalled.ShouldBeTrue();
+        downloaded.ShowDelete.ShouldBeTrue();
+        downloaded.ShowDownload.ShouldBeFalse();
+
+        var notDownloaded = viewModel.LocalModels.Single(item => item.Info.Id == "hy-mt-7b");
+        notDownloaded.IsInstalled.ShouldBeFalse();
+        notDownloaded.ShowDownload.ShouldBeTrue();
+
+        // TranslateGemma 还没配下载源：下载按钮不能出现，状态要说明原因
+        var noSource = viewModel.LocalModels.Single(item => item.Info.Id == "translategemma-4b");
+        noSource.ShowDownload.ShouldBeFalse();
+        noSource.StateText.ShouldBe("暂未配置下载源");
+    }
+
+    [Fact]
+    public void 宿主没注入本地模型时设置页列表为空()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+
+        var log = new NullLog();
+        var store = new SettingsStore(Path.Combine(root, "settings.json"), log);
+        var catalog = new ToolCatalog(root, log, new AppSettings());
+        var viewModel = new SettingsViewModel(catalog, store, new StartupService(log), new AppSettings());
+
+        viewModel.HasLocalModels.ShouldBeFalse();
+        viewModel.LocalModels.ShouldBeEmpty();
     }
 }
