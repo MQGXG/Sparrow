@@ -5,6 +5,7 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using Sparrow.App.Services;
 using Sparrow.App.ViewModels;
+using Sparrow.Plugin.Sdk;
 
 namespace Sparrow.App.Views;
 
@@ -31,6 +32,9 @@ public partial class ClipboardPanelWindow : Window
 
     /// <summary>拖动结束后要吃掉那一次 Tapped，避免顺带改变选中或复制。</summary>
     private bool _suppressClick;
+
+    /// <summary>右键菜单打开时被右键的条目；菜单项的 DataContext 取不到时用它兜底。</summary>
+    private ClipboardEntryViewModel? _menuTarget;
 
     public ClipboardPanelWindow()
     {
@@ -306,10 +310,63 @@ public partial class ClipboardPanelWindow : Window
         e.Handled = true;
     }
 
+    /// <summary>
+    /// 右键菜单打开后记住被右键的条目，并刷新随条目变化的可见性与文案。
+    /// 用 Opened 而不是 Opening：Avalonia 12 的 Flyout 只在真正打开后才有 DataContext。
+    /// </summary>
+    private void OnMenuOpened(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not ContextMenu menu
+            || (menu.PlacementTarget?.DataContext ?? menu.DataContext)
+                is not ClipboardEntryViewModel item)
+        {
+            _menuTarget = null;
+            return;
+        }
+
+        _menuTarget = item;
+
+        var isText = item.Entry.Kind == ClipboardEntryKind.Text
+            && item.Entry.Text is { Length: > 0 };
+
+        foreach (var entry in menu.Items)
+        {
+            if (entry is not MenuItem { Tag: string tag } menuItem)
+                continue;
+
+            switch (tag)
+            {
+                case "cmd:copy-plain":
+                    menuItem.IsVisible = isText;
+                    break;
+
+                case "cmd:transforms":
+                    menuItem.IsVisible = isText;
+                    break;
+
+                case "cmd:open":
+                    menuItem.IsVisible = item.CanOpen;
+                    break;
+
+                case "cmd:reveal":
+                    menuItem.IsVisible = item.CanReveal;
+                    break;
+
+                case "cmd:queue":
+                    menuItem.Header = item.IsQueued ? "移出顺序粘贴队列" : "加入顺序粘贴队列";
+                    break;
+
+                case "cmd:favorite":
+                    menuItem.Header = item.IsFavorite ? "取消收藏" : "收藏";
+                    break;
+            }
+        }
+    }
+
     /// <summary>右键菜单的「复制」：复制被右键的条目并收起。</summary>
     private void OnMenuCopy(object? sender, RoutedEventArgs e)
     {
-        if (ItemFromMenu(sender) is not { } item || History is not { } history)
+        if (MenuTarget(sender) is not { } item || History is not { } history)
             return;
 
         history.SelectedItem = item;
@@ -318,10 +375,26 @@ public partial class ClipboardPanelWindow : Window
         e.Handled = true;
     }
 
+    /// <summary>右键菜单的「粘贴到刚才的应用」：与工具条一致，先收起再把焦点还给目标窗口。</summary>
+    private async void OnMenuPaste(object? sender, RoutedEventArgs e)
+    {
+        if (MenuTarget(sender) is not { } item || History is not { } history)
+            return;
+
+        history.SelectedItem = item;
+        HidePanel();
+
+        // 窗口隐藏到系统把前台还给上一个窗口有一小段延迟，立刻发键会打到空处
+        await Task.Delay(120);
+
+        history.PasteItem(item);
+        e.Handled = true;
+    }
+
     /// <summary>右键菜单的「复制为纯文本」：丢掉 HTML / RTF，只留文字。</summary>
     private void OnMenuCopyPlain(object? sender, RoutedEventArgs e)
     {
-        if (ItemFromMenu(sender) is not { } item || History is not { } history)
+        if (MenuTarget(sender) is not { } item || History is not { } history)
             return;
 
         history.SelectedItem = item;
@@ -335,7 +408,7 @@ public partial class ClipboardPanelWindow : Window
     {
         if (sender is not MenuItem { Tag: string tag }
             || !Enum.TryParse<PasteTransform>(tag, out var transform)
-            || ItemFromMenu(sender) is not { } item
+            || MenuTarget(sender) is not { } item
             || History is not { } history)
         {
             return;
@@ -347,9 +420,66 @@ public partial class ClipboardPanelWindow : Window
         e.Handled = true;
     }
 
+    /// <summary>右键菜单的「打开」：链接走浏览器、路径与文件走默认程序、图片转临时文件。</summary>
+    private void OnMenuOpen(object? sender, RoutedEventArgs e)
+    {
+        MenuTarget(sender)?.Open();
+        e.Handled = true;
+    }
+
+    /// <summary>右键菜单的「打开所在位置」：在资源管理器里选中文件。</summary>
+    private void OnMenuReveal(object? sender, RoutedEventArgs e)
+    {
+        MenuTarget(sender)?.RevealInExplorer();
+        e.Handled = true;
+    }
+
+    /// <summary>右键菜单的「加入 / 移出顺序粘贴队列」。</summary>
+    private void OnMenuQueueToggle(object? sender, RoutedEventArgs e)
+    {
+        if (MenuTarget(sender) is { } item && History is { } history)
+            history.ToggleQueue(item);
+
+        e.Handled = true;
+    }
+
+    /// <summary>右键菜单的「收藏 / 取消收藏」。</summary>
+    private void OnMenuFavorite(object? sender, RoutedEventArgs e)
+    {
+        if (MenuTarget(sender) is { } item && History is { } history)
+            history.ToggleFavorite(item);
+
+        e.Handled = true;
+    }
+
+    /// <summary>右键菜单的「查看详情」：选中后把详情覆盖在面板上。</summary>
+    private void OnMenuDetail(object? sender, RoutedEventArgs e)
+    {
+        if (MenuTarget(sender) is { } item && History is { } history)
+        {
+            history.SelectedItem = item;
+            ShowDetail();
+        }
+
+        e.Handled = true;
+    }
+
+    /// <summary>右键菜单的「删除」：删掉后留在面板，可撤销。</summary>
+    private void OnMenuDelete(object? sender, RoutedEventArgs e)
+    {
+        if (MenuTarget(sender) is { } item && History is { } history)
+            history.Delete(item);
+
+        e.Handled = true;
+    }
+
+    /// <summary>点击菜单项时取条目：优先从菜单项取，回退到 Opening 记住的那一个。</summary>
+    private ClipboardEntryViewModel? MenuTarget(object? sender) =>
+        ItemFromMenu(sender) ?? _menuTarget;
+
     /// <summary>
     /// 右键菜单挂在弹出层里，DataContext 有时取不到条目；
-    /// 先读 MenuItem 自己，再回退到 ContextMenu 的 PlacementTarget。
+    /// 先读 MenuItem 自己，再沿父级向上找，最后回退到 ContextMenu 的 PlacementTarget。
     /// </summary>
     private static ClipboardEntryViewModel? ItemFromMenu(object? sender)
     {
@@ -359,10 +489,17 @@ public partial class ClipboardPanelWindow : Window
         if (menuItem.DataContext is ClipboardEntryViewModel direct)
             return direct;
 
-        if (menuItem.Parent is ContextMenu { PlacementTarget: Control target }
-            && target.DataContext is ClipboardEntryViewModel fromTarget)
+        // 子菜单里的项，Parent 是父 MenuItem 而不是 ContextMenu
+        for (var node = menuItem.Parent; node is not null; node = node.Parent)
         {
-            return fromTarget;
+            if (node is Control { DataContext: ClipboardEntryViewModel fromParent })
+                return fromParent;
+
+            if (node is ContextMenu { PlacementTarget: Control target }
+                && target.DataContext is ClipboardEntryViewModel fromTarget)
+            {
+                return fromTarget;
+            }
         }
 
         return null;
@@ -409,7 +546,7 @@ public partial class ClipboardPanelWindow : Window
         e.Handled = true;
     }
 
-    /// <summary>工具条的「打开」：链接走浏览器，文件在资源管理器里选中。</summary>
+    /// <summary>工具条的「打开」：链接走浏览器、路径与文件走默认程序、图片转临时文件。</summary>
     private void OnRowOpenClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: ClipboardEntryViewModel item })
