@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -632,6 +633,58 @@ public sealed class ClipboardPanelWindowTests
                 $"实际 Hit={actions.IsHitTestVisible} Opacity={actions.Opacity}");
 
             row.Classes.Contains("selected").ShouldBeFalse();
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [AvaloniaFact]
+    public void 清空入口收进更多菜单()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"),
+                new NullLog());
+            store.AddText("hello world");
+
+            var viewModel = new ClipboardHistoryViewModel(store, new FakeClipboard());
+            var window = new ClipboardPanelWindow { DataContext = viewModel };
+            window.Show();
+            window.PrepareForShow();
+            Dispatcher.UIThread.RunJobs();
+
+            var clearButton = window.GetVisualDescendants()
+                .OfType<Button>()
+                .FirstOrDefault(button => AutomationProperties.GetName(button) == "清空");
+            clearButton.ShouldBeNull("搜索行不该再放清空：一行六个控件太挤");
+
+            var more = window.GetVisualDescendants()
+                .OfType<Button>()
+                .First(button => AutomationProperties.GetName(button) == "更多");
+
+            var flyout = more.Flyout as MenuFlyout;
+            flyout.ShouldNotBeNull("⋯ 要有菜单");
+
+            var headers = flyout!.Items
+                .OfType<MenuItem>()
+                .Select(item => item.Header as string)
+                .ToList();
+
+            headers.ShouldContain("清空全部历史…");
         }
         finally
         {

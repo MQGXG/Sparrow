@@ -485,7 +485,13 @@ public partial class ClipboardPanelWindow : Window
 
     private void OnClearClick(object? sender, RoutedEventArgs e)
     {
+        // 「清空」入口在 ⋯ 菜单里，确认 / 取消按钮却在搜索行；
+        // 搜索行默认收起，不先展开用户会看不到确认，以为点了没反应
+        if (!_isSearchOpen)
+            SetSearchOpen(true);
+
         History?.RequestClear();
+        e.Handled = true;
     }
 
     private void OnClearConfirmClick(object? sender, RoutedEventArgs e)

@@ -136,19 +136,8 @@
           <Path Classes="icon icon-xs"
                 Data="{StaticResource IconUndo}" />
         </Button>
-        <Button Grid.Column="2"
-                Classes="ghost small"
-                Width="30"
-                Padding="0"
-                Margin="8,0,0,0"
-                IsVisible="{Binding !IsClearConfirmVisible}"
-                ToolTip.Tip="清空全部历史"
-                AutomationProperties.Name="清空"
-                Click="OnClearClick">
-          <Path Classes="icon icon-xs"
-                Data="{StaticResource IconTrash}" />
-        </Button>
-        <!-- 危险确认保留文字：图标在这一步没有「确定要删」的语义 -->
+        <!-- 危险确认保留文字：图标在这一步没有「确定要删」的语义。
+             「清空」入口收进了右侧 ⋯ 菜单，这一行只在确认态出现 -->
         <Button Grid.Column="2"
                 Classes="ghost small danger"
                 Content="确认清空"
@@ -172,7 +161,7 @@
                 Width="30"
                 Padding="0"
                 Margin="8,0,0,0"
-                ToolTip.Tip="更多：不记录某个来源的复制"
+                ToolTip.Tip="更多：不记录某个来源的复制、清空全部历史"
                 AutomationProperties.Name="更多">
           <Path Classes="icon icon-xs icon-dot"
                 Data="{StaticResource IconMore}" />
@@ -181,6 +170,10 @@
               <MenuItem Header="{Binding ExclusionButtonLabel}"
                         IsEnabled="{Binding CanToggleExclusion}"
                         Click="OnExclusionClick" />
+              <Separator />
+              <!-- 低频危险操作收在这里：搜索行只留撤销，避免一行塞六个控件 -->
+              <MenuItem Header="清空全部历史…"
+                        Click="OnClearClick" />
             </MenuFlyout>
           </Button.Flyout>
         </Button>
@@ -204,13 +197,17 @@
                       Margin="0,0,6,6"
                       Classes.selected="{Binding IsSelected}"
                       IsVisible="{Binding IsShown}"
+                      ToolTip.Tip="{Binding Name}"
                       Tag="{Binding}"
                       Click="OnKindClick">
+                <!-- 图标 + 计数：原来「名称 + 计数」五个 chip 会把搜索行挤扁 -->
                 <StackPanel Orientation="Horizontal" Spacing="5">
-                  <TextBlock Text="{Binding Name}" />
+                  <Path Classes="icon icon-xs"
+                        VerticalAlignment="Center"
+                        Data="{Binding Name, Converter={x:Static converters:ClipboardKindIconConverter.Instance}}" />
                   <TextBlock Text="{Binding Count}"
                              Classes="num"
-                             Opacity="0.75"
+                             Opacity="0.85"
                              VerticalAlignment="Center" />
                 </StackPanel>
               </Button>

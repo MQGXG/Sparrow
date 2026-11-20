@@ -581,6 +581,11 @@
     <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
   </Style>
 
+  <!-- 类型 chip 是图标 + 计数：选中时图标也要转琥珀，否则只有数字变色 -->
+  <Style Selector="Button.hud-chip.selected Path.icon">
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+  </Style>
+
   <!-- 分组标题：透明底、hover 才浮一层；点击折叠 -->
   <Style Selector="Button.group-header">
     <Setter Property="Background" Value="Transparent" />
