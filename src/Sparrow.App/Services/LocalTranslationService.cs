@@ -255,7 +255,7 @@ internal sealed class LocalTranslationService : ILocalTranslation
     }
 
     /// <summary>常见目标语言给英文名（混元模型卡用的是英文）；其余原样输出。</summary>
-    private static string EnglishName(string target) => target switch
+    internal static string EnglishName(string target) => target switch
     {
         "English" => "English",
         "日本語" => "Japanese",
@@ -264,6 +264,10 @@ internal sealed class LocalTranslationService : ILocalTranslation
         "Français" => "French",
         "Deutsch" => "German",
         "Español" => "Spanish",
+        "Português" => "Portuguese",
+        "العربية" => "Arabic",
+        "ไทย" => "Thai",
+        "Tiếng Việt" => "Vietnamese",
         _ => target
     };
 

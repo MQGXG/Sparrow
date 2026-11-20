@@ -280,6 +280,24 @@ public sealed class TranslateToolTests
     }
 
     [Fact]
+    public void 描述符_目标语言是常用12种且都有中文名()
+    {
+        var descriptor = new TranslateTool().Descriptor;
+        var to = ToolParameter.Find(descriptor.Parameters, "to");
+
+        to.ShouldNotBeNull();
+        to!.Choices.Length.ShouldBe(12);
+        to.Default.ShouldBe("English");
+
+        // 每种语言都要有显示名：阿拉伯语/泰语这种原生写法，用户认不出来
+        foreach (var language in to.Choices)
+            to.ChoiceLabels.ShouldNotBeNull().ShouldContainKey(language);
+
+        to.Choices.ShouldContain("العربية");
+        to.Choices.ShouldContain("Tiếng Việt");
+    }
+
+    [Fact]
     public async Task 离线引擎_调用宿主共享的翻译能力()
     {
         var translation = new FakeLocalTranslation();

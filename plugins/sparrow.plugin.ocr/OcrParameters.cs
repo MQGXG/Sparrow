@@ -84,7 +84,12 @@ internal static class OcrParameters
         Key = TranslateKey,
         Label = "翻译为",
         Kind = ParameterKind.Choice,
-        Choices = [TranslateNone, "中文", "English", "日本語", "한국어", "Русский"],
+        // 跟随翻译工具的常用 12 种；离线时用宿主的本地翻译引擎
+        Choices =
+        [
+            TranslateNone, "中文", "English", "日本語", "한국어", "Русский", "Français",
+            "Deutsch", "Español", "Português", "العربية", "ไทย", "Tiếng Việt"
+        ],
         ChoiceLabels = new Dictionary<string, string>
         {
             [TranslateNone] = "不翻译",
@@ -92,10 +97,17 @@ internal static class OcrParameters
             ["English"] = "英语",
             ["日本語"] = "日语",
             ["한국어"] = "韩语",
-            ["Русский"] = "俄语"
+            ["Русский"] = "俄语",
+            ["Français"] = "法语",
+            ["Deutsch"] = "德语",
+            ["Español"] = "西班牙语",
+            ["Português"] = "葡萄牙语",
+            ["العربية"] = "阿拉伯语",
+            ["ไทย"] = "泰语",
+            ["Tiếng Việt"] = "越南语"
         },
         Default = TranslateNone,
-        Hint = "识别后调用 AI 翻译，结果按「原文 / 译文」对照输出；需要在设置里配置模型"
+        Hint = "识别后翻译，结果按「原文 / 译文」对照输出；在线模型或已下载的离线模型均可"
     };
 
     /// <summary>整理模式参数 → 枚举；未知值回退默认「按行」。</summary>

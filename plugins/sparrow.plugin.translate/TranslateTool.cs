@@ -53,7 +53,27 @@ public sealed class TranslateTool : ITool
                 Key = "to",
                 Label = "目标语言",
                 Kind = ParameterKind.Choice,
-                Choices = ["中文", "English", "日本語", "한국어", "Русский", "Français", "Deutsch", "Español"],
+                // 常用 12 种；模型本身支持 33 种，这里只放最常翻的，避免下拉太长
+                Choices =
+                [
+                    "中文", "English", "日本語", "한국어", "Русский", "Français",
+                    "Deutsch", "Español", "Português", "العربية", "ไทย", "Tiếng Việt"
+                ],
+                ChoiceLabels = new Dictionary<string, string>
+                {
+                    ["中文"] = "中文",
+                    ["English"] = "英语",
+                    ["日本語"] = "日语",
+                    ["한국어"] = "韩语",
+                    ["Русский"] = "俄语",
+                    ["Français"] = "法语",
+                    ["Deutsch"] = "德语",
+                    ["Español"] = "西班牙语",
+                    ["Português"] = "葡萄牙语",
+                    ["العربية"] = "阿拉伯语",
+                    ["ไทย"] = "泰语",
+                    ["Tiếng Việt"] = "越南语"
+                },
                 Default = "English"
             },
             new ToolParameter

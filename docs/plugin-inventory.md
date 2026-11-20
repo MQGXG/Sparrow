@@ -19,8 +19,8 @@
 | `sparrow.plugin.images-convert` | `sparrow.images.convert` | 图片格式转换 | Image → Image | 无 | 108 |
 | `sparrow.plugin.images-resize` | `sparrow.images.resize` | 图片缩放 | Image → Image | 无 | 138 |
 | `sparrow.plugin.files-hash` | `sparrow.files.hash` | 文件哈希 | Files → Table | 无 | 201 |
-| `sparrow.plugin.ocr` | `sparrow.ocr.image` | 图片文字识别 | Images → Text | `Ocr`（独立 worker）+ `Ai`/`LocalTranslation` | 1088 |
-| `sparrow.plugin.translate` | `sparrow.text.translate` | 翻译 | Text → Text | `Ai` + `LocalTranslation` | 423 |
+| `sparrow.plugin.ocr` | `sparrow.ocr.image` | 图片文字识别 | Images → Text | `Ocr`（独立 worker）+ `Ai`/`LocalTranslation` | 1100 |
+| `sparrow.plugin.translate` | `sparrow.text.translate` | 翻译 | Text → Text | `Ai` + `LocalTranslation` | 443 |
 | `sparrow.plugin.svg-prompt` | `sparrow.svg.prompt` | 提示词生成 SVG | Text → Svg | `Ai` + `SvgRender` | 132 |
 | `sparrow.plugin.window-pin` | `sparrow.window.pin` | 窗口置顶 | None → Text | 无（用通用 `IWindowOverlay`） | 158 |
 
