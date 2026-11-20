@@ -1391,8 +1391,8 @@
                                 BorderBrush="{StaticResource LineBrush}"
                                 BorderThickness="1">
                           <StackPanel Spacing="6">
-                            <!-- 标题行：名称 + 展开（识别框开关在左侧轮播图上） -->
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                            <!-- 标题行：名称 + 复制本条 + 展开（识别框开关在左侧轮播图上） -->
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
                               <TextBlock Text="{Binding Title}"
                                          VerticalAlignment="Center"
                                          FontSize="12"
@@ -1401,6 +1401,19 @@
                                          Foreground="{StaticResource TextPrimaryBrush}" />
 
                               <Button Grid.Column="1"
+                                      Classes="ghost small"
+                                      Width="24"
+                                      Padding="0"
+                                      ToolTip.Tip="只复制这一条识别结果"
+                                      AutomationProperties.Name="复制这一条"
+                                      IsVisible="{Binding !IsFailed}"
+                                      Tag="{Binding}"
+                                      Click="OnCopySectionClick">
+                                <Path Classes="icon icon-xs"
+                                      Data="{StaticResource IconCopy}" />
+                              </Button>
+
+                              <Button Grid.Column="2"
                                       Classes="ghost small"
                                       Width="24"
                                       Padding="0"

@@ -661,6 +661,18 @@ public partial class WorkspaceWindow : Window
         e.Handled = true;
     }
 
+    /// <summary>右侧某一段：只复制这一条的识别结果（含译文，如果选了翻译）。</summary>
+    private void OnCopySectionClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: TextSectionViewModel section } &&
+            DataContext is WorkspaceViewModel viewModel)
+        {
+            viewModel.CopySectionText(section);
+        }
+
+        e.Handled = true;
+    }
+
     /// <summary>多图结果：展开 / 折叠某一项。</summary>
     private void OnToggleSectionClick(object? sender, RoutedEventArgs e)
     {

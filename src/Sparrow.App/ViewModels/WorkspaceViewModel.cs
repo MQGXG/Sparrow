@@ -1076,6 +1076,19 @@ public partial class WorkspaceViewModel : ObservableObject
         RebuildRecentTools();
     }
 
+    /// <summary>复制某一段的识别结果（含译文，如果选了翻译）。</summary>
+    public void CopySectionText(TextSectionViewModel section)
+    {
+        if (string.IsNullOrWhiteSpace(section.Text))
+        {
+            _log.Warn("这一条没有可复制的文字");
+            return;
+        }
+
+        if (_clipboard.SetText(section.Text))
+            _log.Info($"已复制「{section.Title}」：{section.Text.Length} 字");
+    }
+
     public void CopyResult()
     {
         // 图片结果复制回剪贴板（JPEG/WebP 先转 PNG，写剪贴板只认 PNG）
