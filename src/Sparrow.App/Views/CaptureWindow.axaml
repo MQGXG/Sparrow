@@ -74,6 +74,46 @@
             Background="Transparent"
             ClipToBounds="True" />
 
+    <!-- 识别 / 翻译结果：跟随选区浮在空白处，可选中、可复制 -->
+    <Border x:Name="ResultCard"
+            IsVisible="False"
+            Cursor="Arrow"
+            Background="{StaticResource OverlayBrush}"
+            BorderBrush="{StaticResource LineStrongBrush}"
+            BorderThickness="1"
+            CornerRadius="10"
+            Padding="12,10"
+            MaxWidth="520"
+            BoxShadow="0 12 32 0 #99000000">
+      <Grid RowDefinitions="Auto,*,Auto" RowSpacing="8" MinWidth="300">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Text="识别结果"
+                     FontSize="11"
+                     Foreground="{StaticResource TextMutedBrush}" />
+          <Button Grid.Column="1"
+                  Classes="ghost"
+                  Content="关闭"
+                  FontSize="11"
+                  Padding="6,2"
+                  Click="OnResultCloseClick" />
+        </Grid>
+
+        <ScrollViewer Grid.Row="1" MaxHeight="240">
+          <SelectableTextBlock x:Name="ResultText"
+                               FontSize="12"
+                               LineHeight="19"
+                               TextWrapping="Wrap"
+                               Foreground="{StaticResource TextPrimaryBrush}" />
+        </ScrollViewer>
+
+        <Button Grid.Row="2"
+                Classes="accent"
+                Content="复制"
+                HorizontalAlignment="Right"
+                Click="OnResultCopyClick" />
+      </Grid>
+    </Border>
+
     <Border Canvas.Left="0"
             Canvas.Top="0"
             HorizontalAlignment="Center"
@@ -112,6 +152,14 @@
                 Content="识别文字"
                 Click="OnRecognizeClick"
                 ToolTip.Tip="识别选区文字（Enter / R）" />
+        <Button Focusable="False" x:Name="TranslateButton"
+                IsVisible="False"
+                Content="翻译 ▾"
+                ToolTip.Tip="识别并翻译；点一下选目标语言">
+          <Button.Flyout>
+            <MenuFlyout Placement="TopEdgeAlignedRight" />
+          </Button.Flyout>
+        </Button>
         <Button Focusable="False" Content="复制图片" Click="OnCopyImageClick" ToolTip.Tip="复制选区图片（C）" />
         <Button Focusable="False" Content="保存" Click="OnSaveClick" ToolTip.Tip="保存为 PNG（S）" />
         <Button Focusable="False" Content="固定" Click="OnPinClick" ToolTip.Tip="固定到屏幕，滚轮缩放（P）" />

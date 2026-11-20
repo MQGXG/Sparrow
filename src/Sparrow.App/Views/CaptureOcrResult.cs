@@ -3,6 +3,12 @@ using Sparrow.Plugin.Sdk.Payloads;
 namespace Sparrow.App.Views;
 
 /// <summary>
+/// 截图 OCR 的请求选项。
+/// <see cref="TranslateTarget"/> 为空表示只识别；非空时工具会在结果里附上译文。
+/// </summary>
+public sealed record CaptureOcrOptions(string? TranslateTarget = null);
+
+/// <summary>
 /// 截图 OCR 的宿主结果。
 /// <see cref="Lines"/> 为空表示插件只返回了文本（旧契约），
 /// 窗口应关掉并回退到命令面板展示。

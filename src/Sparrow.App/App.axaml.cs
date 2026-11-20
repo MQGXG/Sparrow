@@ -385,6 +385,43 @@ public partial class App : Application
         return _aiConsentPending ??= AskAiConsentAsync(request);
     }
 
+    /// <summary>
+    /// 截图工具条「翻译」的语言列表：直接读 OCR 工具的「翻译为」声明，跳过「不翻译」。
+    /// 读不到（插件还没加载/加载失败）就返回空，按钮自己隐藏。
+    /// </summary>
+    private IReadOnlyList<(string Value, string Label)> TranslateTargets()
+    {
+        if (_catalog is null)
+            return [];
+
+        try
+        {
+            var entry = _catalog.GetRegistry()
+                .FindAccepting(InputShape.Images)
+                .FirstOrDefault();
+
+            var parameter = entry?.Descriptor.Parameters
+                .FirstOrDefault(item => item.Key == "translate");
+
+            if (parameter is null)
+                return [];
+
+            return parameter.Choices
+                .Where(choice => choice != "none")
+                .Select(choice => (
+                    choice,
+                    parameter.ChoiceLabels is { } labels && labels.TryGetValue(choice, out var label)
+                        ? label
+                        : choice))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"读取截图翻译语言失败：{ex.Message}");
+            return [];
+        }
+    }
+
     private Task<bool> AskAiConsentAsync(AiRequest request)
     {
         var completion = new TaskCompletionSource<bool>();
@@ -494,6 +531,9 @@ public partial class App : Application
             _settingsViewModel?.SetCaptureOcrBoxMode(OcrBoxModes.Format(mode));
         capture.Show();
         capture.Activate();
+
+        // 窗口先出来再读语言列表：首次会顺手加载插件，别让它卡在显示之前
+        capture.ConfigureTranslateTargets(TranslateTargets());
         Log.Info($"截图窗口已显示：visible={capture.IsVisible}，title={capture.Title}");
 
         await WaitForClosedAsync(capture);
@@ -563,6 +603,7 @@ public partial class App : Application
     /// </summary>
     private async Task<CaptureOcrResult> RunCaptureOcrAsync(
         byte[] png,
+        CaptureOcrOptions options,
         CancellationToken cancellationToken)
     {
         if (_catalog is null)
@@ -579,6 +620,12 @@ public partial class App : Application
 
         try
         {
+            var parameters = BuildParameters(entry);
+
+            // 截图工具的「翻译」下拉：覆盖 OCR 上次的选择，本次生效
+            if (options.TranslateTarget is { Length: > 0 } target)
+                parameters["translate"] = target;
+
             var context = new ToolContext
             {
                 Input = new ImageSetInput(
@@ -586,7 +633,7 @@ public partial class App : Application
                     new ImageInput(png, ImageFormat.Png) { Name = "截图" }
                 ]),
                 Source = ToolSource.Screenshot,
-                Parameters = BuildParameters(entry),
+                Parameters = parameters,
                 Host = entry.Host
             };
 

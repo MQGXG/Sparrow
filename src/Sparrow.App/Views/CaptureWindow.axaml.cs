@@ -156,8 +156,33 @@ public partial class CaptureWindow : Window
     /// <summary>
     /// 宿主注入的 OCR 执行器。为空时「识别文字」保持旧行为：
     /// 关窗、由宿主走面板识别。
+    /// <c>options.TranslateTarget</c> 非空时宿主会把「翻译为」参数带给 OCR 工具。
     /// </summary>
-    public Func<byte[], CancellationToken, Task<CaptureOcrResult>>? OcrRunner { get; set; }
+    public Func<byte[], CaptureOcrOptions, CancellationToken, Task<CaptureOcrResult>>? OcrRunner { get; set; }
+
+    /// <summary>
+    /// 「翻译」按钮的语言列表（值 + 显示名），来自 OCR 工具的声明。
+    /// 为空时整个按钮隐藏，避免给出一个点了没反应的入口。
+    /// </summary>
+    public void ConfigureTranslateTargets(IReadOnlyList<(string Value, string Label)> targets)
+    {
+        if (TranslateButton.Flyout is not MenuFlyout menu)
+        {
+            TranslateButton.IsVisible = false;
+            return;
+        }
+
+        menu.Items.Clear();
+
+        foreach (var (value, label) in targets)
+        {
+            var item = new MenuItem { Header = label };
+            item.Click += async (_, _) => await RunTranslateAsync(value);
+            menu.Items.Add(item);
+        }
+
+        TranslateButton.IsVisible = menu.Items.Count > 0;
+    }
 
     /// <summary>宿主注入的复制实现。窗口不直接碰剪贴板。</summary>
     public Action<string>? CopyText { get; set; }
@@ -498,6 +523,7 @@ public partial class CaptureWindow : Window
         OcrStatus.IsVisible = false;
         CopyAllButton.IsVisible = false;
         RecognizeButton.Content = "识别文字";
+        HideResultCard();
         _ocrText = null;
 
         OcrLayer.Children.Clear();
@@ -858,6 +884,7 @@ public partial class CaptureWindow : Window
         HandleLayer.IsVisible = false;
         ActionBar.IsVisible = false;
         SizeBadge.IsVisible = false;
+        HideResultCard();
         Cursor = CrossCursor;
     }
 
@@ -867,21 +894,65 @@ public partial class CaptureWindow : Window
         PositionActionBar(selection);
     }
 
+    /// <summary>
+    /// 工具条位置：对齐选区右下角，放得下就放下方，放不下翻到上方，
+    /// 最后横向/纵向钳制在窗口内（参考 snow-shot 的 anchoredToolbarPlacement）。
+    /// 用实测尺寸而不是估算宽度——按钮数量一变估算就失效。
+    /// </summary>
     private void PositionActionBar(Rect selection)
     {
         if (!ActionBar.IsVisible)
             return;
 
-        const double estimatedWidth = 620;
-        var left = Math.Max(8, Math.Min(selection.X, Width - estimatedWidth - 8));
-        var top = selection.Bottom + 12;
+        ActionBar.Measure(Size.Infinity);
+        var size = ActionBar.DesiredSize;
 
-        // 选区贴近底部时，动作栏放到选区上方
-        if (top + 56 > Height)
-            top = Math.Max(8, selection.Y - 56);
+        var position = ComputeToolbarPosition(selection, size, new Size(Width, Height));
+        Canvas.SetLeft(ActionBar, position.X);
+        Canvas.SetTop(ActionBar, position.Y);
+    }
 
-        Canvas.SetLeft(ActionBar, left);
-        Canvas.SetTop(ActionBar, top);
+    internal static Point ComputeToolbarPosition(
+        Rect selection,
+        Size toolbar,
+        Size bounds,
+        double gap = 8,
+        double margin = 8)
+    {
+        // 首选：右边缘对齐选区右边缘，放在下方
+        var left = selection.Right - toolbar.Width;
+        var top = selection.Bottom + gap;
+
+        // 下方放不下就翻到上方（snow-shot 的 bottom-first 规则）
+        if (top + toolbar.Height > bounds.Height - margin)
+            top = selection.Y - toolbar.Height - gap;
+
+        left = Math.Clamp(left, margin, Math.Max(margin, bounds.Width - toolbar.Width - margin));
+        top = Math.Clamp(top, margin, Math.Max(margin, bounds.Height - toolbar.Height - margin));
+
+        return new Point(left, top);
+    }
+
+    /// <summary>结果卡片：优先选区右侧，其次左侧，最后钳制到窗口内。</summary>
+    internal static Point ComputeCardPosition(
+        Rect selection,
+        Size card,
+        Size bounds,
+        double gap = 12,
+        double margin = 8)
+    {
+        var left = selection.Right + gap;
+
+        if (left + card.Width > bounds.Width - margin)
+            left = selection.X - card.Width - gap;
+
+        left = Math.Clamp(left, margin, Math.Max(margin, bounds.Width - card.Width - margin));
+        var top = Math.Clamp(
+            selection.Y,
+            margin,
+            Math.Max(margin, bounds.Height - card.Height - margin));
+
+        return new Point(left, top);
     }
 
     private bool IsPointInActionBar(Point point)
@@ -987,7 +1058,7 @@ public partial class CaptureWindow : Window
         }
     }
 
-    private async Task RunOcrAsync()
+    private async Task RunOcrAsync(CaptureOcrOptions? options = null, bool showText = false)
     {
         // 没有注入 runner 或还没截图时，退回旧流程
         if (OcrRunner is null || Result is not { Length: > 0 } png)
@@ -1003,12 +1074,15 @@ public partial class CaptureWindow : Window
         _isRecognizing = true;
         _ocrCancellation = new CancellationTokenSource();
         RecognizeButton.IsEnabled = false;
+        TranslateButton.IsEnabled = false;
         OcrStatus.IsVisible = true;
-        OcrStatus.Text = "正在识别…";
+        OcrStatus.Text = options?.TranslateTarget is { Length: > 0 } target
+            ? $"正在翻译（{target}）…"
+            : "正在识别…";
 
         try
         {
-            var result = await OcrRunner(png, _ocrCancellation.Token);
+            var result = await OcrRunner(png, options ?? new CaptureOcrOptions(), _ocrCancellation.Token);
 
             if (!string.IsNullOrEmpty(result.Error))
             {
@@ -1026,6 +1100,9 @@ public partial class CaptureWindow : Window
             }
 
             ShowOcrResult(result);
+
+            if (showText && !string.IsNullOrWhiteSpace(result.Text))
+                ShowResultCard(result.Text);
         }
         catch (OperationCanceledException)
         {
@@ -1039,9 +1116,72 @@ public partial class CaptureWindow : Window
         {
             _isRecognizing = false;
             RecognizeButton.IsEnabled = true;
+            TranslateButton.IsEnabled = true;
             _ocrCancellation?.Dispose();
             _ocrCancellation = null;
         }
+    }
+
+    /// <summary>
+    /// 「翻译」菜单选中语言后：先按当前选区取图，再走同一条 OCR 链路，只是多带目标语言。
+    /// 不能直接调 RunOcrAsync——那时 Result 还没生成。
+    /// </summary>
+    private async Task RunTranslateAsync(string target)
+    {
+        if (_isActing || _isRecognizing || !_hasSelection)
+            return;
+
+        if (_selection.Width < MinSelectionSize || _selection.Height < MinSelectionSize)
+            return;
+
+        _isActing = true;
+
+        try
+        {
+            var png = await CaptureSelectionAsync(CaptureAction.Recognize);
+            if (png is null)
+            {
+                Action = CaptureAction.None;
+                Close();
+                return;
+            }
+
+            if (!IsVisible)
+                return;
+
+            Result = png;
+            Action = CaptureAction.Recognize;
+
+            await RunOcrAsync(new CaptureOcrOptions(target), showText: true);
+        }
+        finally
+        {
+            _isActing = false;
+        }
+    }
+
+    /// <summary>把结果卡片放在选区旁边：优先右侧，放不下就左侧和下方。</summary>
+    internal void ShowResultCard(string text)
+    {
+        ResultText.Text = text;
+        ResultCard.IsVisible = true;
+
+        ResultCard.Measure(Size.Infinity);
+        var size = ResultCard.DesiredSize;
+
+        var position = ComputeCardPosition(_selection, size, new Size(Width, Height));
+        Canvas.SetLeft(ResultCard, position.X);
+        Canvas.SetTop(ResultCard, position.Y);
+    }
+
+    private void HideResultCard() => ResultCard.IsVisible = false;
+
+    private void OnResultCloseClick(object? sender, RoutedEventArgs e) => HideResultCard();
+
+    private void OnResultCopyClick(object? sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrEmpty(ResultText.Text))
+            CopyText?.Invoke(ResultText.Text);
     }
 
     /// <summary>把行框叠在选区上；坐标按主屏缩放换算回 DIP。</summary>
@@ -1114,6 +1254,7 @@ public partial class CaptureWindow : Window
         OcrBoxButton.IsVisible = false;
         OcrStatus.IsVisible = false;
         RecognizeButton.Content = "识别文字";
+        HideResultCard();
         _ocrText = null;
         UpdateHandles();
     }
