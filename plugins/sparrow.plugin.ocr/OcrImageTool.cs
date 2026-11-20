@@ -90,6 +90,7 @@ public sealed class OcrImageTool : ITool
                     sections.Add(new TextSection
                     {
                         Title = FormatTitle(image, index),
+                        SourceIndex = index,
                         Status = TextSectionStatus.Failed
                     });
                     continue;
@@ -106,6 +107,7 @@ public sealed class OcrImageTool : ITool
                         sections.Add(new TextSection
                         {
                             Title = FormatTitle(image, index),
+                            SourceIndex = index,
                             Status = TextSectionStatus.Failed
                         });
                         continue;
@@ -119,6 +121,7 @@ public sealed class OcrImageTool : ITool
                     sections.Add(new TextSection
                     {
                         Title = FormatTitle(image, index),
+                        SourceIndex = index,
                         Text = sectionText,
                         Status = TextSectionStatus.Ok,
                         Lines = payload.Lines
@@ -135,6 +138,7 @@ public sealed class OcrImageTool : ITool
                     sections.Add(new TextSection
                     {
                         Title = FormatTitle(image, index),
+                        SourceIndex = index,
                         Status = TextSectionStatus.Failed
                     });
                 }

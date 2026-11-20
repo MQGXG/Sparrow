@@ -61,6 +61,12 @@ public sealed record TextSection
 
     /// <summary>这段文字在源图片里的行框；没有就为 null。</summary>
     public IReadOnlyList<OcrTextLine>? Lines { get; init; }
+
+    /// <summary>
+    /// 这段对应的图片在输入图片集里的下标（从 0 起）。
+    /// 宿主靠它取回原图来叠识别框；不适用的插件留 -1。
+    /// </summary>
+    public int SourceIndex { get; init; } = -1;
 }
 
 /// <summary>

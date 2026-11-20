@@ -1,5 +1,7 @@
 using Shouldly;
 using Sparrow.App.ViewModels;
+using Sparrow.Plugin.Sdk;
+using Sparrow.Plugin.Sdk.Inputs;
 using Sparrow.Plugin.Sdk.Payloads;
 using Xunit;
 
@@ -48,6 +50,53 @@ public sealed class TextSectionViewModelTests
         });
 
         viewModel.Preview.ShouldBe("第一行 第二行 第三行");
+    }
+
+    [Fact]
+    public void 有源图时可以展开看原图和框()
+    {
+        var input = new ImageInput(new byte[] { 1, 2, 3 }, ImageFormat.Png)
+        {
+            Name = "a.png",
+            Width = 1200,
+            Height = 800
+        };
+
+        var viewModel = new TextSectionViewModel(
+            new TextSection
+            {
+                Title = "1. a.png",
+                Text = "hello",
+                Lines = [new OcrTextLine("hello", 0, 0, 10, 10)]
+            },
+            new InputImageViewModel(input, sourcePath: null));
+
+        viewModel.HasImage.ShouldBeTrue("宿主按 SourceIndex 找回了原图");
+        viewModel.ImageWidth.ShouldBe(1200);
+        viewModel.ImageHeight.ShouldBe(800);
+        viewModel.HasLines.ShouldBeTrue();
+
+        viewModel.IsExpanded.ShouldBeFalse("默认折叠，只显示一行摘要");
+        viewModel.ShowBoxes.ShouldBeTrue("默认显示识别框");
+
+        viewModel.IsExpanded = true;
+        viewModel.ShowBoxes = false;
+
+        viewModel.IsExpanded.ShouldBeTrue();
+        viewModel.ShowBoxes.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void 没有源图时只显示文字()
+    {
+        var viewModel = new TextSectionViewModel(new TextSection
+        {
+            Title = "1. a.png",
+            Text = "hello"
+        });
+
+        viewModel.HasImage.ShouldBeFalse("找不到原图就退化成纯文字，不画空画布");
+        viewModel.HasLines.ShouldBeFalse();
     }
 
     [Fact]

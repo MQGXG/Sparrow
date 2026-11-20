@@ -889,7 +889,15 @@ public partial class WorkspaceViewModel : ObservableObject
 
         ResultSections.Clear();
         foreach (var section in sections)
-            ResultSections.Add(new TextSectionViewModel(section));
+        {
+            // 按 SourceIndex 找回输入里的原图；找不到就只显示文字，
+            // 插件之间不传图片字节，避免同一张图在内存里存两份
+            var source = section.SourceIndex >= 0 && section.SourceIndex < InputImages.Count
+                ? InputImages[section.SourceIndex]
+                : null;
+
+            ResultSections.Add(new TextSectionViewModel(section, source));
+        }
 
         HasSections = true;
 

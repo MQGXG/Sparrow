@@ -600,6 +600,24 @@ public partial class WorkspaceWindow : Window
             viewModel.CopyResult();
     }
 
+    /// <summary>多图结果：展开 / 折叠某一项。</summary>
+    private void OnToggleSectionClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: TextSectionViewModel section })
+            section.IsExpanded = !section.IsExpanded;
+
+        e.Handled = true;
+    }
+
+    /// <summary>多图结果：显示 / 隐藏识别框，方便对照原图和文字。</summary>
+    private void OnToggleBoxesClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: TextSectionViewModel section })
+            section.ShowBoxes = !section.ShowBoxes;
+
+        e.Handled = true;
+    }
+
     /// <summary>
     /// 保存图片结果（缩放 / 格式转换的产物）。
     /// 落盘是宿主的事——插件按契约不写盘，只在结果里带字节。
