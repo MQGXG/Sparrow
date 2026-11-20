@@ -124,6 +124,11 @@ public partial class CaptureWindow : Window
     private int _nextNumber = 1;
     private Point _textOrigin;
 
+    // 当前画笔样式：只影响之后画的图元
+    private Color _noteColor = NoteColor;
+    private double _noteWidth = NoteWidth;
+    private bool _mosaicBlur;
+
     public CaptureWindow()
     {
         InitializeComponent();
@@ -131,6 +136,7 @@ public partial class CaptureWindow : Window
 
         OcrLayer.PointerMoved += OnOcrLayerPointerMoved;
         OcrLayer.PointerExited += OnOcrLayerPointerExited;
+        UpdateStyleButtons();
     }
 
     /// <summary>显示前是否先冻结整屏；测试/无桌面场景由调用方关掉。</summary>
@@ -965,6 +971,48 @@ public partial class CaptureWindow : Window
 
     private void OnNumberToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Number);
 
+    private void OnColorClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string hex })
+        {
+            _noteColor = Color.Parse(hex);
+            UpdateStyleButtons();
+        }
+    }
+
+    private void OnWidthClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string text } && double.TryParse(text, out var width))
+        {
+            _noteWidth = width;
+            UpdateStyleButtons();
+        }
+    }
+
+    private void OnMosaicModeClick(object? sender, RoutedEventArgs e)
+    {
+        _mosaicBlur = !_mosaicBlur;
+        UpdateStyleButtons();
+    }
+
+    private void UpdateStyleButtons()
+    {
+        SetSelected(ColorAmberButton, IsColor("#E5A44C"));
+        SetSelected(ColorWhiteButton, IsColor("#FFFFFF"));
+        SetSelected(ColorRedButton, IsColor("#FF5F5F"));
+        SetSelected(ColorGreenButton, IsColor("#5FD08C"));
+        SetSelected(ColorBlueButton, IsColor("#5FA8FF"));
+
+        SetSelected(Width2Button, Math.Abs(_noteWidth - 2) < 0.01);
+        SetSelected(Width4Button, Math.Abs(_noteWidth - 4) < 0.01);
+        SetSelected(Width8Button, Math.Abs(_noteWidth - 8) < 0.01);
+
+        MosaicModeButton.Content = _mosaicBlur ? "马赛克·模糊" : "马赛克·像素";
+        SetSelected(MosaicModeButton, _mosaicBlur);
+    }
+
+    private bool IsColor(string hex) => _noteColor.ToUInt32() == Color.Parse(hex).ToUInt32();
+
     private void OnUndoClick(object? sender, RoutedEventArgs e) => UndoAnnotation();
 
     private void UndoAnnotation()
@@ -972,6 +1020,25 @@ public partial class CaptureWindow : Window
         _notes.Undo();
         RebuildNotePreview();
         UpdateToolButtons();
+    }
+
+    /// <summary>数字键 → 工具；和按钮 ToolTip 里的数字保持一致。</summary>
+    private static bool TryMapToolKey(Key key, out AnnotationTool tool)
+    {
+        tool = key switch
+        {
+            Key.D2 or Key.NumPad2 => AnnotationTool.Rectangle,
+            Key.D3 or Key.NumPad3 => AnnotationTool.Ellipse,
+            Key.D4 or Key.NumPad4 => AnnotationTool.Arrow,
+            Key.D5 or Key.NumPad5 => AnnotationTool.Pen,
+            Key.D6 or Key.NumPad6 => AnnotationTool.Highlighter,
+            Key.D7 or Key.NumPad7 => AnnotationTool.Mosaic,
+            Key.D8 or Key.NumPad8 => AnnotationTool.Text,
+            Key.D9 or Key.NumPad9 => AnnotationTool.Number,
+            _ => AnnotationTool.None
+        };
+
+        return tool != AnnotationTool.None;
     }
 
     /// <summary>选区变化或重设时清空标注：坐标相对选区，选区一动旧标注就错位。</summary>
@@ -1037,33 +1104,34 @@ public partial class CaptureWindow : Window
             case AnnotationTool.Ellipse:
                 _pendingAnnotation = new ShapeAnnotation(
                     new Rect(_annotationStart, new Size()),
-                    NoteColor.ToUInt32(),
-                    NoteWidth,
+                    _noteColor.ToUInt32(),
+                    _noteWidth,
                     _tool == AnnotationTool.Ellipse);
                 break;
 
             case AnnotationTool.Arrow:
                 _pendingAnnotation = new ArrowAnnotation(
-                    _annotationStart, _annotationStart, NoteColor.ToUInt32(), NoteWidth);
+                    _annotationStart, _annotationStart, _noteColor.ToUInt32(), _noteWidth);
                 break;
 
             case AnnotationTool.Pen:
                 _penPoints = [_annotationStart];
-                _pendingAnnotation = new PenAnnotation(_penPoints, NoteColor.ToUInt32(), NoteWidth);
+                _pendingAnnotation = new PenAnnotation(
+                    _penPoints, _noteColor.ToUInt32(), _noteWidth);
                 break;
 
             case AnnotationTool.Highlighter:
                 _penPoints = [_annotationStart];
                 _pendingAnnotation = new PenAnnotation(
                     _penPoints,
-                    NoteColor.ToUInt32(),
+                    _noteColor.ToUInt32(),
                     HighlighterWidth,
                     HighlighterOpacity);
                 break;
 
             case AnnotationTool.Mosaic:
                 _pendingAnnotation = new MosaicAnnotation(
-                    new Rect(_annotationStart, new Size()), MosaicCell, Blur: false);
+                    new Rect(_annotationStart, new Size()), MosaicCell, _mosaicBlur);
                 break;
 
             case AnnotationTool.Text:
@@ -1072,7 +1140,7 @@ public partial class CaptureWindow : Window
 
             case AnnotationTool.Number:
                 _notes.Add(new NumberAnnotation(
-                    _annotationStart, _nextNumber++, NoteColor.ToUInt32(), NumberSize));
+                    _annotationStart, _nextNumber++, _noteColor.ToUInt32(), NumberSize));
                 RebuildNotePreview();
                 UpdateToolButtons();
                 return true;
@@ -1169,8 +1237,6 @@ public partial class CaptureWindow : Window
 
     private void AddPreviewShape(IAnnotation item)
     {
-        var brush = new SolidColorBrush(NoteColor);
-
         switch (item)
         {
             case ShapeAnnotation { Ellipse: true } shape:
@@ -1178,7 +1244,7 @@ public partial class CaptureWindow : Window
                 {
                     Width = shape.Rect.Width,
                     Height = shape.Rect.Height,
-                    Stroke = brush,
+                    Stroke = new SolidColorBrush(Color.FromUInt32(shape.Color)),
                     StrokeThickness = shape.Width
                 };
                 Canvas.SetLeft(ellipse, shape.Rect.X);
@@ -1191,7 +1257,7 @@ public partial class CaptureWindow : Window
                 {
                     Width = shape.Rect.Width,
                     Height = shape.Rect.Height,
-                    Stroke = brush,
+                    Stroke = new SolidColorBrush(Color.FromUInt32(shape.Color)),
                     StrokeThickness = shape.Width
                 };
                 Canvas.SetLeft(rectangle, shape.Rect.X);
@@ -1200,17 +1266,18 @@ public partial class CaptureWindow : Window
                 break;
 
             case ArrowAnnotation arrow:
-                AddPreviewLine(arrow.From, arrow.To, arrow.Width);
+                var arrowBrush = new SolidColorBrush(Color.FromUInt32(arrow.Color));
+                AddPreviewLine(arrowBrush, arrow.From, arrow.To, arrow.Width);
                 var (left, right) = ArrowGeometry.Head(
                     arrow.From, arrow.To, Math.Max(8, arrow.Width * 3.5));
-                AddPreviewLine(arrow.To, left, arrow.Width);
-                AddPreviewLine(arrow.To, right, arrow.Width);
+                AddPreviewLine(arrowBrush, arrow.To, left, arrow.Width);
+                AddPreviewLine(arrowBrush, arrow.To, right, arrow.Width);
                 break;
 
             case PenAnnotation { Points.Count: >= 2 } pen:
                 NoteLayer.Children.Add(new Polyline
                 {
-                    Stroke = new SolidColorBrush(NoteColor, pen.Opacity),
+                    Stroke = new SolidColorBrush(Color.FromUInt32(pen.Color), pen.Opacity),
                     StrokeThickness = pen.Width,
                     StrokeLineCap = PenLineCap.Round,
                     StrokeJoin = PenLineJoin.Round,
@@ -1237,7 +1304,7 @@ public partial class CaptureWindow : Window
                 {
                     Text = text.Text,
                     FontSize = text.FontSize,
-                    Foreground = new SolidColorBrush(NoteColor)
+                    Foreground = new SolidColorBrush(Color.FromUInt32(text.Color))
                 };
                 Canvas.SetLeft(label, text.Origin.X);
                 Canvas.SetTop(label, text.Origin.Y - text.FontSize);
@@ -1249,7 +1316,7 @@ public partial class CaptureWindow : Window
                 {
                     Width = number.Size,
                     Height = number.Size,
-                    Fill = new SolidColorBrush(NoteColor)
+                    Fill = new SolidColorBrush(Color.FromUInt32(number.Color))
                 };
                 Canvas.SetLeft(circle, number.Center.X - number.Size / 2);
                 Canvas.SetTop(circle, number.Center.Y - number.Size / 2);
@@ -1303,7 +1370,7 @@ public partial class CaptureWindow : Window
         _notes.Add(new TextAnnotation(
             new Point(origin.X, origin.Y + TextFontSize),
             text,
-            NoteColor.ToUInt32(),
+            _noteColor.ToUInt32(),
             TextFontSize));
 
         RebuildNotePreview();
@@ -1326,12 +1393,12 @@ public partial class CaptureWindow : Window
 
     private void OnTextNoteLostFocus(object? sender, RoutedEventArgs e) => CommitTextNote();
 
-    private void AddPreviewLine(Point from, Point to, double width) =>
+    private void AddPreviewLine(IBrush brush, Point from, Point to, double width) =>
         NoteLayer.Children.Add(new Line
         {
             StartPoint = from,
             EndPoint = to,
-            Stroke = new SolidColorBrush(NoteColor),
+            Stroke = brush,
             StrokeThickness = width,
             StrokeLineCap = PenLineCap.Round
         });
@@ -1873,6 +1940,15 @@ public partial class CaptureWindow : Window
         if (key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
             UndoAnnotation();
+            e.Handled = true;
+            return;
+        }
+
+        // 数字键 2..9 切标注工具（和按钮提示一致）
+        if (e.KeyModifiers == KeyModifiers.None && TryMapToolKey(key, out var tool)
+            && _hasSelection)
+        {
+            SetTool(tool);
             e.Handled = true;
             return;
         }

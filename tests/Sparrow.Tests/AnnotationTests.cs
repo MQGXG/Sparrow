@@ -221,6 +221,47 @@ public sealed class AnnotationTests
         window.NoteLayer.Children.Count.ShouldBe(0);
     }
 
+    [AvaloniaFact]
+    public void 截图窗口_颜色切换影响之后画的图元()
+    {
+        var window = CreateWindowWithSelection();
+        window.RectToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        // 换成红色再画
+        window.ColorRedButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        window.MouseDown(new Point(150, 150), MouseButton.Left);
+        window.MouseMove(new Point(250, 220));
+        window.MouseUp(new Point(250, 220), MouseButton.Left);
+
+        var rectangle = window.NoteLayer.Children[0].ShouldBeOfType<Avalonia.Controls.Shapes.Rectangle>();
+        var brush = rectangle.Stroke.ShouldBeOfType<Avalonia.Media.SolidColorBrush>();
+        brush.Color.ShouldBe(Avalonia.Media.Color.Parse("#FF5F5F"));
+    }
+
+    [AvaloniaFact]
+    public void 截图窗口_数字键切换工具()
+    {
+        var window = CreateWindowWithSelection();
+
+        window.KeyPress(Key.D4, RawInputModifiers.None, PhysicalKey.Digit4, null);
+        window.ArrowToolButton.Classes.Contains("selected").ShouldBeTrue();
+
+        window.KeyPress(Key.D7, RawInputModifiers.None, PhysicalKey.Digit7, null);
+        window.MosaicToolButton.Classes.Contains("selected").ShouldBeTrue();
+        window.ArrowToolButton.Classes.Contains("selected").ShouldBeFalse();
+    }
+
+    [AvaloniaFact]
+    public void 截图窗口_马赛克模式可切换像素与模糊()
+    {
+        var window = new CaptureWindow();
+
+        window.MosaicModeButton.Content.ShouldBe("马赛克·像素");
+        window.MosaicModeButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.MosaicModeButton.Content.ShouldBe("马赛克·模糊");
+    }
+
     private static CaptureWindow CreateWindowWithSelection()
     {
         var window = new CaptureWindow();

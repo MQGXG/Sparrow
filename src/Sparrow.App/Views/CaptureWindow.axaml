@@ -21,6 +21,21 @@
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
     </Style>
+
+    <!-- 颜色色块：小圆点，选中加琥珀描边 -->
+    <Style Selector="Button.swatch">
+      <Setter Property="Width" Value="18" />
+      <Setter Property="Height" Value="18" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="#66000000" />
+    </Style>
+    <Style Selector="Button.swatch.selected">
+      <Setter Property="BorderBrush" Value="#FFFFFFFF" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
   </Window.Styles>
 
   <Canvas x:Name="Root" Background="Transparent">
@@ -202,6 +217,34 @@
           <Button Focusable="False" x:Name="UndoButton"
                   Classes="ghost" Content="撤销"
                   ToolTip.Tip="撤销上一条标注（Ctrl+Z）" Click="OnUndoClick" />
+        </StackPanel>
+
+        <!-- 样式行：颜色、线宽、马赛克模式；只影响之后画的图元 -->
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <TextBlock Text="颜色" FontSize="11" VerticalAlignment="Center"
+                     Foreground="{StaticResource TextMutedBrush}" />
+          <Button Focusable="False" x:Name="ColorAmberButton" Classes="swatch" Tag="#E5A44C"
+                  Background="#E5A44C" ToolTip.Tip="琥珀" Click="OnColorClick" />
+          <Button Focusable="False" x:Name="ColorWhiteButton" Classes="swatch" Tag="#FFFFFF"
+                  Background="#FFFFFF" ToolTip.Tip="白色" Click="OnColorClick" />
+          <Button Focusable="False" x:Name="ColorRedButton" Classes="swatch" Tag="#FF5F5F"
+                  Background="#FF5F5F" ToolTip.Tip="红色" Click="OnColorClick" />
+          <Button Focusable="False" x:Name="ColorGreenButton" Classes="swatch" Tag="#5FD08C"
+                  Background="#5FD08C" ToolTip.Tip="绿色" Click="OnColorClick" />
+          <Button Focusable="False" x:Name="ColorBlueButton" Classes="swatch" Tag="#5FA8FF"
+                  Background="#5FA8FF" ToolTip.Tip="蓝色" Click="OnColorClick" />
+
+          <TextBlock Text="粗细" FontSize="11" VerticalAlignment="Center" Margin="6,0,0,0"
+                     Foreground="{StaticResource TextMutedBrush}" />
+          <Button Focusable="False" x:Name="Width2Button" Classes="tool" Tag="2" Content="2"
+                  ToolTip.Tip="细" Click="OnWidthClick" />
+          <Button Focusable="False" x:Name="Width4Button" Classes="tool" Tag="4" Content="4"
+                  ToolTip.Tip="中" Click="OnWidthClick" />
+          <Button Focusable="False" x:Name="Width8Button" Classes="tool" Tag="8" Content="8"
+                  ToolTip.Tip="粗" Click="OnWidthClick" />
+
+          <Button Focusable="False" x:Name="MosaicModeButton" Classes="tool" Content="马赛克·像素"
+                  ToolTip.Tip="切换像素 / 模糊" Click="OnMosaicModeClick" />
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="6">
