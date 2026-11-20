@@ -34,6 +34,12 @@ public interface IToolHost
     IAiClient Ai { get; }
 
     /// <summary>
+    /// 本地模型（GGUF）。宿主管下载、校验、缓存与进度，插件只拿文件路径。
+    /// 宿主未注入时是 <see cref="NullLocalModels"/>。
+    /// </summary>
+    ILocalModels LocalModels { get; }
+
+    /// <summary>
     /// 插件自己的安装目录（只读）。
     ///
     /// 用于定位随插件分发的资源，比如 OCR 的 worker exe 与模型文件。

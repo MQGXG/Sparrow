@@ -36,6 +36,7 @@ public partial class App : Application
     private ClipboardPanelWindow? _clipboardPanel;
     private SettingsStore? _settingsStore;
     private AppSettings _appSettings = new();
+    private LocalModelManager? _localModels;
     private ToolParameterStore? _parameterStore;
     private IHistoryStore? _history;
     private WindowOverlay? _windowOverlay;
@@ -124,7 +125,8 @@ public partial class App : Application
         // 通用窗口覆盖能力：拾取窗口 + 图钉指示（任何插件都可用）
         _windowOverlay = new WindowOverlay(log);
 
-        _catalog = new ToolCatalog(pluginsRoot, log, settings, ai, clipboardHistory, _windowOverlay);
+        _localModels = new LocalModelManager(log);
+        _catalog = new ToolCatalog(pluginsRoot, log, settings, ai, clipboardHistory, _windowOverlay, _localModels);
 
         var historyPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

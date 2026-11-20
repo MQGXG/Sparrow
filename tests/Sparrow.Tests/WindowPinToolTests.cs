@@ -72,6 +72,8 @@ public sealed class WindowPinToolTests
 
         public IAiClient Ai => throw new NotSupportedException();
 
+        public ILocalModels LocalModels => NullLocalModels.Instance;
+
         public string PluginDirectory => AppContext.BaseDirectory;
 
         public IClipboardHistory? ClipboardHistory => null;

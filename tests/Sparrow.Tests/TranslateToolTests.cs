@@ -65,6 +65,8 @@ public sealed class TranslateToolTests
 
         public IAiClient Ai { get; }
 
+        public ILocalModels LocalModels => NullLocalModels.Instance;
+
         public string PluginDirectory => AppContext.BaseDirectory;
 
         public IClipboardHistory? ClipboardHistory { get; init; }

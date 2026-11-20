@@ -19,13 +19,15 @@ public sealed class ToolHost : IToolHost
         IAppLog log,
         IAiClient? ai = null,
         IClipboardHistory? clipboardHistory = null,
-        IWindowOverlay? windows = null)
+        IWindowOverlay? windows = null,
+        ILocalModels? localModels = null)
     {
         PluginDirectory = pluginDirectory;
         Logger = new PluginLogger(pluginId, log);
         Settings = new InMemoryToolSettings();
         Http = DisabledHttpAccess.Instance;
         Ai = ai ?? NullAiClient.Instance;
+        LocalModels = localModels ?? NullLocalModels.Instance;
         ClipboardHistory = clipboardHistory;
         Windows = windows;
     }
@@ -37,6 +39,9 @@ public sealed class ToolHost : IToolHost
     public IHttpClientAccess Http { get; }
 
     public IAiClient Ai { get; }
+
+    /// <summary>本地模型：宿主管下载与缓存，插件只拿文件路径。</summary>
+    public ILocalModels LocalModels { get; }
 
     public string PluginDirectory { get; }
 
@@ -62,6 +67,8 @@ public sealed class NullToolHost : IToolHost
     public IHttpClientAccess Http => DisabledHttpAccess.Instance;
 
     public IAiClient Ai => NullAiClient.Instance;
+
+    public ILocalModels LocalModels => NullLocalModels.Instance;
 
     public string PluginDirectory => AppContext.BaseDirectory;
 
