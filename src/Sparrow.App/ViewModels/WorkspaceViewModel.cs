@@ -1082,6 +1082,13 @@ public partial class WorkspaceViewModel : ObservableObject
         ? $"复制全部 {ResultSections.Count} 张的识别结果"
         : "复制结果到剪贴板";
 
+    /// <summary>点某一段时把左侧轮播切到它对应的图 —— 眼睛和框都跟着走。</summary>
+    public void SelectSectionImage(TextSectionViewModel section)
+    {
+        if (section.SourceIndex >= 0 && section.SourceIndex < InputImages.Count)
+            CurrentImageIndex = section.SourceIndex;
+    }
+
     /// <summary>复制某一段的识别结果（含译文，如果选了翻译）。</summary>
     public void CopySectionText(TextSectionViewModel section)
     {

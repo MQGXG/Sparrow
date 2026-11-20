@@ -634,11 +634,18 @@ public partial class WorkspaceWindow : Window
             viewModel.CopyResult();
     }
 
-    /// <summary>左侧轮播图：显示 / 隐藏当前图的识别框。</summary>
-    private void OnToggleCurrentBoxesClick(object? sender, RoutedEventArgs e)
+    /// <summary>
+    /// 右侧某一段：切换它的识别框显示。
+    /// 点眼睛顺手把左侧轮播切到这张图——否则框还停在旧图上，看起来像没反应。
+    /// </summary>
+    private void OnToggleSectionBoxesClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is WorkspaceViewModel { CurrentSection: { } section })
+        if (sender is Button { Tag: TextSectionViewModel section } &&
+            DataContext is WorkspaceViewModel viewModel)
+        {
+            viewModel.SelectSectionImage(section);
             section.ShowBoxes = !section.ShowBoxes;
+        }
 
         e.Handled = true;
     }
