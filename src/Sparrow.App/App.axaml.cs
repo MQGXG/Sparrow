@@ -37,6 +37,7 @@ public partial class App : Application
     private SettingsStore? _settingsStore;
     private AppSettings _appSettings = new();
     private LocalModelManager? _localModels;
+    private LocalTranslationService? _localTranslation;
 
     /// <summary>本次运行是否已同意「发送到模型服务」。</summary>
     private bool _aiConsentGranted;
@@ -133,7 +134,8 @@ public partial class App : Application
         _windowOverlay = new WindowOverlay(log);
 
         _localModels = new LocalModelManager(log) { MirrorUrl = settings.LocalModelMirror };
-        _catalog = new ToolCatalog(pluginsRoot, log, settings, ai, clipboardHistory, _windowOverlay, _localModels);
+        _localTranslation = new LocalTranslationService(_localModels, log);
+        _catalog = new ToolCatalog(pluginsRoot, log, settings, ai, clipboardHistory, _windowOverlay, _localModels, _localTranslation);
 
         var historyPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

@@ -27,6 +27,9 @@
     <PackageReference Include="Svg.Skia" />
     <PackageReference Include="System.Drawing.Common" />
     <PackageReference Include="Velopack" />
+    <!-- 本地翻译引擎：llama.cpp 的 .NET 封装 + CPU 后端（宿主能力，插件不各自引） -->
+    <PackageReference Include="LLamaSharp" />
+    <PackageReference Include="LLamaSharp.Backend.Cpu" />
   </ItemGroup>
 
   <ItemGroup>
@@ -102,5 +105,17 @@
     ReferenceOutputAssembly=false，插件程序集不会成为 App 的依赖。
     插件产物由 plugins/Directory.Build.targets 复制到 $(OutDir)plugins/<PluginId>/。
   -->
+  <!--
+    本地推理后端默认把各平台 native 库都拷进输出（约 26MB）。
+    应用只发 Windows：非 win-x64 的运行库在构建后删掉；带 RID 的 publish 本来就只取 win-x64。
+  -->
+  <Target Name="TrimForeignRuntimeAssets" AfterTargets="Build">
+    <ItemGroup>
+      <_ForeignRuntimeFiles Include="$(TargetDir)runtimes\**\*" Exclude="$(TargetDir)runtimes\win-x64\**\*" />
+    </ItemGroup>
+
+    <!-- 只删文件：MSBuild 的通配符不返回目录，空目录留着不占空间 -->
+    <Delete Files="@(_ForeignRuntimeFiles)" ContinueOnError="true" />
+  </Target>
 
 </Project>

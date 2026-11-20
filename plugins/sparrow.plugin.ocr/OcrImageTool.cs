@@ -240,42 +240,84 @@ public sealed class OcrImageTool : ITool
         if (target == OcrParameters.TranslateNone || string.IsNullOrWhiteSpace(original))
             return original;
 
-        if (context.Host is not { } host || !host.Ai.IsAvailable)
-        {
-            // 用户明确要求了翻译却没配模型：不能静默返回原文，否则会以为识别成了原文语言
-            return original.TrimEnd()
-                + "\n\n—— 未翻译：未配置 AI 模型。可在「设置 › 模型」启用，"
-                + "或把这段文字发给「翻译」工具（支持离线）——";
-        }
-
-        try
-        {
-            var response = await host.Ai.CompleteAsync(
-                new AiRequest
-                {
-                    System =
-                        $"把用户给出的文字翻译成{target}。只输出译文，不要解释、不要加引号，保留原有分段。",
-                    Messages = [new AiMessage(AiRole.User, original)],
-                    Temperature = 0.2,
-                    MaxTokens = Math.Clamp(original.Length * 2, 512, 4096)
-                },
-                cancellationToken);
-
-            var translated = response.Text.Trim();
-            if (string.IsNullOrEmpty(translated))
-                return original;
-
-            return $"{original.TrimEnd()}\n\n—— 译文（{target}）——\n\n{translated}";
-        }
-        catch (AiException ex)
-        {
-            host.Logger.LogWarning("OCR 翻译失败：{Error}", ex.Message);
+        if (context.Host is not { } host)
             return original;
-        }
-        catch (Exception ex)
+
+        if (host.Ai.IsAvailable)
         {
-            host.Logger.LogWarning("OCR 翻译异常：{Error}", ex.Message);
-            return original;
+            try
+            {
+                var response = await host.Ai.CompleteAsync(
+                    new AiRequest
+                    {
+                        System =
+                            $"把用户给出的文字翻译成{target}。只输出译文，不要解释、不要加引号，保留原有分段。",
+                        Messages = [new AiMessage(AiRole.User, original)],
+                        Temperature = 0.2,
+                        MaxTokens = Math.Clamp(original.Length * 2, 512, 4096)
+                    },
+                    cancellationToken);
+
+                var translated = response.Text.Trim();
+                if (!string.IsNullOrEmpty(translated))
+                    return $"{original.TrimEnd()}\n\n—— 译文（{target}）——\n\n{translated}";
+            }
+            catch (AiException ex)
+            {
+                host.Logger.LogWarning("OCR 翻译失败：{Error}", ex.Message);
+            }
+            catch (Exception ex)
+            {
+                host.Logger.LogWarning("OCR 翻译异常：{Error}", ex.Message);
+            }
         }
+
+        // 没配在线模型时用宿主下载好的本地模型（和「翻译」工具共用同一套引擎）
+        var modelId = PickInstalledModel(host);
+        if (modelId is not null && host.LocalTranslation.IsAvailable(modelId))
+        {
+            try
+            {
+                var translated = await host.LocalTranslation.TranslateAsync(
+                    new LocalTranslationRequest
+                    {
+                        ModelId = modelId,
+                        Text = original,
+                        TargetLanguage = target
+                    },
+                    cancellationToken);
+
+                if (!string.IsNullOrWhiteSpace(translated))
+                    return $"{original.TrimEnd()}\n\n—— 译文（{target}）——\n\n{translated}";
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                host.Logger.LogWarning("OCR 本地翻译失败：{Error}", ex.Message);
+            }
+        }
+
+        // 用户明确要求了翻译却没有可用的引擎：不能静默返回原文，
+        // 否则会以为识别结果本来就是目标语言。
+        return original.TrimEnd()
+            + "\n\n—— 未翻译：没有可用的翻译引擎。"
+            + "可在「设置 › 模型」启用在线模型，或下载一个离线模型——";
+    }
+
+    /// <summary>挑宿主编译清单里第一个已下载的本地模型；没有就返回 null。</summary>
+    private static string? PickInstalledModel(IToolHost host)
+    {
+        var models = host.LocalModels;
+
+        foreach (var model in models.All)
+        {
+            if (models.IsInstalled(model.Id))
+                return model.Id;
+        }
+
+        return null;
     }
 }

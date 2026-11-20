@@ -42,13 +42,6 @@ dotnet publish (Join-Path $root 'src/Sparrow.App/Sparrow.App.csproj') `
     -o $publishDir -v quiet
 if ($LASTEXITCODE -ne 0) { throw '发布失败' }
 
-# 第三方包会把调试符号一起带出来（libSkiaSharp.pdb 就有 80MB），发布产物不需要
-$pdbs = Get-ChildItem $publishDir -Recurse -File -Filter *.pdb
-if ($pdbs) {
-    $pdbSize = ($pdbs | Measure-Object Length -Sum).Sum
-    $pdbs | Remove-Item -Force
-    Write-Host ("  已移除 {0} 个 PDB（{1:N1} MB）" -f $pdbs.Count, ($pdbSize / 1MB))
-}
 
 Write-Host "== 3/4 复制插件 ==" -ForegroundColor Cyan
 if (-not (Test-Path $pluginBin)) { throw "找不到插件输出目录：$pluginBin" }
@@ -64,6 +57,14 @@ foreach ($plugin in Get-ChildItem $pluginBin -Directory) {
 
     Copy-Item $plugin.FullName -Destination $targetPlugins -Recurse -Force
     Write-Host "  $($plugin.Name)"
+}
+
+# 第三方包和插件都会带调试符号（libSkiaSharp.pdb 就有 80MB），发布产物不需要
+$pdbs = Get-ChildItem $publishDir -Recurse -File -Filter *.pdb
+if ($pdbs) {
+    $pdbSize = ($pdbs | Measure-Object Length -Sum).Sum
+    $pdbs | Remove-Item -Force
+    Write-Host ("  已移除 {0} 个 PDB（{1:N1} MB）" -f $pdbs.Count, ($pdbSize / 1MB))
 }
 
 $size = (Get-ChildItem $publishDir -Recurse -File | Measure-Object Length -Sum).Sum

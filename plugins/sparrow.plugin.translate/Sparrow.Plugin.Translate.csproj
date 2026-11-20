@@ -3,18 +3,10 @@
   <PropertyGroup>
     <AssemblyName>Sparrow.Plugin.Translate</AssemblyName>
     <RootNamespace>Sparrow.Plugin.Translate</RootNamespace>
-    <Version>0.2.0</Version>
-    <Description>翻译：在线大模型或本地离线模型（GGUF）</Description>
+    <Version>0.3.0</Version>
+    <Description>翻译：在线大模型或本地离线模型（由宿主提供的共享翻译引擎）</Description>
     <PluginId>sparrow.plugin.translate</PluginId>
-    <!-- 插件是独立目录加载的：第三方依赖必须跟着插件走，不能指望宿主提供 -->
-    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
-
-  <ItemGroup>
-    <!-- 离线推理：llama.cpp 的 .NET 封装，CPU 后端 -->
-    <PackageReference Include="LLamaSharp" />
-    <PackageReference Include="LLamaSharp.Backend.Cpu" />
-  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Sparrow.Plugin.Sdk\Sparrow.Plugin.Sdk.csproj">
@@ -26,22 +18,5 @@
   <ItemGroup>
     <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
-
-  <!--
-    后端包默认把所有平台的 native 库都拷进输出（26MB）。
-    插件只分发 Windows 版本，只留 win-x64，避免把 linux/macos 的二进制塞进安装包。
-    BeforeTargets 保证在复制到宿主插件目录之前完成精简。
-  -->
-  <Target Name="TrimTranslateRuntimeAssets" BeforeTargets="CopyPluginToHost">
-    <ItemGroup>
-      <_ForeignRuntimeFiles Include="$(TargetDir)runtimes\**\*"
-                            Exclude="$(TargetDir)runtimes\win-x64\**\*" />
-      <_ForeignRuntimeDirs Include="$(TargetDir)runtimes\*"
-                           Exclude="$(TargetDir)runtimes\win-x64" />
-    </ItemGroup>
-
-    <Delete Files="@(_ForeignRuntimeFiles)" />
-    <RemoveDir Directories="@(_ForeignRuntimeDirs)" />
-  </Target>
 
 </Project>

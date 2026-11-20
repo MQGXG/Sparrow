@@ -4,20 +4,29 @@ using LLama.Common;
 using LLama.Native;
 using LLama.Sampling;
 using Microsoft.Extensions.Logging.Abstractions;
+using Sparrow.Plugin.Sdk;
 
-namespace Sparrow.Plugin.Translate;
+namespace Sparrow.App.Services;
 
 /// <summary>
-/// 离线翻译推理（llama.cpp / LLamaSharp，GGUF 模型）。
+/// 本地翻译引擎（GGUF / llama.cpp）。
 ///
-/// 模型只在一次翻译期间加载，调用结束立刻释放：
-/// 1.8B 模型常驻要 1GB 以上内存，7B 要 4GB 以上——闲置时不占着更符合这个工具的定位。
-/// 也不做静态缓存 + 定时释放：定时器会把插件程序集钉在进程里，宿主卸载插件时
-/// ALC 回收不掉（见 docs/architecture.md 铁律 4）。
+/// 这是「翻译能力」而不是「翻译工具」：翻译插件和 OCR 的「翻译为」都通过
+/// <see cref="ILocalTranslation"/> 调它，提示词、采样、分块、清理只有这一份实现。
+///
+/// 模型只在一次翻译期间加载，调用结束立刻释放：1.8B 常驻要 1GB 以上，
+/// 7B 要 4GB 以上，闲置时不占着更符合这个工具的定位。
+/// 也不做静态缓存 + 定时释放——定时器会把程序集钉在进程里。
 /// </summary>
-internal static class LocalTranslator
+internal sealed class LocalTranslationService : ILocalTranslation
 {
     private const int ContextSize = 4096;
+
+    /// <summary>离线模型上下文小，块切得短，避免 4096 被吃掉。</summary>
+    private const int ChunkLength = 1200;
+
+    /// <summary>最多 20 块（约 2.4 万字）；再多就是让用户等十几分钟，不如直接拒绝。</summary>
+    private const int MaxChunks = 20;
 
     /// <summary>同一时间只跑一个推理：模型加载和上下文都不是线程安全的。</summary>
     private static readonly SemaphoreSlim Gate = new(1, 1);
@@ -33,30 +42,53 @@ internal static class LocalTranslator
 
     private static bool _nativeConfigured;
 
-    /// <summary>
-    /// 逐块翻译。返回顺序与 <paramref name="chunks"/> 一致。
-    /// 抛出的异常由调用方转成可读提示（这里只做「把资源放掉」）。
-    /// </summary>
-    public static async Task<IReadOnlyList<string>> TranslateAsync(
-        string modelPath,
-        string pluginDirectory,
-        IReadOnlyList<string> chunks,
-        string targetLanguage,
-        string style,
-        bool keepFormatting,
-        string glossary,
-        CancellationToken cancellationToken)
+    private readonly ILocalModels _models;
+    private readonly IAppLog _log;
+
+    public LocalTranslationService(ILocalModels models, IAppLog log)
     {
+        _models = models;
+        _log = log;
+    }
+
+    public bool IsAvailable(string modelId) => _models.IsInstalled(modelId);
+
+    public async Task<string?> TranslateAsync(
+        LocalTranslationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Text))
+            return null;
+
+        if (!_models.IsInstalled(request.ModelId))
+        {
+            _log.Warn($"本地翻译：模型「{request.ModelId}」未下载");
+            return null;
+        }
+
+        var chunks = Chunk(request.Text, ChunkLength).ToList();
+        if (chunks.Count > MaxChunks)
+        {
+            _log.Warn($"本地翻译：文本 {request.Text.Length} 字，超过 {MaxChunks} 块的限制");
+            return null;
+        }
+
+        var path = await _models.EnsureAsync(request.ModelId, progress: null, cancellationToken);
+        if (path is null)
+        {
+            _log.Warn($"本地翻译：模型「{request.ModelId}」不可用");
+            return null;
+        }
+
         await Gate.WaitAsync(cancellationToken);
 
         try
         {
-            ConfigureNative(pluginDirectory);
+            ConfigureNative();
 
-            var parameters = CreateParameters(modelPath);
+            var parameters = CreateParameters(path);
 
-            // 加载 1.1GB 模型要几秒，放线程池：调用方在 UI 线程上 await，
-            // 直接同步加载会把面板冻住。
+            // 加载 1.1GB 模型要几秒，放线程池：调用方通常在 UI 线程上 await
             var weights = await Task.Run(
                 () => LLamaWeights.LoadFromFile(parameters),
                 cancellationToken);
@@ -69,16 +101,14 @@ internal static class LocalTranslator
                     ApplyTemplate = false
                 };
 
+                var glossary = BuildGlossary(request.Terms);
                 var results = new List<string>(chunks.Count);
 
                 foreach (var chunk in chunks)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    // 不拼「上文」：混元是专用翻译模型，把参考上下文塞进正文会被当成待译文本，
-                    // 实测会在开头复述上一段。相邻块之间它自己的术语已经够稳定。
-                    var prompt = RenderPrompt(weights, targetLanguage, style, keepFormatting, glossary, chunk);
-
+                    var prompt = RenderPrompt(weights, request, glossary, chunk);
                     var options = new InferenceParams
                     {
                         MaxTokens = Math.Clamp(chunk.Length * 2, 256, 3072),
@@ -91,11 +121,20 @@ internal static class LocalTranslator
                     await foreach (var token in executor.InferAsync(prompt, options, cancellationToken))
                         builder.Append(token);
 
-                    results.Add(builder.ToString());
+                    results.Add(Clean(builder.ToString()));
                 }
 
-                return results;
+                return string.Concat(results).Trim();
             }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _log.Error($"本地翻译失败：{ex.Message}", ex);
+            return null;
         }
         finally
         {
@@ -104,16 +143,16 @@ internal static class LocalTranslator
     }
 
     /// <summary>
-    /// 插件目录里有 runtimes/win-x64/native，默认搜索路径只认宿主目录，
+    /// native 库跟着宿主走（App 目录下的 runtimes/win-x64/native）。
     /// 不显式指过去会报「native library cannot be correctly loaded」。
     /// </summary>
-    private static void ConfigureNative(string pluginDirectory)
+    private static void ConfigureNative()
     {
         if (_nativeConfigured)
             return;
 
         NativeLibraryConfig.All
-            .WithSearchDirectory(pluginDirectory)
+            .WithSearchDirectory(AppContext.BaseDirectory)
             .WithAutoFallback(true);
 
         _nativeConfigured = true;
@@ -139,18 +178,16 @@ internal static class LocalTranslator
     /// 渲染提示词。
     ///
     /// 混元翻译按模型卡手工拼：llama.cpp 的 Jinja 引擎解析这个 GGUF 的 chat_template 有误
-    /// （会把 &lt;hy_User&gt; 挪到正文后面，译文就退化成了原文）。
+    /// （会把 &lt;hy_User&gt; 挪到正文后面，译文就退化成原文）。
     /// 其余模型仍交给自带的 chat template。
     /// </summary>
     private static string RenderPrompt(
         LLamaWeights weights,
-        string target,
-        string style,
-        bool keepFormatting,
+        LocalTranslationRequest request,
         string glossary,
         string text)
     {
-        var user = BuildInstruction(target, style, keepFormatting) + text;
+        var user = BuildInstruction(request.TargetLanguage, request.Style, request.KeepFormatting) + text;
 
         if (IsHunyuan(weights))
         {
@@ -229,4 +266,57 @@ internal static class LocalTranslator
         "Español" => "Spanish",
         _ => target
     };
+
+    private static string BuildGlossary(IReadOnlyList<LocalTranslationTerm> terms)
+    {
+        if (terms.Count == 0)
+            return string.Empty;
+
+        var builder = new StringBuilder("术语表（这些词必须按指定译法翻译）：\n");
+
+        foreach (var term in terms)
+            builder.Append(term.Source).Append(" → ").Append(term.Target).Append('\n');
+
+        return builder.Append('\n').ToString();
+    }
+
+    /// <summary>按长度切块，优先在换行/句末标点处断开，避免把句子劈开。</summary>
+    private static IEnumerable<string> Chunk(string text, int maxLength)
+    {
+        var start = 0;
+
+        while (start < text.Length)
+        {
+            var length = Math.Min(maxLength, text.Length - start);
+
+            if (start + length < text.Length)
+            {
+                var cut = text.LastIndexOfAny(
+                    ['\n', '。', '！', '？', '.', '!', '?', '；', ';'],
+                    start + length - 1,
+                    length);
+
+                if (cut > start + maxLength / 3)
+                    length = cut - start + 1;
+            }
+
+            yield return text.Substring(start, length);
+            start += length;
+        }
+    }
+
+    /// <summary>小模型偶尔会自作主张加一对引号，去掉；再清理漏出的英文连接词。</summary>
+    private static string Clean(string text)
+    {
+        var trimmed = TranslationCleanup.Apply(text).Trim();
+
+        if (trimmed.Length >= 2
+            && ((trimmed[0] == '"' && trimmed[^1] == '"')
+                || (trimmed[0] == '“' && trimmed[^1] == '”')))
+        {
+            trimmed = trimmed[1..^1].Trim();
+        }
+
+        return trimmed;
+    }
 }

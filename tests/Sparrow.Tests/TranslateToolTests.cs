@@ -59,7 +59,15 @@ public sealed class TranslateToolTests
 
     private sealed class FakeHost : IToolHost
     {
-        public FakeHost(IAiClient ai) => Ai = ai;
+        public FakeHost(
+            IAiClient ai,
+            ILocalModels? models = null,
+            ILocalTranslation? translation = null)
+        {
+            Ai = ai;
+            LocalModels = models ?? NullLocalModels.Instance;
+            LocalTranslation = translation ?? NullLocalTranslation.Instance;
+        }
 
         public ILogger Logger => NullLogger.Instance;
 
@@ -69,7 +77,9 @@ public sealed class TranslateToolTests
 
         public IAiClient Ai { get; }
 
-        public ILocalModels LocalModels => NullLocalModels.Instance;
+        public ILocalModels LocalModels { get; }
+
+        public ILocalTranslation LocalTranslation { get; }
 
         public string PluginDirectory => AppContext.BaseDirectory;
 
@@ -95,6 +105,61 @@ public sealed class TranslateToolTests
             Host = new FakeHost(ai),
             Parameters = parameters ?? new Dictionary<string, string>()
         };
+
+    private static ToolContext Context(
+        FakeAi ai,
+        string text,
+        IReadOnlyDictionary<string, string>? parameters,
+        ILocalModels models,
+        ILocalTranslation translation) =>
+        new()
+        {
+            Input = new TextInput(text),
+            Host = new FakeHost(ai, models, translation),
+            Parameters = parameters ?? new Dictionary<string, string>()
+        };
+
+    private sealed class FakeLocalModels : ILocalModels
+    {
+        private readonly HashSet<string> _installed;
+
+        public FakeLocalModels(params string[] installed) =>
+            _installed = new HashSet<string>(installed, StringComparer.Ordinal);
+
+        public IReadOnlyList<LocalModelInfo> All { get; } =
+        [
+            new("hy-mt-1.8b", "小模型", "测试", 1, 4, "测试许可", ["https://example.com/a.gguf"]),
+            new("hy-mt-7b", "大模型", "测试", 2, 16, "测试许可", ["https://example.com/b.gguf"])
+        ];
+
+        public bool IsInstalled(string modelId) => _installed.Contains(modelId);
+
+        public Task<string?> EnsureAsync(
+            string modelId,
+            IProgress<double>? progress = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<string?>(IsInstalled(modelId) ? "model.gguf" : null);
+
+        public Task<bool> DeleteAsync(string modelId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(false);
+    }
+
+    private sealed class FakeLocalTranslation : ILocalTranslation
+    {
+        public string? Result { get; set; } = "本地译文";
+
+        public LocalTranslationRequest? LastRequest { get; private set; }
+
+        public bool IsAvailable(string modelId) => true;
+
+        public Task<string?> TranslateAsync(
+            LocalTranslationRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            LastRequest = request;
+            return Task.FromResult(Result);
+        }
+    }
 
     [Fact]
     public async Task 翻译_调用模型并返回译文()
@@ -212,6 +277,71 @@ public sealed class TranslateToolTests
         var system = withGlossary.LastRequest!.System.ShouldNotBeNull();
         system.ShouldContain("A → 甲");
         system.ShouldContain("B → 乙");
+    }
+
+    [Fact]
+    public async Task 离线引擎_调用宿主共享的翻译能力()
+    {
+        var translation = new FakeLocalTranslation();
+        var models = new FakeLocalModels("hy-mt-1.8b");
+
+        var result = await new TranslateTool().ExecuteAsync(
+            Context(
+                new FakeAi { IsAvailable = false },
+                "Hello",
+                new Dictionary<string, string>
+                {
+                    ["engine"] = "离线 · 1.8B",
+                    ["to"] = "中文",
+                    ["glossary"] = "Sparrow=Sparrow"
+                },
+                models,
+                translation),
+            CancellationToken.None);
+
+        result.Success.ShouldBeTrue();
+        result.Payload.ShouldBeOfType<TextPayload>().Text.ShouldBe("本地译文");
+
+        // 插件只描述「翻什么」，模型路径、提示词、采样都在宿主
+        var request = translation.LastRequest.ShouldNotBeNull();
+        request.ModelId.ShouldBe("hy-mt-1.8b");
+        request.Text.ShouldBe("Hello");
+        request.TargetLanguage.ShouldBe("中文");
+        request.Terms.ShouldHaveSingleItem().Source.ShouldBe("Sparrow");
+    }
+
+    [Fact]
+    public async Task 自动_在线不可用时选第一个已下载的本地模型()
+    {
+        var translation = new FakeLocalTranslation();
+        var models = new FakeLocalModels("hy-mt-7b");
+
+        var result = await new TranslateTool().ExecuteAsync(
+            Context(new FakeAi { IsAvailable = false }, "Hello", null, models, translation),
+            CancellationToken.None);
+
+        result.Success.ShouldBeTrue();
+        translation.LastRequest!.ModelId.ShouldBe("hy-mt-7b");
+    }
+
+    [Fact]
+    public async Task 离线引擎_返回空时给出失败而不是空结果()
+    {
+        var translation = new FakeLocalTranslation { Result = null };
+        var models = new FakeLocalModels("hy-mt-1.8b");
+
+        var result = await new TranslateTool().ExecuteAsync(
+            Context(
+                new FakeAi { IsAvailable = false },
+                "Hello",
+                new Dictionary<string, string> { ["engine"] = "离线 · 1.8B" },
+                models,
+                translation),
+            CancellationToken.None);
+
+        result.Success.ShouldBeFalse();
+        result.Error!.Kind.ShouldBe(ToolErrorKind.Execution);
+        result.Error.Message.ShouldContain("离线翻译失败");
     }
 
     [Fact]

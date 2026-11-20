@@ -21,17 +21,18 @@ pwsh build\pack.ps1 -Version 0.1.0 -SkipOcr
 
 | 产物 | 大小 |
 |---|---:|
-| 发布目录（自包含） | **135.5 MB** |
+| 发布目录（自包含） | **135.3 MB** |
 | `Sparrow-win-Portable.zip` | 61.7 MB |
 | `Sparrow-0.1.0-full.nupkg`（增量基线） | 61.7 MB |
-| `Sparrow-win-Setup.exe` | **68.9 MB** |
+| `Sparrow-win-Setup.exe` | **68.8 MB** |
 
 发布目录构成：
 
 | 部分 | 大小 | 说明 |
 |---|---:|---|
-| .NET 运行时 + 应用 + Skia | 112.6 MB | 自包含，目标机不需要装 .NET |
-| `plugins/` | 22.5 MB | 其中翻译插件 22.4 MB（LLamaSharp + 4 套 CPU 变体） |
+| 根目录（.NET 运行时 + 应用 + 托管库） | 116.0 MB | 自包含，目标机不需要装 .NET |
+| `runtimes/win-x64/native` | 19.1 MB | LLamaSharp 4 套 CPU 变体 + Skia / HarfBuzz / sqlite |
+| `plugins/` | 0.2 MB | 翻译插件不再自带推理库（原 22.4 MB） |
 
 **已剔除**：第三方包带出来的调试符号。`libSkiaSharp.pdb` 80 MB、`libHarfBuzzSharp.pdb` 20 MB，
 发布后不再需要，`publish.ps1` 会统一删掉 —— 这一项把 235 MB 降到了 135 MB。
@@ -45,7 +46,7 @@ pwsh build\pack.ps1 -Version 0.1.0 -SkipOcr
 | 改成框架依赖发布（`--self-contained false`） | ≈ 70 MB | 用户必须先装 .NET 10 Desktop Runtime |
 | 翻译插件只保留 avx2 一套 native 库 | ≈ 9 MB | 极老的 CPU（无 AVX2）会退到纯解释执行或直接不可用 |
 
-按「开箱即用」优先，当前默认是**自包含**。目标线建议改成 80 MB，或者接受框架依赖。
+按「开箱即用」优先，当前默认是**自包含**。目标线建议改成 80 MB，或者接受框架依赖。`r`n`r`n> 本地翻译引擎从插件搬进宿主后，总体积基本没变（22 MB 从 `plugins/` 挪到了 `runtimes/`），`r`n> 但插件目录从 22.4 MB 降到 0.2 MB，OCR 和翻译也不必各背一份 native 库。
 
 ## 四、更新
 

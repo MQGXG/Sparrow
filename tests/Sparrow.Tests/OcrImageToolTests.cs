@@ -84,6 +84,47 @@ public sealed class OcrImageToolTests
     private static ToolHost CreateHost(string pluginDirectory) =>
         new("sparrow.plugin.ocr", pluginDirectory, new NullLog());
 
+    private sealed class FakeModels : ILocalModels
+    {
+        public FakeModels(params string[] installed) =>
+            Installed = new HashSet<string>(installed, StringComparer.Ordinal);
+
+        public HashSet<string> Installed { get; }
+
+        public IReadOnlyList<LocalModelInfo> All { get; } =
+            [new("hy-mt-1.8b", "小模型", "测试", 1, 4, "测试", ["https://example.com/a.gguf"])];
+
+        public bool IsInstalled(string modelId) => Installed.Contains(modelId);
+
+        public Task<string?> EnsureAsync(
+            string modelId,
+            IProgress<double>? progress = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<string?>(IsInstalled(modelId) ? "model.gguf" : null);
+
+        public Task<bool> DeleteAsync(string modelId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(false);
+    }
+
+    private sealed class FakeTranslation : ILocalTranslation
+    {
+        private readonly string? _result;
+
+        public FakeTranslation(string? result) => _result = result;
+
+        public LocalTranslationRequest? LastRequest { get; private set; }
+
+        public bool IsAvailable(string modelId) => true;
+
+        public Task<string?> TranslateAsync(
+            LocalTranslationRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            LastRequest = request;
+            return Task.FromResult(_result);
+        }
+    }
+
     [Fact]
     public async Task 非图片输入_返回InvalidInput()
     {
@@ -185,6 +226,53 @@ public sealed class OcrImageToolTests
         var text = result.Payload.ShouldBeOfType<OcrResultPayload>().Text;
         text.ShouldBe("HELLO");
         text.ShouldNotContain("##");
+    }
+
+    [Fact]
+    public async Task 没配在线模型_用本地引擎翻译()
+    {
+        var root = CreateWorkerDirectory();
+        try
+        {
+            var runner = new FakeRunner([Result("hello world")]);
+            var translation = new FakeTranslation("你好，世界");
+
+            var host = new ToolHost(
+                "sparrow.plugin.ocr",
+                root,
+                new NullLog(),
+                localModels: new FakeModels("hy-mt-1.8b"),
+                localTranslation: translation);
+
+            var result = await new OcrImageTool(runner).ExecuteAsync(
+                new ToolContext
+                {
+                    Input = new ImageSetInput([Image("a.png")]),
+                    Host = host,
+                    Parameters = new Dictionary<string, string> { ["translate"] = "中文" }
+                },
+                CancellationToken.None);
+
+            result.Success.ShouldBeTrue();
+
+            var text = result.Payload.ShouldBeOfType<OcrResultPayload>().Text;
+            text.ShouldContain("hello world");
+            text.ShouldContain("译文");
+            text.ShouldContain("你好，世界");
+
+            translation.LastRequest.ShouldNotBeNull().TargetLanguage.ShouldBe("中文");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
     }
 
     [Fact]

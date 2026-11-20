@@ -40,6 +40,12 @@ public interface IToolHost
     ILocalModels LocalModels { get; }
 
     /// <summary>
+    /// 本地翻译引擎：模型加载、提示词模板、采样与分块都在宿主，
+    /// 多个插件（翻译、OCR）共用同一份实现。未注入时是 <see cref="NullLocalTranslation"/>。
+    /// </summary>
+    ILocalTranslation LocalTranslation { get; }
+
+    /// <summary>
     /// 插件自己的安装目录（只读）。
     ///
     /// 用于定位随插件分发的资源，比如 OCR 的 worker exe 与模型文件。

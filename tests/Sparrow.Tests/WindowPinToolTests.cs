@@ -74,6 +74,8 @@ public sealed class WindowPinToolTests
 
         public ILocalModels LocalModels => NullLocalModels.Instance;
 
+        public ILocalTranslation LocalTranslation => NullLocalTranslation.Instance;
+
         public string PluginDirectory => AppContext.BaseDirectory;
 
         public IClipboardHistory? ClipboardHistory => null;

@@ -1,4 +1,4 @@
-using System.Text;
+using Sparrow.Plugin.Sdk;
 
 namespace Sparrow.Plugin.Translate;
 
@@ -8,7 +8,7 @@ namespace Sparrow.Plugin.Translate;
 /// 参数是一个字符串（多行输入），每行 <c>原文=译文</c>；
 /// 也接受 <c>＝</c>、<c>→</c> 和分号分隔，避免用户为了对齐格式来回折腾。
 ///
-/// 术语表比「带上文」更可靠：它不依赖模型去理解上下文，而是直接给出答案。
+/// 解析留在插件（这是工具自己的参数格式），渲染成提示词由宿主的翻译引擎负责。
 /// </summary>
 internal static class Glossary
 {
@@ -23,18 +23,18 @@ internal static class Glossary
     private static readonly char[] Delimiters = ['=', '＝', '→'];
 
     /// <summary>解析成词条；空行、没有分隔符、重复原文都会被丢弃。</summary>
-    public static IReadOnlyList<(string Source, string Target)> Parse(string? raw)
+    public static IReadOnlyList<LocalTranslationTerm> Parse(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
             return [];
 
         var text = raw.Length > MaxInputLength ? raw[..MaxInputLength] : raw;
-        var entries = new List<(string Source, string Target)>();
+        var terms = new List<LocalTranslationTerm>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var line in text.Split(Separators, StringSplitOptions.RemoveEmptyEntries))
         {
-            if (entries.Count >= MaxEntries)
+            if (terms.Count >= MaxEntries)
                 break;
 
             var item = line.Trim().TrimStart('-', '•', '*').Trim();
@@ -49,23 +49,9 @@ internal static class Glossary
             if (source.Length == 0 || target.Length == 0 || !seen.Add(source))
                 continue;
 
-            entries.Add((source, target));
+            terms.Add(new LocalTranslationTerm(source, target));
         }
 
-        return entries;
-    }
-
-    /// <summary>渲染成提示词块；没有词条时返回空串（调用方直接拼接）。</summary>
-    public static string ToPrompt(IReadOnlyList<(string Source, string Target)> entries)
-    {
-        if (entries.Count == 0)
-            return string.Empty;
-
-        var builder = new StringBuilder("术语表（这些词必须按指定译法翻译）：\n");
-
-        foreach (var (source, target) in entries)
-            builder.Append(source).Append(" → ").Append(target).Append('\n');
-
-        return builder.Append('\n').ToString();
+        return terms;
     }
 }

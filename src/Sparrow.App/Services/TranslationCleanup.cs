@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace Sparrow.Plugin.Translate;
+namespace Sparrow.App.Services;
 
 /// <summary>
 /// 离线译文的收尾清理。

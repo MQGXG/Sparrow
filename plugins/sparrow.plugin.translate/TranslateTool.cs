@@ -7,20 +7,16 @@ namespace Sparrow.Plugin.Translate;
 /// <summary>
 /// 翻译工具。
 ///
-/// 在线走宿主注入的 <see cref="IToolHost.Ai"/>（插件不关心 provider、端点或密钥）；
-/// 离线走宿主下载好的 GGUF 模型——插件只按 Id 取路径，推理在本插件里做。
+/// 在线走宿主注入的 <see cref="IToolHost.Ai"/>；离线走宿主注入的
+/// <see cref="IToolHost.LocalTranslation"/>——两者都由宿主实现，插件只描述「翻什么」。
 /// 长文本按标点/换行切块，逐块翻译后按原顺序拼接。
 /// </summary>
 public sealed class TranslateTool : ITool
 {
     private const int MaxChunkLength = 3000;
-
-    /// <summary>离线模型上下文小，块切得更短，避免 4096 上下文被吃掉。</summary>
-    private const int LocalChunkLength = 1200;
-
     private const int MaxChunks = 20;
 
-    /// <summary>模型 Id 必须和宿主 LocalModelManager 的清单一致。</summary>
+    /// <summary>离线引擎的模型 Id 必须和宿主 LocalModelManager 的清单一致。</summary>
     private const string LocalSmallModel = "hy-mt-1.8b";
     private const string LocalLargeModel = "hy-mt-7b";
 
@@ -102,30 +98,30 @@ public sealed class TranslateTool : ITool
         var target = context.GetParameter("to", "English");
         var style = context.GetParameter("style", "自然");
         var keepFormatting = context.GetParameter("keepFormatting", "true") != "false";
-        var glossary = Glossary.ToPrompt(Glossary.Parse(context.GetParameter("glossary", string.Empty)));
+        var terms = Glossary.Parse(context.GetParameter("glossary", string.Empty));
 
         // 明确选了离线：不回落在线，缺模型就告诉用户去哪下
         if (engine is EngineLocalSmall or EngineLocalLarge)
         {
             var modelId = engine == EngineLocalLarge ? LocalLargeModel : LocalSmallModel;
             return await TranslateOfflineAsync(
-                host, modelId, input.Text, target, style, keepFormatting, glossary, cancellationToken);
+                host, modelId, input.Text, target, style, keepFormatting, terms, cancellationToken);
         }
 
         // 自动 / 在线：在线模型可用就沿用原来的路径（保持既有行为）
         if (host.Ai.IsAvailable)
         {
             return await TranslateOnlineAsync(
-                host, input.Text, target, style, keepFormatting, glossary, cancellationToken);
+                host, input.Text, target, style, keepFormatting, terms, cancellationToken);
         }
 
         if (engine == EngineAuto)
         {
-            var installed = PickInstalledModel(host.LocalModels);
+            var installed = PickInstalledModel(host);
             if (installed is not null)
             {
                 return await TranslateOfflineAsync(
-                    host, installed, input.Text, target, style, keepFormatting, glossary, cancellationToken);
+                    host, installed, input.Text, target, style, keepFormatting, terms, cancellationToken);
             }
         }
 
@@ -140,11 +136,12 @@ public sealed class TranslateTool : ITool
         string target,
         string style,
         bool keepFormatting,
-        string glossary,
+        IReadOnlyList<LocalTranslationTerm> terms,
         CancellationToken cancellationToken)
     {
         var system = BuildSystemPrompt(target, style, keepFormatting);
 
+        var glossary = BuildGlossary(terms);
         if (glossary.Length > 0)
             system += Environment.NewLine + Environment.NewLine + glossary;
 
@@ -204,49 +201,40 @@ public sealed class TranslateTool : ITool
         string target,
         string style,
         bool keepFormatting,
-        string glossary,
+        IReadOnlyList<LocalTranslationTerm> terms,
         CancellationToken cancellationToken)
     {
-        var models = host.LocalModels;
+        var engine = host.LocalTranslation;
 
-        // 翻译工具不主动下载 1GB+ 的模型：没下就提示去设置页下，别让用户莫名其妙等半天
-        if (models is null || !models.IsInstalled(modelId))
+        // 翻译工具不主动下载 1GB+ 的模型：没下就提示去设置页下
+        if (engine is null || !engine.IsAvailable(modelId))
         {
             return ToolResult.Unsupported(
                 "离线模型尚未下载，请到「设置 › 模型 › 离线模型」下载后再试");
         }
 
-        var path = await models.EnsureAsync(modelId, progress: null, cancellationToken);
-        if (path is null)
-            return ToolResult.Failed("离线模型不可用，请到「设置 › 模型 › 离线模型」重新下载");
-
-        var chunks = Chunk(text, LocalChunkLength).ToList();
-        if (chunks.Count > MaxChunks)
-            return ToolResult.InvalidInput($"文本过长（{text.Length} 字），请分段翻译");
-
         try
         {
-            var translated = await LocalTranslator.TranslateAsync(
-                path,
-                host.PluginDirectory,
-                chunks,
-                target,
-                style,
-                keepFormatting,
-                glossary,
+            var translated = await engine.TranslateAsync(
+                new LocalTranslationRequest
+                {
+                    ModelId = modelId,
+                    Text = text,
+                    TargetLanguage = target,
+                    Style = style,
+                    KeepFormatting = keepFormatting,
+                    Terms = terms
+                },
                 cancellationToken);
 
-            // 小模型偶尔漏英文连接词，先清理再交给 Clean 去引号
-            var parts = translated.Select(chunk => Clean(TranslationCleanup.Apply(chunk)));
-            return ToolResult.Ok(new TextPayload(string.Concat(parts).Trim()));
+            if (string.IsNullOrWhiteSpace(translated))
+                return ToolResult.Failed("离线翻译失败：模型不可用或文本过长");
+
+            return ToolResult.Ok(new TextPayload(translated));
         }
         catch (OperationCanceledException)
         {
             return ToolResult.Cancelled();
-        }
-        catch (DllNotFoundException ex)
-        {
-            return ToolResult.Failed($"离线推理组件缺失，请重新安装翻译插件（{ex.Message}）");
         }
         catch (Exception ex)
         {
@@ -254,16 +242,20 @@ public sealed class TranslateTool : ITool
         }
     }
 
-    /// <summary>「自动」且在线不可用时，优先挑已经下载好的模型（小的先）。</summary>
-    private static string? PickInstalledModel(ILocalModels? models)
+    /// <summary>「自动」且在线不可用时，挑第一个已下载的模型（顺序由宿主清单决定）。</summary>
+    private static string? PickInstalledModel(IToolHost host)
     {
+        var models = host.LocalModels;
         if (models is null)
             return null;
 
-        if (models.IsInstalled(LocalSmallModel))
-            return LocalSmallModel;
+        foreach (var model in models.All)
+        {
+            if (models.IsInstalled(model.Id))
+                return model.Id;
+        }
 
-        return models.IsInstalled(LocalLargeModel) ? LocalLargeModel : null;
+        return null;
     }
 
     private static string BuildSystemPrompt(string target, string style, bool keepFormatting)
@@ -278,6 +270,17 @@ public sealed class TranslateTool : ITool
             {formatting}
             只输出译文，不要解释、不要加引号、不要加“译文：”前缀。
             """;
+    }
+
+    /// <summary>在线路径自己拼术语表；离线路径交给宿主的翻译引擎。</summary>
+    private static string BuildGlossary(IReadOnlyList<LocalTranslationTerm> terms)
+    {
+        if (terms.Count == 0)
+            return string.Empty;
+
+        return "术语表（这些词必须按指定译法翻译）：\n"
+            + string.Join('\n', terms.Select(term => $"{term.Source} → {term.Target}"))
+            + "\n";
     }
 
     /// <summary>按长度切块，优先在换行/句末标点处断开，避免把句子劈开。</summary>

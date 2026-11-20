@@ -172,6 +172,7 @@ public interface IToolHost
     IHttpClientAccess Http { get; }           // 受策略控制，可被禁用
     IAiClient Ai { get; }                     // 模型能力；未配置时 IsAvailable=false
     ILocalModels LocalModels { get; }          // 本地模型：宿主管下载/缓存，插件只拿路径
+    ILocalTranslation LocalTranslation { get; } // 本地翻译引擎：多个插件共用，插件只描述翻什么
     string PluginDirectory { get; }           // 插件自己的目录，用于定位随包资源
     IClipboardHistory? ClipboardHistory { get; } // 剪贴板历史；用户关闭记录或测试场景为 null
     IWindowOverlay? Windows { get; }          // 通用窗口覆盖：拾取 / 图钉；无 UI 场景为 null
@@ -396,6 +397,7 @@ plugin.sdkVersion 的 major  ==  host.sdkVersion 的 major   → 兼容
 | 1.6 | `ClipboardHistoryEntry`：收藏 / 手动标签 / 自动标签字段 |
 | 1.7 | `ClipboardHistoryEntry.SourceApp`：复制来源进程名 |
 | 1.8 | `IToolHost.LocalModels` / `ILocalModels`：本地模型清单、下载、缓存、删除 |
+| 1.9 | `IToolHost.LocalTranslation` / `ILocalTranslation`：宿主共享的本地翻译引擎 |
 
 ---
 
