@@ -35,6 +35,8 @@
          0.25 的 llama.cpp 不认 hunyuan-dense 架构，必须 0.30 及以上 -->
     <PackageVersion Include="LLamaSharp" Version="0.30.0" />
     <PackageVersion Include="LLamaSharp.Backend.Cpu" Version="0.30.0" />
+    <!-- 打包与增量更新：Velopack（Setup.exe + delta）；Program.Main 首行调用 -->
+    <PackageVersion Include="Velopack" Version="1.2.161" />
     <!-- 测试栈：xunit v3（Avalonia.Headless.XUnit 12.1.6 依赖 extensibility.core 3.2.2） -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
     <PackageVersion Include="System.Drawing.Common" Version="11.0.0" />

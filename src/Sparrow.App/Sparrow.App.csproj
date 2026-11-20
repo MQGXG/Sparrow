@@ -26,6 +26,7 @@
     <PackageReference Include="SkiaSharp" />
     <PackageReference Include="Svg.Skia" />
     <PackageReference Include="System.Drawing.Common" />
+    <PackageReference Include="Velopack" />
   </ItemGroup>
 
   <ItemGroup>

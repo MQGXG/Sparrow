@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Avalonia;
+using Velopack;
 
 namespace Sparrow.App;
 
@@ -11,6 +12,10 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // Velopack 的安装 / 更新钩子：必须是第一行，早于单实例互斥与任何 UI。
+        // 开发态（未通过 Setup 安装）调用是空操作。
+        VelopackApp.Build().Run();
+
         Startup = Stopwatch.StartNew();
 
         // 单实例：M0 只做「第二个实例直接退出」。
