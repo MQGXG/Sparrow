@@ -1356,13 +1356,39 @@ public partial class WorkspaceViewModel : ObservableObject
 
     public void RemoveInputImage(InputImageViewModel image)
     {
-        if (!InputImages.Remove(image))
+        var index = InputImages.IndexOf(image);
+        if (index < 0)
             return;
+
+        InputImages.RemoveAt(index);
 
         if (IsImagePreviewVisible)
             HideImagePreview();
 
+        RemoveSectionFor(index);
         NotifyInputImagesChanged();
+    }
+
+    /// <summary>
+    /// 删掉图片后，它对应的那段识别结果也要消失，后面段的下标整体前移——
+    /// 不然 SourceIndex 和 CurrentImageIndex 会错位，切图时右侧指向错误的文字。
+    /// </summary>
+    private void RemoveSectionFor(int imageIndex)
+    {
+        var section = ResultSections.FirstOrDefault(item => item.SourceIndex == imageIndex);
+        if (section is not null)
+            ResultSections.Remove(section);
+
+        foreach (var rest in ResultSections)
+        {
+            if (rest.SourceIndex > imageIndex)
+                rest.SourceIndex--;
+        }
+
+        HasSections = ResultSections.Count > 0;
+        OnPropertyChanged(nameof(CurrentSection));
+        OnPropertyChanged(nameof(VisibleSections));
+        OnPropertyChanged(nameof(CanSwitchSectionView));
     }
 
     public void ClearInputImages()
@@ -1371,6 +1397,12 @@ public partial class WorkspaceViewModel : ObservableObject
             return;
 
         InputImages.Clear();
+
+        // 输入全清掉，结果也没有对应关系了，一并收起
+        ResultSections.Clear();
+        HasSections = false;
+        ShowAllSections = false;
+
         HideImagePreview();
         NotifyInputImagesChanged();
     }

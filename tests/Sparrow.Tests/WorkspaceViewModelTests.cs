@@ -391,6 +391,50 @@ public sealed class WorkspaceViewModelTests
     }
 
     [Fact]
+    public async Task 删除图片时对应结果一起移除()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+        await viewModel.ReloadAsync();
+
+        var paths = new List<string>();
+        for (var i = 0; i < 3; i++)
+        {
+            var path = System.IO.Path.Combine(root.Path, $"img{i}.png");
+            File.WriteAllBytes(path, [1, 2, 3]);
+            paths.Add(path);
+        }
+
+        viewModel.AcceptDroppedFiles(paths);
+
+        // 模拟识别结果：第 1 张和第 3 张有结果
+        viewModel.ResultSections.Add(new TextSectionViewModel(
+            new TextSection { Title = "1. a", SourceIndex = 0 }));
+        viewModel.ResultSections.Add(new TextSectionViewModel(
+            new TextSection { Title = "3. c", SourceIndex = 2 }));
+
+        // 删掉中间那张（它没有结果）
+        viewModel.RemoveInputImage(viewModel.InputImages[1]);
+
+        viewModel.InputImageCount.ShouldBe(2);
+        viewModel.ResultSections.Count.ShouldBe(2, "没有结果的那张被删，其余段保留");
+        viewModel.ResultSections[1].SourceIndex.ShouldBe(1, "第 3 张的段要前移到第 2");
+
+        // 删掉有结果的那张
+        viewModel.RemoveInputImage(viewModel.InputImages[0]);
+
+        viewModel.ResultSections.Count.ShouldBe(1);
+        viewModel.ResultSections[0].SourceIndex.ShouldBe(0);
+
+        // 全部清空
+        viewModel.ClearInputImages();
+
+        viewModel.ResultSections.ShouldBeEmpty("输入清空后结果没有对应关系");
+        viewModel.HasSections.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task 拖入多张图片_合并进图片集并切到OCRTool()
     {
         using var root = new TempPluginRoot();

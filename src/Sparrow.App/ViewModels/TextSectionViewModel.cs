@@ -35,8 +35,8 @@ public sealed partial class TextSectionViewModel : ObservableObject
 
     public bool IsFailed => Status == TextSectionStatus.Failed;
 
-    /// <summary>对应输入图片的下标，右侧「只看当前」靠它和图对上。</summary>
-    public int SourceIndex { get; }
+    /// <summary>对应输入图片的下标，右侧「只看当前」靠它和图对上。删图后会被前移。</summary>
+    public int SourceIndex { get; set; }
 
     /// <summary>列表里显示的一段摘要，避免一次铺开几千字。</summary>
     public string Preview { get; }
