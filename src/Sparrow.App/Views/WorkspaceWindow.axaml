@@ -1110,13 +1110,17 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                           <DataTemplate>
-                            <Rectangle Canvas.Left="{Binding X}"
-                                       Canvas.Top="{Binding Y}"
-                                       Width="{Binding Width}"
+                            <!-- Canvas 只认直接子元素，而条目外面还有一层 ContentPresenter；
+                                 改用 TranslateTransform 定位，绕开附加属性的容器限制 -->
+                            <Rectangle Width="{Binding Width}"
                                        Height="{Binding Height}"
                                        Stroke="{StaticResource AccentBrush}"
                                        StrokeThickness="2"
-                                       Fill="#28FFB020" />
+                                       Fill="#28FFB020">
+                              <Rectangle.RenderTransform>
+                                <TranslateTransform X="{Binding X}" Y="{Binding Y}" />
+                              </Rectangle.RenderTransform>
+                            </Rectangle>
                           </DataTemplate>
                         </ItemsControl.ItemTemplate>
                       </ItemsControl>
