@@ -30,27 +30,34 @@ public sealed class LocalModelManager : ILocalModels
             "models");
     }
 
-    /// <summary>当前支持的本地模型；下载源给的是 HuggingFace 官方仓库。</summary>
+    /// <summary>
+    /// 当前支持的本地模型。
+    ///
+    /// 下载源按顺序尝试：ModelScope 在前（国内直连），HuggingFace 兜底（官方仓库）。
+    /// 将来要自托管，在数组最前面插一条自己的镜像地址即可，别处不用动。
+    /// </summary>
     public IReadOnlyList<LocalModelInfo> All { get; } =
     [
         new(
             "hy-mt-1.8b",
             "混元翻译 1.5 · 1.8B",
             "33 种语言互译，小巧快速，适合大多数电脑",
-            1_100_000_000,
+            1_133_080_512,
             4,
             "腾讯混元社区协议（不适用于欧盟、英国和韩国）",
             [
+                "https://modelscope.cn/models/Tencent-Hunyuan/HY-MT1.5-1.8B-GGUF/resolve/master/HY-MT1.5-1.8B-Q4_K_M.gguf",
                 "https://huggingface.co/tencent/HY-MT1.5-1.8B-GGUF/resolve/main/HY-MT1.5-1.8B-Q4_K_M.gguf"
             ]),
         new(
             "hy-mt-7b",
             "混元翻译 1.5 · 7B",
             "WMT25 冠军模型升级版，译文更地道，需要较高配置",
-            4_300_000_000,
+            4_624_649_312,
             16,
             "腾讯混元社区协议（不适用于欧盟、英国和韩国）",
             [
+                "https://modelscope.cn/models/Tencent-Hunyuan/HY-MT1.5-7B-GGUF/resolve/master/HY-MT1.5-7B-Q4_K_M.gguf",
                 "https://huggingface.co/tencent/HY-MT1.5-7B-GGUF/resolve/main/HY-MT1.5-7B-Q4_K_M.gguf"
             ]),
         new(

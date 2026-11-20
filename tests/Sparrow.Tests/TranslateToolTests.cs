@@ -175,4 +175,47 @@ public sealed class TranslateToolTests
         descriptor.Produces.ShouldBe(OutputShape.Text);
         descriptor.Requires.ShouldBe(PlatformCapability.Ai);
     }
+
+    [Fact]
+    public void 描述符_有引擎选项且默认自动()
+    {
+        var descriptor = new TranslateTool().Descriptor;
+
+        var engine = ToolParameter.Find(descriptor.Parameters, "engine");
+        engine.ShouldNotBeNull();
+        engine!.Kind.ShouldBe(ParameterKind.Choice);
+        engine.Default.ShouldBe("自动");
+        engine.Choices.ShouldContain("离线 · 1.8B");
+        engine.Choices.ShouldContain("离线 · 7B");
+    }
+
+    [Fact]
+    public async Task 离线引擎_模型未下载时提示去设置页()
+    {
+        var ai = new FakeAi();
+
+        var result = await new TranslateTool().ExecuteAsync(
+            Context(ai, "hello", new Dictionary<string, string> { ["engine"] = "离线 · 1.8B" }),
+            CancellationToken.None);
+
+        result.Success.ShouldBeFalse();
+        result.Error!.Kind.ShouldBe(ToolErrorKind.PlatformUnsupported);
+        result.Error.Message.ShouldContain("离线模型");
+        result.Error.Message.ShouldContain("设置");
+        ai.Calls.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task 在线引擎_未配置时不提示离线模型()
+    {
+        var ai = new FakeAi { IsAvailable = false };
+
+        var result = await new TranslateTool().ExecuteAsync(
+            Context(ai, "hello", new Dictionary<string, string> { ["engine"] = "在线模型" }),
+            CancellationToken.None);
+
+        result.Success.ShouldBeFalse();
+        result.Error!.Kind.ShouldBe(ToolErrorKind.PlatformUnsupported);
+        result.Error.Message.ShouldNotContain("离线模型");
+    }
 }

@@ -82,6 +82,19 @@ public sealed class LocalModelManagerTests
     }
 
     [Fact]
+    public void 有下载源的模型都优先走国内镜像()
+    {
+        var manager = new LocalModelManager(new NullLog(), Path.GetTempPath());
+
+        var downloadable = manager.All.Where(model => model.DownloadUrls.Count > 0).ToList();
+        downloadable.ShouldNotBeEmpty();
+
+        // HuggingFace 在部分网络下连不通，第一个源必须是 ModelScope
+        downloadable.ShouldAllBe(model =>
+            model.DownloadUrls[0].StartsWith("https://modelscope.cn/", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void 设置页列出离线模型并按磁盘状态区分按钮()
     {
         var root = Path.Combine(Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));

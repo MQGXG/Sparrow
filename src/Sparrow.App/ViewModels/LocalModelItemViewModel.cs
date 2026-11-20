@@ -104,6 +104,11 @@ public partial class LocalModelItemViewModel : ObservableObject
             IsInstalled = true;
             _report($"「{Name}」已下载完成");
         }
+        catch (Exception ex)
+        {
+            // 事件处理器是 async void，异常漏出去会直接把进程带崩
+            _report($"「{Name}」下载失败：{ex.Message}");
+        }
         finally
         {
             IsBusy = false;
