@@ -942,7 +942,7 @@
         </Grid>
 
         <!-- 台态：单个工具的工作区，占满整宽 -->
-        <Grid IsVisible="{Binding IsDetailOpen}" RowDefinitions="Auto,Auto,Auto,Auto,*">
+        <Grid IsVisible="{Binding IsDetailOpen}" RowDefinitions="Auto,Auto,Auto,*">
 
             <!-- 面包屑 + 工具头：动作按钮放右侧，紧贴当前工具 -->
             <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
@@ -1058,25 +1058,27 @@
               </ItemsControl>
             </StackPanel>
 
-            <!-- 输入：文本工具给编辑框，图片/无输入工具给一条提示 -->
-            <TextBox Grid.Row="3"
-                     Text="{Binding InputText, Mode=TwoWay}"
-                     AcceptsReturn="True"
-                     MinHeight="64"
-                     MaxHeight="170"
-                     IsVisible="{Binding IsTextInput}"
-                     PlaceholderText="{Binding InputHint}"
-                     Margin="0,12,0,0"
-                     VerticalContentAlignment="Top" />
+            <!-- 左右分栏：左输入 / 右结果 -->
+            <Grid Grid.Row="3"
+                  ColumnDefinitions="*,*"
+                  ColumnSpacing="16"
+                  Margin="0,12,0,0">
+              <Panel Grid.Column="0">
 
-            <Border Grid.Row="3"
-                    IsVisible="{Binding !IsTextInput}"
+                <!-- 输入：文本工具给编辑框，图片/无输入工具给一条提示 -->
+                <TextBox Text="{Binding InputText, Mode=TwoWay}"
+                         AcceptsReturn="True"
+                         MinHeight="64"
+                         IsVisible="{Binding IsTextInput}"
+                         PlaceholderText="{Binding InputHint}"
+                         VerticalContentAlignment="Top" />
+
+            <Border IsVisible="{Binding !IsTextInput}"
                     Background="{StaticResource SurfaceRaisedBrush}"
                     BorderBrush="{StaticResource LineBrush}"
                     BorderThickness="1"
                     CornerRadius="8"
                     Padding="12,8"
-                    Margin="0,12,0,0"
                     HorizontalAlignment="Stretch">
               <StackPanel Spacing="10">
                 <!-- 图片集缩略图：选了什么一眼能看见 -->
@@ -1208,11 +1210,12 @@
               </StackPanel>
             </Border>
 
-            <!-- 结果：占满剩余高度 -->
-            <Border Grid.Row="4"
-                    Classes="panel"
-                    Margin="0,16,0,0"
-                    Padding="16">
+              </Panel>
+
+              <!-- 结果：右栏 -->
+              <Border Grid.Column="1"
+                      Classes="panel"
+                      Padding="16">
               <Grid RowDefinitions="Auto,Auto,*">
                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,10">
                   <TextBlock Classes="section" Text="结果" />
@@ -1324,6 +1327,7 @@
                            VerticalAlignment="Center" />
               </Grid>
             </Border>
+            </Grid>
           </Grid>
 
         </Grid>
