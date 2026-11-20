@@ -82,13 +82,12 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
         _ => "文件"
     };
 
-    /// <summary>缩略图占位字符：没有缩略图时给一个一眼能分辨的标记。</summary>
-    public string KindGlyph => Entry.Kind switch
-    {
-        ClipboardEntryKind.Text => "文",
-        ClipboardEntryKind.Image => "图",
-        _ => "件"
-    };
+    /// <summary>缩略图占位用的类型图标，与缩略图互斥；四者互斥，一次只有一个可见。</summary>
+    public bool IsTextKind => Entry.Kind == ClipboardEntryKind.Text && !IsLink;
+
+    public bool IsImageKind => Entry.Kind == ClipboardEntryKind.Image;
+
+    public bool IsFileKind => Entry.Kind == ClipboardEntryKind.Files;
 
     public bool HasThumbnail => Entry.Kind == ClipboardEntryKind.Image;
 

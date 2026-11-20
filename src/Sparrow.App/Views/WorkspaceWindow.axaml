@@ -459,19 +459,37 @@
                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto">
                   <TextBox x:Name="ClipboardSearchBox"
                            Text="{Binding Query, Mode=TwoWay}"
-                           PlaceholderText="搜索内容、标签、来源…" />
+                           PlaceholderText="搜索内容、标签、来源…">
+                    <TextBox.InnerLeftContent>
+                      <Path Classes="icon icon-sm"
+                            Data="{StaticResource IconSearch}" />
+                    </TextBox.InnerLeftContent>
+                  </TextBox>
                   <Button Grid.Column="1"
                           Classes="ghost small"
-                          Content="撤销删除"
+                          Width="30"
+                          Padding="0"
                           Margin="8,0,0,0"
                           IsVisible="{Binding CanUndoDelete}"
-                          Click="OnClipboardUndoDeleteClick" />
+                          ToolTip.Tip="撤销删除"
+                          AutomationProperties.Name="撤销删除"
+                          Click="OnClipboardUndoDeleteClick">
+                    <Path Classes="icon icon-xs"
+                          Data="{StaticResource IconUndo}" />
+                  </Button>
                   <Button Grid.Column="2"
                           Classes="ghost small"
-                          Content="清空"
+                          Width="30"
+                          Padding="0"
                           Margin="8,0,0,0"
                           IsVisible="{Binding !IsClearConfirmVisible}"
-                          Click="OnClipboardClearClick" />
+                          ToolTip.Tip="清空全部历史"
+                          AutomationProperties.Name="清空"
+                          Click="OnClipboardClearClick">
+                    <Path Classes="icon icon-xs"
+                          Data="{StaticResource IconTrash}" />
+                  </Button>
+                  <!-- 危险确认保留文字：图标在这一步没有「确定要删」的语义 -->
                   <Button Grid.Column="2"
                           Classes="ghost small danger"
                           Content="确认清空"
@@ -480,10 +498,16 @@
                           Click="OnClipboardClearConfirmClick" />
                   <Button Grid.Column="3"
                           Classes="ghost small"
-                          Content="取消"
+                          Width="30"
+                          Padding="0"
                           Margin="6,0,0,0"
                           IsVisible="{Binding IsClearConfirmVisible}"
-                          Click="OnClipboardClearCancelClick" />
+                          ToolTip.Tip="取消"
+                          AutomationProperties.Name="取消"
+                          Click="OnClipboardClearCancelClick">
+                    <Path Classes="icon icon-xs"
+                          Data="{StaticResource IconClose}" />
+                  </Button>
                 </Grid>
 
                 <!-- 统计归列表：条数 / 容量贴着搜索框，操作反馈在右 -->
@@ -707,12 +731,26 @@
                                         BorderThickness="1"
                                         ClipToBounds="True">
                                   <Panel>
-                                    <TextBlock Text="{Binding KindGlyph}"
-                                               FontSize="13"
-                                               Foreground="{StaticResource TextMutedBrush}"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"
-                                               IsVisible="{Binding !HasThumbnail}" />
+                                    <Path Classes="icon icon-sm"
+                                          Data="{StaticResource IconLink}"
+                                          IsVisible="{Binding IsLink}"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center" />
+                                    <Path Classes="icon icon-sm"
+                                          Data="{StaticResource IconText}"
+                                          IsVisible="{Binding IsTextKind}"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center" />
+                                    <Path Classes="icon icon-sm"
+                                          Data="{StaticResource IconImage}"
+                                          IsVisible="{Binding IsImageKind}"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center" />
+                                    <Path Classes="icon icon-sm"
+                                          Data="{StaticResource IconFile}"
+                                          IsVisible="{Binding IsFileKind}"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center" />
                                     <Image Source="{Binding Thumbnail, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
                                            Stretch="UniformToFill"
                                            IsVisible="{Binding HasThumbnail}" />
@@ -747,14 +785,16 @@
 
                                 <Button Grid.Column="3"
                                         Classes="ghost small"
-                                        Width="38"
+                                        Width="30"
                                         Height="26"
                                         Padding="0"
-                                        FontSize="10"
-                                        Content="查看"
-                                        ToolTip.Tip="在当前页查看详情（也可以双击这一行）"
+                                        ToolTip.Tip="查看详情（也可以双击这一行）"
+                                        AutomationProperties.Name="查看详情"
                                         Tag="{Binding}"
-                                        Click="OnClipboardOpenDetailClick" />
+                                        Click="OnClipboardOpenDetailClick">
+                                  <Path Classes="icon icon-xs"
+                                        Data="{StaticResource IconEye}" />
+                                </Button>
 
                                 <Button Grid.Column="4"
                                         Classes="ghost small row-action"

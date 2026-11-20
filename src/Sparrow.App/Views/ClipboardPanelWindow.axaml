@@ -13,33 +13,97 @@
         RequestedThemeVariant="Dark"
         Icon="avares://Sparrow.App/Assets/sparrow-64.png"
         ShowInTaskbar="False"
+        WindowDecorations="None"
+        CanResize="True"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent"
         WindowStartupLocation="CenterScreen">
 
-  <Panel>
+  <!-- 无边框 + 自绘圆角：Windows 10 没有 DWM 圆角属性，只能这样画 -->
+  <Border x:Name="Shell"
+          Background="{StaticResource WindowBgGradientBrush}"
+          BorderBrush="{StaticResource LineStrongBrush}"
+          BorderThickness="1"
+          CornerRadius="14"
+          BoxShadow="0 18 48 0 #99000000"
+          ClipToBounds="True">
 
-    <Border Background="{StaticResource DotGridBrush}" IsHitTestVisible="False" />
+    <Panel>
 
-    <!-- 只有搜索 + 筛选 + 列表：不带主窗的品牌栏和切换行 -->
-    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto"
-          RowSpacing="8"
-          Margin="14,12,14,10">
+      <Border Background="{StaticResource DotGridBrush}" IsHitTestVisible="False" />
+
+      <Grid RowDefinitions="Auto,*">
+
+        <!-- 无边框窗口的拖动区与关闭入口 -->
+        <Grid Grid.Row="0"
+              ColumnDefinitions="Auto,*,Auto"
+              Margin="14,9,10,0"
+              PointerPressed="OnTitleBarPointerPressed">
+          <StackPanel Grid.Column="0"
+                      Orientation="Horizontal"
+                      Spacing="6"
+                      VerticalAlignment="Center">
+            <Path Classes="icon icon-xs"
+                  VerticalAlignment="Center"
+                  Data="{StaticResource IconClipboard}" />
+            <TextBlock Text="剪贴板"
+                       FontSize="11"
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       VerticalAlignment="Center" />
+          </StackPanel>
+
+          <Button Grid.Column="2"
+                  Classes="ghost"
+                  Width="24"
+                  Height="20"
+                  Padding="0"
+                  ToolTip.Tip="收起面板（Esc）"
+                  AutomationProperties.Name="关闭"
+                  Click="OnTitleCloseClick">
+            <Path Classes="icon icon-xs"
+                  Data="{StaticResource IconClose}" />
+          </Button>
+        </Grid>
+
+        <Grid Grid.Row="1"
+              RowDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto"
+              RowSpacing="8"
+              Margin="14,10,14,10">
 
       <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto">
         <TextBox x:Name="SearchBox"
                  Text="{Binding Query, Mode=TwoWay}"
-                 PlaceholderText="搜索内容、标签、来源…" />
+                 PlaceholderText="搜索内容、标签、来源…">
+          <TextBox.InnerLeftContent>
+            <Path Classes="icon icon-sm"
+                  Data="{StaticResource IconSearch}" />
+          </TextBox.InnerLeftContent>
+        </TextBox>
         <Button Grid.Column="1"
                 Classes="ghost small"
-                Content="撤销删除"
+                Width="30"
+                Padding="0"
                 Margin="8,0,0,0"
                 IsVisible="{Binding CanUndoDelete}"
-                Click="OnUndoDeleteClick" />
+                ToolTip.Tip="撤销删除"
+                AutomationProperties.Name="撤销删除"
+                Click="OnUndoDeleteClick">
+          <Path Classes="icon icon-xs"
+                Data="{StaticResource IconUndo}" />
+        </Button>
         <Button Grid.Column="2"
                 Classes="ghost small"
-                Content="清空"
+                Width="30"
+                Padding="0"
                 Margin="8,0,0,0"
                 IsVisible="{Binding !IsClearConfirmVisible}"
-                Click="OnClearClick" />
+                ToolTip.Tip="清空全部历史"
+                AutomationProperties.Name="清空"
+                Click="OnClearClick">
+          <Path Classes="icon icon-xs"
+                Data="{StaticResource IconTrash}" />
+        </Button>
+        <!-- 危险确认保留文字：图标在这一步没有「确定要删」的语义 -->
         <Button Grid.Column="2"
                 Classes="ghost small danger"
                 Content="确认清空"
@@ -48,10 +112,16 @@
                 Click="OnClearConfirmClick" />
         <Button Grid.Column="3"
                 Classes="ghost small"
-                Content="取消"
+                Width="30"
+                Padding="0"
                 Margin="6,0,0,0"
                 IsVisible="{Binding IsClearConfirmVisible}"
-                Click="OnClearCancelClick" />
+                ToolTip.Tip="取消"
+                AutomationProperties.Name="取消"
+                Click="OnClearCancelClick">
+          <Path Classes="icon icon-xs"
+                Data="{StaticResource IconClose}" />
+        </Button>
         <Button Grid.Column="5"
                 Classes="ghost small"
                 Width="30"
@@ -165,13 +235,24 @@
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
             <Button x:Name="QueueCopyNextButton"
                     Classes="ghost small"
-                    Content="复制下一条"
-                    ToolTip.Tip="写入剪贴板，自己在目标应用按 Ctrl+V"
-                    Click="OnCopyNextClick" />
+                    Width="30"
+                    Padding="0"
+                    ToolTip.Tip="复制下一条：写入剪贴板，自己在目标应用按 Ctrl+V"
+                    AutomationProperties.Name="复制下一条"
+                    Click="OnCopyNextClick">
+              <Path Classes="icon icon-xs"
+                    Data="{StaticResource IconPaste}" />
+            </Button>
             <Button x:Name="QueueClearButton"
                     Classes="ghost small"
-                    Content="清空"
-                    Click="OnQueueClearClick" />
+                    Width="30"
+                    Padding="0"
+                    ToolTip.Tip="清空队列"
+                    AutomationProperties.Name="清空队列"
+                    Click="OnQueueClearClick">
+              <Path Classes="icon icon-xs"
+                    Data="{StaticResource IconTrash}" />
+            </Button>
           </StackPanel>
         </Grid>
       </Border>
@@ -529,5 +610,7 @@
                                    Copied="OnDetailCopied" />
       </Border>
     </Panel>
-  </Panel>
+      </Grid>
+    </Panel>
+  </Border>
 </Window>

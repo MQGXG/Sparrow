@@ -83,6 +83,21 @@ public partial class ClipboardPanelWindow : Window
         Hide();
     }
 
+    /// <summary>无边框窗口没有系统标题栏，标题行就是拖动区。</summary>
+    private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        // 标题行上的按钮会自己处理按下，冒泡到这里就只剩空白区
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            BeginMoveDrag(e);
+    }
+
+    /// <summary>标题行的关闭按钮：与 Esc 同一条路径，顺带把搜索词还回去。</summary>
+    private void OnTitleCloseClick(object? sender, RoutedEventArgs e)
+    {
+        HidePanel();
+        e.Handled = true;
+    }
+
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         // 保持同一个实例，下次热键直接复用

@@ -1,3 +1,4 @@
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -380,9 +381,9 @@ public sealed class WorkspaceWindowTests
 
                 var button = window.GetVisualDescendants()
                     .OfType<Button>()
-                    .FirstOrDefault(control => control.Content is "查看");
+                    .FirstOrDefault(control => AutomationProperties.GetName(control) == "查看详情");
 
-                button.ShouldNotBeNull("列表行里应该有「查看」按钮");
+                button.ShouldNotBeNull("列表行里应该有「查看详情」按钮");
 
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
