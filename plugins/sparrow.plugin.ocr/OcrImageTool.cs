@@ -41,7 +41,8 @@ public sealed class OcrImageTool : ITool
         Parameters =
         [
             OcrParameters.Language,
-            OcrParameters.Layout
+            OcrParameters.Layout,
+            OcrParameters.Translate
         ]
     };
 
@@ -64,6 +65,7 @@ public sealed class OcrImageTool : ITool
 
         var language = context.GetParameter(OcrParameters.LanguageKey, "ch");
         var layout = OcrParameters.ResolveLayout(context);
+        var translateTo = context.GetParameter(OcrParameters.TranslateKey, OcrParameters.TranslateNone);
 
         var sections = new List<(string Name, string Text)>();
         var lines = new List<OcrTextLine>();
@@ -102,7 +104,11 @@ public sealed class OcrImageTool : ITool
                     }
 
                     var payload = OcrOutputComposer.Compose(output, layout);
-                    sections.Add((name, payload.Text));
+
+                    // 多图时标题带序号和尺寸，「这段字是哪张图」一眼能对上；
+                    // 选了翻译就把原文和译文对照着放进同一段
+                    var sectionText = await MaybeTranslateAsync(context, payload.Text, translateTo, cancellationToken);
+                    sections.Add((FormatTitle(image, index), sectionText));
 
                     // 行框只对单张有意义：截图叠加层用它做「点行复制」
                     if (set.Images.Count == 1)
@@ -182,4 +188,66 @@ public sealed class OcrImageTool : ITool
 
     private static string DisplayName(ImageInput image, int index) =>
         string.IsNullOrWhiteSpace(image.Name) ? $"图片 {index + 1}" : image.Name;
+
+    /// <summary>
+    /// 多图时的分节标题：序号 + 名字 + 尺寸。
+    /// 只写名字的话，几张剪贴板图片都叫「图片」，分不清哪段对应哪张。
+    /// </summary>
+    private static string FormatTitle(ImageInput image, int index)
+    {
+        var name = string.IsNullOrWhiteSpace(image.Name) ? "图片" : image.Name;
+        var title = $"{index + 1}. {name}";
+
+        if (image.Width > 0 && image.Height > 0)
+            title += $"（{image.Width}×{image.Height}）";
+
+        return title;
+    }
+
+    /// <summary>
+    /// 可选翻译：把识别结果送给模型，按「原文 / 译文」对照拼回去。
+    /// 没配模型或翻译失败都返回原文——识别是主任务，不能因为附加的翻译丢掉结果。
+    /// </summary>
+    private static async Task<string> MaybeTranslateAsync(
+        ToolContext context,
+        string original,
+        string target,
+        CancellationToken cancellationToken)
+    {
+        if (target == OcrParameters.TranslateNone || string.IsNullOrWhiteSpace(original))
+            return original;
+
+        if (context.Host is not { } host || !host.Ai.IsAvailable)
+            return original;
+
+        try
+        {
+            var response = await host.Ai.CompleteAsync(
+                new AiRequest
+                {
+                    System =
+                        $"把用户给出的文字翻译成{target}。只输出译文，不要解释、不要加引号，保留原有分段。",
+                    Messages = [new AiMessage(AiRole.User, original)],
+                    Temperature = 0.2,
+                    MaxTokens = Math.Clamp(original.Length * 2, 512, 4096)
+                },
+                cancellationToken);
+
+            var translated = response.Text.Trim();
+            if (string.IsNullOrEmpty(translated))
+                return original;
+
+            return $"{original.TrimEnd()}\n\n—— 译文（{target}）——\n\n{translated}";
+        }
+        catch (AiException ex)
+        {
+            host.Logger.LogWarning("OCR 翻译失败：{Error}", ex.Message);
+            return original;
+        }
+        catch (Exception ex)
+        {
+            host.Logger.LogWarning("OCR 翻译异常：{Error}", ex.Message);
+            return original;
+        }
+    }
 }

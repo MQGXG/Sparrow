@@ -10,6 +10,10 @@ internal static class OcrParameters
 {
     public const string LanguageKey = "language";
     public const string LayoutKey = "layout";
+    public const string TranslateKey = "translate";
+
+    /// <summary>不翻译：默认值，避免每张图都白跑一次模型。</summary>
+    public const string TranslateNone = "none";
 
     public const string LayoutLine = "按行";
     public const string LayoutRaw = "原文";
@@ -55,6 +59,29 @@ internal static class OcrParameters
         Choices = [LayoutLine, LayoutRaw, LayoutPosition, LayoutTable],
         Default = LayoutLine,
         Hint = "表格：Tab 分隔，可直接粘贴进 Excel；按位置：空格还原排版"
+    };
+
+    /// <summary>
+    /// 识别后可选翻译：结果按「原文 / 译文」对照输出，方便核对。
+    /// 需要先在设置里配好模型；没配时静默跳过，识别结果照常返回。
+    /// </summary>
+    public static ToolParameter Translate { get; } = new()
+    {
+        Key = TranslateKey,
+        Label = "翻译为",
+        Kind = ParameterKind.Choice,
+        Choices = [TranslateNone, "中文", "English", "日本語", "한국어", "Русский"],
+        ChoiceLabels = new Dictionary<string, string>
+        {
+            [TranslateNone] = "不翻译",
+            ["中文"] = "中文",
+            ["English"] = "英语",
+            ["日本語"] = "日语",
+            ["한국어"] = "韩语",
+            ["Русский"] = "俄语"
+        },
+        Default = TranslateNone,
+        Hint = "识别后调用 AI 翻译，结果按「原文 / 译文」对照输出；需要在设置里配置模型"
     };
 
     /// <summary>整理模式参数 → 枚举；未知值回退默认「按行」。</summary>

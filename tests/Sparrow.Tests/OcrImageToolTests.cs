@@ -172,6 +172,90 @@ public sealed class OcrImageToolTests
     }
 
     [Fact]
+    public async Task 选了翻译但模型不可用_结果保持原文且不报错()
+    {
+        var root = CreateWorkerDirectory();
+        try
+        {
+            var runner = new FakeRunner([Result("第一张的内容")]);
+
+            var result = await new OcrImageTool(runner).ExecuteAsync(
+                new ToolContext
+                {
+                    Input = new ImageSetInput([Image("a.png")]),
+                    Host = CreateHost(root),
+                    // 参数键与 OcrParameters.TranslateKey 一致（那个常量是 internal）
+                    Parameters = new Dictionary<string, string> { ["translate"] = "English" }
+                },
+                CancellationToken.None);
+
+            result.Success.ShouldBeTrue("翻译是附加能力，没配模型不能拖垮识别");
+
+            var text = result.Payload.ShouldBeOfType<OcrResultPayload>().Text;
+            text.ShouldContain("第一张的内容");
+
+            // 没配模型时不能凭空造出译文段
+            text.ShouldNotContain("译文");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [Fact]
+    public async Task 多图标题带序号和尺寸()
+    {
+        var root = CreateWorkerDirectory();
+        try
+        {
+            var runner = new FakeRunner([Result("甲"), Result("乙")]);
+
+            var result = await new OcrImageTool(runner).ExecuteAsync(
+                new ToolContext
+                {
+                    Input = new ImageSetInput(
+                    [
+                        new ImageInput(new byte[] { 1, 2, 3 }, ImageFormat.Png)
+                        {
+                            Name = "a.png", Width = 1200, Height = 800
+                        },
+                        new ImageInput(new byte[] { 4, 5, 6 }, ImageFormat.Png)
+                        {
+                            Name = "b.png", Width = 640, Height = 480
+                        }
+                    ]),
+                    Host = CreateHost(root)
+                },
+                CancellationToken.None);
+
+            var text = result.Payload.ShouldBeOfType<OcrResultPayload>().Text;
+
+            // 标题要能让用户对上是哪张图
+            text.ShouldContain("1. a.png（1200×800）");
+            text.ShouldContain("2. b.png（640×480）");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [Fact]
     public async Task 多张图片_复用同一会话并按文件名分节()
     {
         var runner = new FakeRunner([Result("第一张"), Result("第二张")]);
@@ -189,9 +273,9 @@ public sealed class OcrImageToolTests
         result.Success.ShouldBeTrue();
 
         var text = result.Payload.ShouldBeOfType<OcrResultPayload>().Text;
-        text.ShouldContain("## a.png");
+        text.ShouldContain("1. a.png");
         text.ShouldContain("第一张");
-        text.ShouldContain("## b.jpg");
+        text.ShouldContain("2. b.jpg");
         text.ShouldContain("第二张");
 
         // 模型只加载一次

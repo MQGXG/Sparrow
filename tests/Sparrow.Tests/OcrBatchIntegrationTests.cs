@@ -61,8 +61,8 @@ public sealed class OcrBatchIntegrationTests
             result.Success.ShouldBeTrue(result.Error?.Message);
 
             var text = result.Payload.ShouldBeOfType<OcrResultPayload>().Text;
-            text.ShouldContain("## one.png");
-            text.ShouldContain("## two.png");
+            text.ShouldContain("1. one.png");
+            text.ShouldContain("2. two.png");
             text.ToUpperInvariant().ShouldContain("ONE");
             text.ToUpperInvariant().ShouldContain("TWO");
         }
