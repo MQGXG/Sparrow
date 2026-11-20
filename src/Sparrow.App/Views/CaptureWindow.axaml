@@ -62,6 +62,20 @@
                Stroke="{StaticResource AccentBrush}"
                StrokeThickness="2" />
 
+    <!-- 文字工具的就地输入框：提交后转成图元 -->
+    <TextBox x:Name="TextNoteBox"
+             IsVisible="False"
+             MinWidth="120"
+             MaxWidth="420"
+             FontSize="16"
+             Foreground="#E5A44C"
+             Background="#CC101316"
+             BorderBrush="#E5A44C"
+             BorderThickness="1"
+             Padding="4,2"
+             KeyDown="OnTextNoteKeyDown"
+             LostFocus="OnTextNoteLostFocus" />
+
     <!-- 标注预览：只画在选区内，坐标相对选区左上角 -->
     <Canvas x:Name="NoteLayer"
             IsVisible="False"
@@ -173,6 +187,18 @@
           <Button Focusable="False" x:Name="PenToolButton"
                   Classes="tool" Content="画笔"
                   ToolTip.Tip="自由画线（5）" Click="OnPenToolClick" />
+          <Button Focusable="False" x:Name="HighlighterToolButton"
+                  Classes="tool" Content="高亮"
+                  ToolTip.Tip="半透明粗线（6）" Click="OnHighlighterToolClick" />
+          <Button Focusable="False" x:Name="MosaicToolButton"
+                  Classes="tool" Content="马赛克"
+                  ToolTip.Tip="拖出要遮挡的区域（7）" Click="OnMosaicToolClick" />
+          <Button Focusable="False" x:Name="TextToolButton"
+                  Classes="tool" Content="文字"
+                  ToolTip.Tip="点一下输入文字（8）" Click="OnTextToolClick" />
+          <Button Focusable="False" x:Name="NumberToolButton"
+                  Classes="tool" Content="序号"
+                  ToolTip.Tip="点一下放置递增编号（9）" Click="OnNumberToolClick" />
           <Button Focusable="False" x:Name="UndoButton"
                   Classes="ghost" Content="撤销"
                   ToolTip.Tip="撤销上一条标注（Ctrl+Z）" Click="OnUndoClick" />

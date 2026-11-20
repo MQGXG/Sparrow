@@ -9,7 +9,11 @@ public enum AnnotationTool
     Rectangle,
     Ellipse,
     Arrow,
-    Pen
+    Pen,
+    Highlighter,
+    Mosaic,
+    Text,
+    Number
 }
 
 /// <summary>
@@ -22,7 +26,20 @@ public sealed record ShapeAnnotation(Rect Rect, uint Color, double Width, bool E
 
 public sealed record ArrowAnnotation(Point From, Point To, uint Color, double Width) : IAnnotation;
 
-public sealed record PenAnnotation(IReadOnlyList<Point> Points, uint Color, double Width) : IAnnotation;
+public sealed record PenAnnotation(
+    IReadOnlyList<Point> Points,
+    uint Color,
+    double Width,
+    double Opacity = 1) : IAnnotation;
+
+/// <summary>马赛克：像素化或模糊一块区域。Cell 是像素格边长（DIP）。</summary>
+public sealed record MosaicAnnotation(Rect Rect, int Cell, bool Blur) : IAnnotation;
+
+/// <summary>文字：Origin 是左下角基线起点（和 Skia 的 DrawText 对齐）。</summary>
+public sealed record TextAnnotation(Point Origin, string Text, uint Color, double FontSize) : IAnnotation;
+
+/// <summary>序号：圆形底 + 数字，Number 从 1 自动递增。</summary>
+public sealed record NumberAnnotation(Point Center, int Number, uint Color, double Size) : IAnnotation;
 
 /// <summary>箭头两翼的几何；单独抽出来便于测试。</summary>
 public static class ArrowGeometry

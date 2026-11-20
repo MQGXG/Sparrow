@@ -115,6 +115,14 @@ public partial class CaptureWindow : Window
 
     private static readonly Color NoteColor = Color.Parse("#E5A44C");
     private const double NoteWidth = 3;
+    private const double HighlighterWidth = 18;
+    private const double HighlighterOpacity = 0.4;
+    private const int MosaicCell = 12;
+    private const double TextFontSize = 16;
+    private const double NumberSize = 24;
+
+    private int _nextNumber = 1;
+    private Point _textOrigin;
 
     public CaptureWindow()
     {
@@ -949,6 +957,14 @@ public partial class CaptureWindow : Window
 
     private void OnPenToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Pen);
 
+    private void OnHighlighterToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Highlighter);
+
+    private void OnMosaicToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Mosaic);
+
+    private void OnTextToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Text);
+
+    private void OnNumberToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Number);
+
     private void OnUndoClick(object? sender, RoutedEventArgs e) => UndoAnnotation();
 
     private void UndoAnnotation()
@@ -961,12 +977,15 @@ public partial class CaptureWindow : Window
     /// <summary>选区变化或重设时清空标注：坐标相对选区，选区一动旧标注就错位。</summary>
     private void ClearAnnotations()
     {
+        HideTextEditor();
+
         if (_notes.Items.Count == 0 && _pendingAnnotation is null)
             return;
 
         _notes.Clear();
         _pendingAnnotation = null;
         _penPoints = null;
+        _nextNumber = 1;
         RebuildNotePreview();
         UpdateToolButtons();
     }
@@ -983,6 +1002,10 @@ public partial class CaptureWindow : Window
         SetSelected(EllipseToolButton, _tool == AnnotationTool.Ellipse);
         SetSelected(ArrowToolButton, _tool == AnnotationTool.Arrow);
         SetSelected(PenToolButton, _tool == AnnotationTool.Pen);
+        SetSelected(HighlighterToolButton, _tool == AnnotationTool.Highlighter);
+        SetSelected(MosaicToolButton, _tool == AnnotationTool.Mosaic);
+        SetSelected(TextToolButton, _tool == AnnotationTool.Text);
+        SetSelected(NumberToolButton, _tool == AnnotationTool.Number);
         UndoButton.IsEnabled = _notes.CanUndo;
     }
 
@@ -1029,6 +1052,31 @@ public partial class CaptureWindow : Window
                 _pendingAnnotation = new PenAnnotation(_penPoints, NoteColor.ToUInt32(), NoteWidth);
                 break;
 
+            case AnnotationTool.Highlighter:
+                _penPoints = [_annotationStart];
+                _pendingAnnotation = new PenAnnotation(
+                    _penPoints,
+                    NoteColor.ToUInt32(),
+                    HighlighterWidth,
+                    HighlighterOpacity);
+                break;
+
+            case AnnotationTool.Mosaic:
+                _pendingAnnotation = new MosaicAnnotation(
+                    new Rect(_annotationStart, new Size()), MosaicCell, Blur: false);
+                break;
+
+            case AnnotationTool.Text:
+                ShowTextEditor(_annotationStart);
+                return true;
+
+            case AnnotationTool.Number:
+                _notes.Add(new NumberAnnotation(
+                    _annotationStart, _nextNumber++, NoteColor.ToUInt32(), NumberSize));
+                RebuildNotePreview();
+                UpdateToolButtons();
+                return true;
+
             default:
                 return false;
         }
@@ -1048,6 +1096,7 @@ public partial class CaptureWindow : Window
         {
             ShapeAnnotation shape => shape with { Rect = NormalizeRect(_annotationStart, current) },
             ArrowAnnotation arrow => arrow with { To = current },
+            MosaicAnnotation mosaic => mosaic with { Rect = NormalizeRect(_annotationStart, current) },
             PenAnnotation pen when _penPoints is not null => AddPenPoint(pen, current),
             _ => _pendingAnnotation
         };
@@ -1080,6 +1129,7 @@ public partial class CaptureWindow : Window
             ShapeAnnotation shape => shape.Rect.Width >= 2 && shape.Rect.Height >= 2,
             ArrowAnnotation arrow => Distance(arrow.From, arrow.To) >= 6,
             PenAnnotation pen => pen.Points.Count >= 2,
+            MosaicAnnotation mosaic => mosaic.Rect.Width >= 4 && mosaic.Rect.Height >= 4,
             _ => false
         };
 
@@ -1160,15 +1210,121 @@ public partial class CaptureWindow : Window
             case PenAnnotation { Points.Count: >= 2 } pen:
                 NoteLayer.Children.Add(new Polyline
                 {
-                    Stroke = brush,
+                    Stroke = new SolidColorBrush(NoteColor, pen.Opacity),
                     StrokeThickness = pen.Width,
                     StrokeLineCap = PenLineCap.Round,
                     StrokeJoin = PenLineJoin.Round,
                     Points = new List<Point>(pen.Points)
                 });
                 break;
+
+            case MosaicAnnotation mosaic:
+                var cover = new Rectangle
+                {
+                    Width = mosaic.Rect.Width,
+                    Height = mosaic.Rect.Height,
+                    Fill = new SolidColorBrush(Color.Parse("#B0808080")),
+                    Stroke = new SolidColorBrush(NoteColor, 0.6),
+                    StrokeThickness = 1
+                };
+                Canvas.SetLeft(cover, mosaic.Rect.X);
+                Canvas.SetTop(cover, mosaic.Rect.Y);
+                NoteLayer.Children.Add(cover);
+                break;
+
+            case TextAnnotation text:
+                var label = new TextBlock
+                {
+                    Text = text.Text,
+                    FontSize = text.FontSize,
+                    Foreground = new SolidColorBrush(NoteColor)
+                };
+                Canvas.SetLeft(label, text.Origin.X);
+                Canvas.SetTop(label, text.Origin.Y - text.FontSize);
+                NoteLayer.Children.Add(label);
+                break;
+
+            case NumberAnnotation number:
+                var circle = new Ellipse
+                {
+                    Width = number.Size,
+                    Height = number.Size,
+                    Fill = new SolidColorBrush(NoteColor)
+                };
+                Canvas.SetLeft(circle, number.Center.X - number.Size / 2);
+                Canvas.SetTop(circle, number.Center.Y - number.Size / 2);
+                NoteLayer.Children.Add(circle);
+
+                var badge = new TextBlock
+                {
+                    Text = number.Number.ToString(),
+                    FontSize = number.Size * 0.55,
+                    FontWeight = FontWeight.SemiBold,
+                    Foreground = Brushes.White
+                };
+                Canvas.SetLeft(badge, number.Center.X - number.Size * 0.14);
+                Canvas.SetTop(badge, number.Center.Y - number.Size * 0.34);
+                NoteLayer.Children.Add(badge);
+                break;
         }
     }
+
+    // ---------- 文字输入 ----------
+
+    private void ShowTextEditor(Point origin)
+    {
+        _textOrigin = origin;
+        TextNoteBox.Text = string.Empty;
+        Canvas.SetLeft(TextNoteBox, _selection.X + origin.X);
+        Canvas.SetTop(TextNoteBox, _selection.Y + origin.Y);
+        TextNoteBox.IsVisible = true;
+        TextNoteBox.Focus();
+    }
+
+    private void HideTextEditor()
+    {
+        TextNoteBox.IsVisible = false;
+        TextNoteBox.Text = string.Empty;
+    }
+
+    private void CommitTextNote()
+    {
+        if (!TextNoteBox.IsVisible)
+            return;
+
+        var text = TextNoteBox.Text?.Trim() ?? string.Empty;
+        var origin = _textOrigin;
+        HideTextEditor();
+
+        if (text.Length == 0)
+            return;
+
+        // 编辑器左上角对齐，Skia 的 DrawText 用基线：往下让一个字高
+        _notes.Add(new TextAnnotation(
+            new Point(origin.X, origin.Y + TextFontSize),
+            text,
+            NoteColor.ToUInt32(),
+            TextFontSize));
+
+        RebuildNotePreview();
+        UpdateToolButtons();
+    }
+
+    private void OnTextNoteKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            CommitTextNote();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            HideTextEditor();
+            e.Handled = true;
+        }
+    }
+
+    private void OnTextNoteLostFocus(object? sender, RoutedEventArgs e) => CommitTextNote();
 
     private void AddPreviewLine(Point from, Point to, double width) =>
         NoteLayer.Children.Add(new Line

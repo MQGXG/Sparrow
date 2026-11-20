@@ -143,6 +143,123 @@ public sealed class AnnotationTests
         window.RectToolButton.Classes.Contains("selected").ShouldBeFalse();
     }
 
+    [Fact]
+    public void 马赛克_像素化把棋盘变成灰块()
+    {
+        var png = CreateCheckerPng(120, 120);
+        var item = new MosaicAnnotation(new Rect(40, 40, 40, 40), 8, Blur: false);
+
+        var composed = AnnotationRenderer.Compose(png, [item], 1);
+
+        using var decoded = SKBitmap.Decode(composed);
+        var pixel = decoded.GetPixel(60, 60);
+        // 棋盘格被平均成灰：既不是纯黑也不是纯白
+        ((int)pixel.Red).ShouldBeGreaterThan(40);
+        ((int)pixel.Red).ShouldBeLessThan(220);
+    }
+
+    [Fact]
+    public void 文字和序号_会在图上留下像素()
+    {
+        var png = CreateWhitePng(120, 120);
+        var items = new IAnnotation[]
+        {
+            new TextAnnotation(new Point(10, 40), "Hi", 0xFFE5A44C, 24),
+            new NumberAnnotation(new Point(80, 80), 3, 0xFFE5A44C, 24)
+        };
+
+        var composed = AnnotationRenderer.Compose(png, items, 1);
+        using var decoded = SKBitmap.Decode(composed);
+
+        HasInk(decoded, 8, 10, 60, 45).ShouldBeTrue("文字应该画出笔画");
+
+        var badge = decoded.GetPixel(70, 80);
+        ((int)badge.Blue).ShouldBeLessThan(150);   // 琥珀圆底
+    }
+
+    [AvaloniaFact]
+    public void 截图窗口_马赛克工具拖拽后有预览()
+    {
+        var window = CreateWindowWithSelection();
+        window.MosaicToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        window.MouseDown(new Point(160, 160), MouseButton.Left);
+        window.MouseMove(new Point(260, 240));
+        window.MouseUp(new Point(260, 240), MouseButton.Left);
+
+        window.NoteLayer.Children.Count.ShouldBe(1);
+    }
+
+    [AvaloniaFact]
+    public void 截图窗口_序号工具点击递增且可撤销()
+    {
+        var window = CreateWindowWithSelection();
+        window.NumberToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        window.MouseDown(new Point(180, 180), MouseButton.Left);
+        window.MouseUp(new Point(180, 180), MouseButton.Left);
+        window.MouseDown(new Point(220, 220), MouseButton.Left);
+        window.MouseUp(new Point(220, 220), MouseButton.Left);
+
+        // 两个序号 = 两个圆 + 两个数字
+        window.NoteLayer.Children.Count.ShouldBe(4);
+
+        window.KeyPress(Key.Z, RawInputModifiers.Control, PhysicalKey.Z, null);
+        window.NoteLayer.Children.Count.ShouldBe(2);
+    }
+
+    [AvaloniaFact]
+    public void 截图窗口_文字工具点击出现输入框()
+    {
+        var window = CreateWindowWithSelection();
+        window.TextToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        window.MouseDown(new Point(170, 170), MouseButton.Left);
+        window.MouseUp(new Point(170, 170), MouseButton.Left);
+
+        window.TextNoteBox.IsVisible.ShouldBeTrue();
+        window.NoteLayer.Children.Count.ShouldBe(0);
+    }
+
+    private static CaptureWindow CreateWindowWithSelection()
+    {
+        var window = new CaptureWindow();
+        window.Show();
+
+        window.MouseDown(new Point(100, 100), MouseButton.Left);
+        window.MouseMove(new Point(400, 300));
+        window.MouseUp(new Point(400, 300), MouseButton.Left);
+
+        return window;
+    }
+
+    private static bool HasInk(SKBitmap bitmap, int left, int top, int right, int bottom)
+    {
+        for (var y = top; y < bottom; y++)
+        for (var x = left; x < right; x++)
+        {
+            if (!IsWhite(bitmap.GetPixel(x, y)))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsWhite(SKColor color) =>
+        color.Red == 255 && color.Green == 255 && color.Blue == 255;
+
+    private static byte[] CreateCheckerPng(int width, int height)
+    {
+        using var bitmap = new SKBitmap(width, height);
+        for (var y = 0; y < height; y++)
+        for (var x = 0; x < width; x++)
+            bitmap.SetPixel(x, y, (x + y) % 2 == 0 ? SKColors.Black : SKColors.White);
+
+        using var image = SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
+    }
+
     private static byte[] CreateWhitePng(int width, int height)
     {
         using var bitmap = new SKBitmap(width, height);

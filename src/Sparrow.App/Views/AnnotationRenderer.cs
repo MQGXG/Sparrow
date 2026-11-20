@@ -35,7 +35,7 @@ internal static class AnnotationRenderer
             };
 
             foreach (var item in items)
-                Draw(canvas, item, paint);
+                Draw(canvas, item, paint, bitmap);
         }
 
         using var image = SKImage.FromBitmap(bitmap);
@@ -43,7 +43,7 @@ internal static class AnnotationRenderer
         return data.ToArray();
     }
 
-    internal static void Draw(SKCanvas canvas, IAnnotation item, SKPaint paint)
+    internal static void Draw(SKCanvas canvas, IAnnotation item, SKPaint paint, SKBitmap source)
     {
         switch (item)
         {
@@ -96,7 +96,7 @@ internal static class AnnotationRenderer
                 if (pen.Points.Count < 2)
                     break;
 
-                paint.Color = new SKColor(pen.Color);
+                paint.Color = WithOpacity(pen.Color, pen.Opacity);
                 paint.StrokeWidth = (float)pen.Width;
                 paint.Style = SKPaintStyle.Stroke;
 
@@ -109,6 +109,125 @@ internal static class AnnotationRenderer
                     canvas.DrawPath(path, paint);
                 }
                 break;
+
+            case MosaicAnnotation mosaic:
+                DrawMosaic(canvas, mosaic, source);
+                break;
+
+            case TextAnnotation text:
+                if (string.IsNullOrEmpty(text.Text))
+                    break;
+
+                using (var typeface = SKTypeface.FromFamilyName("Microsoft YaHei UI") ?? SKTypeface.Default)
+                using (var font = new SKFont(typeface, (float)text.FontSize))
+                {
+                    paint.Color = new SKColor(text.Color);
+                    paint.Style = SKPaintStyle.Fill;
+                    canvas.DrawText(
+                        text.Text,
+                        (float)text.Origin.X,
+                        (float)text.Origin.Y,
+                        SKTextAlign.Left,
+                        font,
+                        paint);
+                }
+                break;
+
+            case NumberAnnotation number:
+                DrawNumber(canvas, number, paint);
+                break;
         }
+    }
+
+    /// <summary>马赛克：像素化用「缩小再最近邻放大」，模糊用 Skia 的模糊滤镜。</summary>
+    private static void DrawMosaic(SKCanvas canvas, MosaicAnnotation mosaic, SKBitmap source)
+    {
+        var rect = new SKRect(
+            (float)mosaic.Rect.X,
+            (float)mosaic.Rect.Y,
+            (float)mosaic.Rect.Right,
+            (float)mosaic.Rect.Bottom);
+
+        // 目标区域换算到源图坐标（画布此时已按 scale 缩放）
+        var matrix = canvas.TotalMatrix;
+        var sourceLeft = matrix.MapPoint(new SKPoint(rect.Left, rect.Top));
+        var sourceRight = matrix.MapPoint(new SKPoint(rect.Right, rect.Bottom));
+        var sourceRect = new SKRect(
+            Math.Max(0, sourceLeft.X),
+            Math.Max(0, sourceLeft.Y),
+            Math.Min(source.Width, sourceRight.X),
+            Math.Min(source.Height, sourceRight.Y));
+
+        if (sourceRect.Width < 1 || sourceRect.Height < 1)
+            return;
+
+        canvas.Save();
+        canvas.ClipRect(rect);
+
+        if (mosaic.Blur)
+        {
+            using var filter = SKImageFilter.CreateBlur(8, 8);
+            using var paint = new SKPaint { ImageFilter = filter };
+            using var image = SKImage.FromBitmap(source);
+            canvas.DrawImage(image, 0, 0, paint);
+        }
+        else
+        {
+            var cell = Math.Max(2, mosaic.Cell);
+            var columns = Math.Max(1, (int)(sourceRect.Width / cell));
+            var rows = Math.Max(1, (int)(sourceRect.Height / cell));
+
+            using var sourceImage = SKImage.FromBitmap(source);
+            using var small = new SKBitmap(columns, rows);
+
+            // 线性采样：一格之内的像素要被平均，否则棋盘格缩小后还是黑白
+            using (var smallCanvas = new SKCanvas(small))
+            {
+                smallCanvas.DrawImage(
+                    sourceImage,
+                    sourceRect,
+                    new SKRect(0, 0, columns, rows),
+                    new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
+            }
+
+            using var image = SKImage.FromBitmap(small);
+            canvas.DrawImage(
+                image,
+                new SKRect(rect.Left, rect.Top, rect.Right, rect.Bottom),
+                new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.None));
+        }
+
+        canvas.Restore();
+    }
+
+    private static void DrawNumber(SKCanvas canvas, NumberAnnotation number, SKPaint paint)
+    {
+        var radius = (float)(number.Size / 2);
+        var center = new SKPoint((float)number.Center.X, (float)number.Center.Y);
+
+        paint.Style = SKPaintStyle.Fill;
+        paint.Color = new SKColor(number.Color);
+        canvas.DrawCircle(center, radius, paint);
+
+        using var typeface = SKTypeface.FromFamilyName("Microsoft YaHei UI") ?? SKTypeface.Default;
+        using var font = new SKFont(typeface, (float)(number.Size * 0.55));
+        paint.Color = SKColors.White;
+
+        var text = number.Number.ToString();
+        var width = font.MeasureText(text);
+        canvas.DrawText(
+            text,
+            center.X - width / 2,
+            center.Y + (float)(number.Size * 0.2),
+            SKTextAlign.Left,
+            font,
+            paint);
+    }
+
+    private static SKColor WithOpacity(uint argb, double opacity)
+    {
+        var color = new SKColor(argb);
+        var alpha = (byte)Math.Clamp(color.Alpha * Math.Clamp(opacity, 0, 1), 0, 255);
+        return color.WithAlpha(alpha);
     }
 }
