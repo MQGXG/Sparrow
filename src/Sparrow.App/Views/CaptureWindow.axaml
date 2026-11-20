@@ -9,6 +9,20 @@
         Cursor="Cross"
         Background="Transparent">
 
+  <Window.Styles>
+    <!-- 标注工具按钮：选中时琥珀描边 + 淡琥珀底 -->
+    <Style Selector="Button.tool">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.tool.selected">
+      <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    </Style>
+  </Window.Styles>
+
   <Canvas x:Name="Root" Background="Transparent">
 
     <!-- 冻结帧：按热键时抓的整屏图；没有时退回实时桌面 -->
@@ -47,6 +61,12 @@
                Fill="Transparent"
                Stroke="{StaticResource AccentBrush}"
                StrokeThickness="2" />
+
+    <!-- 标注预览：只画在选区内，坐标相对选区左上角 -->
+    <Canvas x:Name="NoteLayer"
+            IsVisible="False"
+            IsHitTestVisible="False"
+            ClipToBounds="True" />
 
     <!-- 8 个控制点：只负责显示，命中判定在窗口里做 -->
     <Canvas x:Name="HandleLayer"
@@ -138,7 +158,27 @@
             CornerRadius="10"
             Padding="8"
             BoxShadow="0 12 32 0 #99000000">
-      <StackPanel Orientation="Horizontal" Spacing="6">
+      <StackPanel Spacing="6">
+        <!-- 工具行：选一个工具后，鼠标在选区内拖动就是画，不再移动选区 -->
+        <StackPanel Orientation="Horizontal" Spacing="4">
+          <Button Focusable="False" x:Name="RectToolButton"
+                  Classes="tool" Content="矩形"
+                  ToolTip.Tip="拖出矩形框（2）" Click="OnRectToolClick" />
+          <Button Focusable="False" x:Name="EllipseToolButton"
+                  Classes="tool" Content="椭圆"
+                  ToolTip.Tip="拖出椭圆（3）" Click="OnEllipseToolClick" />
+          <Button Focusable="False" x:Name="ArrowToolButton"
+                  Classes="tool" Content="箭头"
+                  ToolTip.Tip="画箭头（4）" Click="OnArrowToolClick" />
+          <Button Focusable="False" x:Name="PenToolButton"
+                  Classes="tool" Content="画笔"
+                  ToolTip.Tip="自由画线（5）" Click="OnPenToolClick" />
+          <Button Focusable="False" x:Name="UndoButton"
+                  Classes="ghost" Content="撤销"
+                  ToolTip.Tip="撤销上一条标注（Ctrl+Z）" Click="OnUndoClick" />
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Spacing="6">
         <TextBlock x:Name="OcrStatus"
                    IsVisible="False"
                    MaxWidth="220"
@@ -175,6 +215,7 @@
                 Click="OnOcrBoxModeClick"
                 ToolTip.Tip="识别框显示方式：全部 / 悬停 / 关闭（B）" />
         <Button Focusable="False" Classes="ghost" Content="取消" Click="OnCancelClick" ToolTip.Tip="取消截图（Esc）" />
+        </StackPanel>
       </StackPanel>
     </Border>
 

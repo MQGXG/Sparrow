@@ -105,6 +105,17 @@ public partial class CaptureWindow : Window
     private bool _isRecognizing;
     private string? _ocrText;
 
+    /// <summary>当前会话的标注；导出时合成进 PNG。</summary>
+    private readonly AnnotationDocument _notes = new();
+
+    private AnnotationTool _tool = AnnotationTool.None;
+    private Point _annotationStart;
+    private IAnnotation? _pendingAnnotation;
+    private List<Point>? _penPoints;
+
+    private static readonly Color NoteColor = Color.Parse("#E5A44C");
+    private const double NoteWidth = 3;
+
     public CaptureWindow()
     {
         InitializeComponent();
@@ -381,6 +392,13 @@ public partial class CaptureWindow : Window
         if (IsPointInActionBar(point))
             return;
 
+        // 选了标注工具：在选区内按下就是开始画，不移动选区
+        if (BeginAnnotation(point))
+        {
+            e.Handled = true;
+            return;
+        }
+
         // 第一次点击先清掉识别结果，不直接开始拉新框
         if (OcrLayer.IsVisible)
         {
@@ -432,6 +450,15 @@ public partial class CaptureWindow : Window
         var point = e.GetPosition(this);
         _lastPointerPoint = point;
 
+        // 正在画标注：更新预览，不参与移动/拉伸选区
+        if (_pendingAnnotation is not null)
+        {
+            UpdatePendingAnnotation(point);
+            RebuildNotePreview();
+            e.Handled = true;
+            return;
+        }
+
         // 没有选区、没有 OCR overlay 时，悬停高亮光标下的窗口
         if (_mode == DragMode.None && !_hasSelection && !OcrLayer.IsVisible)
         {
@@ -463,6 +490,14 @@ public partial class CaptureWindow : Window
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
+        // 画完一条标注：小于阈值当误触丢掉
+        if (_pendingAnnotation is not null)
+        {
+            CommitPendingAnnotation();
+            e.Handled = true;
+            return;
+        }
+
         if (_mode == DragMode.None)
             return;
 
@@ -524,6 +559,11 @@ public partial class CaptureWindow : Window
         CopyAllButton.IsVisible = false;
         RecognizeButton.Content = "识别文字";
         HideResultCard();
+        _notes.Clear();
+        _pendingAnnotation = null;
+        _penPoints = null;
+        RebuildNotePreview();
+        UpdateToolButtons();
         _ocrText = null;
 
         OcrLayer.Children.Clear();
@@ -727,6 +767,9 @@ public partial class CaptureWindow : Window
 
     private void ApplyMove(Point current)
     {
+        // 框移动后截图内容变了，旧标注会错位，直接清掉
+        ClearAnnotations();
+
         var dx = current.X - _dragOrigin.X;
         var dy = current.Y - _dragOrigin.Y;
 
@@ -745,6 +788,9 @@ public partial class CaptureWindow : Window
 
     private void ApplyResize(Point current)
     {
+        // 框尺寸变化后截图内容变了，旧标注会错位，直接清掉
+        ClearAnnotations();
+
         var dx = current.X - _dragOrigin.X;
         var dy = current.Y - _dragOrigin.Y;
 
@@ -885,8 +931,254 @@ public partial class CaptureWindow : Window
         ActionBar.IsVisible = false;
         SizeBadge.IsVisible = false;
         HideResultCard();
+        _notes.Clear();
+        _pendingAnnotation = null;
+        _penPoints = null;
+        RebuildNotePreview();
+        UpdateToolButtons();
         Cursor = CrossCursor;
     }
+
+    // ---------- 标注 ----------
+
+    private void OnRectToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Rectangle);
+
+    private void OnEllipseToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Ellipse);
+
+    private void OnArrowToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Arrow);
+
+    private void OnPenToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Pen);
+
+    private void OnUndoClick(object? sender, RoutedEventArgs e) => UndoAnnotation();
+
+    private void UndoAnnotation()
+    {
+        _notes.Undo();
+        RebuildNotePreview();
+        UpdateToolButtons();
+    }
+
+    /// <summary>选区变化或重设时清空标注：坐标相对选区，选区一动旧标注就错位。</summary>
+    private void ClearAnnotations()
+    {
+        if (_notes.Items.Count == 0 && _pendingAnnotation is null)
+            return;
+
+        _notes.Clear();
+        _pendingAnnotation = null;
+        _penPoints = null;
+        RebuildNotePreview();
+        UpdateToolButtons();
+    }
+
+    private void SetTool(AnnotationTool tool)
+    {
+        _tool = _tool == tool ? AnnotationTool.None : tool;
+        UpdateToolButtons();
+    }
+
+    private void UpdateToolButtons()
+    {
+        SetSelected(RectToolButton, _tool == AnnotationTool.Rectangle);
+        SetSelected(EllipseToolButton, _tool == AnnotationTool.Ellipse);
+        SetSelected(ArrowToolButton, _tool == AnnotationTool.Arrow);
+        SetSelected(PenToolButton, _tool == AnnotationTool.Pen);
+        UndoButton.IsEnabled = _notes.CanUndo;
+    }
+
+    private static void SetSelected(Button button, bool selected)
+    {
+        if (selected)
+        {
+            if (!button.Classes.Contains("selected"))
+                button.Classes.Add("selected");
+        }
+        else
+        {
+            button.Classes.Remove("selected");
+        }
+    }
+
+    /// <summary>工具激活时在选区内按下 = 开始画；返回 true 表示这次按下已被标注消费。</summary>
+    private bool BeginAnnotation(Point point)
+    {
+        if (_tool == AnnotationTool.None || !_hasSelection || !_selection.Contains(point))
+            return false;
+
+        _annotationStart = new Point(point.X - _selection.X, point.Y - _selection.Y);
+        _penPoints = null;
+
+        switch (_tool)
+        {
+            case AnnotationTool.Rectangle:
+            case AnnotationTool.Ellipse:
+                _pendingAnnotation = new ShapeAnnotation(
+                    new Rect(_annotationStart, new Size()),
+                    NoteColor.ToUInt32(),
+                    NoteWidth,
+                    _tool == AnnotationTool.Ellipse);
+                break;
+
+            case AnnotationTool.Arrow:
+                _pendingAnnotation = new ArrowAnnotation(
+                    _annotationStart, _annotationStart, NoteColor.ToUInt32(), NoteWidth);
+                break;
+
+            case AnnotationTool.Pen:
+                _penPoints = [_annotationStart];
+                _pendingAnnotation = new PenAnnotation(_penPoints, NoteColor.ToUInt32(), NoteWidth);
+                break;
+
+            default:
+                return false;
+        }
+
+        RebuildNotePreview();
+        return true;
+    }
+
+    private void UpdatePendingAnnotation(Point point)
+    {
+        // 标注坐标相对选区，超出选区就贴在边上
+        var current = new Point(
+            Math.Clamp(point.X - _selection.X, 0, _selection.Width),
+            Math.Clamp(point.Y - _selection.Y, 0, _selection.Height));
+
+        _pendingAnnotation = _pendingAnnotation switch
+        {
+            ShapeAnnotation shape => shape with { Rect = NormalizeRect(_annotationStart, current) },
+            ArrowAnnotation arrow => arrow with { To = current },
+            PenAnnotation pen when _penPoints is not null => AddPenPoint(pen, current),
+            _ => _pendingAnnotation
+        };
+    }
+
+    private PenAnnotation AddPenPoint(PenAnnotation pen, Point current)
+    {
+        _penPoints!.Add(current);
+        return pen with { Points = _penPoints };
+    }
+
+    private static Rect NormalizeRect(Point a, Point b) => new(
+        Math.Min(a.X, b.X),
+        Math.Min(a.Y, b.Y),
+        Math.Abs(a.X - b.X),
+        Math.Abs(a.Y - b.Y));
+
+    private void CommitPendingAnnotation()
+    {
+        var annotation = _pendingAnnotation;
+        _pendingAnnotation = null;
+        _penPoints = null;
+
+        if (annotation is null)
+            return;
+
+        // 点一下没拖动：当误触丢掉，不进撤销栈
+        var keep = annotation switch
+        {
+            ShapeAnnotation shape => shape.Rect.Width >= 2 && shape.Rect.Height >= 2,
+            ArrowAnnotation arrow => Distance(arrow.From, arrow.To) >= 6,
+            PenAnnotation pen => pen.Points.Count >= 2,
+            _ => false
+        };
+
+        if (keep)
+            _notes.Add(annotation);
+
+        RebuildNotePreview();
+        UpdateToolButtons();
+    }
+
+    private static double Distance(Point a, Point b) =>
+        Math.Sqrt(Math.Pow(a.X - b.X, 2) + Math.Pow(a.Y - b.Y, 2));
+
+    /// <summary>把已提交的标注 + 正在画的那条重画到预览层。</summary>
+    private void RebuildNotePreview()
+    {
+        NoteLayer.Children.Clear();
+
+        if (!_hasSelection || (_notes.Items.Count == 0 && _pendingAnnotation is null))
+        {
+            NoteLayer.IsVisible = false;
+            return;
+        }
+
+        NoteLayer.IsVisible = true;
+        NoteLayer.Width = _selection.Width;
+        NoteLayer.Height = _selection.Height;
+        Canvas.SetLeft(NoteLayer, _selection.X);
+        Canvas.SetTop(NoteLayer, _selection.Y);
+
+        foreach (var item in _notes.Items)
+            AddPreviewShape(item);
+
+        if (_pendingAnnotation is not null)
+            AddPreviewShape(_pendingAnnotation);
+    }
+
+    private void AddPreviewShape(IAnnotation item)
+    {
+        var brush = new SolidColorBrush(NoteColor);
+
+        switch (item)
+        {
+            case ShapeAnnotation { Ellipse: true } shape:
+                var ellipse = new Ellipse
+                {
+                    Width = shape.Rect.Width,
+                    Height = shape.Rect.Height,
+                    Stroke = brush,
+                    StrokeThickness = shape.Width
+                };
+                Canvas.SetLeft(ellipse, shape.Rect.X);
+                Canvas.SetTop(ellipse, shape.Rect.Y);
+                NoteLayer.Children.Add(ellipse);
+                break;
+
+            case ShapeAnnotation shape:
+                var rectangle = new Rectangle
+                {
+                    Width = shape.Rect.Width,
+                    Height = shape.Rect.Height,
+                    Stroke = brush,
+                    StrokeThickness = shape.Width
+                };
+                Canvas.SetLeft(rectangle, shape.Rect.X);
+                Canvas.SetTop(rectangle, shape.Rect.Y);
+                NoteLayer.Children.Add(rectangle);
+                break;
+
+            case ArrowAnnotation arrow:
+                AddPreviewLine(arrow.From, arrow.To, arrow.Width);
+                var (left, right) = ArrowGeometry.Head(
+                    arrow.From, arrow.To, Math.Max(8, arrow.Width * 3.5));
+                AddPreviewLine(arrow.To, left, arrow.Width);
+                AddPreviewLine(arrow.To, right, arrow.Width);
+                break;
+
+            case PenAnnotation { Points.Count: >= 2 } pen:
+                NoteLayer.Children.Add(new Polyline
+                {
+                    Stroke = brush,
+                    StrokeThickness = pen.Width,
+                    StrokeLineCap = PenLineCap.Round,
+                    StrokeJoin = PenLineJoin.Round,
+                    Points = new List<Point>(pen.Points)
+                });
+                break;
+        }
+    }
+
+    private void AddPreviewLine(Point from, Point to, double width) =>
+        NoteLayer.Children.Add(new Line
+        {
+            StartPoint = from,
+            EndPoint = to,
+            Stroke = new SolidColorBrush(NoteColor),
+            StrokeThickness = width,
+            StrokeLineCap = PenLineCap.Round
+        });
 
     private void ShowActionBar(Rect selection)
     {
@@ -998,7 +1290,11 @@ public partial class CaptureWindow : Window
             if (!IsVisible)
                 return;
 
-            Result = png;
+            // 标注合成进导出的图：复制 / 保存 / 固定 / 识别拿到的都是带标注的版本
+            Result = action == CaptureAction.Scroll || _notes.Items.Count == 0
+                ? png
+                : await Task.Run(() => AnnotationRenderer.Compose(png, _notes.Items, _scaling));
+
             Action = action;
 
             if (action == CaptureAction.Recognize && OcrRunner is not null)
@@ -1149,7 +1445,9 @@ public partial class CaptureWindow : Window
             if (!IsVisible)
                 return;
 
-            Result = png;
+            Result = _notes.Items.Count == 0
+                ? png
+                : await Task.Run(() => AnnotationRenderer.Compose(png, _notes.Items, _scaling));
             Action = CaptureAction.Recognize;
 
             await RunOcrAsync(new CaptureOcrOptions(target), showText: true);
@@ -1414,6 +1712,14 @@ public partial class CaptureWindow : Window
         // 中文输入法会把字母键标记成 ImeProcessed；
         // 截图窗口没有文本输入，按物理键还原即可，不需要放行给输入法。
         var key = e.Key == Key.ImeProcessed ? MapPhysicalKey(e.PhysicalKey) : e.Key;
+
+        // Ctrl+Z：撤销最后一条标注
+        if (key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            UndoAnnotation();
+            e.Handled = true;
+            return;
+        }
 
         // Tab：没有选区时切换窗口；控件级由鼠标停顿后自动探测
         if (key == Key.Tab && !_hasSelection && !OcrLayer.IsVisible && _candidates.Count > 0)
