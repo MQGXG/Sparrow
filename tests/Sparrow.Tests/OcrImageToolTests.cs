@@ -188,7 +188,7 @@ public sealed class OcrImageToolTests
     }
 
     [Fact]
-    public async Task 选了翻译但模型不可用_结果保持原文且不报错()
+    public async Task 选了翻译但模型不可用_保留原文并说明未翻译()
     {
         var root = CreateWorkerDirectory();
         try
@@ -210,8 +210,9 @@ public sealed class OcrImageToolTests
             var text = result.Payload.ShouldBeOfType<OcrResultPayload>().Text;
             text.ShouldContain("第一张的内容");
 
-            // 没配模型时不能凭空造出译文段
-            text.ShouldNotContain("译文");
+            // 不能凭空造译文，但必须告诉用户「没翻」以及去哪里配
+            text.ShouldContain("未翻译");
+            text.ShouldContain("设置");
         }
         finally
         {

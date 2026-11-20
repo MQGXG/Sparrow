@@ -241,7 +241,12 @@ public sealed class OcrImageTool : ITool
             return original;
 
         if (context.Host is not { } host || !host.Ai.IsAvailable)
-            return original;
+        {
+            // 用户明确要求了翻译却没配模型：不能静默返回原文，否则会以为识别成了原文语言
+            return original.TrimEnd()
+                + "\n\n—— 未翻译：未配置 AI 模型。可在「设置 › 模型」启用，"
+                + "或把这段文字发给「翻译」工具（支持离线）——";
+        }
 
         try
         {
