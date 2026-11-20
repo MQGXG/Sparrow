@@ -38,11 +38,16 @@ public sealed class ClipboardKindIconConverterTests
     }
 
     [Fact]
-    public void 同一个类型复用同一份几何()
+    public void 每次都新建几何_不跨线程复用同一实例()
     {
         var first = ClipboardKindIconConverter.Instance.Convert("文本", typeof(object), null, Culture);
         var second = ClipboardKindIconConverter.Instance.Convert("文本", typeof(object), null, Culture);
 
-        ReferenceEquals(first, second).ShouldBeTrue("几何要缓存，列表滚动时不该反复 Parse");
+        first.ShouldNotBeNull();
+        second.ShouldNotBeNull();
+
+        // Geometry.PlatformImpl 是 Skia 对象，带线程亲和性：
+        // 在 xUnit 线程池里创建、在 UI 线程 Measure 会抛 VerifyAccess，所以绝不能缓存实例
+        ReferenceEquals(first, second).ShouldBeFalse();
     }
 }

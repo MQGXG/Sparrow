@@ -13,6 +13,7 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
     private readonly ClipboardHistoryStore _store;
     private readonly Lazy<byte[]?> _thumbnail;
     private readonly Lazy<byte[]?> _sourceIcon;
+    private readonly Lazy<byte[]?> _fileIcon;
 
     public ClipboardEntryViewModel(ClipboardHistoryEntry entry, ClipboardHistoryStore store)
     {
@@ -24,6 +25,12 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
 
         // 图标提取要枚举进程：懒加载 + 进程级缓存，列表滚动时每个来源只查一次
         _sourceIcon = new Lazy<byte[]?>(() => SourceIconProvider.TryGet(entry.SourceApp));
+
+        // 文件图标按扩展名缓存，同一类型只查一次
+        _fileIcon = new Lazy<byte[]?>(() =>
+            entry.Kind == ClipboardEntryKind.Files && entry.Paths.Count > 0
+                ? FileIconProvider.TryGet(entry.Paths[0])
+                : null);
     }
 
     /// <summary>从 http(s) 链接里取域名（去掉 www.），失败返回空串。</summary>
@@ -125,6 +132,11 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
         : string.Empty;
 
     public bool HasFileSubtitle => FileSubtitle.Length > 0;
+
+    /// <summary>文件类型图标（PNG）；文件已被删除时为 null，界面回退到类型图标。</summary>
+    public byte[]? FileIconPng => _fileIcon.Value;
+
+    public bool HasFileIcon => FileIconPng is not null;
 
     /// <summary>普通文本预览：图片、链接、文件各有专用布局。</summary>
     public bool ShowPlainPreview => !HasThumbnail && !IsLink && !IsFileSet;

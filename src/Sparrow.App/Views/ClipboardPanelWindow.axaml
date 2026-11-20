@@ -477,11 +477,18 @@
                                           BorderBrush="{StaticResource LineBrush}"
                                           BorderThickness="1"
                                           VerticalAlignment="Center">
-                                    <TextBlock Text="件"
-                                               FontSize="13"
-                                               Foreground="{StaticResource TextMutedBrush}"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center" />
+                                    <Panel>
+                                      <!-- 文件已被删除时取不到图标，回退到类型图标 -->
+                                      <Path Classes="icon icon-md"
+                                            Data="{StaticResource IconFile}"
+                                            IsVisible="{Binding !HasFileIcon}"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center" />
+                                      <Image Source="{Binding FileIconPng, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
+                                             IsVisible="{Binding HasFileIcon}"
+                                             Stretch="Uniform"
+                                             Margin="3" />
+                                    </Panel>
                                   </Border>
                                   <StackPanel Spacing="2"
                                               VerticalAlignment="Center">
