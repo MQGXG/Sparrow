@@ -1,0 +1,94 @@
+# 截图标注（设计稿）
+
+> 结合两个参考：
+> · **snow-shot**（Qt/C++）：工具条分组、布局紧凑、锚定放置（已用于 `docs/capture.md`）
+> · **LumaShot**（Win32/C++）：**按工具切换的属性行**（`tool_properties.h` + `ui/toolbar.cpp`）、马赛克/箭头/画笔的完整参数
+
+目标：截图工具条从「只能识别/复制」升级为「能画、能遮、能标序号」，并保持深灰 + 琥珀的视觉。
+
+## 一、工具
+
+| 工具 | 行为 | 参考 |
+|---|---|---|
+| 选择/移动 | 默认态：拖选区、拖动标注、拉控制点 | LumaShot `Tool::Select` |
+| 矩形 | 拖拽出框；可调圆角与填充透明度 | 两边都有 |
+| 椭圆 | 拖拽出圆/椭圆 | LumaShot |
+| 箭头 | 起点→终点；箭头头部大小/样式可调 | LumaShot `model/arrow.cpp` |
+| 画笔 | 自由、直线、连续直线三种轨迹；连续线条做平滑 | LumaShot `Pen` |
+| 文字 | 点一下出输入框，提交后成为图元；字号/背景可选 | snow-shot |
+| 马赛克 | 像素/模糊两种模式；涂抹/框选两种方式；密度可调 | LumaShot `Mosaic` |
+| 序号 | 点一下递增编号，圆形/方形，可改颜色 | LumaShot `Number` |
+| 高亮 | 半透明粗笔画，用于划重点 | LumaShot `Highlighter` |
+
+第一版做：矩形、椭圆、箭头、画笔、文字、马赛克（6 个），序号与高亮放第二版。
+
+## 二、工具条布局（合并两边）
+
+```
+┌ 工具 ─────────────┬ 属性（跟随当前工具）──────────┬ 动作 ──────────────┐
+│ ▭ ◯ ↗ ✎ T ▦      │ 色 ●●●●●  粗细 ▁▃▅  圆角 ─○─  │ 识别 翻译▾ 复制 保存 │
+└───────────────────┴──────────────────────────────┴──────────── 固定 滚动 撤销 取消 ┘
+```
+
+关键点：
+
+1. **属性行按工具切换**（取自 LumaShot）：选中矩形才出现圆角/填充；选中马赛克才出现像素/模糊、涂抹/框选；不把十几种参数全铺出来。
+2. **三组 + 分隔线**（取自 snow-shot）：工具 / 属性 / 动作。动作区永远是「识别、翻译、复制、保存…」，不会因为切工具而移动。
+3. **宽度不够时折叠**：属性行先收进「属性」按钮，再不行把低频动作收进「更多 ▾」（snow-shot 的 layout compaction）。
+4. 放置规则沿用 `CaptureWindow.ComputeToolbarPosition`（右下锚定、放不下翻上方、钳制）。
+
+## 三、数据模型
+
+```csharp
+// 纯数据，便于撤销与重放；坐标是 DIP，导出时乘 _scaling
+abstract record Annotation;
+record RectNote(Rect Rect, uint Color, double Width, double CornerRadius, double FillOpacity) : Annotation;
+record EllipseNote(Rect Rect, uint Color, double Width, double FillOpacity) : Annotation;
+record ArrowNote(Point From, Point To, uint Color, double Width, double HeadSize) : Annotation;
+record PenNote(IReadOnlyList<Point> Points, uint Color, double Width, double Opacity, PenMode Mode) : Annotation;
+record TextNote(Point Origin, string Text, uint Color, double FontSize, TextBackground Background) : Annotation;
+record MosaicNote(Rect Rect, MosaicMode Mode, MosaicMethod Method, double Cell, int Strength) : Annotation;
+```
+
+- 撤销 = 弹出最后一条并重画（不做命令模式，图元都是不可变记录，够用）。
+- 重做保留一个 `Stack<Annotation>`，画新图元时清空。
+- 所有图元存 `List<Annotation>`，`OnRender` 按顺序画。
+
+## 四、导出合成
+
+**不要**用 Avalonia 截图渲染（高 DPI 会发虚）。用 SkiaSharp 直接画到物理像素：
+
+```
+1. CaptureSelectionAsync 拿到选区 PNG（原尺寸）
+2. 新建 SKCanvas(png)，按 _scaling 缩放坐标系
+3. 依次画图元（马赛克先做降采样/模糊，再画到 canvas）
+4. 复制 / 保存 / 固定 / 识别 都用这张合成后的 PNG
+```
+
+项目已依赖 SkiaSharp 3.119.4，OCR 插件也在用；不需要新包。
+
+## 五、交互细节（易踩的坑）
+
+| 坑 | 处理 |
+|---|---|
+| 标注与拖选区打架 | `DragMode` 增加 `Annotate`；有选中工具时鼠标事件先给工具 |
+| 文字输入法 | 用真实 `TextBox` 浮在选区上，提交后转 `TextNote`；不要自绘文本 |
+| 高 DPI | 图元存 DIP，导出时乘 `_scaling`；线宽用像素对齐（`.5` 偏移） |
+| 马赛克格子 | 按**物理像素**算单元格大小，否则 150% 缩放下格子不一致 |
+| 撤销后悬停态 | 重画时清掉命中缓存，避免抓到已删除的图元 |
+| 工具条太宽 | 见第二节的折叠规则；7 个动作 + 6 个工具一定超宽 |
+
+## 六、分期
+
+| 期 | 内容 | 工时 |
+|---|---|---|
+| P1 | 数据模型 + Skia 合成 + 矩形/椭圆/箭头/画笔 + 撤销 + 工具条分组骨架 | 1.5 天 |
+| P2 | 文字（含输入法）、马赛克、序号、高亮 | 1 天 |
+| P3 | 属性折叠、更多菜单、快捷键（数字键切工具） | 0.5 天 |
+
+## 七、验收
+
+- 画完 → 复制 / 保存 / 固定 / 识别，四个出口拿到的都是**带标注**的图
+- 150% 与 100% 缩放下，箭头粗细与马赛克格子视觉一致
+- 撤销 20 步不卡（每次重画是 O(n)，n 很小）
+- 选区重设后标注清空（避免旧图元落在新选区外）
