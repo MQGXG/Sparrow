@@ -183,4 +183,37 @@ public sealed class SettingsViewModelTests
         viewModel.SaveExcludedApps(["chrome", "1Password"]);
         store.Load().ClipboardExcludedApps.Count.ShouldBe(2);
     }
+
+    [AvaloniaFact]
+    public void 设置页_模型分段_显示离线模型列表()
+    {
+        var root = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+
+        var log = new NullLog();
+        var manager = new LocalModelManager(log, root);
+        var catalog = new ToolCatalog(root, log, new AppSettings());
+        var store = new SettingsStore(System.IO.Path.Combine(root, "settings.json"), log);
+        var viewModel = new SettingsViewModel(
+            catalog, store, new StartupService(log), new AppSettings(), localModels: manager);
+
+        var view = new SettingsView { DataContext = viewModel };
+        var window = new Avalonia.Controls.Window { Content = view, Width = 900, Height = 700 };
+        window.Show();
+
+        viewModel.SelectSection(SettingsSection.Model);
+
+        var list = view.FindControl<ItemsControl>("LocalModelsList");
+        list.ShouldNotBeNull();
+        list!.ItemsSource!.Cast<LocalModelItemViewModel>().Count().ShouldBe(3);
+
+        // 切走分段时整个区块隐藏，别在插件页留半截
+        var panel = view.FindControl<Border>("LocalModelsPanel");
+        panel.ShouldNotBeNull();
+        panel!.IsVisible.ShouldBeTrue();
+
+        viewModel.SelectSection(SettingsSection.Plugins);
+        panel.IsVisible.ShouldBeFalse();
+    }
 }

@@ -140,7 +140,10 @@
         </Border>
 
         <!-- ============ 离线模型 ============ -->
-        <Border Classes="panel" Padding="0" IsVisible="{Binding IsModelSelected}">
+        <Border x:Name="LocalModelsPanel"
+                Classes="panel"
+                Padding="0"
+                IsVisible="{Binding IsModelSelected}">
           <StackPanel>
             <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,14">
               <Border Classes="hud-icon">
@@ -164,7 +167,8 @@
 
             <Border Classes="hud-line" Margin="20,0" />
 
-            <ItemsControl ItemsSource="{Binding LocalModels}"
+            <ItemsControl x:Name="LocalModelsList"
+                          ItemsSource="{Binding LocalModels}"
                           Margin="20,12,20,0"
                           IsVisible="{Binding HasLocalModels}">
               <ItemsControl.ItemTemplate>
