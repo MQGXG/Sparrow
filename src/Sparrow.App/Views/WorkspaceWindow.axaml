@@ -643,35 +643,42 @@
                         Padding="4">
                   <Grid>
                     <ScrollViewer IsVisible="{Binding HasItems}">
-                      <ItemsControl ItemsSource="{Binding Groups}">
-                        <ItemsControl.ItemTemplate>
-                          <DataTemplate x:DataType="vm:ClipboardGroupViewModel">
-                            <StackPanel Margin="0,2,0,8">
+                      <!-- 虚拟化：Rows 是「分组头 + 条目」拍平后的集合，只实现视口内的行 -->
+                      <ItemsControl ItemsSource="{Binding Rows}">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate>
+                            <VirtualizingStackPanel />
+                          </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
 
-                              <!-- 分组头：琥珀刻度 + 标题 + 发丝线 + 条数 -->
-                              <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="8,2,8,4">
-                                <Border Classes="hud-tick" Height="10" />
-                                <TextBlock Grid.Column="1"
-                                           Text="{Binding Title}"
-                                           FontSize="10"
-                                           FontWeight="SemiBold"
-                                           LetterSpacing="0.8"
-                                           Margin="6,0,0,0"
-                                           VerticalAlignment="Center"
-                                           Foreground="{StaticResource TextMutedBrush}" />
-                                <Border Grid.Column="2"
-                                        Classes="hud-line"
-                                        Margin="10,0"
-                                        VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="3"
-                                           Classes="num"
-                                           Text="{Binding Items.Count}"
-                                           VerticalAlignment="Center" />
-                              </Grid>
+                        <ItemsControl.DataTemplates>
+                          <!-- 分组头：琥珀刻度 + 标题 + 发丝线 + 条数 -->
+                          <DataTemplate DataType="vm:ClipboardGroupViewModel"
+                                        x:DataType="vm:ClipboardGroupViewModel">
+                            <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="8,6,8,4">
+                              <Border Classes="hud-tick" Height="10" />
+                              <TextBlock Grid.Column="1"
+                                         Text="{Binding Title}"
+                                         FontSize="10"
+                                         FontWeight="SemiBold"
+                                         LetterSpacing="0.8"
+                                         Margin="6,0,0,0"
+                                         VerticalAlignment="Center"
+                                         Foreground="{StaticResource TextMutedBrush}" />
+                              <Border Grid.Column="2"
+                                      Classes="hud-line"
+                                      Margin="10,0"
+                                      VerticalAlignment="Center" />
+                              <TextBlock Grid.Column="3"
+                                         Classes="num"
+                                         Text="{Binding Items.Count}"
+                                         VerticalAlignment="Center" />
+                            </Grid>
+                          </DataTemplate>
 
-                              <ItemsControl ItemsSource="{Binding Items}">
-                                <ItemsControl.ItemTemplate>
-                                  <DataTemplate x:DataType="vm:ClipboardEntryViewModel">
+                          <!-- 条目 -->
+                          <DataTemplate DataType="vm:ClipboardEntryViewModel"
+                                        x:DataType="vm:ClipboardEntryViewModel">
                             <Border Margin="2,1"
                                     Padding="8,7"
                                     CornerRadius="8"
@@ -894,11 +901,7 @@
                               </Grid>
                             </Border>
                                   </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                              </ItemsControl>
-                            </StackPanel>
-                          </DataTemplate>
-                        </ItemsControl.ItemTemplate>
+                        </ItemsControl.DataTemplates>
                       </ItemsControl>
                     </ScrollViewer>
 

@@ -48,6 +48,51 @@ public sealed class ClipboardPanelWindowTests
     }
 
     [AvaloniaFact]
+    public void 剪贴板面板_长列表只实现在视口内的卡片()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"),
+                new NullLog());
+
+            for (var index = 0; index < 80; index++)
+                store.AddText($"第 {index} 条内容");
+
+            var viewModel = new ClipboardHistoryViewModel(store, new FakeClipboard());
+            var window = new ClipboardPanelWindow { DataContext = viewModel };
+            window.Show();
+            window.PrepareForShow();
+
+            Dispatcher.UIThread.RunJobs();
+
+            // 虚拟化：80 条历史只应实现视口内的那几张卡片
+            var realized = window.GetVisualDescendants()
+                .OfType<Border>()
+                .Count(border => border.Classes.Contains("clip-row"));
+
+            realized.ShouldBeGreaterThan(0);
+            realized.ShouldBeLessThan(40, "虚拟化失效：整份历史都被实例化了");
+            viewModel.Rows.Count.ShouldBe(80 + viewModel.Groups.Count);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [AvaloniaFact]
     public void 剪贴板面板_回车复制并收起()
     {
         var directory = System.IO.Path.Combine(

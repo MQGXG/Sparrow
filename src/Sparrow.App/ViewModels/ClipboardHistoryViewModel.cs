@@ -100,6 +100,13 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     /// <summary>按时间分组的列表视图：收藏 / 今天 / 三日内 / 一周内 / 更早。</summary>
     public ObservableCollection<ClipboardGroupViewModel> Groups { get; } = [];
 
+    /// <summary>
+    /// 拍平后的列表行：分组标题与条目混排，交给虚拟化列表绑定。
+    /// 元素类型是 <see cref="ClipboardGroupViewModel"/> 或 <see cref="ClipboardEntryViewModel"/>，
+    /// 界面用 DataTemplate 的 DataType 区分。
+    /// </summary>
+    public ObservableCollection<object> Rows { get; } = [];
+
     /// <summary>来源应用筛选（第一个是「全部来源」）。</summary>
     public ObservableCollection<string> SourceFilters { get; } = [];
 
@@ -610,6 +617,28 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
         {
             if (items.Count > 0)
                 Groups.Add(new ClipboardGroupViewModel(title, items));
+        }
+
+        BuildRows();
+    }
+
+    /// <summary>
+    /// 把分组拍平成「标题行 + 条目行」。
+    ///
+    /// 面板和工作区都用这个扁平集合绑定虚拟化列表：嵌套 ItemsControl 会把
+    /// 历史里的每一张卡片都实例化（75 张图就是 75 套视觉树），拍平后由
+    /// VirtualizingStackPanel 只实现视口内的那几行。
+    /// </summary>
+    private void BuildRows()
+    {
+        Rows.Clear();
+
+        foreach (var group in Groups)
+        {
+            Rows.Add(group);
+
+            foreach (var item in group.Items)
+                Rows.Add(item);
         }
     }
 

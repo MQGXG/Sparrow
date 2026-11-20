@@ -394,6 +394,43 @@ public sealed class ClipboardHistoryViewModelTests : IDisposable
         _viewModel.Summary.ShouldContain("MB");
     }
 
+    [Fact]
+    public void 扁平行_分组头与条目交替且条数与分组一致()
+    {
+        _store.AddText("第一条内容");
+        _store.AddText("第二条内容");
+
+        _viewModel.Refresh();
+
+        // 拍平集合是虚拟化列表的数据源：每个分组一条标题行 + 该组的所有条目
+        var expected = _viewModel.Groups.Sum(group => group.Items.Count + 1);
+        _viewModel.Rows.Count.ShouldBe(expected);
+
+        var first = _viewModel.Rows[0].ShouldBeOfType<ClipboardGroupViewModel>();
+        _viewModel.Rows[1].ShouldBeOfType<ClipboardEntryViewModel>();
+        _viewModel.Rows[1].ShouldBe(_viewModel.Items[0]);
+
+        // 分组头数量等于 Rows 里的标题行数量
+        _viewModel.Rows.OfType<ClipboardGroupViewModel>().Count().ShouldBe(_viewModel.Groups.Count);
+    }
+
+    [Fact]
+    public void 扁平行_重新筛选后跟着重建()
+    {
+        _store.AddText("chrome 收藏的内容");
+        _store.AddText("另一条");
+
+        _viewModel.Refresh();
+        var before = _viewModel.Rows.Count;
+
+        _viewModel.Query = "chrome";
+        _viewModel.Refresh();
+
+        _viewModel.Rows.Count.ShouldBeLessThan(before);
+        _viewModel.Rows.OfType<ClipboardEntryViewModel>().Count()
+            .ShouldBe(_viewModel.Items.Count);
+    }
+
     public void Dispose()
     {
         try
