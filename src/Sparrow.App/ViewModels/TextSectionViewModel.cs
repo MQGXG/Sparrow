@@ -51,9 +51,12 @@ public sealed partial class TextSectionViewModel : ObservableObject
 
     public bool HasLines => Lines is { Count: > 0 };
 
-    /// <summary>展开后显示原图 + 全文；折叠时只显示摘要。</summary>
+    /// <summary>
+    /// 展开后显示原图 + 全文；折叠时只显示摘要。
+    /// 默认展开：多图识别的核心用途就是「图对文」，默认折叠会逼用户逐张点开。
+    /// </summary>
     [ObservableProperty]
-    private bool _isExpanded;
+    private bool _isExpanded = true;
 
     /// <summary>识别框开关：默认显示，可以关掉看干净的原图。</summary>
     [ObservableProperty]

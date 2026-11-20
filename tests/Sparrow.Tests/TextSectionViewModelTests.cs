@@ -76,13 +76,13 @@ public sealed class TextSectionViewModelTests
         viewModel.ImageHeight.ShouldBe(800);
         viewModel.HasLines.ShouldBeTrue();
 
-        viewModel.IsExpanded.ShouldBeFalse("默认折叠，只显示一行摘要");
+        viewModel.IsExpanded.ShouldBeTrue("默认展开：多图识别就是要直接对比图和对文");
         viewModel.ShowBoxes.ShouldBeTrue("默认显示识别框");
 
-        viewModel.IsExpanded = true;
+        viewModel.IsExpanded = false;
         viewModel.ShowBoxes = false;
 
-        viewModel.IsExpanded.ShouldBeTrue();
+        viewModel.IsExpanded.ShouldBeFalse();
         viewModel.ShowBoxes.ShouldBeFalse();
     }
 

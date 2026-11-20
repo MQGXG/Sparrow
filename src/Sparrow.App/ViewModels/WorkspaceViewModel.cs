@@ -1184,9 +1184,12 @@ public partial class WorkspaceViewModel : ObservableObject
                 }
 
                 var bytes = File.ReadAllBytes(path);
+                var (width, height) = ImageSizeReader.Read(bytes);
                 var input = new ImageInput(bytes, FormatFromExtension(Path.GetExtension(path)))
                 {
-                    Name = info.Name
+                    Name = info.Name,
+                    Width = width,
+                    Height = height
                 };
 
                 InputImages.Add(new InputImageViewModel(input, path));
@@ -1222,8 +1225,14 @@ public partial class WorkspaceViewModel : ObservableObject
             ? "剪贴板图片"
             : $"剪贴板图片 {InputImages.Count + 1}";
 
+        var (imageWidth, imageHeight) = ImageSizeReader.Read(png);
         InputImages.Add(new InputImageViewModel(
-            new ImageInput(png, ImageFormat.Png) { Name = name },
+            new ImageInput(png, ImageFormat.Png)
+            {
+                Name = name,
+                Width = imageWidth,
+                Height = imageHeight
+            },
             sourcePath: null));
 
         NotifyInputImagesChanged();
@@ -1372,7 +1381,7 @@ public partial class WorkspaceViewModel : ObservableObject
         {
             // 拖入的图片优先；没有才回退到剪贴板
             if (_droppedImagePng is not null)
-                return new ImageInput(_droppedImagePng, _droppedImageFormat);
+                return WithSize(new ImageInput(_droppedImagePng, _droppedImageFormat));
 
             var png = _clipboard.GetImagePng();
             if (png is null)
@@ -1381,10 +1390,17 @@ public partial class WorkspaceViewModel : ObservableObject
                 return null;
             }
 
-            return new ImageInput(png, ImageFormat.Png);
+            return WithSize(new ImageInput(png, ImageFormat.Png));
         }
 
         return new TextInput(InputText);
+    }
+
+    /// <summary>补上图片宽高：只读文件头，不解码像素。</summary>
+    private static ImageInput WithSize(ImageInput input)
+    {
+        var (width, height) = ImageSizeReader.Read(input.Data.Span);
+        return input with { Width = width, Height = height };
     }
 
     private static string PreviewInput(IToolInput input) => input switch
