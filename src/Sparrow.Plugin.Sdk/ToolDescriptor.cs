@@ -53,6 +53,15 @@ public sealed record ToolParameter
     /// <summary>Kind == Choice 时的可选项。</summary>
     public string[] Choices { get; init; } = Array.Empty<string>();
 
+    /// <summary>
+    /// Choice 选项的显示名（值 → 标签）。没配的项原样显示值。
+    ///
+    /// 用于「值是代码、用户看不懂」的场合，比如 OCR 的 ch / en / ja。
+    /// 值本身不变——工具仍然用 <see cref="Choices"/> 里的代码做逻辑判断，
+    /// 只有界面显示标签。
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? ChoiceLabels { get; init; }
+
     public string? Hint { get; init; }
 
     /// <summary>根据 Key 查找参数声明，找不到返回 null。</summary>

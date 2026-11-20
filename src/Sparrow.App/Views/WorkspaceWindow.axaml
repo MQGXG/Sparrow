@@ -1000,8 +1000,8 @@
                        Margin="0,4,0,0" />
 
             <!-- 参数：行内控件，不占整栏 -->
-            <StackPanel Grid.Row="2" IsVisible="{Binding HasParameters}" Margin="0,16,0,0">
-              <TextBlock Classes="section" Text="参数" Margin="0,0,0,8" />
+            <StackPanel Grid.Row="2" IsVisible="{Binding HasParameters}" Margin="0,12,0,0">
+              <TextBlock Classes="section" Text="参数" Margin="0,0,0,6" />
 
               <ItemsControl ItemsSource="{Binding Parameters}">
                 <ItemsControl.ItemsPanel>
@@ -1031,10 +1031,16 @@
                                    FontSize="11"
                                    Foreground="{StaticResource TextMutedBrush}" />
                         <ComboBox ItemsSource="{Binding Choices}"
-                                  SelectedItem="{Binding Value, Mode=TwoWay}"
+                                  SelectedItem="{Binding SelectedChoice, Mode=TwoWay}"
                                   IsVisible="{Binding IsChoice}"
-                                  MinWidth="160"
-                                  HorizontalAlignment="Left" />
+                                  MinWidth="140"
+                                  HorizontalAlignment="Left">
+                          <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ParameterChoice">
+                              <TextBlock Text="{Binding Label}" />
+                            </DataTemplate>
+                          </ComboBox.ItemTemplate>
+                        </ComboBox>
                         <TextBox Text="{Binding Value, Mode=TwoWay}"
                                  IsVisible="{Binding IsText}"
                                  MinWidth="220"
