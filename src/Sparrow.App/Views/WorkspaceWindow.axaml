@@ -1261,7 +1261,7 @@
                             IsVisible="{Binding CanClearInputImages}"
                             Click="OnClearInputImagesClick">
                       <Path Classes="icon icon-xs"
-                            Data="{StaticResource IconClose}" />
+                            Data="{StaticResource IconTrash}" />
                     </Button>
                     <Button Classes="ghost small"
                             Width="28"
@@ -1271,7 +1271,7 @@
                             IsVisible="{Binding CanClearDroppedImage}"
                             Click="OnClearDroppedImageClick">
                       <Path Classes="icon icon-xs"
-                            Data="{StaticResource IconClose}" />
+                            Data="{StaticResource IconTrash}" />
                     </Button>
                     <Button Classes="ghost small"
                             Width="28"
@@ -1281,7 +1281,7 @@
                             IsVisible="{Binding CanClearDroppedFiles}"
                             Click="OnClearDroppedFilesClick">
                       <Path Classes="icon icon-xs"
-                            Data="{StaticResource IconClose}" />
+                            Data="{StaticResource IconTrash}" />
                     </Button>
                   </StackPanel>
                 </Grid>
