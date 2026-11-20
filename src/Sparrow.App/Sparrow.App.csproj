@@ -25,6 +25,7 @@
     <PackageReference Include="Interop.UIAutomationClient" />
     <PackageReference Include="SkiaSharp" />
     <PackageReference Include="Svg.Skia" />
+    <PackageReference Include="System.Drawing.Common" />
   </ItemGroup>
 
   <ItemGroup>
@@ -39,10 +40,7 @@
     用 glob 而不是逐个列项目，加插件不需要改 App.csproj。
   -->
   <ItemGroup>
-    <ProjectReference Include="..\..\plugins\**\*.csproj"
-                      Exclude="..\..\plugins\**\bin\**;..\..\plugins\**\obj\**"
-                      ReferenceOutputAssembly="false"
-                      Private="false" />
+    <ProjectReference Include="..\..\plugins\**\*.csproj" Exclude="..\..\plugins\**\bin\**;..\..\plugins\**\obj\**" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
 
   <ItemGroup>
@@ -54,9 +52,7 @@
     删除插件目录后，bin/.../plugins 里的旧副本不会自动消失，应用会继续加载它。
     每次构建后按仓库 plugins/ 的目录名对齐一次：输出里有、源码里没有的直接删掉。
   -->
-  <UsingTask TaskName="PruneStalePluginOutput"
-             TaskFactory="RoslynCodeTaskFactory"
-             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+  <UsingTask TaskName="PruneStalePluginOutput" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
     <ParameterGroup>
       <SourceRoot ParameterType="System.String" Required="true" />
       <HostRoot ParameterType="System.String" Required="true" />
@@ -93,15 +89,11 @@
   </UsingTask>
 
   <Target Name="RemoveStalePluginOutput" AfterTargets="Build">
-    <PruneStalePluginOutput
-        SourceRoot="$(MSBuildProjectDirectory)\..\..\plugins"
-        HostRoot="$(MSBuildProjectDirectory)\$(OutDir)plugins">
+    <PruneStalePluginOutput SourceRoot="$(MSBuildProjectDirectory)\..\..\plugins" HostRoot="$(MSBuildProjectDirectory)\$(OutDir)plugins">
       <Output TaskParameter="Removed" PropertyName="_RemovedPluginDirs" />
     </PruneStalePluginOutput>
 
-    <Message Importance="normal"
-             Text="清理已删除插件的输出：$(_RemovedPluginDirs)"
-             Condition="'$(_RemovedPluginDirs)' != ''" />
+    <Message Importance="normal" Text="清理已删除插件的输出：$(_RemovedPluginDirs)" Condition="'$(_RemovedPluginDirs)' != ''" />
   </Target>
 
   <!--

@@ -12,6 +12,7 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
 {
     private readonly ClipboardHistoryStore _store;
     private readonly Lazy<byte[]?> _thumbnail;
+    private readonly Lazy<byte[]?> _sourceIcon;
 
     public ClipboardEntryViewModel(ClipboardHistoryEntry entry, ClipboardHistoryStore store)
     {
@@ -20,6 +21,9 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
         LinkHost = ExtractHost(entry);
         _thumbnail = new Lazy<byte[]?>(() =>
             entry.Kind == ClipboardEntryKind.Image ? store.LoadImage(entry) : null);
+
+        // 图标提取要枚举进程：懒加载 + 进程级缓存，列表滚动时每个来源只查一次
+        _sourceIcon = new Lazy<byte[]?>(() => SourceIconProvider.TryGet(entry.SourceApp));
     }
 
     /// <summary>从 http(s) 链接里取域名（去掉 www.），失败返回空串。</summary>
@@ -254,6 +258,16 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
 
     /// <summary>详情里的来源值；没有来源时给一个占位符，避免那一栏留空。</summary>
     public string SourceDisplay => SourceLabel.Length > 0 ? SourceLabel : "—";
+
+    /// <summary>来源应用图标（PNG）；来源进程已退出时为 null，界面回退到首字母色块。</summary>
+    public byte[]? SourceIconPng => _sourceIcon.Value;
+
+    public bool HasSourceIcon => SourceIconPng is not null;
+
+    /// <summary>拿不到图标时的回退：进程名首字母。</summary>
+    public string SourceInitial => SourceLabel.Length > 0
+        ? SourceLabel[..1].ToUpperInvariant()
+        : string.Empty;
 
     /// <summary>是否有手动标签（自动标签不算），详情底栏靠它显示空态提示。</summary>
     public bool HasManualTags => Entry.Tags.Count > 0;

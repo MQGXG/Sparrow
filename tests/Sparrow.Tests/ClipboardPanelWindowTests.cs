@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -570,6 +571,67 @@ public sealed class ClipboardPanelWindowTests
 
             window.Topmost.ShouldBeFalse("再点取消");
             settingsStore.Load().ClipboardPanelTopmost.ShouldBeFalse();
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [AvaloniaFact]
+    public void 工具条默认透明且不参与命中()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"),
+                new NullLog());
+
+            // 两条：面板呼出时第一行是选中的，得靠第二行测默认态
+            store.AddText("hello world");
+            store.AddText("second item");
+
+            var viewModel = new ClipboardHistoryViewModel(store, new FakeClipboard());
+            var window = new ClipboardPanelWindow { DataContext = viewModel };
+            window.Show();
+            window.PrepareForShow();
+            Dispatcher.UIThread.RunJobs();
+
+            var row = window.GetVisualDescendants()
+                .OfType<Border>()
+                .FirstOrDefault(border => border.Classes.Contains("clip-row")
+                    && !border.Classes.Contains("selected"));
+            row.ShouldNotBeNull("面板呼出时第一行是选中的，要测默认态得找没选中的行");
+
+            var actions = row!.GetVisualDescendants()
+                .OfType<Border>()
+                .First(border => border.Classes.Contains("row-actions"));
+
+            // headless 的虚拟指针默认压在原点，可能正好悬停在第一行上；
+            // 先把它挪开，否则 :pointerover 样式会把工具条显示出来，测的就不是默认态了。
+            window.MouseMove(new Point(-1000, -1000));
+            Dispatcher.UIThread.RunJobs();
+
+            row!.IsPointerOver.ShouldBeFalse("前提：指针必须不在行上");
+
+            // Opacity 带 140ms 过渡，headless 不推进时钟，不断言它的中间值；
+            // 真正要防的是「看不见却还能被点到」，IsHitTestVisible 没有过渡，是瞬时的。
+            actions.IsHitTestVisible.ShouldBeFalse(
+                $"透明时必须不参与命中，否则看不见的按钮还能被点到；" +
+                $"实际 Hit={actions.IsHitTestVisible} Opacity={actions.Opacity}");
+
+            row.Classes.Contains("selected").ShouldBeFalse();
         }
         finally
         {

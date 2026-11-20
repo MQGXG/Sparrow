@@ -377,22 +377,34 @@
                                 <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
                               </Style>
 
-                              <!-- 操作浮层：默认不可见，悬停或选中才出现 -->
+                              <!--
+                                悬停浮层：默认藏在右侧 16px 且透明，悬停或选中时从右滑入。
+                                用 Opacity 而不是 IsVisible——IsVisible 是瞬时切换，没有过渡；
+                                默认态必须同时 IsHitTestVisible=False，否则看不见的按钮还能被点到。
+                              -->
                               <Style Selector="Border.clip-row Border.row-actions">
-                                <Setter Property="IsVisible" Value="False" />
+                                <Setter Property="Opacity" Value="0" />
+                                <Setter Property="IsHitTestVisible" Value="False" />
+                                <Setter Property="RenderTransform" Value="translate(16px,0)" />
                               </Style>
                               <Style Selector="Border.clip-row:pointerover Border.row-actions">
-                                <Setter Property="IsVisible" Value="True" />
+                                <Setter Property="Opacity" Value="1" />
+                                <Setter Property="IsHitTestVisible" Value="True" />
+                                <Setter Property="RenderTransform" Value="translate(0px,0)" />
                               </Style>
                               <Style Selector="Border.clip-row.selected Border.row-actions">
-                                <Setter Property="IsVisible" Value="True" />
+                                <Setter Property="Opacity" Value="1" />
+                                <Setter Property="IsHitTestVisible" Value="True" />
+                                <Setter Property="RenderTransform" Value="translate(0px,0)" />
                               </Style>
                             </Border.Styles>
 
                             <Panel>
                               <StackPanel Spacing="6">
-                                <!-- 元信息常驻：类型 · 字数/尺寸 · 时间 · 来源 -->
-                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                <!-- 元信息常驻：类型 · 字数/尺寸 · 时间 · 来源；右侧留 26px 给来源图标 -->
+                                <StackPanel Orientation="Horizontal"
+                                            Spacing="6"
+                                            Margin="0,0,26,0">
                                   <TextBlock Text="{Binding KindLabel}"
                                              FontSize="10"
                                              Foreground="{StaticResource TextMutedBrush}" />
@@ -504,7 +516,35 @@
                                            IsVisible="{Binding ShowTagLine}" />
                               </StackPanel>
 
-                              <!-- 悬停浮层：查看 / 队列 / 收藏，三个等宽图标 -->
+                              <!-- 来源应用图标：常驻右上角，hover 时工具条从右滑入盖住它 -->
+                              <Border Classes="row-source"
+                                      HorizontalAlignment="Right"
+                                      VerticalAlignment="Top"
+                                      Width="18"
+                                      Height="18"
+                                      IsVisible="{Binding HasSource}">
+                                <Panel>
+                                  <!-- 来源进程已退出时拿不到真图标，回退到进程名首字母 -->
+                                  <Border Background="{StaticResource SurfaceRaisedBrush}"
+                                          BorderBrush="{StaticResource LineBrush}"
+                                          BorderThickness="1"
+                                          CornerRadius="4"
+                                          IsVisible="{Binding !HasSourceIcon}">
+                                    <TextBlock Text="{Binding SourceInitial}"
+                                               FontSize="9"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                  </Border>
+                                  <Image Source="{Binding SourceIconPng, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
+                                         IsVisible="{Binding HasSourceIcon}"
+                                         Stretch="Uniform"
+                                         Margin="1" />
+                                </Panel>
+                              </Border>
+
+                              <!-- 悬停浮层：查看 / 复制 / 粘贴 / 打开 / 队列 / 收藏 / 删除 -->
                               <Border Classes="row-actions"
                                       HorizontalAlignment="Right"
                                       VerticalAlignment="Top"
@@ -513,6 +553,14 @@
                                       BorderThickness="1"
                                       CornerRadius="8"
                                       Padding="2">
+                                <Border.Transitions>
+                                  <Transitions>
+                                    <DoubleTransition Property="Opacity" Duration="0:0:0.14" />
+                                    <TransformOperationsTransition Property="RenderTransform"
+                                                                   Duration="0:0:0.16"
+                                                                   Easing="CubicEaseOut" />
+                                  </Transitions>
+                                </Border.Transitions>
                                 <StackPanel Orientation="Horizontal" Spacing="1">
                                   <Button Classes="row-icon"
                                           ToolTip.Tip="在面板内查看详情"

@@ -99,6 +99,83 @@ public sealed class ClipboardEntryDisplayTests
     }
 
     [Fact]
+    public void 来源图标拿不到时回退到进程名首字母()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"), new NullLog());
+
+            // 这个进程名一定不存在，图标必然拿不到
+            store.AddText("hello", "sparrow-never-exists-xyz");
+            var viewModel = new ClipboardEntryViewModel(store.Recent(1)[0], store);
+
+            viewModel.HasSource.ShouldBeTrue();
+            viewModel.SourceInitial.ShouldBe("S", "回退用进程名首字母");
+            viewModel.HasSourceIcon.ShouldBeFalse("进程不在，取不到真图标");
+            viewModel.SourceIconPng.ShouldBeNull();
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [Fact]
+    public void 没有来源时首字母与图标都为空()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"), new NullLog());
+            store.AddText("hello");
+
+            var viewModel = new ClipboardEntryViewModel(store.Recent(1)[0], store);
+
+            viewModel.HasSource.ShouldBeFalse();
+            viewModel.SourceInitial.ShouldBe(string.Empty);
+            viewModel.HasSourceIcon.ShouldBeFalse();
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [Fact]
+    public void 图标提供者对空值与未知进程返回空()
+    {
+        Sparrow.App.Services.SourceIconProvider.TryGet(null).ShouldBeNull();
+        Sparrow.App.Services.SourceIconProvider.TryGet("   ").ShouldBeNull();
+        Sparrow.App.Services.SourceIconProvider.TryGet("sparrow-never-exists-xyz").ShouldBeNull();
+
+        // 失败结果也进缓存：同一个未知进程第二次直接返回，不再枚举
+        Sparrow.App.Services.SourceIconProvider.TryGet("sparrow-never-exists-xyz").ShouldBeNull();
+    }
+
+    [Fact]
     public void 图片条目写临时文件后用默认程序打开()
     {
         var directory = System.IO.Path.Combine(
