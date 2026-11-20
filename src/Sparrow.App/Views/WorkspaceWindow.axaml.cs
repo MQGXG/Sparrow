@@ -216,6 +216,40 @@ public partial class WorkspaceWindow : Window
             viewModel.ShowImagePreview(image);
     }
 
+    private void OnPreviousImageClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel viewModel)
+            viewModel.PreviousImage();
+
+        e.Handled = true;
+    }
+
+    private void OnNextImageClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel viewModel)
+            viewModel.NextImage();
+
+        e.Handled = true;
+    }
+
+    /// <summary>点小缩略图：跳到那一张。</summary>
+    private void OnSelectImageClick(object? sender, TappedEventArgs e)
+    {
+        if (sender is Control { Tag: InputImageViewModel image } && DataContext is WorkspaceViewModel viewModel)
+            viewModel.SelectImage(image);
+
+        e.Handled = true;
+    }
+
+    /// <summary>移除当前轮播的这张。</summary>
+    private void OnRemoveCurrentImageClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel { CurrentImage: { } image } viewModel)
+            viewModel.RemoveInputImage(image);
+
+        e.Handled = true;
+    }
+
     private void OnClearInputImagesClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is WorkspaceViewModel viewModel)
@@ -598,6 +632,24 @@ public partial class WorkspaceWindow : Window
     {
         if (DataContext is WorkspaceViewModel viewModel)
             viewModel.CopyResult();
+    }
+
+    /// <summary>结果区：只看当前这张图。</summary>
+    private void OnShowCurrentSectionClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel viewModel)
+            viewModel.ShowAllSections = false;
+
+        e.Handled = true;
+    }
+
+    /// <summary>结果区：看全部图片的识别结果。</summary>
+    private void OnShowAllSectionsClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel viewModel)
+            viewModel.ShowAllSections = true;
+
+        e.Handled = true;
     }
 
     /// <summary>多图结果：展开 / 折叠某一项。</summary>

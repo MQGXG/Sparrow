@@ -290,6 +290,90 @@ public partial class WorkspaceViewModel : ObservableObject
 
     public int InputImageCount => InputImages.Count;
 
+    /// <summary>当前轮播到第几张（从 0 起）。</summary>
+    [ObservableProperty]
+    private int _currentImageIndex;
+
+    public bool HasMultipleImages => InputImages.Count > 1;
+
+    public bool CanGoPreviousImage => CurrentImageIndex > 0;
+
+    public bool CanGoNextImage => CurrentImageIndex < InputImages.Count - 1;
+
+    /// <summary>当前显示的那张原图。</summary>
+    public InputImageViewModel? CurrentImage =>
+        CurrentImageIndex >= 0 && CurrentImageIndex < InputImages.Count
+            ? InputImages[CurrentImageIndex]
+            : null;
+
+    public string ImageCounter => InputImages.Count == 0
+        ? string.Empty
+        : $"{CurrentImageIndex + 1} / {InputImages.Count}";
+
+    public void PreviousImage()
+    {
+        if (CanGoPreviousImage)
+            CurrentImageIndex--;
+    }
+
+    public void NextImage()
+    {
+        if (CanGoNextImage)
+            CurrentImageIndex++;
+    }
+
+    /// <summary>点小缩略图直接跳到某张。</summary>
+    public void SelectImage(InputImageViewModel image)
+    {
+        var index = InputImages.IndexOf(image);
+        if (index >= 0)
+            CurrentImageIndex = index;
+    }
+
+    partial void OnCurrentImageIndexChanged(int value)
+    {
+        OnPropertyChanged(nameof(CanGoPreviousImage));
+        OnPropertyChanged(nameof(CanGoNextImage));
+        OnPropertyChanged(nameof(CurrentImage));
+        OnPropertyChanged(nameof(ImageCounter));
+        OnPropertyChanged(nameof(CurrentSection));
+        OnPropertyChanged(nameof(VisibleSections));
+    }
+
+    /// <summary>
+    /// 多图结果：false = 只看当前这张（默认，方便逐张核对）；
+    /// true = 看全部（总览 / 复制全部）。
+    /// </summary>
+    [ObservableProperty]
+    private bool _showAllSections;
+
+    public bool IsCurrentSectionView => !ShowAllSections;
+
+    /// <summary>只有一段时两个视图内容一样，切换按钮不该出现。</summary>
+    public bool CanSwitchSectionView => ResultSections.Count > 1;
+
+    /// <summary>当前轮播图对应的那段识别结果。</summary>
+    public TextSectionViewModel? CurrentSection =>
+        ResultSections.FirstOrDefault(section => section.SourceIndex == CurrentImageIndex)
+        ?? ResultSections.FirstOrDefault();
+
+    partial void OnShowAllSectionsChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsCurrentSectionView));
+        OnPropertyChanged(nameof(VisibleSections));
+    }
+
+    /// <summary>
+    /// 结果区实际渲染的段：只看当前时是一个元素，看全部时是整份列表。
+    /// 两个视图共用同一批 TextSectionViewModel，不复制数据。
+    /// </summary>
+    public IReadOnlyList<TextSectionViewModel> VisibleSections =>
+        ShowAllSections
+            ? ResultSections
+            : CurrentSection is { } current
+                ? [current]
+                : [];
+
     public bool HasInputImages => InputImages.Count > 0;
 
     public bool CanClearInputImages => IsImagesInput && HasInputImages;
@@ -435,7 +519,13 @@ public partial class WorkspaceViewModel : ObservableObject
 
     partial void OnHasImageResultChanged(bool value) => OnPropertyChanged(nameof(IsTextResultVisible));
 
-    partial void OnHasSectionsChanged(bool value) => OnPropertyChanged(nameof(IsTextResultVisible));
+    partial void OnHasSectionsChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsTextResultVisible));
+        OnPropertyChanged(nameof(CanSwitchSectionView));
+        OnPropertyChanged(nameof(CurrentSection));
+        OnPropertyChanged(nameof(VisibleSections));
+    }
 
     /// <summary>图片结果的规格摘要，用作历史记录与复制提示。</summary>
     public static string SummarizeImage(ImagePayload payload) =>
@@ -901,6 +991,10 @@ public partial class WorkspaceViewModel : ObservableObject
 
         HasSections = true;
 
+        // 新结果出来时回到「只看当前这张」，用户刚识别完通常要逐张核对
+        ShowAllSections = false;
+        CurrentImageIndex = Math.Clamp(CurrentImageIndex, 0, Math.Max(0, InputImages.Count - 1));
+
         ResultText = payload.Text;
         HasResult = true;
         HasError = false;
@@ -1280,6 +1374,17 @@ public partial class WorkspaceViewModel : ObservableObject
         OnPropertyChanged(nameof(HasInputImages));
         OnPropertyChanged(nameof(CanClearInputImages));
         OnPropertyChanged(nameof(InputHint));
+
+        // 轮播相关：数量变了，索引可能要夹回合法范围
+        OnPropertyChanged(nameof(HasMultipleImages));
+        OnPropertyChanged(nameof(CurrentImage));
+        OnPropertyChanged(nameof(ImageCounter));
+        OnPropertyChanged(nameof(CanGoPreviousImage));
+        OnPropertyChanged(nameof(CanGoNextImage));
+        OnPropertyChanged(nameof(CurrentSection));
+
+        if (CurrentImageIndex >= InputImages.Count)
+            CurrentImageIndex = Math.Max(0, InputImages.Count - 1);
     }
 
     public void ClearDroppedImage()
@@ -1435,6 +1540,7 @@ public partial class WorkspaceViewModel : ObservableObject
 
         ResultSections.Clear();
         HasSections = false;
+        ShowAllSections = false;
     }
 
     private void ClearSvgResult()

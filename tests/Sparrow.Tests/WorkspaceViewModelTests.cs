@@ -345,6 +345,52 @@ public sealed class WorkspaceViewModelTests
     }
 
     [Fact]
+    public async Task 轮播切换_边界与跳转()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+        await viewModel.ReloadAsync();
+
+        var paths = new List<string>();
+        for (var i = 0; i < 3; i++)
+        {
+            var path = System.IO.Path.Combine(root.Path, $"img{i}.png");
+            File.WriteAllBytes(path, [1, 2, 3]);
+            paths.Add(path);
+        }
+
+        viewModel.AcceptDroppedFiles(paths);
+
+        viewModel.InputImageCount.ShouldBe(3);
+        viewModel.CurrentImageIndex.ShouldBe(0);
+        viewModel.CanGoPreviousImage.ShouldBeFalse("第一张没有上一张");
+        viewModel.CanGoNextImage.ShouldBeTrue();
+        viewModel.ImageCounter.ShouldBe("1 / 3");
+
+        viewModel.NextImage();
+        viewModel.CurrentImageIndex.ShouldBe(1);
+        viewModel.ImageCounter.ShouldBe("2 / 3");
+
+        viewModel.NextImage();
+        viewModel.NextImage();
+        viewModel.CurrentImageIndex.ShouldBe(2, "最后一张不能再往后");
+        viewModel.CanGoNextImage.ShouldBeFalse();
+
+        // 点小缩略图直接跳
+        viewModel.SelectImage(viewModel.InputImages[0]);
+        viewModel.CurrentImageIndex.ShouldBe(0);
+
+        viewModel.PreviousImage();
+        viewModel.CurrentImageIndex.ShouldBe(0, "第一张不能再往前");
+
+        // 清空后索引要夹回 0
+        viewModel.ClearInputImages();
+        viewModel.CurrentImageIndex.ShouldBe(0);
+        viewModel.ImageCounter.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task 拖入多张图片_合并进图片集并切到OCRTool()
     {
         using var root = new TempPluginRoot();

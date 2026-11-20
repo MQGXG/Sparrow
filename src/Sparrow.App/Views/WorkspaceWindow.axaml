@@ -1080,64 +1080,101 @@
                     CornerRadius="8"
                     Padding="12,8"
                     HorizontalAlignment="Stretch">
-              <Grid RowDefinitions="*,Auto" RowSpacing="10">
-                <!-- 图片集缩略图：选了什么一眼能看见；图片多了这里滚动，底部按钮固定 -->
-                <ScrollViewer Grid.Row="0"
-                              VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled">
-                <ItemsControl x:Name="InputImagesStrip"
-                              ItemsSource="{Binding InputImages}"
+              <Grid RowDefinitions="*,Auto,Auto,Auto" RowSpacing="8">
+                <!-- 当前图：原图按比例铺满，左右箭头切换 -->
+                <Panel Grid.Row="0" IsVisible="{Binding IsImagesInput}">
+                  <Image Source="{Binding CurrentImage.PreviewBytes, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
+                         Stretch="Uniform"
+                         Cursor="Hand"
+                         ToolTip.Tip="点击全屏查看"
+                         Tag="{Binding CurrentImage}"
+                         Tapped="OnPreviewInputImageClick" />
+
+                  <Button Classes="ghost"
+                          Width="28"
+                          Height="28"
+                          Padding="0"
+                          HorizontalAlignment="Left"
+                          VerticalAlignment="Center"
+                          IsEnabled="{Binding CanGoPreviousImage}"
+                          ToolTip.Tip="上一张"
+                          AutomationProperties.Name="上一张"
+                          Click="OnPreviousImageClick">
+                    <Path Classes="icon icon-xs"
+                          Data="{StaticResource IconChevronLeft}" />
+                  </Button>
+
+                  <Button Classes="ghost"
+                          Width="28"
+                          Height="28"
+                          Padding="0"
+                          HorizontalAlignment="Right"
+                          VerticalAlignment="Center"
+                          IsEnabled="{Binding CanGoNextImage}"
+                          ToolTip.Tip="下一张"
+                          AutomationProperties.Name="下一张"
+                          Click="OnNextImageClick">
+                    <Path Classes="icon icon-xs"
+                          Data="{StaticResource IconChevronRight}" />
+                  </Button>
+
+                  <Button Classes="ghost small"
+                          Width="24"
+                          Padding="0"
+                          HorizontalAlignment="Right"
+                          VerticalAlignment="Top"
+                          Margin="2"
+                          ToolTip.Tip="移除当前这张"
+                          AutomationProperties.Name="移除当前这张"
+                          IsVisible="{Binding HasInputImages}"
+                          Click="OnRemoveCurrentImageClick">
+                    <Path Classes="icon icon-xs"
+                          Data="{StaticResource IconClose}" />
+                  </Button>
+                </Panel>
+
+                <!-- 计数 -->
+                <TextBlock Grid.Row="1"
+                           Text="{Binding ImageCounter}"
+                           IsVisible="{Binding IsImagesInput}"
+                           HorizontalAlignment="Center"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}" />
+
+                <!-- 小缩略图条：点哪张跳哪张 -->
+                <ScrollViewer Grid.Row="2"
+                              HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Disabled"
                               IsVisible="{Binding IsImagesInput}">
-                  <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                      <WrapPanel />
-                    </ItemsPanelTemplate>
-                  </ItemsControl.ItemsPanel>
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:InputImageViewModel">
-                      <Border Width="96"
-                              Margin="0,0,8,8"
-                              CornerRadius="6"
-                              Background="{StaticResource SurfaceBrush}"
-                              BorderBrush="{StaticResource LineBrush}"
-                              BorderThickness="1"
-                              ClipToBounds="True"
-                              Cursor="Hand"
-                              Tapped="OnPreviewInputImageClick"
-                              Tag="{Binding}">
-                        <Grid RowDefinitions="64,Auto">
-                          <Image Grid.Row="0"
-                                 Source="{Binding PreviewBytes, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
+                  <ItemsControl x:Name="InputImagesStrip"
+                                ItemsSource="{Binding InputImages}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="4" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:InputImageViewModel">
+                        <Border Width="52"
+                                Height="36"
+                                CornerRadius="4"
+                                Background="{StaticResource SurfaceBrush}"
+                                BorderBrush="{StaticResource LineBrush}"
+                                BorderThickness="1"
+                                ClipToBounds="True"
+                                Cursor="Hand"
+                                ToolTip.Tip="{Binding Name}"
+                                Tag="{Binding}"
+                                Tapped="OnSelectImageClick">
+                          <Image Source="{Binding PreviewBytes, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
                                  Stretch="UniformToFill" />
-                          <TextBlock Grid.Row="1"
-                                     Text="{Binding Name}"
-                                     Margin="6,3"
-                                     FontSize="10"
-                                     TextTrimming="CharacterEllipsis"
-                                     Foreground="{StaticResource TextMutedBrush}" />
-                          <Button Grid.Row="0"
-                                  Classes="ghost small"
-                                  Width="20"
-                                  Height="20"
-                                  Padding="0"
-                                  HorizontalAlignment="Right"
-                                  VerticalAlignment="Top"
-                                  Margin="2"
-                                  ToolTip.Tip="移除这张图片"
-                                  AutomationProperties.Name="移除这张图片"
-                                  Click="OnRemoveInputImageClick"
-                                  Tag="{Binding}">
-                            <Path Classes="icon icon-xs"
-                                  Data="{StaticResource IconClose}" />
-                          </Button>
-                        </Grid>
-                      </Border>
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
                 </ScrollViewer>
 
-                <Grid Grid.Row="1" ColumnDefinitions="*,Auto">
+                <Grid Grid.Row="3" ColumnDefinitions="*,Auto">
                   <TextBlock Text="{Binding InputHint}"
                              VerticalAlignment="Center"
                              TextWrapping="Wrap"
@@ -1221,10 +1258,28 @@
                       Classes="panel"
                       Padding="16">
               <Grid RowDefinitions="Auto,Auto,*">
-                <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,10">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,0,0,10">
                   <TextBlock Classes="section" Text="结果" />
 
+                  <!-- 多图时才有：只看当前这张 / 看全部 -->
                   <StackPanel Grid.Column="1"
+                              Orientation="Horizontal"
+                              Spacing="4"
+                              Margin="0,0,12,0"
+                              IsVisible="{Binding CanSwitchSectionView}">
+                    <Button Classes="ghost small"
+                            Classes.selected="{Binding IsCurrentSectionView}"
+                            Content="当前这张"
+                            ToolTip.Tip="只显示左侧当前图片的识别结果"
+                            Click="OnShowCurrentSectionClick" />
+                    <Button Classes="ghost small"
+                            Classes.selected="{Binding ShowAllSections}"
+                            Content="全部"
+                            ToolTip.Tip="显示所有图片的识别结果"
+                            Click="OnShowAllSectionsClick" />
+                  </StackPanel>
+
+                  <StackPanel Grid.Column="2"
                               Orientation="Horizontal"
                               Spacing="4"
                               Margin="0,0,12,0"
@@ -1239,7 +1294,7 @@
                             Click="OnSvgSourceClick" />
                   </StackPanel>
 
-                  <TextBlock Grid.Column="2"
+                  <TextBlock Grid.Column="3"
                              Text="{Binding ResultSummary}"
                              IsVisible="{Binding HasResult}"
                              FontSize="11"
@@ -1273,7 +1328,7 @@
 
                 <!-- 多图识别：分段列表，每段能对上是哪张图 -->
                 <ScrollViewer Grid.Row="2" IsVisible="{Binding HasSections}">
-                  <ItemsControl ItemsSource="{Binding ResultSections}">
+                  <ItemsControl ItemsSource="{Binding VisibleSections}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:TextSectionViewModel">
                         <Border Margin="0,0,0,8"
