@@ -100,6 +100,43 @@ public sealed class TextSectionViewModelTests
     }
 
     [Fact]
+    public void 多选识别框后可以一起复制()
+    {
+        var viewModel = new TextSectionViewModel(new TextSection
+        {
+            Title = "t",
+            Text = "第一行\n第二行\n第三行",
+            Lines =
+            [
+                new OcrTextLine("第一行", 0, 0, 10, 10),
+                new OcrTextLine("第二行", 0, 20, 10, 10),
+                new OcrTextLine("第三行", 0, 40, 10, 10)
+            ]
+        });
+
+        viewModel.HasSelection.ShouldBeFalse("默认没有选中");
+        viewModel.SelectedLineCount.ShouldBe(0);
+
+        // 点第 1 行和第 3 行
+        viewModel.Lines![0].IsSelected = true;
+        viewModel.Lines[2].IsSelected = true;
+        viewModel.RefreshSelection();
+
+        viewModel.HasSelection.ShouldBeTrue();
+        viewModel.SelectedLineCount.ShouldBe(2);
+        viewModel.SelectionLabel.ShouldBe("复制选中 2 行");
+        viewModel.SelectedText.ShouldBe($"第一行{Environment.NewLine}第三行", "按原顺序拼，跳过未选中的");
+
+        // 取消选中
+        viewModel.Lines[0].IsSelected = false;
+        viewModel.Lines[2].IsSelected = false;
+        viewModel.RefreshSelection();
+
+        viewModel.HasSelection.ShouldBeFalse();
+        viewModel.SelectedText.ShouldBeEmpty();
+    }
+
+    [Fact]
     public void 行框随分段一起带过来()
     {
         var lines = new[] { new OcrTextLine("hello", 10, 20, 80, 18) };

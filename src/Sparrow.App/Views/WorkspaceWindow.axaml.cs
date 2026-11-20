@@ -670,16 +670,27 @@ public partial class WorkspaceWindow : Window
     }
 
     /// <summary>
-    /// 点左侧轮播图上的识别框：把这一行的文字复制到剪贴板。
+    /// 点左侧轮播图上的识别框：切换选中。
+    /// 选中多行后底部会出现「复制选中 N 行」，一次拿多行。
     /// 吃掉事件，避免继续冒泡触发图片的全屏预览。
     /// </summary>
     private void OnOcrBoxTapped(object? sender, TappedEventArgs e)
     {
-        if (sender is Control { DataContext: OcrTextLine line } &&
-            DataContext is WorkspaceViewModel viewModel)
+        if (sender is Control { DataContext: OcrLineViewModel line } &&
+            DataContext is WorkspaceViewModel { CurrentSection: { } section })
         {
-            viewModel.CopyText(line.Text);
+            line.IsSelected = !line.IsSelected;
+            section.RefreshSelection();
         }
+
+        e.Handled = true;
+    }
+
+    /// <summary>复制选中的多行识别结果。</summary>
+    private void OnCopySelectionClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel { CurrentSection: { } section } viewModel)
+            viewModel.CopyText(section.SelectedText);
 
         e.Handled = true;
     }

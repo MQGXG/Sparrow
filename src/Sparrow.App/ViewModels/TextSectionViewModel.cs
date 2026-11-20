@@ -15,7 +15,7 @@ public sealed partial class TextSectionViewModel : ObservableObject
         Text = section.Text;
         Status = section.Status;
         SourceIndex = section.SourceIndex;
-        Lines = section.Lines;
+        Lines = section.Lines?.Select(line => new OcrLineViewModel(line)).ToArray();
         Preview = BuildPreview(section.Text);
 
         // 原图从输入区拿，不复制字节；没有就退化成只有文字
@@ -31,7 +31,7 @@ public sealed partial class TextSectionViewModel : ObservableObject
     public TextSectionStatus Status { get; }
 
     /// <summary>这段文字在源图片里的行框；有的话可以叠识别框。</summary>
-    public IReadOnlyList<OcrTextLine>? Lines { get; }
+    public IReadOnlyList<OcrLineViewModel>? Lines { get; }
 
     public bool IsFailed => Status == TextSectionStatus.Failed;
 
@@ -54,6 +54,29 @@ public sealed partial class TextSectionViewModel : ObservableObject
     public bool HasImage => ImagePng is { Length: > 0 } && ImageWidth > 0 && ImageHeight > 0;
 
     public bool HasLines => Lines is { Count: > 0 };
+
+    /// <summary>有选中行时才显示「复制选中 N 行」。</summary>
+    public bool HasSelection => Lines?.Any(line => line.IsSelected) == true;
+
+    public int SelectedLineCount => Lines?.Count(line => line.IsSelected) ?? 0;
+
+    public string SelectionLabel => $"复制选中 {SelectedLineCount} 行";
+
+    /// <summary>选中行按原顺序拼起来，一行一条。</summary>
+    public string SelectedText => string.Join(
+        Environment.NewLine,
+        (Lines ?? Array.Empty<OcrLineViewModel>())
+            .Where(line => line.IsSelected)
+            .Select(line => line.Text));
+
+    /// <summary>点框后由视图调用：选中集合变了，通知相关派生属性。</summary>
+    public void RefreshSelection()
+    {
+        OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(SelectedLineCount));
+        OnPropertyChanged(nameof(SelectionLabel));
+        OnPropertyChanged(nameof(SelectedText));
+    }
 
     /// <summary>
     /// 展开后显示原图 + 全文；折叠时只显示摘要。

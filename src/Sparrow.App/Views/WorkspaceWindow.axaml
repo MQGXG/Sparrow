@@ -1103,6 +1103,15 @@
                                     Height="{Binding CurrentImage.Input.Height}"
                                     ItemsSource="{Binding CurrentSection.Lines}"
                                     IsVisible="{Binding CurrentSection.ShowBoxes}">
+                        <ItemsControl.Styles>
+                          <Style Selector="Rectangle.box">
+                            <Setter Property="Fill" Value="#28FFB020" />
+                          </Style>
+                          <Style Selector="Rectangle.box.selected">
+                            <Setter Property="Fill" Value="#70FFB020" />
+                            <Setter Property="StrokeThickness" Value="3" />
+                          </Style>
+                        </ItemsControl.Styles>
                         <ItemsControl.ItemsPanel>
                           <ItemsPanelTemplate>
                             <Canvas />
@@ -1112,13 +1121,14 @@
                           <DataTemplate>
                             <!-- Canvas 只认直接子元素，而条目外面还有一层 ContentPresenter；
                                  改用 TranslateTransform 定位，绕开附加属性的容器限制 -->
-                            <Rectangle Width="{Binding Width}"
+                            <Rectangle Classes="box"
+                                       Classes.selected="{Binding IsSelected}"
+                                       Width="{Binding Width}"
                                        Height="{Binding Height}"
                                        Stroke="{StaticResource AccentBrush}"
                                        StrokeThickness="2"
-                                       Fill="#28FFB020"
                                        Cursor="Hand"
-                                       ToolTip.Tip="点击复制这一行"
+                                       ToolTip.Tip="点击选中 / 取消，选中后可一起复制"
                                        Tapped="OnOcrBoxTapped">
                               <Rectangle.RenderTransform>
                                 <TranslateTransform X="{Binding X}" Y="{Binding Y}" />
@@ -1224,6 +1234,12 @@
                               Orientation="Horizontal"
                               Spacing="8"
                               Margin="12,0,0,0">
+                    <!-- 选中若干识别框后才出现：一次复制多行 -->
+                    <Button Classes="ghost small"
+                            Content="{Binding CurrentSection.SelectionLabel}"
+                            IsVisible="{Binding CurrentSection.HasSelection, FallbackValue=False}"
+                            ToolTip.Tip="把选中的识别框按顺序复制"
+                            Click="OnCopySelectionClick" />
                     <Button x:Name="ChooseImagesButton"
                             Classes="ghost small"
                             Width="28"
