@@ -981,10 +981,16 @@
                         IsVisible="{Binding HasImageResult}"
                         IsEnabled="{Binding !IsExecuting}"
                         Click="OnSaveResultClick" />
-                <Button Content="复制"
+                <Button Classes="ghost"
+                        Width="32"
+                        Padding="0"
                         ToolTip.Tip="复制结果到剪贴板"
+                        AutomationProperties.Name="复制结果"
                         IsEnabled="{Binding !IsExecuting}"
-                        Click="OnCopyClick" />
+                        Click="OnCopyClick">
+                  <Path Classes="icon icon-xs"
+                        Data="{StaticResource IconCopy}" />
+                </Button>
                 <Button Classes="accent"
                         Content="{Binding ExecuteLabel}"
                         ToolTip.Tip="执行当前工具"
@@ -1137,30 +1143,66 @@
                               Margin="12,0,0,0">
                     <Button x:Name="ChooseImagesButton"
                             Classes="ghost small"
-                            Content="添加图片…"
+                            Width="28"
+                            Padding="0"
+                            ToolTip.Tip="添加图片…（可多选）"
+                            AutomationProperties.Name="添加图片"
                             IsVisible="{Binding IsImagesInput}"
-                            Click="OnChooseImagesClick" />
+                            Click="OnChooseImagesClick">
+                      <Path Classes="icon icon-xs"
+                            Data="{StaticResource IconPlus}" />
+                    </Button>
                     <Button Classes="ghost small"
-                            Content="粘贴剪贴板"
+                            Width="28"
+                            Padding="0"
+                            ToolTip.Tip="粘贴剪贴板里的图片"
+                            AutomationProperties.Name="粘贴剪贴板"
                             IsVisible="{Binding IsImagesInput}"
-                            Click="OnPasteImageClick" />
+                            Click="OnPasteImageClick">
+                      <Path Classes="icon icon-xs"
+                            Data="{StaticResource IconPaste}" />
+                    </Button>
                     <Button x:Name="ChooseFilesButton"
                             Classes="ghost small"
-                            Content="选择文件…"
+                            Width="28"
+                            Padding="0"
+                            ToolTip.Tip="选择文件…"
+                            AutomationProperties.Name="选择文件"
                             IsVisible="{Binding IsFilesInput}"
-                            Click="OnChooseFilesClick" />
+                            Click="OnChooseFilesClick">
+                      <Path Classes="icon icon-xs"
+                            Data="{StaticResource IconFile}" />
+                    </Button>
                     <Button Classes="ghost small"
-                            Content="清除"
+                            Width="28"
+                            Padding="0"
+                            ToolTip.Tip="清除已添加的图片"
+                            AutomationProperties.Name="清除图片"
                             IsVisible="{Binding CanClearInputImages}"
-                            Click="OnClearInputImagesClick" />
+                            Click="OnClearInputImagesClick">
+                      <Path Classes="icon icon-xs"
+                            Data="{StaticResource IconClose}" />
+                    </Button>
                     <Button Classes="ghost small"
-                            Content="清除"
+                            Width="28"
+                            Padding="0"
+                            ToolTip.Tip="清除拖入的图片"
+                            AutomationProperties.Name="清除拖入图片"
                             IsVisible="{Binding CanClearDroppedImage}"
-                            Click="OnClearDroppedImageClick" />
+                            Click="OnClearDroppedImageClick">
+                      <Path Classes="icon icon-xs"
+                            Data="{StaticResource IconClose}" />
+                    </Button>
                     <Button Classes="ghost small"
-                            Content="清除"
+                            Width="28"
+                            Padding="0"
+                            ToolTip.Tip="清除拖入的文件"
+                            AutomationProperties.Name="清除拖入文件"
                             IsVisible="{Binding CanClearDroppedFiles}"
-                            Click="OnClearDroppedFilesClick" />
+                            Click="OnClearDroppedFilesClick">
+                      <Path Classes="icon icon-xs"
+                            Data="{StaticResource IconClose}" />
+                    </Button>
                   </StackPanel>
                 </Grid>
               </StackPanel>
