@@ -1105,11 +1105,18 @@
                                     IsVisible="{Binding CurrentSection.ShowBoxes}">
                         <ItemsControl.Styles>
                           <Style Selector="Rectangle.box">
-                            <Setter Property="Fill" Value="#28FFB020" />
+                            <!-- 透明而不是不填：Shape 没有 Fill 区域就不参与命中，点框就失效了。
+                                 画刷必须用 DynamicResource——控件级 Styles 里 StaticResource
+                                 拿不到 App 级资源，会在窗口构造时抛 KeyNotFound。 -->
+                            <Setter Property="Fill" Value="Transparent" />
+                            <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+                            <Setter Property="StrokeThickness" Value="2" />
                           </Style>
                           <Style Selector="Rectangle.box.selected">
-                            <Setter Property="Fill" Value="#70FFB020" />
+                            <!-- 选中靠边框变粗 + 虚线，不再用填充色，避免盖住图片内容 -->
+                            <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
                             <Setter Property="StrokeThickness" Value="3" />
+                            <Setter Property="StrokeDashArray" Value="4,2" />
                           </Style>
                         </ItemsControl.Styles>
                         <ItemsControl.ItemsPanel>

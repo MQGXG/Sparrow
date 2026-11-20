@@ -56,9 +56,10 @@ public partial class CaptureWindow : Window
         W
     }
 
-    private static readonly IBrush LineFill = new SolidColorBrush(Color.Parse("#1FE5A44C"));
-    private static readonly IBrush LineHoverFill = new SolidColorBrush(Color.Parse("#40E5A44C"));
+    // 行框只画边框：填充透明（Transparent 而不是 null，否则中间不参与命中，点行复制会失效）
+    private static readonly IBrush LineFill = Brushes.Transparent;
     private static readonly IBrush LineStroke = new SolidColorBrush(Color.Parse("#80E5A44C"));
+    private static readonly IBrush LineHoverStroke = new SolidColorBrush(Color.Parse("#FFE5A44C"));
     private static readonly IBrush HandleFill = Brushes.White;
     private static readonly IBrush HandleStroke = new SolidColorBrush(Color.Parse("#CCE5A44C"));
 
@@ -1195,7 +1196,8 @@ public partial class CaptureWindow : Window
         if (hit is not null)
         {
             hit.IsVisible = true;
-            hit.Fill = LineHoverFill;
+            hit.Stroke = LineHoverStroke;
+            hit.StrokeThickness = 2;
         }
     }
 
@@ -1206,6 +1208,8 @@ public partial class CaptureWindow : Window
 
         _hoveredOcrBox.IsVisible = false;
         _hoveredOcrBox.Fill = LineFill;
+        _hoveredOcrBox.Stroke = LineStroke;
+        _hoveredOcrBox.StrokeThickness = 1;
         _hoveredOcrBox = null;
     }
 
@@ -1220,14 +1224,21 @@ public partial class CaptureWindow : Window
 
     private void OnOcrLineEntered(object? sender, PointerEventArgs e)
     {
+        // 悬停只加亮边框，不再用填充色——中间要保持原图可见
         if (sender is Rectangle box)
-            box.Fill = LineHoverFill;
+        {
+            box.Stroke = LineHoverStroke;
+            box.StrokeThickness = 2;
+        }
     }
 
     private void OnOcrLineExited(object? sender, PointerEventArgs e)
     {
         if (sender is Rectangle box)
-            box.Fill = LineFill;
+        {
+            box.Stroke = LineStroke;
+            box.StrokeThickness = 1;
+        }
     }
 
     private void OnOcrLinePressed(object? sender, PointerPressedEventArgs e)

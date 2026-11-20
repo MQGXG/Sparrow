@@ -41,9 +41,10 @@
                  Foreground="{StaticResource TextPrimaryBrush}" />
     </Border>
 
+    <!-- 选区只画边框：填充透明，中间保持原图，不盖一层颜色 -->
     <Rectangle x:Name="Selection"
                IsVisible="False"
-               Fill="{StaticResource AccentSelectionBrush}"
+               Fill="Transparent"
                Stroke="{StaticResource AccentBrush}"
                StrokeThickness="2" />
 
