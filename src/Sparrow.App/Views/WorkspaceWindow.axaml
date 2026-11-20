@@ -1080,8 +1080,11 @@
                     CornerRadius="8"
                     Padding="12,8"
                     HorizontalAlignment="Stretch">
-              <StackPanel Spacing="10">
-                <!-- 图片集缩略图：选了什么一眼能看见 -->
+              <Grid RowDefinitions="*,Auto" RowSpacing="10">
+                <!-- 图片集缩略图：选了什么一眼能看见；图片多了这里滚动，底部按钮固定 -->
+                <ScrollViewer Grid.Row="0"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
                 <ItemsControl x:Name="InputImagesStrip"
                               ItemsSource="{Binding InputImages}"
                               IsVisible="{Binding IsImagesInput}">
@@ -1132,8 +1135,9 @@
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
+                </ScrollViewer>
 
-                <Grid ColumnDefinitions="*,Auto">
+                <Grid Grid.Row="1" ColumnDefinitions="*,Auto">
                   <TextBlock Text="{Binding InputHint}"
                              VerticalAlignment="Center"
                              TextWrapping="Wrap"
@@ -1207,7 +1211,7 @@
                     </Button>
                   </StackPanel>
                 </Grid>
-              </StackPanel>
+              </Grid>
             </Border>
 
               </Panel>
