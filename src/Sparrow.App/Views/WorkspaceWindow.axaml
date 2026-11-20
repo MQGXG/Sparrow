@@ -746,11 +746,16 @@
                                           IsVisible="{Binding IsImageKind}"
                                           HorizontalAlignment="Center"
                                           VerticalAlignment="Center" />
+                                    <!-- 文件条目优先用系统真图标，取不到才画类型线框 -->
                                     <Path Classes="icon icon-sm"
                                           Data="{StaticResource IconFile}"
-                                          IsVisible="{Binding IsFileKind}"
+                                          IsVisible="{Binding ShowFileKindIcon}"
                                           HorizontalAlignment="Center"
                                           VerticalAlignment="Center" />
+                                    <Image Source="{Binding FileIconPng, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
+                                           IsVisible="{Binding HasFileIcon}"
+                                           Stretch="Uniform"
+                                           Margin="4" />
                                     <Image Source="{Binding Thumbnail, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
                                            Stretch="UniformToFill"
                                            IsVisible="{Binding HasThumbnail}" />
@@ -775,11 +780,31 @@
                                                FontSize="10"
                                                IsVisible="{Binding HasSource}"
                                                Foreground="{StaticResource TextMutedBrush}" />
-                                    <TextBlock Text="{Binding SourceLabel}"
-                                               FontSize="10"
-                                               TextTrimming="CharacterEllipsis"
-                                               IsVisible="{Binding HasSource}"
-                                               Foreground="{StaticResource TextMutedBrush}" />
+                                    <!--
+                                      来源用图标而不是文字：这一行右边还挤着 6 个常驻按钮，
+                                      文字来源会把预览挤没。拿不到真图标时回退到进程名首字母。
+                                    -->
+                                    <Panel Width="14"
+                                           Height="14"
+                                           IsVisible="{Binding HasSource}"
+                                           ToolTip.Tip="{Binding SourceLabel}">
+                                      <Border Background="{StaticResource SurfaceRaisedBrush}"
+                                              BorderBrush="{StaticResource LineBrush}"
+                                              BorderThickness="1"
+                                              CornerRadius="3"
+                                              IsVisible="{Binding !HasSourceIcon}">
+                                        <TextBlock Text="{Binding SourceInitial}"
+                                                   FontSize="8"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center" />
+                                      </Border>
+                                      <Image Source="{Binding SourceIconPng, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
+                                             IsVisible="{Binding HasSourceIcon}"
+                                             Stretch="Uniform"
+                                             Margin="1" />
+                                    </Panel>
                                   </StackPanel>
                                 </StackPanel>
 

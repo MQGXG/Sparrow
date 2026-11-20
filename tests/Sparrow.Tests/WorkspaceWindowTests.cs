@@ -341,6 +341,56 @@ public sealed class WorkspaceWindowTests
     }
 
     [AvaloniaFact]
+    public void 工作区来源显示为图标而不是文字()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"),
+                new NullLog());
+            store.AddText("hello world", "some-origin-app");
+
+            var (window, viewModel, catalog) = Create(store);
+            try
+            {
+                viewModel.ShowClipboard();
+                Dispatcher.UIThread.RunJobs();
+
+                var page = window.FindControl<Grid>("ClipboardPage")!;
+
+                // 前提：条目确实带来源，否则下面的断言是空过
+                viewModel.Clipboard!.Items.ShouldHaveSingleItem()
+                    .SourceLabel.ShouldBe("some-origin-app");
+
+                var sourceText = page.GetVisualDescendants()
+                    .OfType<TextBlock>()
+                    .FirstOrDefault(block => block.Text == "some-origin-app");
+
+                sourceText.ShouldBeNull("来源已换成图标，进程名只留在 ToolTip 里");
+            }
+            finally
+            {
+                catalog.Dispose();
+            }
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [AvaloniaFact]
     public void 设置页_Esc不抢返回()
     {
         var (window, viewModel, catalog) = Create();

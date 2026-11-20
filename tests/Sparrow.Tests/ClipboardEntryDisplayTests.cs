@@ -176,6 +176,72 @@ public sealed class ClipboardEntryDisplayTests
     }
 
     [Fact]
+    public void 文件条目能取到系统文件图标()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var path = System.IO.Path.Combine(directory, "笔记.txt");
+            File.WriteAllText(path, "内容");
+
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"), new NullLog());
+            store.AddFiles([path]);
+
+            var viewModel = new ClipboardEntryViewModel(store.Recent(1)[0], store);
+
+            viewModel.HasFileIcon.ShouldBeTrue("存在的文件要拿到注册表关联的真图标");
+            viewModel.ShowFileKindIcon.ShouldBeFalse("有真图标时不该再画类型线框");
+            viewModel.FileIconPng!.Length.ShouldBeGreaterThan(0);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [Fact]
+    public void 文件已被删除时回退到类型线框()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"), new NullLog());
+            store.AddFiles([System.IO.Path.Combine(directory, "已经删掉.pdf")]);
+
+            var viewModel = new ClipboardEntryViewModel(store.Recent(1)[0], store);
+
+            viewModel.HasFileIcon.ShouldBeFalse();
+            viewModel.ShowFileKindIcon.ShouldBeTrue("取不到真图标就画类型线框");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [Fact]
     public void 图片条目写临时文件后用默认程序打开()
     {
         var directory = System.IO.Path.Combine(

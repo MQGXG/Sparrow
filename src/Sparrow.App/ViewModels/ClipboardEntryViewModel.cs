@@ -100,6 +100,9 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
 
     public bool IsFileKind => Entry.Kind == ClipboardEntryKind.Files;
 
+    /// <summary>文件条目但取不到真图标时，才画类型线框；否则会和真图标叠在一起。</summary>
+    public bool ShowFileKindIcon => IsFileKind && !HasFileIcon;
+
     public bool HasThumbnail => Entry.Kind == ClipboardEntryKind.Image;
 
     public byte[]? Thumbnail => _thumbnail.Value;

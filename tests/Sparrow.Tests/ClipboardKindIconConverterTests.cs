@@ -1,16 +1,23 @@
 using System.Globalization;
+using Avalonia.Headless.XUnit;
 using Shouldly;
 using Sparrow.App.Converters;
 using Xunit;
 
 namespace Sparrow.Tests;
 
-/// <summary>类型 chip 的图标映射：几何内置，六个 Kind* 常量都要有图。</summary>
+/// <summary>
+/// 类型 chip 的图标映射：几何内置，六个 Kind* 常量都要有图。
+///
+/// 必须用 AvaloniaFact：StreamGeometry.Parse 要从 AvaloniaLocator 取 IGeometryImpl 工厂，
+/// 纯 Fact 跑在 xUnit 线程池上时 headless App 未必初始化过，会随机失败。
+/// 这里返回的几何每次都是新建的（converter 不缓存实例），所以不会跨线程复用。
+/// </summary>
 public sealed class ClipboardKindIconConverterTests
 {
     private static readonly CultureInfo Culture = CultureInfo.InvariantCulture;
 
-    [Theory]
+    [AvaloniaTheory]
     [InlineData("全部")]
     [InlineData("文本")]
     [InlineData("链接")]
@@ -25,7 +32,7 @@ public sealed class ClipboardKindIconConverterTests
         geometry.ShouldNotBeNull($"{name} 必须有对应图标");
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void 未知类型返回空_标签chip不画图标()
     {
         ClipboardKindIconConverter.Instance
@@ -37,7 +44,7 @@ public sealed class ClipboardKindIconConverterTests
             .ShouldBeNull();
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void 每次都新建几何_不跨线程复用同一实例()
     {
         var first = ClipboardKindIconConverter.Instance.Convert("文本", typeof(object), null, Culture);
