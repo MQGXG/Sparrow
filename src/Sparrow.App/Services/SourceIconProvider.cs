@@ -31,28 +31,35 @@ public static class SourceIconProvider
 
         var name = processName.Trim();
 
-        if (Failed.ContainsKey(name))
-            return null;
-
-        if (Cache.TryGetValue(name, out var cached))
-            return cached;
-
-        var png = Resolve(name);
-        if (png is null)
+        // 查-解-存整段原子，否则并发时会各自解码出不同实例
+        lock (Gate)
         {
-            // 失败也记一笔，避免每次绑定都重新枚举进程
-            Failed[name] = true;
-            return null;
+            if (Failed.ContainsKey(name))
+                return null;
+
+            if (Cache.TryGetValue(name, out var cached))
+                return cached;
+
+            var png = Resolve(name);
+            if (png is null)
+            {
+                // 失败也记一笔，避免每次绑定都重新枚举进程
+                Failed[name] = true;
+                return null;
+            }
+
+            Cache[name] = png;
+
+            // 进程名通常只有几十个，但同样给个上限兜底，避免长期运行只增不减
+            if (Cache.Count > MaxCacheEntries)
+                Cache.Clear();
+
+            return png;
         }
-
-        Cache[name] = png;
-
-        // 进程名通常只有几十个，但同样给个上限兜底，避免长期运行只增不减
-        if (Cache.Count > MaxCacheEntries)
-            Cache.Clear();
-
-        return png;
     }
+
+    /// <summary>保护两个缓存容器的读写原子性。</summary>
+    private static readonly object Gate = new();
 
     /// <summary>进程名缓存条数上限。</summary>
     private const int MaxCacheEntries = 256;

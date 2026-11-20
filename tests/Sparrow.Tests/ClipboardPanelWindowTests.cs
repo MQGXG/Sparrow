@@ -1,10 +1,13 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Chrome;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Shouldly;
@@ -685,6 +688,119 @@ public sealed class ClipboardPanelWindowTests
                 .ToList();
 
             headers.ShouldContain("清空全部历史…");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [AvaloniaFact]
+    public void 详情遮罩完全不透明_不透出下面的列表()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"),
+                new NullLog());
+            store.AddText("hello world");
+
+            var viewModel = new ClipboardHistoryViewModel(store, new FakeClipboard());
+            var window = new ClipboardPanelWindow { DataContext = viewModel };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var layer = window.FindControl<Panel>("DetailLayer");
+            layer.ShouldNotBeNull();
+
+            var backdrop = layer!.Children.OfType<Border>().FirstOrDefault();
+            backdrop.ShouldNotBeNull("详情层第一个子元素应该是遮罩");
+
+            var brush = backdrop.Background;
+            brush.ShouldNotBeNull("遮罩必须有背景，否则列表会直接透出来");
+
+            // XAML 会把 #AARRGGBB 解析成 ImmutableSolidColorBrush，不是 SolidColorBrush
+            var color = brush switch
+            {
+                SolidColorBrush solid => solid.Color,
+                ImmutableSolidColorBrush immutable => immutable.Color,
+                _ => throw new Shouldly.ShouldAssertException(
+                    $"遮罩背景不是纯色画刷，实际是 {brush.GetType().FullName}"),
+            };
+
+            var alpha = color.A;
+            alpha.ShouldBe(
+                (byte)0xFF,
+                $"遮罩必须完全不透明，半透明会让下面的列表透出来（当前 alpha=0x{alpha:X2}）");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录留给系统清理
+            }
+        }
+    }
+
+    [AvaloniaFact]
+    public void 无边框窗口有八个缩放手柄()
+    {
+        var directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new ClipboardHistoryStore(
+                System.IO.Path.Combine(directory, "clipboard.db"),
+                new NullLog());
+            store.AddText("hello world");
+
+            var viewModel = new ClipboardHistoryViewModel(store, new FakeClipboard());
+            var window = new ClipboardPanelWindow { DataContext = viewModel };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            window.ExtendClientAreaToDecorationsHint.ShouldBeTrue(
+                "不打开这个开关，ElementRole 完全不生效");
+
+            var grips = window.GetVisualDescendants()
+                .OfType<Control>()
+                .Select(control => WindowDecorationProperties.GetElementRole(control))
+                .Where(role => role is
+                    WindowDecorationsElementRole.ResizeN
+                    or WindowDecorationsElementRole.ResizeS
+                    or WindowDecorationsElementRole.ResizeE
+                    or WindowDecorationsElementRole.ResizeW
+                    or WindowDecorationsElementRole.ResizeNE
+                    or WindowDecorationsElementRole.ResizeNW
+                    or WindowDecorationsElementRole.ResizeSE
+                    or WindowDecorationsElementRole.ResizeSW)
+                .Count();
+
+            grips.ShouldBe(8, "四边 + 四角都要有手柄，否则角落拖不动");
+
+            var titleBar = window.GetVisualDescendants()
+                .OfType<Control>()
+                .Any(control => WindowDecorationProperties.GetElementRole(control)
+                    == WindowDecorationsElementRole.TitleBar);
+
+            titleBar.ShouldBeTrue("标题行要标成 TitleBar，交给 OS 处理拖动");
         }
         finally
         {

@@ -17,6 +17,7 @@
         CanResize="True"
         Background="Transparent"
         TransparencyLevelHint="Transparent"
+        ExtendClientAreaToDecorationsHint="True"
         WindowStartupLocation="CenterScreen">
 
   <Window.Styles>
@@ -28,6 +29,9 @@
       <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
     </Style>
   </Window.Styles>
+
+  <!-- 外层包一层：resize 手柄要和 Shell 平级放在最上层，否则会被圆角裁掉 -->
+  <Panel>
 
   <!-- 无边框 + 自绘圆角：Windows 10 没有 DWM 圆角属性，只能这样画 -->
   <Border x:Name="Shell"
@@ -45,12 +49,15 @@
       <Grid RowDefinitions="Auto,*">
 
         <!-- 无边框窗口的拖动区与关闭入口。
-             Background 必须给：没有背景的 Grid 不参与命中测试，事件会穿透到底下的 Shell -->
+             Background 必须给：没有背景的 Grid 不参与命中测试，事件会穿透到底下的 Shell；
+             ElementRole=TitleBar 交给 OS 做拖动（含双击最大化），
+             PointerPressed 的 BeginMoveDrag 留作兜底：新 API 万一不生效，拖动不能跟着失效 -->
         <Grid Grid.Row="0"
               ColumnDefinitions="Auto,*,Auto"
               Height="26"
               Margin="14,6,10,0"
               Background="Transparent"
+              WindowDecorationProperties.ElementRole="TitleBar"
               PointerPressed="OnTitleBarPointerPressed">
           <StackPanel Grid.Column="0"
                       Orientation="Horizontal"
@@ -68,7 +75,8 @@
           <StackPanel Grid.Column="2"
                       Orientation="Horizontal"
                       Spacing="2"
-                      VerticalAlignment="Center">
+                      VerticalAlignment="Center"
+                      WindowDecorationProperties.ElementRole="User">
             <Button x:Name="SearchToggle"
                     Classes="ghost"
                     Width="24"
@@ -694,7 +702,8 @@
 
     <!-- 详情覆盖层：盖住搜索和列表，← / Esc 回到列表；复制后整个面板收起 -->
     <Panel x:Name="DetailLayer" IsVisible="False">
-      <Border Background="#CC07090B"
+      <!-- 必须完全不透明：详情内容比面板短时，半透明会让下面的列表透出来 -->
+      <Border Background="#FF07090B"
               PointerPressed="OnDetailBackdropPressed" />
       <Border Margin="10"
               CornerRadius="10"
@@ -710,4 +719,51 @@
       </Grid>
     </Panel>
   </Border>
+
+  <!--
+    resize 手柄：不可见，只参与 chrome hit-test（需要 ExtendClientAreaToDecorationsHint）。
+    四边 6px、四角 14px（覆盖圆角区）。内容四周留了 14px 边距，
+    所以手柄不会挡住任何按钮；标题行从 y=6 开始，也和顶部手柄错开。
+  -->
+  <Border Height="6"
+          VerticalAlignment="Top"
+          Background="Transparent"
+          WindowDecorationProperties.ElementRole="ResizeN" />
+  <Border Height="6"
+          VerticalAlignment="Bottom"
+          Background="Transparent"
+          WindowDecorationProperties.ElementRole="ResizeS" />
+  <Border Width="6"
+          HorizontalAlignment="Left"
+          Background="Transparent"
+          WindowDecorationProperties.ElementRole="ResizeW" />
+  <Border Width="6"
+          HorizontalAlignment="Right"
+          Background="Transparent"
+          WindowDecorationProperties.ElementRole="ResizeE" />
+  <Border Width="14"
+          Height="14"
+          HorizontalAlignment="Left"
+          VerticalAlignment="Top"
+          Background="Transparent"
+          WindowDecorationProperties.ElementRole="ResizeNW" />
+  <Border Width="14"
+          Height="14"
+          HorizontalAlignment="Right"
+          VerticalAlignment="Top"
+          Background="Transparent"
+          WindowDecorationProperties.ElementRole="ResizeNE" />
+  <Border Width="14"
+          Height="14"
+          HorizontalAlignment="Left"
+          VerticalAlignment="Bottom"
+          Background="Transparent"
+          WindowDecorationProperties.ElementRole="ResizeSW" />
+  <Border Width="14"
+          Height="14"
+          HorizontalAlignment="Right"
+          VerticalAlignment="Bottom"
+          Background="Transparent"
+          WindowDecorationProperties.ElementRole="ResizeSE" />
+  </Panel>
 </Window>

@@ -56,23 +56,32 @@ public static class FileIconProvider
         }
 
         var cache = perFile ? ByPath : ByExtension;
-        if (cache.TryGetValue(key, out var cached))
-            return cached;
 
-        var png = Resolve(path);
-        if (png is null)
-            return null;
+        // 整段查-解-存必须原子：TryGetValue 与赋值之间没有锁的话，
+        // 两个线程会各自解码出不同实例，缓存形同虚设
+        lock (Gate)
+        {
+            if (cache.TryGetValue(key, out var cached))
+                return cached;
 
-        cache[key] = png;
+            var png = Resolve(path);
+            if (png is null)
+                return null;
 
-        // 图标缓存不设字节上限，但条数要有：.exe / .lnk 按完整路径存，
-        // 长期运行会只增不减。LumaShot 是 16 条整表清（file_icons.h:18），
-        // 我们的图标小得多，放宽到 256；清掉只是下次重新解码，不影响已显示的。
-        if (perFile && ByPath.Count > MaxPathEntries)
-            ByPath.Clear();
+            cache[key] = png;
 
-        return png;
+            // 图标缓存不设字节上限，但条数要有：.exe / .lnk 按完整路径存，
+            // 长期运行会只增不减。LumaShot 是 16 条整表清（file_icons.h:18），
+            // 我们的图标小得多，放宽到 256；清掉只是下次重新解码，不影响已显示的。
+            if (perFile && ByPath.Count > MaxPathEntries)
+                ByPath.Clear();
+
+            return png;
+        }
     }
+
+    /// <summary>保护三个缓存容器的读写原子性。</summary>
+    private static readonly object Gate = new();
 
     /// <summary>按路径缓存的条数上限（只约束 .exe / .lnk 这类每文件图标不同的）。</summary>
     private const int MaxPathEntries = 256;
