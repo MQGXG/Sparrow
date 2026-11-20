@@ -285,6 +285,16 @@
     <Setter Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
   </Style>
 
+  <!-- 多行参数：术语表这类需要换行输入，单行框放不下 -->
+  <Style Selector="TextBox.multiline">
+    <Setter Property="AcceptsReturn" Value="True" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="MinHeight" Value="76" />
+    <Setter Property="Width" Value="320" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="VerticalContentAlignment" Value="Top" />
+  </Style>
+
   <!-- 无边框输入框：命令面板的搜索行 -->
   <Style Selector="TextBox.bare">
     <Setter Property="Background" Value="Transparent" />

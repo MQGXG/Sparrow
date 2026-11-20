@@ -74,6 +74,13 @@ public sealed class TranslateTool : ITool
                 Kind = ParameterKind.Toggle,
                 Default = "true",
                 Hint = "换行、列表、代码块"
+            },
+            new ToolParameter
+            {
+                Key = "glossary",
+                Label = "术语表",
+                Kind = ParameterKind.Multiline,
+                Hint = "每行 原文=译文，如 Sparrow=Sparrow"
             }
         ]
     };
@@ -94,20 +101,21 @@ public sealed class TranslateTool : ITool
         var target = context.GetParameter("to", "English");
         var style = context.GetParameter("style", "自然");
         var keepFormatting = context.GetParameter("keepFormatting", "true") != "false";
+        var glossary = Glossary.ToPrompt(Glossary.Parse(context.GetParameter("glossary", string.Empty)));
 
         // 明确选了离线：不回落在线，缺模型就告诉用户去哪下
         if (engine is EngineLocalSmall or EngineLocalLarge)
         {
             var modelId = engine == EngineLocalLarge ? LocalLargeModel : LocalSmallModel;
             return await TranslateOfflineAsync(
-                host, modelId, input.Text, target, style, keepFormatting, cancellationToken);
+                host, modelId, input.Text, target, style, keepFormatting, glossary, cancellationToken);
         }
 
         // 自动 / 在线：在线模型可用就沿用原来的路径（保持既有行为）
         if (host.Ai.IsAvailable)
         {
             return await TranslateOnlineAsync(
-                host, input.Text, target, style, keepFormatting, cancellationToken);
+                host, input.Text, target, style, keepFormatting, glossary, cancellationToken);
         }
 
         if (engine == EngineAuto)
@@ -116,7 +124,7 @@ public sealed class TranslateTool : ITool
             if (installed is not null)
             {
                 return await TranslateOfflineAsync(
-                    host, installed, input.Text, target, style, keepFormatting, cancellationToken);
+                    host, installed, input.Text, target, style, keepFormatting, glossary, cancellationToken);
             }
         }
 
@@ -131,9 +139,13 @@ public sealed class TranslateTool : ITool
         string target,
         string style,
         bool keepFormatting,
+        string glossary,
         CancellationToken cancellationToken)
     {
         var system = BuildSystemPrompt(target, style, keepFormatting);
+
+        if (glossary.Length > 0)
+            system += Environment.NewLine + Environment.NewLine + glossary;
 
         var chunks = Chunk(text, MaxChunkLength).ToList();
         if (chunks.Count > MaxChunks)
@@ -191,6 +203,7 @@ public sealed class TranslateTool : ITool
         string target,
         string style,
         bool keepFormatting,
+        string glossary,
         CancellationToken cancellationToken)
     {
         var models = host.LocalModels;
@@ -219,6 +232,7 @@ public sealed class TranslateTool : ITool
                 target,
                 style,
                 keepFormatting,
+                glossary,
                 cancellationToken);
 
             var parts = translated.Select(Clean);

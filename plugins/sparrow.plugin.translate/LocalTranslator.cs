@@ -44,6 +44,7 @@ internal static class LocalTranslator
         string targetLanguage,
         string style,
         bool keepFormatting,
+        string glossary,
         CancellationToken cancellationToken)
     {
         await Gate.WaitAsync(cancellationToken);
@@ -76,7 +77,7 @@ internal static class LocalTranslator
 
                     // 不拼「上文」：混元是专用翻译模型，把参考上下文塞进正文会被当成待译文本，
                     // 实测会在开头复述上一段。相邻块之间它自己的术语已经够稳定。
-                    var prompt = RenderPrompt(weights, targetLanguage, style, keepFormatting, chunk);
+                    var prompt = RenderPrompt(weights, targetLanguage, style, keepFormatting, glossary, chunk);
 
                     var options = new InferenceParams
                     {
@@ -146,12 +147,20 @@ internal static class LocalTranslator
         string target,
         string style,
         bool keepFormatting,
+        string glossary,
         string text)
     {
         var user = BuildInstruction(target, style, keepFormatting) + text;
 
         if (IsHunyuan(weights))
-            return HunyuanBegin + HunyuanUser + user + HunyuanAssistant;
+        {
+            // 术语表放在 <hy_User> 之前（模型的 system 位）。
+            // 实测放进正文会被当成待译文本复述一遍，输出开头多出「X → Y」。
+            return HunyuanBegin + glossary + HunyuanUser + user + HunyuanAssistant;
+        }
+
+        if (glossary.Length > 0)
+            user = glossary + user;
 
         try
         {

@@ -71,6 +71,7 @@ new LocalModelInfo(
 | 依赖分发 | 插件目录自带 `LLamaSharp.dll` 与 `runtimes/win-x64/native`（只留 Windows，约 22MB） |
 | 加载时机 | 一次翻译期间加载，调用结束立刻释放；不常驻、不设定时器（定时器会阻止 ALC 回收） |
 | 提示词 | 混元按模型卡手工拼 `<｜hy_begin▁of▁sentence｜><｜hy_User｜>…<｜hy_Assistant｜>`；GGUF 自带的 chat_template 会被 llama.cpp 解析错 |
+| 术语表 | 参数「术语表」每行 `原文=译文`；混元必须放在 `<hy_User>` **之前**（system 位），放进正文会被复述成输出的一部分 |
 | 采样 | 模型卡推荐：`temperature=0.7 / top_k=20 / top_p=0.6 / repeat_penalty=1.05` |
 | 分块 | 1200 字一块（上下文 4096），优先在标点处断开 |
 | 专有名词 | 提示词要求产品名、代码、链接保持原文 |

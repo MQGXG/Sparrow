@@ -23,6 +23,7 @@ public partial class ParameterViewModel : ObservableObject
         Key = parameter.Key;
         Label = parameter.Label;
         Kind = parameter.Kind;
+        Hint = parameter.Hint;
 
         // 选项做成「值 + 标签」：像 OCR 的 ch / en / ja 这种代码，
         // 直接显示给用户毫无意义，插件可以通过 ChoiceLabels 给出中文名
@@ -44,6 +45,9 @@ public partial class ParameterViewModel : ObservableObject
 
     public ParameterKind Kind { get; }
 
+    /// <summary>参数提示；文本 / 多行输入框拿它当占位符，告诉用户该怎么填。</summary>
+    public string? Hint { get; }
+
     /// <summary>可选项（带显示名）；XAML 的下拉绑这个。</summary>
     public IReadOnlyList<ParameterChoice> Choices { get; }
 
@@ -63,6 +67,9 @@ public partial class ParameterViewModel : ObservableObject
         or ParameterKind.FilePath
         or ParameterKind.Color
         or ParameterKind.Multiline;
+
+    /// <summary>多行参数（如术语表）：输入框要能换行，并且给够高度。</summary>
+    public bool IsMultiline => Kind == ParameterKind.Multiline;
 
     /// <summary>Toggle 用的布尔视图，底层仍存字符串（与 ToolContext.Parameters 一致）。</summary>
     public bool BoolValue

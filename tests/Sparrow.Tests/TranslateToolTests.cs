@@ -176,6 +176,45 @@ public sealed class TranslateToolTests
     }
 
     [Fact]
+    public async Task 术语表_注入系统提示词并去重()
+    {
+        var ai = new FakeAi();
+
+        var result = await new TranslateTool().ExecuteAsync(
+            Context(ai, "Sparrow keeps the clipboard panel tidy.", new Dictionary<string, string>
+            {
+                ["glossary"] = "Sparrow=Sparrow\n剪贴板=剪贴板面板\n坏行\nSparrow=别的译法"
+            }),
+            CancellationToken.None);
+
+        result.Success.ShouldBeTrue();
+
+        var system = ai.LastRequest!.System.ShouldNotBeNull();
+        system.ShouldContain("术语表");
+        system.ShouldContain("Sparrow → Sparrow");
+        system.ShouldContain("剪贴板 → 剪贴板面板");
+        system.ShouldNotContain("坏行");
+        system.ShouldNotContain("别的译法");
+    }
+
+    [Fact]
+    public async Task 术语表_支持分号分隔_空表不出现()
+    {
+        var empty = new FakeAi();
+        await new TranslateTool().ExecuteAsync(Context(empty, "hello"), CancellationToken.None);
+        empty.LastRequest!.System.ShouldNotBeNull().ShouldNotContain("术语表");
+
+        var withGlossary = new FakeAi();
+        await new TranslateTool().ExecuteAsync(
+            Context(withGlossary, "hello", new Dictionary<string, string> { ["glossary"] = "A=甲;B=乙" }),
+            CancellationToken.None);
+
+        var system = withGlossary.LastRequest!.System.ShouldNotBeNull();
+        system.ShouldContain("A → 甲");
+        system.ShouldContain("B → 乙");
+    }
+
+    [Fact]
     public async Task 模型超时_返回Failed()
     {
         var ai = new FakeAi

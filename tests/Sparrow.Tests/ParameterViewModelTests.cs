@@ -86,4 +86,39 @@ public sealed class ParameterViewModelTests
         viewModel.Choices[0].Label.ShouldBe("按行");
         viewModel.Choices[1].Label.ShouldBe("原文");
     }
+
+    [Fact]
+    public void 多行参数_标记为多行并保留提示()
+    {
+        var parameter = new ToolParameter
+        {
+            Key = "glossary",
+            Label = "术语表",
+            Kind = ParameterKind.Multiline,
+            Hint = "每行 原文=译文"
+        };
+
+        var viewModel = new ParameterViewModel(parameter);
+
+        viewModel.IsText.ShouldBeTrue();
+        viewModel.IsMultiline.ShouldBeTrue();
+        viewModel.Hint.ShouldBe("每行 原文=译文");
+        viewModel.Value.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void 普通文本参数_不是多行()
+    {
+        var parameter = new ToolParameter
+        {
+            Key = "url",
+            Label = "地址",
+            Kind = ParameterKind.Text
+        };
+
+        var viewModel = new ParameterViewModel(parameter);
+
+        viewModel.IsText.ShouldBeTrue();
+        viewModel.IsMultiline.ShouldBeFalse();
+    }
 }

@@ -1049,6 +1049,8 @@
                         </ComboBox>
                         <TextBox Text="{Binding Value, Mode=TwoWay}"
                                  IsVisible="{Binding IsText}"
+                                 PlaceholderText="{Binding Hint}"
+                                 Classes.multiline="{Binding IsMultiline}"
                                  MinWidth="220"
                                  HorizontalAlignment="Left" />
                       </StackPanel>
