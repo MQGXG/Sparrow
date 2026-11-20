@@ -984,8 +984,8 @@
                 <Button Classes="ghost"
                         Width="32"
                         Padding="0"
-                        ToolTip.Tip="复制结果到剪贴板"
-                        AutomationProperties.Name="复制结果"
+                        ToolTip.Tip="{Binding CopyAllHint}"
+                        AutomationProperties.Name="复制全部结果"
                         IsEnabled="{Binding !IsExecuting}"
                         Click="OnCopyClick">
                   <Path Classes="icon icon-xs"

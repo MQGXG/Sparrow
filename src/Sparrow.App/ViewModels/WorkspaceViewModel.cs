@@ -525,6 +525,7 @@ public partial class WorkspaceViewModel : ObservableObject
         OnPropertyChanged(nameof(CanSwitchSectionView));
         OnPropertyChanged(nameof(CurrentSection));
         OnPropertyChanged(nameof(VisibleSections));
+        OnPropertyChanged(nameof(CopyAllHint));
     }
 
     /// <summary>图片结果的规格摘要，用作历史记录与复制提示。</summary>
@@ -1075,6 +1076,11 @@ public partial class WorkspaceViewModel : ObservableObject
         FilterHistory();
         RebuildRecentTools();
     }
+
+    /// <summary>右上角复制的说明：多图时明确写出「全部 N 张」，避免和每列的单条复制混淆。</summary>
+    public string CopyAllHint => HasSections
+        ? $"复制全部 {ResultSections.Count} 张的识别结果"
+        : "复制结果到剪贴板";
 
     /// <summary>复制某一段的识别结果（含译文，如果选了翻译）。</summary>
     public void CopySectionText(TextSectionViewModel section)
