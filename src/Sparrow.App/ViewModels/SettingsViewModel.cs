@@ -55,6 +55,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _aiModel = settings.AiModel;
         _aiTemperature = settings.AiTemperature;
         _aiMaxTokens = settings.AiMaxTokens;
+        _localModelMirror = settings.LocalModelMirror;
 
         ReloadLocalModels();
         Reload();
@@ -194,6 +195,10 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
     [ObservableProperty]
     private string? _aiStatus;
+
+    /// <summary>离线模型的自托管镜像根地址；空表示只用内置源。</summary>
+    [ObservableProperty]
+    private string _localModelMirror = string.Empty;
 
     /// <summary>当前设置分段；默认插件页，和进入设置的习惯一致。</summary>
     [ObservableProperty]
@@ -522,6 +527,29 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _secrets?.Save(null);
         _ai?.Configure(_settings);
         AiStatus = "API Key 已清除";
+    }
+
+    /// <summary>
+    /// 保存自托管镜像地址（空 = 只用内置源）。
+    /// 下载器运行期可改，不需要重建；下一次点「下载」就按新地址走。
+    /// </summary>
+    public void SaveLocalModelMirror()
+    {
+        var mirror = LocalModelMirror.Trim();
+
+        if (string.Equals(mirror, _settings.LocalModelMirror, StringComparison.Ordinal))
+        {
+            StatusMessage = "镜像地址未变化";
+            return;
+        }
+
+        _settings = _settings with { LocalModelMirror = mirror };
+        _store.Save(_settings);
+
+        if (_localModels is LocalModelManager manager)
+            manager.MirrorUrl = mirror;
+
+        StatusMessage = mirror.Length == 0 ? "已恢复内置下载源" : "镜像地址已保存";
     }
 
     /// <summary>

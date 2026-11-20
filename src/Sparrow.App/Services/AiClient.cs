@@ -61,6 +61,14 @@ public sealed class AiClient : IAiClient
 
     public string? ModelName => _settings.AiModel;
 
+    /// <summary>
+    /// 发送前的确认钩子。返回 false 表示用户取消，请求不会发出去。
+    ///
+    /// 由宿主在启动时接上（弹窗展示 provider / 模型 / 将要发送的内容）；
+    /// 插件只拿到 <c>IAiClient</c>，不知道有没有确认，也无法绕过。
+    /// </summary>
+    public Func<AiRequest, Task<bool>>? ConfirmBeforeSend { get; set; }
+
     public async Task<AiResponse> CompleteAsync(AiRequest request, CancellationToken cancellationToken)
     {
         if (!IsAvailable)
@@ -72,6 +80,12 @@ public sealed class AiClient : IAiClient
 
         if (request.Messages.Count == 0 && string.IsNullOrWhiteSpace(request.System))
             throw new ArgumentException("AiRequest 至少需要一条消息或系统提示词。", nameof(request));
+
+        if (ConfirmBeforeSend is { } confirm && !await confirm(request))
+        {
+            // 用「已取消」表达用户拒绝发送：各工具的 catch 已经把它转成 ToolResult.Cancelled
+            throw new OperationCanceledException("用户取消了发送。");
+        }
 
         var payload = BuildPayload(request);
         var endpoint = BuildEndpoint(_settings.AiBaseUrl);

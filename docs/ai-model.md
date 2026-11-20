@@ -91,7 +91,21 @@ Requires = PlatformCapability.Ai
 
 需要本地推理的工具还可用 `IToolHost.LocalModels`（下载、缓存由宿主负责），见 `docs/local-models.md`。
 
-## 五、测试
+**`Requires` 的语义是「必须满足才能用」，不是「可能用到」。** 有离线替代的工具
+（比如翻译）必须声明 `None`，否则界面会把「没配 AI」误判成不可用；只有真正离不开
+云端模型的工具（`sparrow.svg.prompt`）才声明 `Ai`。
+
+## 五、发送前确认
+
+第一次调用 AI 时，宿主弹窗展示 **服务 / 模型 / 将要发送的内容**，用户点「发送」才发出去：
+
+- 勾「本次运行不再提示」→ 本次进程内不再询问
+- 取消 → 请求不发出，工具返回「已取消」，下次调用重新询问
+- 内容摘要截断到 800 字，密钥永远不进入弹窗
+
+实现：`AiClient.ConfirmBeforeSend`（宿主注入），插件只看到 `IAiClient`，无法绕过。
+
+## 六、测试
 
 单元测试不要真的联网：
 
@@ -101,7 +115,7 @@ Requires = PlatformCapability.Ai
 
 参考：`tests/Sparrow.Tests/TranslateToolTests.cs`、`AiClientTests.cs`。
 
-## 六、限制
+## 七、限制
 
 - 只支持非流式 `chat/completions`；流式以后按真实需求加
 - 单次请求超时 90 秒
@@ -109,7 +123,7 @@ Requires = PlatformCapability.Ai
 - 本地推理由两种方式提供：外部进程（Ollama / LM Studio）或宿主下载的 GGUF（见 `docs/local-models.md`）
 - 不做账号、云同步、模型市场
 
-## 七、已接入工具
+## 八、已接入工具
 
 | 工具 | 说明 |
 |---|---|

@@ -74,6 +74,30 @@ public sealed class LocalModelManager : ILocalModels
 
     public bool IsInstalled(string modelId) => File.Exists(PathFor(modelId));
 
+    /// <summary>
+    /// 自托管镜像根地址（可选）。填了就优先从 <c>{镜像}/{原文件名}</c> 下载。
+    /// 由设置页写入，运行期可改，不需要重建管理器。
+    /// </summary>
+    public string? MirrorUrl { get; set; }
+
+    /// <summary>
+    /// 某模型实际会尝试的下载地址：镜像（如果有）在前，内置源随后。
+    /// 镜像地址只换前缀、不换文件名——自托管只要把同名文件放上去就能用。
+    /// </summary>
+    public IReadOnlyList<string> SourcesFor(string modelId)
+    {
+        var model = All.FirstOrDefault(item => item.Id == modelId);
+        if (model is null || model.DownloadUrls.Count == 0)
+            return model?.DownloadUrls ?? [];
+
+        var mirror = MirrorUrl?.Trim();
+        if (string.IsNullOrEmpty(mirror))
+            return model.DownloadUrls;
+
+        var fileName = Path.GetFileName(new Uri(model.DownloadUrls[0]).AbsolutePath);
+        return [mirror.TrimEnd('/') + "/" + fileName, .. model.DownloadUrls];
+    }
+
     /// <summary>模型文件路径；没下载时也返回预期路径，调用方用 IsInstalled 判断。</summary>
     public string PathFor(string modelId) =>
         Path.Combine(_root, modelId, ModelFileName);
@@ -100,9 +124,16 @@ public sealed class LocalModelManager : ILocalModels
             return null;
         }
 
+        var sources = SourcesFor(modelId);
+        if (sources.Count == 0)
+        {
+            _log.Warn($"模型「{model.Name}」没有可用的下载地址");
+            return null;
+        }
+
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
-        foreach (var url in model.DownloadUrls)
+        foreach (var url in sources)
         {
             try
             {

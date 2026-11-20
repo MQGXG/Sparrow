@@ -95,6 +95,34 @@ public sealed class LocalModelManagerTests
     }
 
     [Fact]
+    public void 自托管镜像_只换前缀且排在内置源前面()
+    {
+        var manager = new LocalModelManager(new NullLog(), Path.GetTempPath());
+
+        manager.MirrorUrl = "https://models.example.com/sparrow/";
+        var sources = manager.SourcesFor("hy-mt-1.8b");
+
+        sources[0].ShouldBe(
+            "https://models.example.com/sparrow/HY-MT1.5-1.8B-Q4_K_M.gguf");
+        // 镜像失败后仍要能回落到内置源
+        sources.Count.ShouldBe(manager.All.Single(m => m.Id == "hy-mt-1.8b").DownloadUrls.Count + 1);
+        sources[^1].ShouldStartWith("https://huggingface.co/", Case.Sensitive);
+    }
+
+    [Fact]
+    public void 没有镜像时直接用内置源()
+    {
+        var manager = new LocalModelManager(new NullLog(), Path.GetTempPath());
+
+        manager.SourcesFor("hy-mt-1.8b")
+            .ShouldBe(manager.All.Single(m => m.Id == "hy-mt-1.8b").DownloadUrls);
+
+        // 没有下载源的模型给空列表，不是抛异常
+        manager.SourcesFor("translategemma-4b").ShouldBeEmpty();
+        manager.SourcesFor("no-such-model").ShouldBeEmpty();
+    }
+
+    [Fact]
     public void 设置页列出离线模型并按磁盘状态区分按钮()
     {
         var root = Path.Combine(Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));

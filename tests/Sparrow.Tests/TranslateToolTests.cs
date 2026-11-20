@@ -231,14 +231,16 @@ public sealed class TranslateToolTests
     }
 
     [Fact]
-    public void 描述符_声明文本输入与AI能力()
+    public void 描述符_声明文本输入且不强制要求AI()
     {
         var descriptor = new TranslateTool().Descriptor;
 
         descriptor.Id.ShouldBe("sparrow.text.translate");
         descriptor.Accepts.ShouldBe(InputShape.Text);
         descriptor.Produces.ShouldBe(OutputShape.Text);
-        descriptor.Requires.ShouldBe(PlatformCapability.Ai);
+
+        // 有离线引擎：没配 AI 也应该能用，所以不能声明 Requires.Ai（否则界面会置灰）
+        descriptor.Requires.ShouldBe(PlatformCapability.None);
     }
 
     [Fact]

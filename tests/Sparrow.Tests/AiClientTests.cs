@@ -118,6 +118,70 @@ public sealed class AiClientTests
     }
 
     [Fact]
+    public async Task 发送前确认_取消时不发请求()
+    {
+        var log = new NullLog();
+        var secrets = new AiSecretStore(TempKeyPath(), log);
+        secrets.Save("sk-test-key");
+        var handler = new FakeHandler();
+        var client = new AiClient(secrets, log, handler);
+        client.Configure(new AppSettings
+        {
+            AiEnabled = true,
+            AiProvider = "openai",
+            AiBaseUrl = "https://example.com/v1",
+            AiModel = "gpt-test"
+        });
+
+        var asked = 0;
+        client.ConfirmBeforeSend = _ =>
+        {
+            asked++;
+            return Task.FromResult(false);
+        };
+
+        await Should.ThrowAsync<OperationCanceledException>(async () =>
+            await client.CompleteAsync(
+                new AiRequest { Messages = [new AiMessage(AiRole.User, "机密内容")] },
+                TestContext.Current.CancellationToken));
+
+        asked.ShouldBe(1);
+        handler.Request.ShouldBeNull("用户取消后不能把内容发出去");
+    }
+
+    [Fact]
+    public async Task 发送前确认_同意后正常发送()
+    {
+        var log = new NullLog();
+        var secrets = new AiSecretStore(TempKeyPath(), log);
+        secrets.Save("sk-test-key");
+        var handler = new FakeHandler();
+        var client = new AiClient(secrets, log, handler);
+        client.Configure(new AppSettings
+        {
+            AiEnabled = true,
+            AiProvider = "openai",
+            AiBaseUrl = "https://example.com/v1",
+            AiModel = "gpt-test"
+        });
+
+        var seen = string.Empty;
+        client.ConfirmBeforeSend = request =>
+        {
+            seen = request.Messages[0].Text;
+            return Task.FromResult(true);
+        };
+
+        var response = await client.CompleteAsync(
+            new AiRequest { Messages = [new AiMessage(AiRole.User, "你好")] },
+            TestContext.Current.CancellationToken);
+
+        response.Text.ShouldBe("pong");
+        seen.ShouldBe("你好");
+        handler.Request.ShouldNotBeNull();
+    }
+
+    [Fact]
     public async Task 调用_发送OpenAI兼容请求并解析用量()
     {
         var log = new NullLog();

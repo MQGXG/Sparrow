@@ -195,14 +195,16 @@ internal static class LocalTranslator
         if (target == "中文")
         {
             builder.Append("将以下文本翻译为中文，注意只需要输出翻译后的结果，不要额外解释。")
-                .Append("产品名、专有名词、代码和链接保持原文：\n\n");
+                .Append("产品名、专有名词、代码和链接保持原文。")
+                .Append("除这些以外，译文只使用中文，不要混入英文单词：\n\n");
         }
         else
         {
             builder.Append("Translate the following segment into ")
                 .Append(EnglishName(target))
                 .Append(", without additional explanation.")
-                .Append(" Keep product names, proper nouns, code and links unchanged:\n\n");
+                .Append(" Keep product names, proper nouns, code and links unchanged.")
+                .Append(" Apart from those, use the target language only:\n\n");
         }
 
         if (style != "自然")

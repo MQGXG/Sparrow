@@ -167,6 +167,19 @@
 
             <Border Classes="hud-line" Margin="20,0" />
 
+            <Grid ColumnDefinitions="*,Auto"
+                  Margin="20,12,20,0"
+                  ColumnSpacing="8"
+                  IsVisible="{Binding HasLocalModels}">
+              <TextBox Text="{Binding LocalModelMirror, Mode=TwoWay}"
+                       PlaceholderText="自托管镜像根地址（可选），如 https://models.example.com/sparrow" />
+              <Button Grid.Column="1"
+                      Classes="ghost small"
+                      Content="保存"
+                      ToolTip.Tip="只换下载前缀，文件名保持不变"
+                      Click="OnSaveModelMirrorClick" />
+            </Grid>
+
             <ItemsControl x:Name="LocalModelsList"
                           ItemsSource="{Binding LocalModels}"
                           Margin="20,12,20,0"

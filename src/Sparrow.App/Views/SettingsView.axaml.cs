@@ -97,6 +97,12 @@ public partial class SettingsView : UserControl
             await item.DeleteAsync();
     }
 
+    private void OnSaveModelMirrorClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is SettingsViewModel viewModel)
+            viewModel.SaveLocalModelMirror();
+    }
+
     private static string LocalAppData =>
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 

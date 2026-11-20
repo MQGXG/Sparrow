@@ -38,7 +38,8 @@ public sealed class TranslateTool : ITool
         Keywords = ["translate", "翻译", "英文", "中文", "日语", "语言", "离线", "本地"],
         Accepts = InputShape.Text,
         Produces = OutputShape.Text,
-        Requires = PlatformCapability.Ai,
+        // 在线走 AI、离线走本地模型，两条路都行——不能因为「没配 AI」就把工具置灰
+        Requires = PlatformCapability.None,
         Order = 40,
         Parameters =
         [
@@ -235,7 +236,8 @@ public sealed class TranslateTool : ITool
                 glossary,
                 cancellationToken);
 
-            var parts = translated.Select(Clean);
+            // 小模型偶尔漏英文连接词，先清理再交给 Clean 去引号
+            var parts = translated.Select(chunk => Clean(TranslationCleanup.Apply(chunk)));
             return ToolResult.Ok(new TextPayload(string.Concat(parts).Trim()));
         }
         catch (OperationCanceledException)

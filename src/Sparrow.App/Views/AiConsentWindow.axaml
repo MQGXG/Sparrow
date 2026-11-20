@@ -1,0 +1,77 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Sparrow.App.Views.AiConsentWindow"
+        Title="发送到模型服务"
+        Width="520"
+        Height="420"
+        CanResize="False"
+        ShowInTaskbar="False"
+        Topmost="True"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource SurfaceBrush}">
+
+  <Border Padding="20" Background="{StaticResource SurfaceBrush}">
+    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" RowSpacing="12">
+
+      <StackPanel Spacing="4">
+        <TextBlock Text="即将把下面的内容发送到模型服务"
+                   FontSize="14"
+                   FontWeight="SemiBold"
+                   Foreground="{StaticResource TextPrimaryBrush}" />
+        <TextBlock Text="发送前确认一次；密钥不会离开本机。"
+                   FontSize="11"
+                   Foreground="{StaticResource TextMutedBrush}" />
+      </StackPanel>
+
+      <Grid Grid.Row="1" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" RowSpacing="4">
+        <TextBlock Text="服务"
+                   FontSize="11"
+                   Foreground="{StaticResource TextMutedBrush}" />
+        <TextBlock x:Name="EndpointText"
+                   Grid.Column="1"
+                   FontSize="11"
+                   TextTrimming="CharacterEllipsis"
+                   Foreground="{StaticResource TextSecondaryBrush}" />
+        <TextBlock Grid.Row="1"
+                   Text="模型"
+                   FontSize="11"
+                   Foreground="{StaticResource TextMutedBrush}" />
+        <TextBlock x:Name="ModelText"
+                   Grid.Row="1"
+                   Grid.Column="1"
+                   FontSize="11"
+                   TextTrimming="CharacterEllipsis"
+                   Foreground="{StaticResource TextSecondaryBrush}" />
+      </Grid>
+
+      <Border Grid.Row="2"
+              Background="{StaticResource SurfaceRaisedBrush}"
+              BorderBrush="{StaticResource LineBrush}"
+              BorderThickness="1"
+              CornerRadius="8"
+              Padding="10">
+        <ScrollViewer>
+          <SelectableTextBlock x:Name="PreviewText"
+                               FontFamily="{StaticResource MonoFont}"
+                               FontSize="12"
+                               LineHeight="18"
+                               TextWrapping="Wrap"
+                               Foreground="{StaticResource TextSecondaryBrush}" />
+        </ScrollViewer>
+      </Border>
+
+      <CheckBox x:Name="RememberBox"
+                Grid.Row="3"
+                IsChecked="True"
+                Content="本次运行不再提示" />
+
+      <StackPanel Grid.Row="4"
+                  Orientation="Horizontal"
+                  Spacing="8"
+                  HorizontalAlignment="Right">
+        <Button Classes="ghost" Content="取消" Click="OnCancelClick" />
+        <Button Classes="accent" Content="发送" Click="OnSendClick" />
+      </StackPanel>
+    </Grid>
+  </Border>
+</Window>

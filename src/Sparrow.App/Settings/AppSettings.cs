@@ -81,4 +81,10 @@ public sealed record AppSettings
     public double AiTemperature { get; init; } = 0.2;
 
     public int AiMaxTokens { get; init; } = 2048;
+
+    /// <summary>
+    /// 离线模型的自托管镜像根地址（可选）。
+    /// 填了就先从 <c>{镜像}/{原文件名}</c> 下载，失败再回落到内置源。
+    /// </summary>
+    public string LocalModelMirror { get; init; } = string.Empty;
 }

@@ -37,6 +37,12 @@ public partial class App : Application
     private SettingsStore? _settingsStore;
     private AppSettings _appSettings = new();
     private LocalModelManager? _localModels;
+
+    /// <summary>本次运行是否已同意「发送到模型服务」。</summary>
+    private bool _aiConsentGranted;
+
+    /// <summary>正在等待用户确认的那一次（并发调用共用，不叠加弹窗）。</summary>
+    private Task<bool>? _aiConsentPending;
     private ToolParameterStore? _parameterStore;
     private IHistoryStore? _history;
     private WindowOverlay? _windowOverlay;
@@ -104,6 +110,7 @@ public partial class App : Application
         var aiSecrets = new AiSecretStore(aiKeyPath, log);
         var ai = new AiClient(aiSecrets, log);
         ai.Configure(settings);
+        ai.ConfirmBeforeSend = ConfirmAiSendAsync;
 
         // 剪贴板历史：监听 + 落盘都是宿主能力，插件经 IToolHost.ClipboardHistory 只读
         var clipboardHistoryPath = Path.Combine(
@@ -125,7 +132,7 @@ public partial class App : Application
         // 通用窗口覆盖能力：拾取窗口 + 图钉指示（任何插件都可用）
         _windowOverlay = new WindowOverlay(log);
 
-        _localModels = new LocalModelManager(log);
+        _localModels = new LocalModelManager(log) { MirrorUrl = settings.LocalModelMirror };
         _catalog = new ToolCatalog(pluginsRoot, log, settings, ai, clipboardHistory, _windowOverlay, _localModels);
 
         var historyPath = Path.Combine(
@@ -362,6 +369,95 @@ public partial class App : Application
         _clipboardPanel.Show();
         _clipboardPanel.Activate();
         _clipboardPanel.PrepareForShow();
+    }
+
+    /// <summary>
+    /// 发送前确认：本次运行第一次调用 AI 时弹一次，展示服务、模型和将要发送的内容。
+    /// 取消后请求不会发出；下次调用会重新询问。并发调用共用同一个弹窗。
+    /// </summary>
+    private Task<bool> ConfirmAiSendAsync(AiRequest request)
+    {
+        if (_aiConsentGranted)
+            return Task.FromResult(true);
+
+        return _aiConsentPending ??= AskAiConsentAsync(request);
+    }
+
+    private Task<bool> AskAiConsentAsync(AiRequest request)
+    {
+        var completion = new TaskCompletionSource<bool>();
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
+        {
+            try
+            {
+                var window = new AiConsentWindow(
+                    DescribeAiTarget(),
+                    _appSettings.AiModel,
+                    FormatAiPreview(request));
+
+                window.Show();
+                var approved = await window.Result;
+
+                if (approved)
+                {
+                    if (window.Remember)
+                        _aiConsentGranted = true;
+
+                    completion.TrySetResult(true);
+                }
+                else
+                {
+                    // 用户拒绝：清掉缓存，下次调用重新问
+                    _aiConsentPending = null;
+                    completion.TrySetResult(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn($"发送确认弹窗失败，已取消本次请求：{ex.Message}");
+                _aiConsentPending = null;
+                completion.TrySetResult(false);
+            }
+        });
+
+        return completion.Task;
+    }
+
+    /// <summary>弹窗第一行：提供方名 + 主机名（不显示完整路径和密钥）。</summary>
+    private string DescribeAiTarget()
+    {
+        var provider = AiProviders.Find(_appSettings.AiProvider)?.Name ?? "自定义";
+        var host = Uri.TryCreate(_appSettings.AiBaseUrl, UriKind.Absolute, out var uri)
+            ? uri.Host
+            : _appSettings.AiBaseUrl;
+
+        return $"{provider} · {host}";
+    }
+
+    /// <summary>预览要发送的内容：系统提示 + 每条消息，长文本截断。</summary>
+    private static string FormatAiPreview(AiRequest request)
+    {
+        var builder = new System.Text.StringBuilder();
+
+        if (!string.IsNullOrWhiteSpace(request.System))
+            builder.AppendLine("【系统提示】").AppendLine(request.System.Trim()).AppendLine();
+
+        foreach (var message in request.Messages)
+        {
+            builder.Append('【').Append(message.Role switch
+            {
+                AiRole.System => "系统",
+                AiRole.Assistant => "模型",
+                _ => "用户"
+            }).Append("】 ").AppendLine(message.Text);
+        }
+
+        if (request.Image.Length > 0)
+            builder.AppendLine().Append("【附带图片】").Append(request.ImageMimeType ?? "image");
+
+        var text = builder.ToString().Trim();
+        return text.Length <= 800 ? text : text[..800] + $"\n…（共 {text.Length} 字）";
     }
 
     /// <summary>从托盘打开工作区。窗口先显示，插件在后台加载。</summary>
