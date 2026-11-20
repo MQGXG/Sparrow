@@ -9,8 +9,11 @@ namespace Sparrow.Plugin.Sdk;
 /// </summary>
 public static class SdkInfo
 {
-    /// <summary>当前 SDK 版本，形如 1.7。1.7：剪贴板条目增加来源应用字段。</summary>
-    public const string Version = "1.7";
+    /// <summary>
+    /// 当前 SDK 版本，形如 1.8。
+    /// 1.8：新增 <c>IToolHost.LocalModels</c>（本地模型下载与缓存）。
+    /// </summary>
+    public const string Version = "1.8";
 
     /// <summary>主版本号，兼容性判断只看它。</summary>
     public const int MajorVersion = 1;

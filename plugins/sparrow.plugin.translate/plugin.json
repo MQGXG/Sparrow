@@ -2,7 +2,7 @@
   "id": "sparrow.plugin.translate",
   "name": "翻译",
   "version": "0.2.0",
-  "sdkVersion": "1.1",
+  "sdkVersion": "1.8",
   "entryAssembly": "Sparrow.Plugin.Translate.dll",
   "author": "sparrow",
   "description": "在线大模型或本地离线模型（混元翻译 GGUF）翻译文本，支持中英日韩俄法德西",

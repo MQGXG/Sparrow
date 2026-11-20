@@ -13,6 +13,7 @@
 | 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | ✅ |
 | 智谱 | `https://open.bigmodel.cn/api/paas/v4` | ✅ |
 | Moonshot | `https://api.moonshot.cn/v1` | ✅ |
+| 硅基流动 | `https://api.siliconflow.cn/v1` | ✅ |
 | OpenRouter | `https://openrouter.ai/api/v1` | ✅ |
 | Ollama（本地） | `http://localhost:11434/v1` | ❌ |
 | LM Studio（本地） | `http://localhost:1234/v1` | ❌ |
@@ -88,6 +89,8 @@ Descriptor 声明：
 Requires = PlatformCapability.Ai
 ```
 
+需要本地推理的工具还可用 `IToolHost.LocalModels`（下载、缓存由宿主负责），见 `docs/local-models.md`。
+
 ## 五、测试
 
 单元测试不要真的联网：
@@ -102,8 +105,8 @@ Requires = PlatformCapability.Ai
 
 - 只支持非流式 `chat/completions`；流式以后按真实需求加
 - 单次请求超时 90 秒
-- 长文本由工具自己切块（翻译工具按标点切 3000 字）
-- 不内置本地模型；本地推理由 Ollama / LM Studio 等外部进程提供
+- 长文本由工具自己切块（翻译工具在线按 3000 字、离线按 1200 字）
+- 本地推理由两种方式提供：外部进程（Ollama / LM Studio）或宿主下载的 GGUF（见 `docs/local-models.md`）
 - 不做账号、云同步、模型市场
 
 ## 七、已接入工具
