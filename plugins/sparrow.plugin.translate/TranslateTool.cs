@@ -140,22 +140,34 @@ public sealed class TranslateTool : ITool
             return ToolResult.InvalidInput($"文本过长（{text.Length} 字），请分段翻译");
 
         var parts = new List<string>(chunks.Count);
+        var previousSource = string.Empty;
+        var previousTranslation = string.Empty;
 
         foreach (var chunk in chunks)
         {
+            // 第一块没有上文；后面的块带上上一块的末尾，保持术语和称谓一致
+            var contextNote = TranslationContext.Build(previousSource, previousTranslation);
+            var requestSystem = contextNote.Length == 0
+                ? system
+                : system + Environment.NewLine + Environment.NewLine + contextNote;
+
             try
             {
                 var response = await host.Ai.CompleteAsync(
                     new AiRequest
                     {
-                        System = system,
+                        System = requestSystem,
                         Messages = [new AiMessage(AiRole.User, chunk)],
                         Temperature = 0.2,
                         MaxTokens = Math.Clamp(chunk.Length * 2, 512, 4096)
                     },
                     cancellationToken);
 
-                parts.Add(Clean(response.Text));
+                var translated = Clean(response.Text);
+                parts.Add(translated);
+
+                previousSource = chunk;
+                previousTranslation = translated;
             }
             catch (AiException ex)
             {

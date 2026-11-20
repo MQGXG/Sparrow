@@ -74,7 +74,10 @@ internal static class LocalTranslator
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
+                    // 不拼「上文」：混元是专用翻译模型，把参考上下文塞进正文会被当成待译文本，
+                    // 实测会在开头复述上一段。相邻块之间它自己的术语已经够稳定。
                     var prompt = RenderPrompt(weights, targetLanguage, style, keepFormatting, chunk);
+
                     var options = new InferenceParams
                     {
                         MaxTokens = Math.Clamp(chunk.Length * 2, 256, 3072),
@@ -182,13 +185,15 @@ internal static class LocalTranslator
 
         if (target == "中文")
         {
-            builder.Append("将以下文本翻译为中文，注意只需要输出翻译后的结果，不要额外解释：\n\n");
+            builder.Append("将以下文本翻译为中文，注意只需要输出翻译后的结果，不要额外解释。")
+                .Append("产品名、专有名词、代码和链接保持原文：\n\n");
         }
         else
         {
             builder.Append("Translate the following segment into ")
                 .Append(EnglishName(target))
-                .Append(", without additional explanation.\n\n");
+                .Append(", without additional explanation.")
+                .Append(" Keep product names, proper nouns, code and links unchanged:\n\n");
         }
 
         if (style != "自然")

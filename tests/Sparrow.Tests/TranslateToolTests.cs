@@ -20,6 +20,9 @@ public sealed class TranslateToolTests
 
         public AiRequest? LastRequest { get; private set; }
 
+        /// <summary>每次调用的请求，用来断言分块与块间上下文。</summary>
+        public List<AiRequest> Requests { get; } = [];
+
         public int Calls { get; private set; }
 
         public Func<AiRequest, string>? Reply { get; set; }
@@ -29,6 +32,7 @@ public sealed class TranslateToolTests
         public Task<AiResponse> CompleteAsync(AiRequest request, CancellationToken cancellationToken)
         {
             LastRequest = request;
+            Requests.Add(request);
             Calls++;
 
             if (Throw is not null)
@@ -147,6 +151,28 @@ public sealed class TranslateToolTests
             CancellationToken.None);
 
         result.Payload.ShouldBeOfType<TextPayload>().Text.ShouldBe("Hello");
+    }
+
+    [Fact]
+    public async Task 长文本_后一块带上一块的译文作上下文()
+    {
+        var ai = new FakeAi { Reply = request => $"译{request.Messages[0].Text.Length}" };
+        var text = string.Join("\n", Enumerable.Repeat(new string('你', 500), 10));
+
+        var result = await new TranslateTool().ExecuteAsync(
+            Context(ai, text),
+            CancellationToken.None);
+
+        result.Success.ShouldBeTrue();
+        ai.Calls.ShouldBeGreaterThan(1);
+
+        // 第一块没有上文；第二块要带上第一块的原文末尾和译文，正文本身不混入上下文
+        ai.Requests[0].System.ShouldNotBeNull().ShouldNotContain("上文已翻译");
+
+        var second = ai.Requests[1];
+        second.System.ShouldNotBeNull().ShouldContain("上文已翻译");
+        second.System.ShouldContain($"译{ai.Requests[0].Messages[0].Text.Length}");  // 第一块的译文
+        second.Messages.ShouldHaveSingleItem().Text.ShouldNotContain("上文已翻译");
     }
 
     [Fact]
