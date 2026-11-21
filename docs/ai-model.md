@@ -13,6 +13,7 @@
 | 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | ✅ |
 | 智谱 | `https://open.bigmodel.cn/api/paas/v4` | ✅ |
 | Moonshot | `https://api.moonshot.cn/v1` | ✅ |
+| 小米 MiMo | `https://api.xiaomimimo.com/v1` | ✅ |
 | 硅基流动 | `https://api.siliconflow.cn/v1` | ✅ |
 | OpenRouter | `https://openrouter.ai/api/v1` | ✅ |
 | Ollama（本地） | `http://localhost:11434/v1` | ❌ |

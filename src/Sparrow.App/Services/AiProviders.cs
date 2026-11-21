@@ -18,6 +18,8 @@ public static class AiProviders
         new("qwen", "通义千问", "https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-plus", true),
         new("zhipu", "智谱", "https://open.bigmodel.cn/api/paas/v4", "glm-4-flash", true),
         new("moonshot", "Moonshot", "https://api.moonshot.cn/v1", "moonshot-v1-8k", true),
+        // 小米 MiMo：全模态（图/音/视频），表格识别用它测过
+        new("mimo", "小米 MiMo", "https://api.xiaomimimo.com/v1", "mimo-v2.6-flash", true),
         // 硅基流动有免费额度，适合先跑通再换付费模型
         new("siliconflow", "硅基流动", "https://api.siliconflow.cn/v1", "Qwen/Qwen2.5-7B-Instruct", true),
         new("openrouter", "OpenRouter", "https://openrouter.ai/api/v1", "openai/gpt-4o-mini", true),

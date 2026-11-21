@@ -335,16 +335,10 @@ public sealed class OcrImageTool : ITool
                 "表格识别需要支持图片的视觉模型，请先在「设置 › 模型」配置（如 qwen2.5vl）");
         }
 
-        var format = markdown
-            ? "Markdown 表格（第一行表头，第二行是 |---| 分隔行）"
-            : "HTML 表格（<table>…</table>）";
-
-        var system =
-            $"把图片里的表格转成{format}，只输出表格本身，不要解释，不要加代码块围栏。"
-            + "保留所有单元格文字，数字、货币符号、编号保持原样。"
-            + (markdown
-                ? "合并单元格无法表达时，把内容放在左上角单元格，其余留空。"
-                : "合并单元格用 rowspan / colspan 表达。");
+        // 统一要 HTML：实测模型不遵守「输出 Markdown」，干脆本地转，转换结果也确定。
+        const string system =
+            "把图片里的表格转成 HTML 表格（<table>…</table>），只输出表格本身，不要解释，不要加代码块围栏。"
+            + "保留所有单元格文字，数字、货币符号、编号保持原样。合并单元格用 rowspan / colspan 表达。";
 
         var parts = new List<string>(set.Images.Count);
 
@@ -372,11 +366,12 @@ public sealed class OcrImageTool : ITool
                     },
                     cancellationToken);
 
-                var text = StripCodeFence(response.Text);
-                if (text.Length == 0)
+                var html = StripCodeFence(response.Text);
+                if (html.Length == 0)
                     return ToolResult.Failed("表格识别没有返回内容，请确认图片里有表格");
 
-                parts.Add(text);
+                // Markdown 由本地转换，模型只负责出 HTML
+                parts.Add(markdown ? HtmlTable.ToMarkdown(html) ?? html : html);
             }
             catch (AiException ex)
             {

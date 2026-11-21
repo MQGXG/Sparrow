@@ -340,7 +340,7 @@ public sealed class OcrImageToolTests
 
             result.Success.ShouldBeTrue();
             result.Payload.ShouldBeOfType<OcrResultPayload>().Text
-                .ShouldBe("<table><tr><td>1</td></tr></table>");
+                .ShouldBe("| 1 |\n| --- |");
         }
         finally
         {
