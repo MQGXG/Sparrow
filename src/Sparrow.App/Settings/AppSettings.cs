@@ -102,4 +102,7 @@ public sealed record AppSettings
 
     /// <summary>导出圆角半径（DIP）；0 = 不切。</summary>
     public double CaptureCornerRadius { get; init; }
+
+    /// <summary>保存的标注样式（最多三个槽）。</summary>
+    public List<AnnotationPreset> AnnotationPresets { get; init; } = [];
 }

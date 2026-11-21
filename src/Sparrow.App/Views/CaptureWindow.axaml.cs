@@ -10,6 +10,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using Sparrow.App.Services;
+using Sparrow.App.Settings;
 
 namespace Sparrow.App.Views;
 
@@ -132,6 +133,9 @@ public partial class CaptureWindow : Window
 
     /// <summary>选区覆盖的那个窗口（DIP）；拖动/拉伸时吸附它的边和中线。</summary>
     private Rect? _snapBox;
+
+    /// <summary>拖动开始时算一次选区所在显示器（DIP）。</summary>
+    private Rect? _activeScreen;
 
     /// <summary>尺寸角标显示物理像素还是 DIP。</summary>
     private bool _sizeInPixels = true;
@@ -286,6 +290,7 @@ public partial class CaptureWindow : Window
 
         // 宿主在构造后注入上次的样式；这里把按钮状态同步过来
         RefreshNoteStyle();
+        BuildPresetMenu();
     }
 
     private void RefreshNoteStyle()
@@ -497,6 +502,7 @@ public partial class CaptureWindow : Window
                 _resizeHandle = handle;
                 _dragOrigin = point;
                 _selectionOrigin = _selection;
+                _activeScreen = ActiveScreenDip();
                 e.Handled = true;
                 return;
             }
@@ -506,6 +512,7 @@ public partial class CaptureWindow : Window
                 _mode = DragMode.Move;
                 _dragOrigin = point;
                 _selectionOrigin = _selection;
+                _activeScreen = ActiveScreenDip();
                 Cursor = MoveCursor;
                 e.Handled = true;
                 return;
@@ -887,11 +894,11 @@ public partial class CaptureWindow : Window
         var (snapX, guideX) = SnapGuides.SnapEdges(
             left,
             left + _selectionOrigin.Width,
-            SnapGuides.Combine(Width, _snapBox, vertical: true));
+            SnapGuides.Combine(Width, _snapBox, vertical: true, _activeScreen));
         var (snapY, guideY) = SnapGuides.SnapEdges(
             top,
             top + _selectionOrigin.Height,
-            SnapGuides.Combine(Height, _snapBox, vertical: false));
+            SnapGuides.Combine(Height, _snapBox, vertical: false, _activeScreen));
 
         left = Math.Clamp(left + snapX, 0, Math.Max(0, Width - _selectionOrigin.Width));
         top = Math.Clamp(top + snapY, 0, Math.Max(0, Height - _selectionOrigin.Height));
@@ -936,26 +943,26 @@ public partial class CaptureWindow : Window
 
         if (_resizeHandle is ResizeHandle.NW or ResizeHandle.W or ResizeHandle.SW)
         {
-            var (value, guide) = SnapGuides.Snap(left, SnapGuides.Combine(Width, _snapBox, vertical: true));
+            var (value, guide) = SnapGuides.Snap(left, SnapGuides.Combine(Width, _snapBox, vertical: true, _activeScreen));
             left = value;
             guideX = guide;
         }
         else if (_resizeHandle is ResizeHandle.NE or ResizeHandle.E or ResizeHandle.SE)
         {
-            var (value, guide) = SnapGuides.Snap(right, SnapGuides.Combine(Width, _snapBox, vertical: true));
+            var (value, guide) = SnapGuides.Snap(right, SnapGuides.Combine(Width, _snapBox, vertical: true, _activeScreen));
             right = value;
             guideX = guide;
         }
 
         if (_resizeHandle is ResizeHandle.NW or ResizeHandle.N or ResizeHandle.NE)
         {
-            var (value, guide) = SnapGuides.Snap(top, SnapGuides.Combine(Height, _snapBox, vertical: false));
+            var (value, guide) = SnapGuides.Snap(top, SnapGuides.Combine(Height, _snapBox, vertical: false, _activeScreen));
             top = value;
             guideY = guide;
         }
         else if (_resizeHandle is ResizeHandle.SW or ResizeHandle.S or ResizeHandle.SE)
         {
-            var (value, guide) = SnapGuides.Snap(bottom, SnapGuides.Combine(Height, _snapBox, vertical: false));
+            var (value, guide) = SnapGuides.Snap(bottom, SnapGuides.Combine(Height, _snapBox, vertical: false, _activeScreen));
             bottom = value;
             guideY = guide;
         }
@@ -1560,6 +1567,25 @@ public partial class CaptureWindow : Window
         bounds.Width / _scaling,
         bounds.Height / _scaling);
 
+    /// <summary>选区所在的显示器（DIP，相对截图窗口）；无头测试或取不到时返回 null。</summary>
+    private Rect? ActiveScreenDip()
+    {
+        var center = new PixelPoint(
+            _origin.X + (int)Math.Round((_selectionOrigin.X + _selectionOrigin.Width / 2) * _scaling),
+            _origin.Y + (int)Math.Round((_selectionOrigin.Y + _selectionOrigin.Height / 2) * _scaling));
+
+        try
+        {
+            return Screens.ScreenFromPoint(center) is { } screen
+                ? ToDip(screen.Bounds)
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     /// <summary>导出前的合成：先画标注，再按需切圆角。</summary>
     private byte[] ComposeResult(byte[] png)
     {
@@ -1577,6 +1603,92 @@ public partial class CaptureWindow : Window
     {
         _sizeInPixels = !_sizeInPixels;
         UpdateSizeBadge(_selection);
+    }
+
+    // ---------- 样式模板（三槽） ----------
+
+    /// <summary>三槽样式模板；由宿主在窗口显示前灌入，关闭后读回持久化。</summary>
+    public AnnotationPreset?[] Presets { get; } = new AnnotationPreset?[3];
+
+    internal void SavePreset(int index)
+    {
+        if (index < 0 || index >= Presets.Length)
+            return;
+
+        Presets[index] = new AnnotationPreset(
+            $"槽 {index + 1}",
+            $"#{_noteColor.R:X2}{_noteColor.G:X2}{_noteColor.B:X2}",
+            _noteWidth,
+            _mosaicBlur,
+            _cornerRadius);
+
+        BuildPresetMenu();
+    }
+
+    internal void ApplyPreset(int index)
+    {
+        if (index < 0 || index >= Presets.Length || Presets[index] is not { } preset)
+            return;
+
+        _noteColor = Color.Parse(preset.Color);
+        _noteWidth = preset.Width;
+        _mosaicBlur = preset.MosaicBlur;
+        _cornerRadius = preset.CornerRadius;
+        UpdateStyleButtons();
+    }
+
+    internal void ClearPreset(int index)
+    {
+        if (index < 0 || index >= Presets.Length)
+            return;
+
+        Presets[index] = null;
+        BuildPresetMenu();
+    }
+
+    /// <summary>「模板」菜单按当前三槽重建：有内容的槽多出「应用 / 清除」。</summary>
+    internal void BuildPresetMenu()
+    {
+        if (PresetButton.Flyout is not MenuFlyout menu)
+            return;
+
+        menu.Items.Clear();
+
+        for (var index = 0; index < Presets.Length; index++)
+        {
+            if (Presets[index] is not { } preset)
+                continue;
+
+            var slot = index;
+            var apply = new MenuItem { Header = $"应用 {preset.Name}" };
+            apply.Click += (_, _) => ApplyPreset(slot);
+            menu.Items.Add(apply);
+        }
+
+        if (menu.Items.Count > 0)
+            menu.Items.Add(new Separator());
+
+        for (var index = 0; index < Presets.Length; index++)
+        {
+            var slot = index;
+            var save = new MenuItem
+            {
+                Header = Presets[index] is null ? $"保存到槽 {index + 1}" : $"覆盖槽 {index + 1}"
+            };
+            save.Click += (_, _) => SavePreset(slot);
+            menu.Items.Add(save);
+        }
+
+        for (var index = 0; index < Presets.Length; index++)
+        {
+            if (Presets[index] is null)
+                continue;
+
+            var slot = index;
+            var clear = new MenuItem { Header = $"清除槽 {index + 1}" };
+            clear.Click += (_, _) => ClearPreset(slot);
+            menu.Items.Add(clear);
+        }
     }
 
     private void ShowGuides(double? x, double? y)

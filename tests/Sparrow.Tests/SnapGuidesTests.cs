@@ -53,6 +53,19 @@ public sealed class SnapGuidesTests
     }
 
     [Fact]
+    public void 参考线合并_可指定显示器矩形()
+    {
+        var box = new Rect(100, 100, 200, 100);
+        var screen = new Rect(100, 0, 800, 600);
+
+        SnapGuides.Combine(2000, box, vertical: true, screen)
+            .ShouldBe([100, 500, 900, 100, 200, 300]);
+
+        SnapGuides.Combine(2000, box, vertical: false, screen)
+            .ShouldBe([0, 300, 600, 100, 150, 200]);
+    }
+
+    [Fact]
     public void 参考线合并_包含窗口边和中线()
     {
         var box = new Rect(100, 100, 200, 100);

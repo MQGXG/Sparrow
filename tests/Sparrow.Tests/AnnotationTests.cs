@@ -305,6 +305,37 @@ public sealed class AnnotationTests
         window.ExportCornerRadius.ShouldBe(0);
     }
 
+    [AvaloniaFact]
+    public void 截图窗口_样式模板可保存应用清除()
+    {
+        var window = new CaptureWindow();
+
+        window.NoteColorValue = 0xFFFF5F5F;
+        window.NoteStrokeWidth = 8;
+        window.NoteMosaicBlur = true;
+        window.ExportCornerRadius = 10;
+        window.SavePreset(0);
+
+        window.Presets[0].ShouldNotBeNull();
+        window.Presets[0]!.Color.ShouldBe("#FF5F5F");
+
+        // 改回默认，再应用模板
+        window.NoteColorValue = 0xFFE5A44C;
+        window.NoteStrokeWidth = 3;
+        window.NoteMosaicBlur = false;
+        window.ExportCornerRadius = 0;
+
+        window.ApplyPreset(0);
+
+        window.NoteColorValue.ShouldBe(0xFFFF5F5F);
+        window.NoteStrokeWidth.ShouldBe(8);
+        window.NoteMosaicBlur.ShouldBeTrue();
+        window.ExportCornerRadius.ShouldBe(10);
+
+        window.ClearPreset(0);
+        window.Presets[0].ShouldBeNull();
+    }
+
     private static CaptureWindow CreateWindowWithSelection()
     {
         var window = new CaptureWindow();

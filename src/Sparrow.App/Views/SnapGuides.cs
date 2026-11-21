@@ -79,10 +79,28 @@ public static class SnapGuides
     /// <summary>选区内的参考线（相对选区）：两边 + 中线。</summary>
     public static IReadOnlyList<double> BoxGuides(double size) => [0, size / 2, size];
 
-    /// <summary>屏幕边 + 中线；给了框就再加上框的边和中线（吸附检测到的窗口）。</summary>
-    public static IReadOnlyList<double> Combine(double size, Rect? box, bool vertical)
+    /// <summary>
+    /// 屏幕边 + 中线；给了框就再加上框的边和中线（吸附检测到的窗口）。
+    /// <paramref name="screen"/> 是选区所在显示器的 DIP 矩形，为空时退回整个窗口。
+    /// </summary>
+    public static IReadOnlyList<double> Combine(
+        double size,
+        Rect? box,
+        bool vertical,
+        Rect? screen = null)
     {
-        var list = new List<double>(ScreenGuides(size));
+        var list = new List<double>(6);
+
+        if (screen is { } s)
+        {
+            list.AddRange(vertical
+                ? [s.Left, s.X + s.Width / 2, s.Right]
+                : [s.Top, s.Y + s.Height / 2, s.Bottom]);
+        }
+        else
+        {
+            list.AddRange(ScreenGuides(size));
+        }
 
         if (box is { } b)
         {

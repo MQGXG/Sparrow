@@ -532,6 +532,13 @@ public partial class App : Application
             ExportCornerRadius = _appSettings.CaptureCornerRadius
         };
 
+        // 三槽样式模板：灌进去，关闭时读回
+        for (var index = 0; index < capture.Presets.Length
+             && index < _appSettings.AnnotationPresets.Count; index++)
+        {
+            capture.Presets[index] = _appSettings.AnnotationPresets[index];
+        }
+
         capture.OcrBoxModeChanged += mode =>
             _settingsViewModel?.SetCaptureOcrBoxMode(OcrBoxModes.Format(mode));
         capture.Show();
@@ -571,12 +578,14 @@ public partial class App : Application
     {
         var color = $"#{capture.NoteColorValue & 0xFFFFFF:X6}";
         var unit = capture.SizeInPixels ? "px" : "dip";
+        var presets = capture.Presets.Where(preset => preset is not null).Cast<AnnotationPreset>().ToList();
 
         if (color == _appSettings.AnnotationColor
             && Math.Abs(capture.NoteStrokeWidth - _appSettings.AnnotationWidth) < 0.01
             && capture.NoteMosaicBlur == _appSettings.AnnotationMosaicBlur
             && unit == _appSettings.CaptureSizeUnit
-            && Math.Abs(capture.ExportCornerRadius - _appSettings.CaptureCornerRadius) < 0.01)
+            && Math.Abs(capture.ExportCornerRadius - _appSettings.CaptureCornerRadius) < 0.01
+            && presets.SequenceEqual(_appSettings.AnnotationPresets))
         {
             return;
         }
@@ -587,7 +596,8 @@ public partial class App : Application
             AnnotationWidth = capture.NoteStrokeWidth,
             AnnotationMosaicBlur = capture.NoteMosaicBlur,
             CaptureSizeUnit = unit,
-            CaptureCornerRadius = capture.ExportCornerRadius
+            CaptureCornerRadius = capture.ExportCornerRadius,
+            AnnotationPresets = presets
         };
 
         try
