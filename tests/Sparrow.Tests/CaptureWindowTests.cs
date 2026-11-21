@@ -248,6 +248,31 @@ public sealed class CaptureWindowTests
         top.ShouldBeGreaterThanOrEqualTo(8);
     }
 
+    [AvaloniaFact]
+    public void 拖动把手_工具条改变位置且不再跟随选区()
+    {
+        var window = CreateWithSelection();
+        var before = Canvas.GetLeft(window.ActionBar);
+        double.IsNaN(before).ShouldBeFalse();
+
+        var handle = window.ToolbarDragHandle
+            .TranslatePoint(new Point(6, 10), window)!.Value;
+
+        window.MouseDown(handle, MouseButton.Left);
+        window.MouseMove(new Point(handle.X + 120, handle.Y + 90));
+        window.MouseUp(new Point(handle.X + 120, handle.Y + 90), MouseButton.Left);
+
+        var moved = Canvas.GetLeft(window.ActionBar);
+        moved.ShouldNotBe(before);
+
+        // 之后拖动选区，工具条保持手动位置
+        window.MouseDown(new Point(200, 200), MouseButton.Left);
+        window.MouseMove(new Point(260, 240));
+        window.MouseUp(new Point(260, 240), MouseButton.Left);
+
+        Canvas.GetLeft(window.ActionBar).ShouldBe(moved);
+    }
+
     /// <summary>拖出选区并松手：窗口不关，进入可编辑态。</summary>
     private static CaptureWindow CreateWithSelection()
     {

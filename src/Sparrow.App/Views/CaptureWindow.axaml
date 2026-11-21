@@ -236,6 +236,20 @@
       <StackPanel Spacing="6">
         <!-- 工具行：选一个工具后，鼠标在选区内拖动就是画，不再移动选区 -->
         <StackPanel Orientation="Horizontal" Spacing="2">
+          <Border x:Name="ToolbarDragHandle"
+                  Width="14"
+                  Height="28"
+                  Margin="0,2,4,2"
+                  Background="Transparent"
+                  Cursor="SizeAll"
+                  ToolTip.Tip="拖动工具条"
+                  PointerPressed="OnToolbarDragPressed">
+            <Path Data="M5 7a1 1 0 1 0 .01 0 M5 12a1 1 0 1 0 .01 0 M5 17a1 1 0 1 0 .01 0 M10 7a1 1 0 1 0 .01 0 M10 12a1 1 0 1 0 .01 0 M10 17a1 1 0 1 0 .01 0"
+                  Fill="{DynamicResource TextMutedBrush}"
+                  Stretch="Uniform"
+                  Width="14"
+                  Height="20" />
+          </Border>
           <Button Focusable="False" x:Name="RectToolButton" Classes="tool"
                   ToolTip.Tip="矩形（2）" Click="OnRectToolClick">
             <Path Data="{StaticResource ToolRect}" />

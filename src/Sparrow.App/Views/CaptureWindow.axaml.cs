@@ -124,6 +124,12 @@ public partial class CaptureWindow : Window
     private int _nextNumber = 1;
     private Point _textOrigin;
 
+    // 工具条拖动：手动位置之后不再跟随选区
+    private bool _draggingToolbar;
+    private bool _toolbarManual;
+    private Point _toolbarDragStart;
+    private Point _toolbarStartPosition;
+
     // 当前画笔样式：只影响之后画的图元
     private Color _noteColor = NoteColor;
     private double _noteWidth = NoteWidth;
@@ -464,6 +470,14 @@ public partial class CaptureWindow : Window
         var point = e.GetPosition(this);
         _lastPointerPoint = point;
 
+        // 拖动工具条：优先于选区/标注
+        if (_draggingToolbar)
+        {
+            MoveToolbar(point);
+            e.Handled = true;
+            return;
+        }
+
         // 正在画标注：更新预览，不参与移动/拉伸选区
         if (_pendingAnnotation is not null)
         {
@@ -504,6 +518,13 @@ public partial class CaptureWindow : Window
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
+        if (_draggingToolbar)
+        {
+            _draggingToolbar = false;
+            e.Handled = true;
+            return;
+        }
+
         // 画完一条标注：小于阈值当误触丢掉
         if (_pendingAnnotation is not null)
         {
@@ -1505,6 +1526,40 @@ public partial class CaptureWindow : Window
         GuideLayer.IsVisible = false;
     }
 
+    private void OnToolbarDragPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+
+        _draggingToolbar = true;
+        _toolbarManual = true;
+        _toolbarDragStart = e.GetPosition(this);
+
+        ActionBar.Measure(Size.Infinity);
+        _toolbarStartPosition = new Point(
+            Canvas.GetLeft(ActionBar),
+            Canvas.GetTop(ActionBar));
+
+        e.Handled = true;
+    }
+
+    private void MoveToolbar(Point point)
+    {
+        var size = ActionBar.Bounds.Width > 0 ? ActionBar.Bounds.Size : ActionBar.DesiredSize;
+
+        var left = Math.Clamp(
+            _toolbarStartPosition.X + (point.X - _toolbarDragStart.X),
+            8,
+            Math.Max(8, Width - size.Width - 8));
+        var top = Math.Clamp(
+            _toolbarStartPosition.Y + (point.Y - _toolbarDragStart.Y),
+            8,
+            Math.Max(8, Height - size.Height - 8));
+
+        Canvas.SetLeft(ActionBar, left);
+        Canvas.SetTop(ActionBar, top);
+    }
+
     private void ShowActionBar(Rect selection)
     {
         ActionBar.IsVisible = true;
@@ -1519,6 +1574,10 @@ public partial class CaptureWindow : Window
     private void PositionActionBar(Rect selection)
     {
         if (!ActionBar.IsVisible)
+            return;
+
+        // 用户拖过工具条之后就不再自动跟随选区
+        if (_toolbarManual)
             return;
 
         ActionBar.Measure(Size.Infinity);
