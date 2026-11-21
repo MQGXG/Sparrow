@@ -81,8 +81,25 @@ public sealed class OcrImageToolTests
         return root;
     }
 
-    private static ToolHost CreateHost(string pluginDirectory) =>
-        new("sparrow.plugin.ocr", pluginDirectory, new NullLog());
+    private sealed class FakeAi : IAiClient
+    {
+        public bool IsAvailable { get; set; } = true;
+
+        public string? ModelName => "fake-vl";
+
+        public AiRequest? LastRequest { get; private set; }
+
+        public string Reply { get; set; } = "<table><tr><td>A</td></tr></table>";
+
+        public Task<AiResponse> CompleteAsync(AiRequest request, CancellationToken cancellationToken)
+        {
+            LastRequest = request;
+            return Task.FromResult(new AiResponse(Reply));
+        }
+    }
+
+    private static ToolHost CreateHost(string pluginDirectory, IAiClient? ai = null) =>
+        new("sparrow.plugin.ocr", pluginDirectory, new NullLog(), ai: ai);
 
     private sealed class FakeModels : ILocalModels
     {
@@ -272,6 +289,87 @@ public sealed class OcrImageToolTests
             {
                 // 临时目录留给系统清理
             }
+        }
+    }
+
+    [Fact]
+    public async Task 表格模式_走视觉模型并输出HTML()
+    {
+        var root = CreateWorkerDirectory();
+        try
+        {
+            var ai = new FakeAi();
+            var result = await new OcrImageTool(new FakeRunner([Result("ignored")])).ExecuteAsync(
+                new ToolContext
+                {
+                    Input = new ImageSetInput([Image("table.png")]),
+                    Host = CreateHost(root, ai),
+                    Parameters = new Dictionary<string, string> { ["output"] = "table-html" }
+                },
+                CancellationToken.None);
+
+            result.Success.ShouldBeTrue();
+            result.Payload.ShouldBeOfType<OcrResultPayload>().Text.ShouldContain("<table>");
+
+            var request = ai.LastRequest.ShouldNotBeNull();
+            request.Image.Length.ShouldBeGreaterThan(0);
+            request.System.ShouldNotBeNull().ShouldContain("HTML");
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task 表格模式_去掉模型加的代码围栏()
+    {
+        var root = CreateWorkerDirectory();
+        try
+        {
+            var ai = new FakeAi { Reply = "```html\n<table><tr><td>1</td></tr></table>\n```" };
+
+            var result = await new OcrImageTool(new FakeRunner([Result("ignored")])).ExecuteAsync(
+                new ToolContext
+                {
+                    Input = new ImageSetInput([Image("table.png")]),
+                    Host = CreateHost(root, ai),
+                    Parameters = new Dictionary<string, string> { ["output"] = "table-md" }
+                },
+                CancellationToken.None);
+
+            result.Success.ShouldBeTrue();
+            result.Payload.ShouldBeOfType<OcrResultPayload>().Text
+                .ShouldBe("<table><tr><td>1</td></tr></table>");
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task 表格模式_没有视觉模型_提示去配置()
+    {
+        var root = CreateWorkerDirectory();
+        try
+        {
+            var result = await new OcrImageTool(new FakeRunner([Result("ignored")])).ExecuteAsync(
+                new ToolContext
+                {
+                    Input = new ImageSetInput([Image("table.png")]),
+                    Host = CreateHost(root),
+                    Parameters = new Dictionary<string, string> { ["output"] = "table-html" }
+                },
+                CancellationToken.None);
+
+            result.Success.ShouldBeFalse();
+            result.Error!.Kind.ShouldBe(ToolErrorKind.PlatformUnsupported);
+            result.Error.Message.ShouldContain("视觉模型");
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
         }
     }
 

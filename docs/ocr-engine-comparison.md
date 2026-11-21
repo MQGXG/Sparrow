@@ -62,3 +62,16 @@
 2. **再做多语言**：按 `language` 下载对应的 `*_rec_mobile.onnx` + `*_dict.txt`。
 
 模型文件 16 MB 不适合进 Git，`.gitignore` 已忽略 `*.onnx`；需要提供一个下载脚本或首次运行下载。
+
+## 表格识别（2026-11-21）
+
+PaddleOCR 的本地链路只做「检测 + 识别」，不理解表格结构，所以表格走了另一条路：
+
+| 路线 | 做法 | 状态 |
+|---|---|---|
+| A. AI 视觉 | OCR 的「识别类型」选「表格 · HTML / Markdown」，把裁图发给支持图片的模型，提示词要求只输出表格 | ✅ 已实现 |
+| B. 本地表格模型 | `Sdcb.PaddleOCR 3.3.1` 自带 `PaddleOcrTableRecognizer` + `TableRecognitionModel.FromDirectory`，随 worker 内置 SLANet（约 10MB） | 未做 |
+
+A 的限制是**必须有视觉模型**（默认 qwen2.5vl 可以，离线翻译模型不行）；B 能把离线补齐，但 SLANet 对合并单元格和复杂版式不如大模型。
+
+A 的输出是纯文本（HTML 或 Markdown），走 `OcrResultPayload`；截图识别时因为没有行框会回退到命令面板展示并复制。

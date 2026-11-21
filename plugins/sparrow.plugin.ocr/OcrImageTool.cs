@@ -42,7 +42,8 @@ public sealed class OcrImageTool : ITool
         [
             OcrParameters.Language,
             OcrParameters.Layout,
-            OcrParameters.Translate
+            OcrParameters.Translate,
+            OcrParameters.Output
         ]
     };
 
@@ -57,15 +58,26 @@ public sealed class OcrImageTool : ITool
         if (context.Host is null)
             return ToolResult.Failed("宿主未注入能力，无法定位 OCR worker");
 
+        var language = context.GetParameter(OcrParameters.LanguageKey, "ch");
+        var layout = OcrParameters.ResolveLayout(context);
+        var translateTo = context.GetParameter(OcrParameters.TranslateKey, OcrParameters.TranslateNone);
+        var output = context.GetParameter(OcrParameters.OutputKey, OcrParameters.OutputText);
+
+        // 表格不走本地 OCR：交给支持图片的视觉模型出 HTML / Markdown
+        if (output is OcrParameters.OutputTableHtml or OcrParameters.OutputTableMarkdown)
+        {
+            return await RecognizeTableAsync(
+                context.Host,
+                set,
+                markdown: output == OcrParameters.OutputTableMarkdown,
+                cancellationToken);
+        }
+
         // 进程插件唯一需要宿主提供的东西：自己在哪
         var workerPath = OcrParameters.WorkerPath(context.Host);
 
         if (!File.Exists(workerPath))
             return ToolResult.Failed($"OCR worker 不存在：{workerPath}");
-
-        var language = context.GetParameter(OcrParameters.LanguageKey, "ch");
-        var layout = OcrParameters.ResolveLayout(context);
-        var translateTo = context.GetParameter(OcrParameters.TranslateKey, OcrParameters.TranslateNone);
 
         var sections = new List<TextSection>();
         var lines = new List<OcrTextLine>();
@@ -98,9 +110,9 @@ public sealed class OcrImageTool : ITool
 
                 try
                 {
-                    var output = await session.RecognizeAsync(image.Data, cancellationToken);
+                    var workerOutput = await session.RecognizeAsync(image.Data, cancellationToken);
 
-                    var error = OcrOutputComposer.TryReadError(output);
+                    var error = OcrOutputComposer.TryReadError(workerOutput);
                     if (error is not null)
                     {
                         context.Host.Logger.LogWarning("OCR：{Name} 失败：{Error}", name, error);
@@ -113,7 +125,7 @@ public sealed class OcrImageTool : ITool
                         continue;
                     }
 
-                    var payload = OcrOutputComposer.Compose(output, layout);
+                    var payload = OcrOutputComposer.Compose(workerOutput, layout);
 
                     // 多图时标题带序号和尺寸，「这段字是哪张图」一眼能对上；
                     // 选了翻译就把原文和译文对照着放进同一段
@@ -305,6 +317,95 @@ public sealed class OcrImageTool : ITool
         return original.TrimEnd()
             + "\n\n—— 未翻译：没有可用的翻译引擎。"
             + "可在「设置 › 模型」启用在线模型，或下载一个离线模型——";
+    }
+
+    /// <summary>
+    /// 表格识别：把图片交给视觉模型，直接产出 HTML / Markdown 表格。
+    /// 本地 OCR 只做文字检测，不理解表格结构，所以这条路必须配视觉模型。
+    /// </summary>
+    private static async Task<ToolResult> RecognizeTableAsync(
+        IToolHost host,
+        ImageSetInput set,
+        bool markdown,
+        CancellationToken cancellationToken)
+    {
+        if (!host.Ai.IsAvailable)
+        {
+            return ToolResult.Unsupported(
+                "表格识别需要支持图片的视觉模型，请先在「设置 › 模型」配置（如 qwen2.5vl）");
+        }
+
+        var format = markdown
+            ? "Markdown 表格（第一行表头，第二行是 |---| 分隔行）"
+            : "HTML 表格（<table>…</table>）";
+
+        var system =
+            $"把图片里的表格转成{format}，只输出表格本身，不要解释，不要加代码块围栏。"
+            + "保留所有单元格文字，数字、货币符号、编号保持原样。"
+            + (markdown
+                ? "合并单元格无法表达时，把内容放在左上角单元格，其余留空。"
+                : "合并单元格用 rowspan / colspan 表达。");
+
+        var parts = new List<string>(set.Images.Count);
+
+        foreach (var image in set.Images)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            try
+            {
+                var response = await host.Ai.CompleteAsync(
+                    new AiRequest
+                    {
+                        System = system,
+                        Messages = [new AiMessage(AiRole.User, "请转换这张图片里的表格。")],
+                        Image = image.Data,
+                        ImageMimeType = image.Format switch
+                        {
+                            ImageFormat.Jpeg => "image/jpeg",
+                            ImageFormat.Webp => "image/webp",
+                            ImageFormat.Bmp => "image/bmp",
+                            _ => "image/png"
+                        },
+                        Temperature = 0,
+                        MaxTokens = 4096
+                    },
+                    cancellationToken);
+
+                var text = StripCodeFence(response.Text);
+                if (text.Length == 0)
+                    return ToolResult.Failed("表格识别没有返回内容，请确认图片里有表格");
+
+                parts.Add(text);
+            }
+            catch (AiException ex)
+            {
+                return ex.Kind == AiErrorKind.NotConfigured
+                    ? ToolResult.Unsupported(ex.Message)
+                    : ToolResult.Failed(ex.Message);
+            }
+            catch (OperationCanceledException)
+            {
+                return ToolResult.Cancelled();
+            }
+        }
+
+        return ToolResult.Ok(new OcrResultPayload(string.Join("\n\n", parts), []));
+    }
+
+    /// <summary>模型偶尔会加 ```html / ``` 围栏，去掉再返回。</summary>
+    private static string StripCodeFence(string text)
+    {
+        var trimmed = text.Trim();
+        if (!trimmed.StartsWith("```", StringComparison.Ordinal))
+            return trimmed;
+
+        var firstLine = trimmed.IndexOf('\n');
+        var lastFence = trimmed.LastIndexOf("```", StringComparison.Ordinal);
+        if (firstLine < 0 || lastFence <= firstLine)
+            return trimmed;
+
+        return trimmed[(firstLine + 1)..lastFence].Trim();
     }
 
     /// <summary>挑宿主编译清单里第一个已下载的本地模型；没有就返回 null。</summary>

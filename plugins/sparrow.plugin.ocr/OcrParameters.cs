@@ -123,4 +123,26 @@ internal static class OcrParameters
     /// <summary>worker 固定在插件目录的 worker 子目录下。</summary>
     public static string WorkerPath(IToolHost host) =>
         Path.Combine(host.PluginDirectory, "worker", "Sparrow.Ocr.Worker.exe");
+
+    public const string OutputKey = "output";
+    public const string OutputText = "text";
+    public const string OutputTableHtml = "table-html";
+    public const string OutputTableMarkdown = "table-md";
+
+    /// <summary>识别类型：文字（本地 OCR）或表格（视觉模型输出 HTML / Markdown）。</summary>
+    public static ToolParameter Output { get; } = new()
+    {
+        Key = OutputKey,
+        Label = "识别类型",
+        Kind = ParameterKind.Choice,
+        Choices = [OutputText, OutputTableHtml, OutputTableMarkdown],
+        ChoiceLabels = new Dictionary<string, string>
+        {
+            [OutputText] = "文字",
+            [OutputTableHtml] = "表格 · HTML",
+            [OutputTableMarkdown] = "表格 · Markdown"
+        },
+        Default = OutputText,
+        Hint = "表格需要支持图片的视觉模型"
+    };
 }
