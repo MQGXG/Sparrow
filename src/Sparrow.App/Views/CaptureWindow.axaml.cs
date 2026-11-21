@@ -508,9 +508,12 @@ public partial class CaptureWindow : Window
         if (_pendingAnnotation is not null)
         {
             CommitPendingAnnotation();
+            ClearGuides();
             e.Handled = true;
             return;
         }
+
+        ClearGuides();
 
         if (_mode == DragMode.None)
             return;
@@ -564,6 +567,7 @@ public partial class CaptureWindow : Window
         _createStart = point;
         _selection = new Rect(point, new Size());
         _selectionOrigin = _selection;
+        ClearGuides();
 
         Result = null;
         FallbackText = null;
@@ -796,6 +800,17 @@ public partial class CaptureWindow : Window
             0,
             Math.Max(0, Height - _selectionOrigin.Height));
 
+        // 吸附：左右/上下边缘靠近屏幕边或中线时贴过去
+        var (snapX, guideX) = SnapGuides.SnapEdges(
+            left, left + _selectionOrigin.Width, SnapGuides.ScreenGuides(Width));
+        var (snapY, guideY) = SnapGuides.SnapEdges(
+            top, top + _selectionOrigin.Height, SnapGuides.ScreenGuides(Height));
+
+        left = Math.Clamp(left + snapX, 0, Math.Max(0, Width - _selectionOrigin.Width));
+        top = Math.Clamp(top + snapY, 0, Math.Max(0, Height - _selectionOrigin.Height));
+
+        ShowGuides(guideX, guideY);
+
         _selection = new Rect(left, top, _selectionOrigin.Width, _selectionOrigin.Height);
         UpdateSelectionVisuals();
     }
@@ -827,6 +842,38 @@ public partial class CaptureWindow : Window
         top = Math.Max(0, top);
         right = Math.Min(Width, right);
         bottom = Math.Min(Height, bottom);
+
+        // 吸附：只吸正在拖的那条边
+        double? guideX = null;
+        double? guideY = null;
+
+        if (_resizeHandle is ResizeHandle.NW or ResizeHandle.W or ResizeHandle.SW)
+        {
+            var (value, guide) = SnapGuides.Snap(left, SnapGuides.ScreenGuides(Width));
+            left = value;
+            guideX = guide;
+        }
+        else if (_resizeHandle is ResizeHandle.NE or ResizeHandle.E or ResizeHandle.SE)
+        {
+            var (value, guide) = SnapGuides.Snap(right, SnapGuides.ScreenGuides(Width));
+            right = value;
+            guideX = guide;
+        }
+
+        if (_resizeHandle is ResizeHandle.NW or ResizeHandle.N or ResizeHandle.NE)
+        {
+            var (value, guide) = SnapGuides.Snap(top, SnapGuides.ScreenGuides(Height));
+            top = value;
+            guideY = guide;
+        }
+        else if (_resizeHandle is ResizeHandle.SW or ResizeHandle.S or ResizeHandle.SE)
+        {
+            var (value, guide) = SnapGuides.Snap(bottom, SnapGuides.ScreenGuides(Height));
+            bottom = value;
+            guideY = guide;
+        }
+
+        ShowGuides(guideX, guideY);
 
         _selection = new Rect(left, top, right - left, bottom - top);
         UpdateSelectionVisuals();
@@ -1160,6 +1207,13 @@ public partial class CaptureWindow : Window
             Math.Clamp(point.X - _selection.X, 0, _selection.Width),
             Math.Clamp(point.Y - _selection.Y, 0, _selection.Height));
 
+        // 落点吸附到选区边框/中线，方便画满整幅或居中
+        var (snapped, guideX, guideY) = SnapGuides.SnapToBox(
+            new Point(_selection.X + current.X, _selection.Y + current.Y),
+            _selection);
+        current = new Point(snapped.X - _selection.X, snapped.Y - _selection.Y);
+        ShowGuides(guideX, guideY);
+
         _pendingAnnotation = _pendingAnnotation switch
         {
             ShapeAnnotation shape => shape with { Rect = NormalizeRect(_annotationStart, current) },
@@ -1402,6 +1456,51 @@ public partial class CaptureWindow : Window
             StrokeThickness = width,
             StrokeLineCap = PenLineCap.Round
         });
+
+    private void ShowGuides(double? x, double? y)
+    {
+        GuideLayer.Children.Clear();
+
+        if (x is null && y is null)
+        {
+            GuideLayer.IsVisible = false;
+            return;
+        }
+
+        var brush = new SolidColorBrush(Color.Parse("#B4E5A44C"));
+
+        if (x is { } vertical)
+        {
+            GuideLayer.Children.Add(new Line
+            {
+                StartPoint = new Point(vertical, 0),
+                EndPoint = new Point(vertical, Height),
+                Stroke = brush,
+                StrokeThickness = 1,
+                StrokeDashArray = [4, 3]
+            });
+        }
+
+        if (y is { } horizontal)
+        {
+            GuideLayer.Children.Add(new Line
+            {
+                StartPoint = new Point(0, horizontal),
+                EndPoint = new Point(Width, horizontal),
+                Stroke = brush,
+                StrokeThickness = 1,
+                StrokeDashArray = [4, 3]
+            });
+        }
+
+        GuideLayer.IsVisible = true;
+    }
+
+    private void ClearGuides()
+    {
+        GuideLayer.Children.Clear();
+        GuideLayer.IsVisible = false;
+    }
 
     private void ShowActionBar(Rect selection)
     {

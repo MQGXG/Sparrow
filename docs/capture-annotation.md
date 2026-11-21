@@ -122,6 +122,18 @@ record MosaicNote(Rect Rect, MosaicMode Mode, MosaicMethod Method, double Cell, 
 
 预览颜色跟着图元自己的颜色走：换红色再画，新矩形是红的，旧的不变。
 
+### 吸附参考线（2026-11-21，参考 snow-shot 的 `snapGuides`）
+
+| 场景 | 吸附对象 |
+|---|---|
+| 拖动整个选区 | 屏幕左右边 / 水平中线、上下边 / 垂直中线（`SnapEdges`，左右边取更近的一条） |
+| 拉伸选区 | 只吸附正在拖的那条边 |
+| 画标注 | 选区的边框和中线（`SnapToBox`） |
+
+- 阈值 6 DIP（`SnapGuides.Tolerance`）；命中时画琥珀虚线，松手立刻消失
+- 纯计算在 `Views/SnapGuides.cs`，四条用例覆盖「阈值内/外、取更近边、标注落点、无头拖动出线」
+- **未做**：吸附到检测到的窗口边缘（`_currentCandidate` 只在没有选区时跟踪），以及多显示器下按当前屏取中线（现在用整个虚拟桌面）
+
 ## 七、验收
 
 - 画完 → 复制 / 保存 / 固定 / 识别，四个出口拿到的都是**带标注**的图

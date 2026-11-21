@@ -97,6 +97,11 @@
             IsHitTestVisible="False"
             ClipToBounds="True" />
 
+    <!-- 吸附参考线：拖动/拉伸时贴在屏幕边或中线 -->
+    <Canvas x:Name="GuideLayer"
+            IsVisible="False"
+            IsHitTestVisible="False" />
+
     <!-- 8 个控制点：只负责显示，命中判定在窗口里做 -->
     <Canvas x:Name="HandleLayer"
             IsVisible="False"
