@@ -76,7 +76,8 @@ new LocalModelInfo(
 | 推理库 | `LLamaSharp` + `LLamaSharp.Backend.Cpu`（**0.30+**，0.25 不认 `hunyuan-dense` 架构） |
 | 分发 | 跟着宿主走，插件目录只有 0.2 MB；native 库在 `runtimes/win-x64`（只留 Windows） |
 | 加载时机 | 一次翻译期间加载，调用结束立刻释放；不常驻、不设定时器（定时器会阻止回收） |
-| 提示词 | 混元按模型卡手工拼 `<｜hy_begin▁of▁sentence｜><｜hy_User｜>…<｜hy_Assistant｜>`；GGUF 自带的 chat_template 会被 llama.cpp 解析错 |
+| 提示词 | **1.8B**：手工拼 `<｜hy_begin▁of▁sentence｜><｜hy_User｜>…<｜hy_Assistant｜>`（它的 Jinja 模板会被 llama.cpp 解析错）。**7B**：模板是 `<|startoftext|>…<|extra_0|>`，交给 `LLamaTemplate` 渲染，指令放 **system** 位 |
+| 指令长度 | 只保留「专有名词保持原文」；再加「只使用中文」会被 1.8B 当成正文，在译文结尾复述一遍（实测 3/3） |
 | 术语表 | 混元必须放在 `<hy_User>` **之前**（system 位），放进正文会被复述成输出的一部分 |
 | 采样 | 模型卡推荐：`temperature=0.7 / top_k=20 / top_p=0.6 / repeat_penalty=1.05` |
 | 分块 | 1200 字一块（上下文 4096），优先在标点处断开，最多 20 块 |
@@ -106,8 +107,11 @@ new LocalModelInfo(
 - `LocalModelManagerTests`：清单、路径、未知模型、无下载源、删除、镜像优先级；不联网
 - 真机验证记录（2026-11-20，1.8B Q4_K_M）：ModelScope 下载 1.13GB 用 98 秒；单句翻译 2.2 秒（含加载）；1750 字两段共 26 秒
 - 推理无法在 CI 跑（需要模型文件），插件测试只覆盖路由与提示词，不覆盖生成质量
-- **7B 未实测**：需要 4.6GB 模型 + 约 6GB 空余内存。本机当时只剩 7.8GB 可用内存，
-  加载会触发换页，所以没有硬验；代码路径与 1.8B 完全一致，只差模型文件和内存要求
+- **7B 已实测**（2026-11-21，Q4_K_M 4.3GB）：同一段 135 字英文，1.8B 3.5s、7B 12.3s；
+  译文更通顺，Sparrow 等专有名词保留正常。机器 31.7GB 内存、9.9GB 可用时跑通。
+- **7B 的两个坑**：① 模板与 1.8B 不同（`<|startoftext|>` / `<|extra_0|>`），必须走 `LLamaTemplate`；
+  ② 指令要和正文分开（system / user），否则会把指令当正文复述；③ 加载权重用的 `ModelParams`
+  会被 `LoadFromFile` 改掉，执行器要另建一份参数。
 
 ## 八、谁在用
 

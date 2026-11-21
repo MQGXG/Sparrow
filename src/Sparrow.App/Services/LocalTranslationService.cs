@@ -95,8 +95,10 @@ internal sealed class LocalTranslationService : ILocalTranslation
 
             using (weights)
             {
-                // 提示词由本类用模型自带的 chat template 渲染，执行器不要再套一次
-                var executor = new StatelessExecutor(weights, parameters, NullLogger.Instance)
+                // 提示词由本类用模型自带的 chat template 渲染，执行器不要再套一次。
+                // 注意：加载时用的 ModelParams 会被 LoadFromFile 改掉，执行器必须另建一份，
+                // 否则 7B 会把指令当成待译文本复述出来（1.8B 碰巧不受影响）。
+                var executor = new StatelessExecutor(weights, CreateParameters(path), NullLogger.Instance)
                 {
                     ApplyTemplate = false
                 };
@@ -189,20 +191,20 @@ internal sealed class LocalTranslationService : ILocalTranslation
     {
         var user = BuildInstruction(request.TargetLanguage, request.Style, request.KeepFormatting) + text;
 
-        if (IsHunyuan(weights))
-        {
-            // 术语表放在 <hy_User> 之前（模型的 system 位）。
-            // 实测放进正文会被当成待译文本复述一遍，输出开头多出「X → Y」。
+        // 混元 1.8B 的模板用全角竖线（<｜hy_User｜>），llama.cpp 解析会错位：
+        // 手工拼，并把术语表放到 <hy_User> 之前（system 位）。
+        if (IsLegacyHunyuanTemplate(weights))
             return HunyuanBegin + glossary + HunyuanUser + user + HunyuanAssistant;
-        }
 
-        if (glossary.Length > 0)
-            user = glossary + user;
-
+        // 7B 用 <|startoftext|>…<|extra_0|>：指令走 system 位（<|extra_4|>），正文走 user。
+        // 实测指令和正文混在一条 user 消息里时，7B 会把指令当成待译文本复述一遍。
         try
         {
             var template = new LLamaTemplate(weights) { AddAssistant = true };
-            template.Add("user", user);
+            template.Add(
+                "system",
+                BuildInstruction(request.TargetLanguage, request.Style, request.KeepFormatting) + glossary);
+            template.Add("user", text);
 
             var rendered = Encoding.UTF8.GetString(template.Apply());
             if (!string.IsNullOrWhiteSpace(rendered))
@@ -216,10 +218,13 @@ internal sealed class LocalTranslationService : ILocalTranslation
         return user;
     }
 
-    /// <summary>架构取自 GGUF 元数据，换模型时不会误用混元的模板。</summary>
-    private static bool IsHunyuan(LLamaWeights weights) =>
-        weights.Metadata.TryGetValue("general.architecture", out var architecture)
-        && architecture.StartsWith("hunyuan", StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// 1.8B 的模板里是 <c>&lt;｜hy_User｜&gt;</c>（全角竖线），需要手工拼；
+    /// 7B 换成了 <c>&lt;|startoftext|&gt;</c> / <c>&lt;|extra_0|&gt;</c>，模板引擎能正确解析。
+    /// </summary>
+    private static bool IsLegacyHunyuanTemplate(LLamaWeights weights) =>
+        weights.Metadata.TryGetValue("tokenizer.chat_template", out var template)
+        && template.Contains("hy_User", StringComparison.Ordinal);
 
     /// <summary>
     /// 混元翻译官方的两种提示：目标含中文用中文指令，其余用英文指令。
@@ -231,17 +236,18 @@ internal sealed class LocalTranslationService : ILocalTranslation
 
         if (target == "中文")
         {
+            // 只保留「专有名词保持原文」这一句：
+            // 再加「只使用中文」会被 1.8B 当成正文，翻译完在结尾复述一遍（实测 3/3 复现）。
+            // 漏出来的英文连接词交给 TranslationCleanup 在输出侧清理。
             builder.Append("将以下文本翻译为中文，注意只需要输出翻译后的结果，不要额外解释。")
-                .Append("产品名、专有名词、代码和链接保持原文。")
-                .Append("除这些以外，译文只使用中文，不要混入英文单词：\n\n");
+                .Append("产品名、专有名词、代码和链接保持原文：\n\n");
         }
         else
         {
             builder.Append("Translate the following segment into ")
                 .Append(EnglishName(target))
                 .Append(", without additional explanation.")
-                .Append(" Keep product names, proper nouns, code and links unchanged.")
-                .Append(" Apart from those, use the target language only:\n\n");
+                .Append(" Keep product names, proper nouns, code and links unchanged:\n\n");
         }
 
         if (style != "自然")
