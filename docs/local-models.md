@@ -122,3 +122,7 @@ new LocalModelInfo(
 
 插件都不主动下载模型：`IsInstalled` 为假时直接返回提示，让用户去设置页点下载——
 避免执行一次翻译突然开始拉 1GB 文件。
+
+> 例外：OCR 的**表格结构模型**（SLANet，7.7 MB）不走这套下载链路，它和文字模型一样
+> 随 worker 分发在 `worker/models/table/`，属于插件的固定资产，不需要用户下载。
+> 表格识别怎么拼结构 + 文字见 `docs/ocr-engine-comparison.md`。

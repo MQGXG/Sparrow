@@ -43,14 +43,18 @@ public sealed class OcrImageToolTests
 
         public int Sessions { get; private set; }
 
+        public string? LastMode { get; private set; }
+
         public FakeSession Session => _session;
 
         public Task<IOcrWorkerSession> StartAsync(
             string workerPath,
             string language,
+            string mode,
             CancellationToken cancellationToken)
         {
             Sessions++;
+            LastMode = mode;
             return Task.FromResult<IOcrWorkerSession>(_session);
         }
     }
@@ -91,9 +95,15 @@ public sealed class OcrImageToolTests
 
         public string Reply { get; set; } = "<table><tr><td>A</td></tr></table>";
 
+        public Exception? Throw { get; set; }
+
         public Task<AiResponse> CompleteAsync(AiRequest request, CancellationToken cancellationToken)
         {
             LastRequest = request;
+
+            if (Throw is not null)
+                throw Throw;
+
             return Task.FromResult(new AiResponse(Reply));
         }
     }
@@ -349,12 +359,68 @@ public sealed class OcrImageToolTests
     }
 
     [Fact]
-    public async Task 表格模式_没有视觉模型_提示去配置()
+    public async Task 表格模式_在线失败回落本地表格模型()
     {
         var root = CreateWorkerDirectory();
         try
         {
-            var result = await new OcrImageTool(new FakeRunner([Result("ignored")])).ExecuteAsync(
+            var ai = new FakeAi { Throw = new AiException(AiErrorKind.ProviderError, "网关超时") };
+            var runner = new FakeRunner(["""{"html":"<table><tr><td>本地</td></tr></table>"}"""]);
+
+            var result = await new OcrImageTool(runner).ExecuteAsync(
+                new ToolContext
+                {
+                    Input = new ImageSetInput([Image("table.png")]),
+                    Host = CreateHost(root, ai),
+                    Parameters = new Dictionary<string, string> { ["output"] = "table-html" }
+                },
+                CancellationToken.None);
+
+            result.Success.ShouldBeTrue();
+            result.Payload.ShouldBeOfType<OcrResultPayload>().Text.ShouldContain("本地");
+            runner.LastMode.ShouldBe("table");
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task 表格模式_本地HTML转Markdown()
+    {
+        var root = CreateWorkerDirectory();
+        try
+        {
+            var runner = new FakeRunner(["""{"html":"<table><tr><th>A</th></tr><tr><td>1</td></tr></table>"}"""]);
+
+            var result = await new OcrImageTool(runner).ExecuteAsync(
+                new ToolContext
+                {
+                    Input = new ImageSetInput([Image("table.png")]),
+                    Host = CreateHost(root),
+                    Parameters = new Dictionary<string, string> { ["output"] = "table-md" }
+                },
+                CancellationToken.None);
+
+            result.Success.ShouldBeTrue();
+            result.Payload.ShouldBeOfType<OcrResultPayload>().Text.ShouldBe("| A |\n| --- |\n| 1 |");
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task 表格模式_本地没有识别出表格时给出失败()
+    {
+        var root = CreateWorkerDirectory();
+        try
+        {
+            var runner = new FakeRunner(["""{"error":"没有识别出表格"}"""]);
+
+            var result = await new OcrImageTool(runner).ExecuteAsync(
                 new ToolContext
                 {
                     Input = new ImageSetInput([Image("table.png")]),
@@ -364,15 +430,14 @@ public sealed class OcrImageToolTests
                 CancellationToken.None);
 
             result.Success.ShouldBeFalse();
-            result.Error!.Kind.ShouldBe(ToolErrorKind.PlatformUnsupported);
-            result.Error.Message.ShouldContain("视觉模型");
+            result.Error!.Kind.ShouldBe(ToolErrorKind.Execution);
+            result.Error.Message.ShouldContain("没有识别出表格");
         }
         finally
         {
             try { Directory.Delete(root, recursive: true); } catch { }
         }
     }
-
     [Fact]
     public async Task 选了翻译但模型不可用_保留原文并说明未翻译()
     {

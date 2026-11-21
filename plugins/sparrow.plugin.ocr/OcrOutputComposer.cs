@@ -63,4 +63,26 @@ public static class OcrOutputComposer
             return null;
         }
     }
+
+    /// <summary>表格帧：<c>{"html":"..."}</c>。不是表格帧返回 null。</summary>
+    public static string? TryReadTable(string output)
+    {
+        var trimmed = output.Trim();
+        if (!trimmed.StartsWith('{'))
+            return null;
+
+        try
+        {
+            using var document = JsonDocument.Parse(trimmed);
+            if (!document.RootElement.TryGetProperty("html", out var html))
+                return null;
+
+            var text = html.GetString();
+            return string.IsNullOrWhiteSpace(text) ? null : text;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 }

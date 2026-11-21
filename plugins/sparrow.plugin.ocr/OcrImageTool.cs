@@ -63,12 +63,13 @@ public sealed class OcrImageTool : ITool
         var translateTo = context.GetParameter(OcrParameters.TranslateKey, OcrParameters.TranslateNone);
         var output = context.GetParameter(OcrParameters.OutputKey, OcrParameters.OutputText);
 
-        // 表格不走本地 OCR：交给支持图片的视觉模型出 HTML / Markdown
+        // 表格：在线视觉模型出 HTML；失败或未配置时回落本地 SLANet
         if (output is OcrParameters.OutputTableHtml or OcrParameters.OutputTableMarkdown)
         {
             return await RecognizeTableAsync(
                 context.Host,
                 set,
+                language,
                 markdown: output == OcrParameters.OutputTableMarkdown,
                 cancellationToken);
         }
@@ -84,7 +85,7 @@ public sealed class OcrImageTool : ITool
 
         try
         {
-            await using var session = await _runner.StartAsync(workerPath, language, cancellationToken);
+            await using var session = await _runner.StartAsync(workerPath, language, "text", cancellationToken);
 
             for (var index = 0; index < set.Images.Count; index++)
             {
@@ -320,21 +321,38 @@ public sealed class OcrImageTool : ITool
     }
 
     /// <summary>
-    /// 表格识别：把图片交给视觉模型，直接产出 HTML / Markdown 表格。
-    /// 本地 OCR 只做文字检测，不理解表格结构，所以这条路必须配视觉模型。
+    /// 表格识别：在线视觉模型优先（HTML），失败或未配置时回落本地 SLANet。
+    /// 两条路都只产出 HTML，Markdown 在本地转换。
     /// </summary>
-    private static async Task<ToolResult> RecognizeTableAsync(
+    private async Task<ToolResult> RecognizeTableAsync(
+        IToolHost host,
+        ImageSetInput set,
+        string language,
+        bool markdown,
+        CancellationToken cancellationToken)
+    {
+        // 在线优先；在线失败（超时、网络、额度）再回落本地表格模型
+        if (host.Ai.IsAvailable)
+        {
+            var online = await RecognizeTableWithAiAsync(host, set, markdown, cancellationToken);
+            if (online.Success)
+                return online;
+
+            if (online.Error?.Kind == ToolErrorKind.Cancelled)
+                return online;
+
+            host.Logger.LogWarning("表格识别：在线模型失败，改用本地表格模型（{Error}）", online.Error?.Message);
+        }
+
+        return await RecognizeTableLocallyAsync(host, set, language, markdown, cancellationToken);
+    }
+
+    private static async Task<ToolResult> RecognizeTableWithAiAsync(
         IToolHost host,
         ImageSetInput set,
         bool markdown,
         CancellationToken cancellationToken)
     {
-        if (!host.Ai.IsAvailable)
-        {
-            return ToolResult.Unsupported(
-                "表格识别需要支持图片的视觉模型，请先在「设置 › 模型」配置（如 qwen2.5vl）");
-        }
-
         // 统一要 HTML：实测模型不遵守「输出 Markdown」，干脆本地转，转换结果也确定。
         const string system =
             "把图片里的表格转成 HTML 表格（<table>…</table>），只输出表格本身，不要解释，不要加代码块围栏。"
@@ -386,6 +404,56 @@ public sealed class OcrImageTool : ITool
         }
 
         return ToolResult.Ok(new OcrResultPayload(string.Join("\n\n", parts), []));
+    }
+
+    /// <summary>本地表格识别：SLANet 模型随 worker 分发，离线可用。</summary>
+    private async Task<ToolResult> RecognizeTableLocallyAsync(
+        IToolHost host,
+        ImageSetInput set,
+        string language,
+        bool markdown,
+        CancellationToken cancellationToken)
+    {
+        var workerPath = OcrParameters.WorkerPath(host);
+
+        if (!File.Exists(workerPath))
+            return ToolResult.Failed($"OCR worker 不存在：{workerPath}");
+
+        try
+        {
+            // 结构模型不分语言；语言只影响回填单元格文字用的文字模型
+            await using var session = await _runner.StartAsync(
+                workerPath, language, "table", cancellationToken);
+
+            var parts = new List<string>(set.Images.Count);
+
+            foreach (var image in set.Images)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var raw = await session.RecognizeAsync(image.Data, cancellationToken);
+
+                var error = OcrOutputComposer.TryReadError(raw);
+                if (error is not null)
+                    return ToolResult.Failed($"表格识别失败：{error}");
+
+                var html = OcrOutputComposer.TryReadTable(raw);
+                if (html is null)
+                    return ToolResult.Failed("表格识别返回了无法解析的结果");
+
+                parts.Add(markdown ? HtmlTable.ToMarkdown(html) ?? html : html);
+            }
+
+            return ToolResult.Ok(new OcrResultPayload(string.Join("\n\n", parts), []));
+        }
+        catch (OcrWorkerException ex)
+        {
+            return ToolResult.Failed($"表格识别失败：{ex.Message}");
+        }
+        catch (OperationCanceledException)
+        {
+            return ToolResult.Cancelled();
+        }
     }
 
     /// <summary>模型偶尔会加 ```html / ``` 围栏，去掉再返回。</summary>

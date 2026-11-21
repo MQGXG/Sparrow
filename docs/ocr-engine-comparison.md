@@ -70,8 +70,20 @@ PaddleOCR 的本地链路只做「检测 + 识别」，不理解表格结构，�
 | 路线 | 做法 | 状态 |
 |---|---|---|
 | A. AI 视觉 | OCR 的「识别类型」选「表格 · HTML / Markdown」，把裁图发给支持图片的模型，提示词要求只输出表格 | ✅ 已实现 |
-| B. 本地表格模型 | `Sdcb.PaddleOCR 3.3.1` 自带 `PaddleOcrTableRecognizer` + `TableRecognitionModel.FromDirectory`，随 worker 内置 SLANet（约 10MB） | 未做 |
+| B. 本地表格模型 | worker 内置 SLANet（`models/table`，7.7MB）+ 文字 OCR 回填，离线可用 | ✅ 已实现 |
 
 A 的限制是**必须有视觉模型**（默认 qwen2.5vl 可以，离线翻译模型不行）；B 能把离线补齐，但 SLANet 对合并单元格和复杂版式不如大模型。
+
+路由规则：`host.Ai.IsAvailable` 时先走 A，在线失败（非取消）记一条 WARN 后回落 B；没有配置视觉模型时直接走 B。
+
+B 的实现要点（都是踩过的坑）：
+
+- **模型要用 Paddle 3 导出的 PIR 版本**（`inference.json` + `inference.pdiparams`）。PaddleOCR 官网的 `ch_ppstructure_mobile_v2.0_SLANet_infer.tar` 是 Paddle 2.0 时代的产物，在 Paddle 3 的 oneDNN 下跑 `fused_conv2d` 会直接崩（`OneDnnContext does not have the input Filter`），而 `PaddleConfig` 不允许在创建后再关掉 oneDNN。PaddleX 的 `SLANet_plus_infer.tar`（`paddle3.0.0` 目录）可以直接跑，标签表仍然是同一份 48 项 `table_structure_dict_ch.txt`。
+- **输入要先补成正方形**：`Sdcb.PaddleOCR` 的后处理用「归一化坐标 × 原图宽高」还原框，只有正方形输入才成立；非正方形图纵向会被压扁（900×420 的图，格子 y 只占原来的 0.45），文字就回填不进去。worker 里 `PadToSquare` 补黑边后再识别，坐标仍与原图一一对应。
+- **SLANet 只给结构，文字要回填**：它输出的是 `<tr>/<td>` 片段（每个 `<td>` 一把框），格子里没有文字。worker 用文字 OCR 再跑一遍，按「文字框中心落在哪个格子」分配；中心出界时退回重叠面积。合成逻辑在插件工程的 `TableHtmlBuilder`（纯函数、有单测），worker 用 `Compile Include` 链接同一份源码，避免两边实现漂移。
+- **`<td>` 有三种 token 形态**：`<td></td>`（整格一个 token）、`<td>`（后跟 `</td>`）、`<td` + 属性 + `>`（合并单元格）。文字要分别插到内容位置，否则 colspan 的格子会串位。
+- 输出统一是完整 `<table>`（Sdcb 不给外层），Markdown 仍由本地 `HtmlTable.ToMarkdown` 转换。
+
+实测（900×420 订单表，含表头 4 行 × 5 列）：本地识别 4.3s（含 SLANet + 文字模型首次加载），HTML 与 Markdown 的单元格内容、货币符号全部正确。
 
 A 的输出是纯文本（HTML 或 Markdown），走 `OcrResultPayload`；截图识别时因为没有行框会回退到命令面板展示并复制。

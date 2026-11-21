@@ -11,9 +11,11 @@ namespace Sparrow.Plugin.Ocr;
 /// </summary>
 public interface IOcrWorkerRunner
 {
+    /// <param name="mode">worker 模式：<c>text</c> 文字识别 / <c>table</c> 表格结构。</param>
     Task<IOcrWorkerSession> StartAsync(
         string workerPath,
         string language,
+        string mode,
         CancellationToken cancellationToken);
 }
 
@@ -36,9 +38,9 @@ public sealed class OcrWorkerException : Exception
 /// 真实的子进程实现。
 ///
 /// 协议（宿主与 worker 的唯一契约）：
-///   args   = --language &lt;code&gt;（可选，默认 ch）
+///   args   = --language &lt;code&gt;（可选，默认 ch）+ --mode text|table（可选，默认 text）
 ///   stdin  = 重复的 [4 字节小端长度][图片字节]
-///   stdout = 每帧一行 JSON：{ text, regions[...] } 或 { error }
+///   stdout = 每帧一行 JSON：{ text, regions[...] } / { html } 或 { error }
 ///   关闭 stdin 后进程退出；exit 0 = 正常
 /// </summary>
 public sealed class ProcessOcrWorkerRunner : IOcrWorkerRunner
@@ -46,6 +48,7 @@ public sealed class ProcessOcrWorkerRunner : IOcrWorkerRunner
     public Task<IOcrWorkerSession> StartAsync(
         string workerPath,
         string language,
+        string mode,
         CancellationToken cancellationToken)
     {
         var startInfo = new ProcessStartInfo
@@ -60,6 +63,8 @@ public sealed class ProcessOcrWorkerRunner : IOcrWorkerRunner
 
         startInfo.ArgumentList.Add("--language");
         startInfo.ArgumentList.Add(language);
+        startInfo.ArgumentList.Add("--mode");
+        startInfo.ArgumentList.Add(mode);
 
         var process = new Process { StartInfo = startInfo };
 
@@ -101,16 +106,24 @@ internal sealed class ProcessOcrWorkerSession : IOcrWorkerSession
             await _process.StandardInput.BaseStream.WriteAsync(image, timeout.Token);
             await _process.StandardInput.BaseStream.FlushAsync(timeout.Token);
 
-            // worker 每帧输出一行；JSON 是紧凑格式，不含换行
-            var line = await _process.StandardOutput.ReadLineAsync(timeout.Token);
-            if (line is null)
+            // worker 每帧输出一行；JSON 是紧凑格式，不含换行。
+            // 但 Paddle 原生层出错时会把 C++ 回溯直接写到 stdout（几十行），
+            // 那不是协议的一部分，跳过直到拿到 JSON 帧或进程退出。
+            for (var attempt = 0; attempt < 200; attempt++)
             {
-                var error = _errorTask.IsCompletedSuccessfully ? _errorTask.Result : string.Empty;
-                throw new OcrWorkerException(
-                    $"worker 提前退出（退出码 {SafeExitCode()}）：{error.Trim()}");
+                var line = await _process.StandardOutput.ReadLineAsync(timeout.Token);
+                if (line is null)
+                {
+                    var error = _errorTask.IsCompletedSuccessfully ? _errorTask.Result : string.Empty;
+                    throw new OcrWorkerException(
+                        $"worker 提前退出（退出码 {SafeExitCode()}）：{error.Trim()}");
+                }
+
+                if (line.TrimStart().StartsWith('{'))
+                    return line;
             }
 
-            return line;
+            throw new OcrWorkerException("worker 输出里没有可解析的 JSON");
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

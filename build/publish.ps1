@@ -59,6 +59,22 @@ foreach ($plugin in Get-ChildItem $pluginBin -Directory) {
     Write-Host "  $($plugin.Name)"
 }
 
+# OCR worker 必须单独「自包含」发布：
+# 常规构建产出的是框架依赖版本，而宿主是自包含发布、目标机没有 .NET 运行时，
+# 直接复制过去在干净机器上会报 Could not resolve CoreCLR path。
+if (-not $SkipOcr) {
+    Write-Host "  发布 OCR worker（自包含）…"
+    $workerProject = Join-Path $root 'plugins/sparrow.plugin.ocr/worker/Sparrow.Ocr.Worker.csproj'
+    $workerDir = Join-Path $targetPlugins 'sparrow.plugin.ocr/worker'
+
+    Remove-Item $workerDir -Recurse -Force -ErrorAction SilentlyContinue
+    dotnet publish $workerProject `
+        -c $Configuration -r $Runtime --self-contained true `
+        -p:Version=$Version -p:DebugType=None -p:DebugSymbols=false `
+        -o $workerDir -v quiet
+    if ($LASTEXITCODE -ne 0) { throw 'OCR worker 发布失败' }
+}
+
 # 第三方包和插件都会带调试符号（libSkiaSharp.pdb 就有 80MB），发布产物不需要
 $pdbs = Get-ChildItem $publishDir -Recurse -File -Filter *.pdb
 if ($pdbs) {

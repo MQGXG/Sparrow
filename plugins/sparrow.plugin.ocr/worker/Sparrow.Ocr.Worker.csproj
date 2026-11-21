@@ -24,4 +24,14 @@
     <PackageReference Include="OpenCvSharp4.runtime.win" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- 表格结构模型（SLANet，约 10MB）：随 worker 分发，运行时取 AppContext.BaseDirectory/models/table -->
+    <None Include="models\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 与插件共用同一份表格合成逻辑（纯函数，不依赖 Paddle 类型），避免两边实现漂移 -->
+    <Compile Include="..\TableHtmlBuilder.cs" Link="TableHtmlBuilder.cs" />
+  </ItemGroup>
+
 </Project>

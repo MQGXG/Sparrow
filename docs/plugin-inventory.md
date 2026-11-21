@@ -19,12 +19,12 @@
 | `sparrow.plugin.images-convert` | `sparrow.images.convert` | 图片格式转换 | Image → Image | 无 | 108 |
 | `sparrow.plugin.images-resize` | `sparrow.images.resize` | 图片缩放 | Image → Image | 无 | 138 |
 | `sparrow.plugin.files-hash` | `sparrow.files.hash` | 文件哈希 | Files → Table | 无 | 201 |
-| `sparrow.plugin.ocr` | `sparrow.ocr.image` | 图片文字识别 | Images → Text | `Ocr`（独立 worker）+ `Ai`/`LocalTranslation` | 1223 |
+| `sparrow.plugin.ocr` | `sparrow.ocr.image` | 图片文字识别 | Images → Text | `Ocr`（独立 worker，含 SLANet 表格模型）+ `Ai`/`LocalTranslation` | 1751 |
 | `sparrow.plugin.translate` | `sparrow.text.translate` | 翻译 | Text → Text | `Ai` + `LocalTranslation` | 443 |
 | `sparrow.plugin.svg-prompt` | `sparrow.svg.prompt` | 提示词生成 SVG | Text → Svg | `Ai` + `SvgRender` | 132 |
 | `sparrow.plugin.window-pin` | `sparrow.window.pin` | 窗口置顶 | None → Text | 无（用通用 `IWindowOverlay`） | 158 |
 
-合计约 2330 行（不含已删除的剪贴板历史插件）。
+合计约 3168 行（不含已删除的剪贴板历史插件）。
 
 ## 二、内置功能（不是工具）
 

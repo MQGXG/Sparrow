@@ -156,6 +156,7 @@ dotnet list package --include-transitive | findstr SkiaSharp
 [ ] 识别完 60s 后子进程退出（任务管理器确认）
 [ ] 主进程内存回落到 150MB 以内
 [ ] 全屏截图（4K）不崩
+[ ] 「识别类型」选「表格 · Markdown」→ 本地 SLANet 能出表格（没配视觉模型也不报「需要视觉模型」）
 ```
 
 ### 2.5 边界

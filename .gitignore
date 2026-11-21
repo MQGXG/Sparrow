@@ -99,6 +99,10 @@ appsettings.*.local.json
 *.pdiparams
 *.pdopt
 
+# 例外：表格结构模型（SLANet，7.7 MB）没有 NuGet 包可依赖，
+# 随 worker 分发才能离线可用；体积可接受，直接进仓库（见 docs/ocr-engine-comparison.md）
+!plugins/sparrow.plugin.ocr/worker/models/table/inference.pdiparams
+
 # ===== 操作系统 =====
 Thumbs.db
 Desktop.ini
