@@ -19,6 +19,17 @@
     <StreamGeometry x:Key="ToolMosaic">M4 4h16v16H4z M4 9.3h16 M4 14.7h16 M9.3 4v16 M14.7 4v16</StreamGeometry>
     <StreamGeometry x:Key="ToolText">M6 6h12 M12 6v13 M9.5 19h5</StreamGeometry>
     <StreamGeometry x:Key="ToolNumber">M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z M10 10l1.5-1.2V16</StreamGeometry>
+    <!-- 选择/退出标注：指针箭头 -->
+    <StreamGeometry x:Key="ToolCursor">M6.5 4.5 11.9 18.2 13.6 12.9 18.9 11.2z</StreamGeometry>
+
+    <!-- 动作图标（24×24 线稿，与工具图标同一套笔画语言） -->
+    <StreamGeometry x:Key="IconScan">M4 8.5V6A2 2 0 0 1 6 4h2.5 M15.5 4H18a2 2 0 0 1 2 2v2.5 M20 15.5V18a2 2 0 0 1-2 2h-2.5 M8.5 20H6a2 2 0 0 1-2-2v-2.5 M8 9.5h8 M8 12.5h5.5</StreamGeometry>
+    <StreamGeometry x:Key="IconTranslate">M4.5 7h8 M8.5 5v2 M11 7c-.5 3.2-2.7 5.8-5.6 6.9 M6 8.3c.7 2.2 2.5 4 4.8 4.8 M12.8 19.5l3.5-9.3 3.5 9.3 M14.2 16.4h4.4</StreamGeometry>
+    <StreamGeometry x:Key="IconSave">M12 4v10.3 M7.9 10.6 12 14.7l4.1-4.1 M5 19.5h14</StreamGeometry>
+    <StreamGeometry x:Key="IconScrollCapture">M6.5 4h11v16h-11z M12 7.5v8.6 M9.3 13.4 12 16.1l2.7-2.7</StreamGeometry>
+    <StreamGeometry x:Key="IconOcrFrame">M4 8.5V6.3A2.3 2.3 0 0 1 6.3 4H8.5 M15.5 4h2.2A2.3 2.3 0 0 1 20 6.3v2.2 M20 15.5v2.2a2.3 2.3 0 0 1-2.3 2.3h-2.2 M8.5 20H6.3A2.3 2.3 0 0 1 4 17.7v-2.2</StreamGeometry>
+    <StreamGeometry x:Key="IconMosaicBlur">M4.5 8.5c1.9-1.7 3.9-1.7 5.8 0s3.9 1.7 5.8 0 M4.5 12.5c1.9-1.7 3.9-1.7 5.8 0s3.9 1.7 5.8 0 M4.5 16.5c1.9-1.7 3.9-1.7 5.8 0s3.9 1.7 5.8 0</StreamGeometry>
+    <StreamGeometry x:Key="IconCornerRadius">M5 20V10.5A5.5 5.5 0 0 1 10.5 5H20</StreamGeometry>
   </Window.Resources>
 
   <Window.Styles>
@@ -57,6 +68,10 @@
       <Setter Property="MinWidth" Value="0" />
       <Setter Property="CornerRadius" Value="6" />
     </Style>
+    <Style Selector="Button.tool.small">
+      <Setter Property="Width" Value="26" />
+      <Setter Property="Height" Value="26" />
+    </Style>
     <Style Selector="Button.tool Path">
       <Setter Property="Stroke" Value="{DynamicResource TextSecondaryBrush}" />
       <Setter Property="StrokeThickness" Value="1.6" />
@@ -67,6 +82,28 @@
     </Style>
     <Style Selector="Button.tool.selected Path">
       <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
+    <!-- 线宽按钮：三个大小不一的实心圆点，比数字更直观 -->
+    <Style Selector="Button.tool Ellipse">
+      <Setter Property="Fill" Value="{DynamicResource TextSecondaryBrush}" />
+    </Style>
+    <Style Selector="Button.tool.selected Ellipse">
+      <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
+    <!-- 主操作（识别）：整条工具条上唯一的琥珀实心按钮 -->
+    <Style Selector="Button.tool.primary">
+      <Setter Property="Background" Value="{DynamicResource AccentGradientBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="Button.tool.primary Path">
+      <Setter Property="Stroke" Value="{DynamicResource AccentOnBrush}" />
+      <Setter Property="StrokeThickness" Value="1.8" />
+    </Style>
+    <Style Selector="Button.tool.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentGradientHoverBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentHoverBrush}" />
     </Style>
 
     <!-- 分组分隔线：1×18，两侧各 6 -->
@@ -86,9 +123,14 @@
            IsVisible="False"
            IsHitTestVisible="False"
            Stretch="Fill" />
-    <Rectangle x:Name="DimLayer"
-               Fill="#80000000"
-               IsHitTestVisible="False" />
+    <!-- 遮罩：只压暗选区之外（Exclude 挖洞），选区保持原图亮度 -->
+    <Path x:Name="DimLayer" Fill="#80000000" IsHitTestVisible="False" />
+
+    <!-- 十字辅助线：还没框选时跟随光标，帮助对齐 -->
+    <Canvas x:Name="CrosshairLayer" IsVisible="False" IsHitTestVisible="False">
+      <Line x:Name="CrosshairV" Stroke="#73E5A44C" StrokeThickness="1" />
+      <Line x:Name="CrosshairH" Stroke="#73E5A44C" StrokeThickness="1" />
+    </Canvas>
 
     <!-- 悬停候选：鼠标停在哪个窗口就虚线框住哪个 -->
     <Rectangle x:Name="CandidateBox"
@@ -112,6 +154,12 @@
     </Border>
 
     <!-- 选区只画边框：填充透明，中间保持原图，不盖一层颜色 -->
+    <Rectangle x:Name="SelectionHalo"
+               IsVisible="False"
+               IsHitTestVisible="False"
+               Fill="Transparent"
+               Stroke="#66000000"
+               StrokeThickness="1" />
     <Rectangle x:Name="Selection"
                IsVisible="False"
                Fill="Transparent"
@@ -147,6 +195,43 @@
     <Canvas x:Name="HandleLayer"
             IsVisible="False"
             IsHitTestVisible="False" />
+
+    <!-- 放大镜：拖动/拉伸时显示光标周围的像素，方便对齐 -->
+    <Border x:Name="Magnifier"
+            IsVisible="False"
+            IsHitTestVisible="False"
+            Width="132"
+            Height="132"
+            CornerRadius="66"
+            ClipToBounds="True"
+            Background="#E60E1114"
+            BorderBrush="#66FFFFFF"
+            BorderThickness="1"
+            BoxShadow="0 10 24 0 #99000000">
+      <Panel ClipToBounds="True">
+        <Canvas ClipToBounds="True">
+          <Image x:Name="MagnifierImage"
+                 Stretch="Fill"
+                 RenderTransformOrigin="0,0">
+            <Image.RenderTransform>
+              <ScaleTransform />
+            </Image.RenderTransform>
+          </Image>
+        </Canvas>
+        <Rectangle Width="1"
+                   HorizontalAlignment="Center"
+                   Fill="#B3E5A44C" />
+        <Rectangle Height="1"
+                   VerticalAlignment="Center"
+                   Fill="#B3E5A44C" />
+        <Ellipse Width="7"
+                 Height="7"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Center"
+                 Stroke="#FFFFFFFF"
+                 StrokeThickness="1" />
+      </Panel>
+    </Border>
 
     <!-- 选区尺寸：显示物理像素，和最终截图尺寸一致 -->
     <Border x:Name="SizeBadge"
@@ -212,19 +297,22 @@
       </Grid>
     </Border>
 
-    <Border Canvas.Left="0"
-            Canvas.Top="0"
-            HorizontalAlignment="Center"
-            VerticalAlignment="Top"
+    <Border x:Name="HintBar"
+            Canvas.Left="0"
+            Canvas.Top="24"
             Background="{StaticResource OverlayBrush}"
             BorderBrush="{StaticResource LineStrongBrush}"
             BorderThickness="1"
-            CornerRadius="8"
-            Padding="12,8"
-            Margin="0,24,0,0">
-      <TextBlock Text="拖拽选择区域 · 松手后可移动 / 拉伸 · Enter 识别"
-                 FontSize="12"
-                 Foreground="{StaticResource TextSecondaryBrush}" />
+            CornerRadius="999"
+            Padding="14,6">
+      <StackPanel Orientation="Horizontal">
+        <TextBlock FontSize="11.5"
+                   Text="拖拽框选"
+                   Foreground="{StaticResource TextPrimaryBrush}" />
+        <TextBlock FontSize="11.5"
+                   Text=" · 单击选窗口 · Esc 取消"
+                   Foreground="{StaticResource TextSecondaryBrush}" />
+      </StackPanel>
     </Border>
 
     <Border x:Name="ActionBar"
@@ -236,13 +324,13 @@
             CornerRadius="10"
             Padding="8"
             BoxShadow="0 12 32 0 #99000000">
-      <StackPanel Spacing="6">
-        <!-- 工具行：选一个工具后，鼠标在选区内拖动就是画，不再移动选区 -->
+      <StackPanel Spacing="4">
+        <!-- 工具行：全图标。选一个工具后，鼠标在选区内拖动就是画，不再移动选区 -->
         <StackPanel Orientation="Horizontal" Spacing="2">
           <Border x:Name="ToolbarDragHandle"
-                  Width="14"
+                  Width="12"
                   Height="28"
-                  Margin="0,2,4,2"
+                  Margin="0,2,2,2"
                   Background="Transparent"
                   Cursor="SizeAll"
                   ToolTip.Tip="拖动工具条"
@@ -250,9 +338,18 @@
             <Path Data="M5 7a1 1 0 1 0 .01 0 M5 12a1 1 0 1 0 .01 0 M5 17a1 1 0 1 0 .01 0 M10 7a1 1 0 1 0 .01 0 M10 12a1 1 0 1 0 .01 0 M10 17a1 1 0 1 0 .01 0"
                   Fill="{DynamicResource TextMutedBrush}"
                   Stretch="Uniform"
-                  Width="14"
-                  Height="20" />
+                  Width="12"
+                  Height="18" />
           </Border>
+
+          <!-- 指针：退出标注，回到移动/拉伸选区 -->
+          <Button Focusable="False" x:Name="SelectToolButton" Classes="tool"
+                  ToolTip.Tip="选择 / 移动选区（1）" Click="OnSelectToolClick">
+            <Path Data="{StaticResource ToolCursor}" />
+          </Button>
+
+          <Border Classes="tool-separator" />
+
           <Button Focusable="False" x:Name="RectToolButton" Classes="tool"
                   ToolTip.Tip="矩形（2）" Click="OnRectToolClick">
             <Path Data="{StaticResource ToolRect}" />
@@ -294,10 +391,8 @@
           </Button>
         </StackPanel>
 
-        <!-- 样式行：只在选中标注工具时出现（LumaShot 的属性卡思路） -->
-        <StackPanel x:Name="StyleRow" Orientation="Horizontal" Spacing="6" IsVisible="False">
-          <TextBlock Text="颜色" FontSize="11" VerticalAlignment="Center"
-                     Foreground="{StaticResource TextMutedBrush}" />
+        <!-- 样式行：同样全图标，只在选中标注工具时出现 -->
+        <StackPanel x:Name="StyleRow" Orientation="Horizontal" Spacing="4" IsVisible="False">
           <Button Focusable="False" x:Name="ColorAmberButton" Classes="swatch" Tag="#E5A44C"
                   Background="#E5A44C" ToolTip.Tip="琥珀" Click="OnColorClick" />
           <Button Focusable="False" x:Name="ColorWhiteButton" Classes="swatch" Tag="#FFFFFF"
@@ -309,65 +404,93 @@
           <Button Focusable="False" x:Name="ColorBlueButton" Classes="swatch" Tag="#5FA8FF"
                   Background="#5FA8FF" ToolTip.Tip="蓝色" Click="OnColorClick" />
 
-          <TextBlock Text="粗细" FontSize="11" VerticalAlignment="Center" Margin="6,0,0,0"
-                     Foreground="{StaticResource TextMutedBrush}" />
-          <Button Focusable="False" x:Name="Width2Button" Classes="tool" Tag="2" Content="2"
-                  ToolTip.Tip="细" Click="OnWidthClick" />
-          <Button Focusable="False" x:Name="Width4Button" Classes="tool" Tag="4" Content="4"
-                  ToolTip.Tip="中" Click="OnWidthClick" />
-          <Button Focusable="False" x:Name="Width8Button" Classes="tool" Tag="8" Content="8"
-                  ToolTip.Tip="粗" Click="OnWidthClick" />
+          <Border x:Name="StyleSeparator1" Classes="tool-separator" />
 
-          <Button Focusable="False" x:Name="MosaicModeButton" Classes="tool" Content="马赛克·像素"
-                  ToolTip.Tip="切换像素 / 模糊" Click="OnMosaicModeClick" />
+          <!-- 线宽：三个圆点，直径对应笔画粗细 -->
+          <Button Focusable="False" x:Name="Width2Button" Classes="tool small" Tag="2"
+                  ToolTip.Tip="细线" Click="OnWidthClick">
+            <Ellipse Width="5" Height="5" />
+          </Button>
+          <Button Focusable="False" x:Name="Width4Button" Classes="tool small" Tag="4"
+                  ToolTip.Tip="中等线宽" Click="OnWidthClick">
+            <Ellipse Width="8" Height="8" />
+          </Button>
+          <Button Focusable="False" x:Name="Width8Button" Classes="tool small" Tag="8"
+                  ToolTip.Tip="粗线" Click="OnWidthClick">
+            <Ellipse Width="12" Height="12" />
+          </Button>
 
-          <Button Focusable="False" x:Name="CornerRadiusButton" Classes="tool" Content="圆角"
-                  ToolTip.Tip="导出时四角切圆角" Click="OnCornerRadiusClick" />
+          <Button Focusable="False" x:Name="MosaicModeButton" Classes="tool"
+                  ToolTip.Tip="马赛克：像素 / 模糊" Click="OnMosaicModeClick">
+            <Panel>
+              <Path x:Name="MosaicPixelIcon" Data="{StaticResource ToolMosaic}" IsVisible="False" />
+              <Path x:Name="MosaicBlurIcon" Data="{StaticResource IconMosaicBlur}" IsVisible="False" />
+            </Panel>
+          </Button>
 
-          <Button Focusable="False" x:Name="PresetButton" Classes="tool" Content="模板 ▾"
-                  ToolTip.Tip="保存 / 应用标注样式">
+          <Border x:Name="StyleSeparator2" Classes="tool-separator" />
+
+          <Button Focusable="False" x:Name="PresetButton" Classes="tool"
+                  ToolTip.Tip="标注样式模板">
+            <Path Data="{StaticResource IconStar}" />
             <Button.Flyout>
               <MenuFlyout Placement="TopEdgeAlignedRight" />
             </Button.Flyout>
           </Button>
         </StackPanel>
 
-        <StackPanel Orientation="Horizontal" Spacing="6">
+        <!-- 动作行：全图标，tooltip 带快捷键 -->
+        <StackPanel Orientation="Horizontal" Spacing="2">
         <TextBlock x:Name="OcrStatus"
                    IsVisible="False"
-                   MaxWidth="220"
-                   Margin="4,0"
+                   MaxWidth="180"
+                   Margin="6,0"
                    VerticalAlignment="Center"
                    FontSize="11"
                    TextTrimming="CharacterEllipsis"
                    Foreground="{StaticResource TextSecondaryBrush}" />
         <Button Focusable="False" x:Name="RecognizeButton"
-                Classes="accent"
-                Content="识别文字"
+                Classes="tool primary"
                 Click="OnRecognizeClick"
-                ToolTip.Tip="识别选区文字（Enter / R）" />
+                ToolTip.Tip="识别选区文字（Enter / R）">
+          <Path Data="{StaticResource IconScan}" />
+        </Button>
         <Button Focusable="False" x:Name="TranslateButton"
+                Classes="tool"
                 IsVisible="False"
-                Content="翻译 ▾"
-                ToolTip.Tip="识别并翻译；点一下选目标语言">
+                ToolTip.Tip="识别并翻译（点击选目标语言）">
+          <Path Data="{StaticResource IconTranslate}" />
           <Button.Flyout>
             <MenuFlyout Placement="TopEdgeAlignedRight" />
           </Button.Flyout>
         </Button>
         <Button Focusable="False" x:Name="CopyImageButton"
-                Content="复制图片" Click="OnCopyImageClick" ToolTip.Tip="复制选区图片（C）" />
+                Classes="tool" Click="OnCopyImageClick" ToolTip.Tip="复制选区图片（C）">
+          <Path Data="{StaticResource IconCopy}" />
+        </Button>
         <Button Focusable="False" x:Name="SaveButton"
-                Content="保存" Click="OnSaveClick" ToolTip.Tip="保存为 PNG（S）" />
+                Classes="tool" Click="OnSaveClick" ToolTip.Tip="保存为 PNG（S）">
+          <Path Data="{StaticResource IconSave}" />
+        </Button>
         <Button Focusable="False" x:Name="PinButton"
-                Content="固定" Click="OnPinClick" ToolTip.Tip="固定到屏幕，滚轮缩放（P）" />
+                Classes="tool" Click="OnPinClick" ToolTip.Tip="固定到屏幕，滚轮缩放（P）">
+          <Path Data="{StaticResource IconPin}" />
+        </Button>
         <Button Focusable="False" x:Name="ScrollButton"
-                Content="滚动" Click="OnScrollClick" ToolTip.Tip="进入滚动截图（G）" />
+                Classes="tool" Click="OnScrollClick" ToolTip.Tip="滚动截图（G）">
+          <Path Data="{StaticResource IconScrollCapture}" />
+        </Button>
+        <Button Focusable="False" x:Name="CornerRadiusButton" Classes="tool"
+                Click="OnCornerRadiusClick" ToolTip.Tip="导出时四角切圆角">
+          <Path Data="{StaticResource IconCornerRadius}" />
+        </Button>
 
         <!-- 窄窗口下把上面四个低频动作收进这里 -->
         <Button Focusable="False" x:Name="MoreButton"
+                Classes="tool"
                 IsVisible="False"
-                Content="更多 ▾"
-                ToolTip.Tip="窄窗口下收起的动作">
+                ToolTip.Tip="更多动作">
+          <Path Data="{StaticResource IconMore}" />
           <Button.Flyout>
             <MenuFlyout Placement="TopEdgeAlignedRight">
               <MenuItem Header="复制图片（C）" Click="OnCopyImageClick" />
@@ -378,17 +501,26 @@
           </Button.Flyout>
         </Button>
         <Button Focusable="False" x:Name="CopyAllButton"
+                Classes="tool"
                 IsVisible="False"
-                Content="复制全文"
                 Click="OnCopyAllClick"
-                ToolTip.Tip="复制全部识别文字（Ctrl+C）" />
+                ToolTip.Tip="复制全部识别文字（Ctrl+C）">
+          <Path Data="{StaticResource IconCopy}" />
+        </Button>
         <Button Focusable="False" x:Name="OcrBoxButton"
+                Classes="tool"
                 IsVisible="False"
-                Content="框 · 悬停"
                 Click="OnOcrBoxModeClick"
-                ToolTip.Tip="识别框显示方式：全部 / 悬停 / 关闭（B）" />
+                ToolTip.Tip="识别框：全部 / 悬停 / 关闭（B）">
+          <Path Data="{StaticResource IconOcrFrame}" />
+        </Button>
         <Border Classes="tool-separator" />
-        <Button Focusable="False" Classes="ghost" Content="取消" Click="OnCancelClick" ToolTip.Tip="取消截图（Esc）" />
+        <Button Focusable="False" x:Name="CancelButton"
+                Classes="tool"
+                Click="OnCancelClick"
+                ToolTip.Tip="取消截图（Esc）">
+          <Path Data="{StaticResource IconClose}" />
+        </Button>
         </StackPanel>
       </StackPanel>
     </Border>

@@ -62,7 +62,11 @@ public partial class CaptureWindow : Window
     private static readonly IBrush LineStroke = new SolidColorBrush(Color.Parse("#80E5A44C"));
     private static readonly IBrush LineHoverStroke = new SolidColorBrush(Color.Parse("#FFE5A44C"));
     private static readonly IBrush HandleFill = Brushes.White;
-    private static readonly IBrush HandleStroke = new SolidColorBrush(Color.Parse("#CCE5A44C"));
+    private static readonly IBrush HandleStroke = new SolidColorBrush(Color.Parse("#B3000000"));
+
+    // 放大镜：显示在光标附近的像素级预览
+    private const double MagnifierSize = 132;
+    private const double MagnifierZoom = 4;
 
     private static readonly Cursor CrossCursor = new(StandardCursorType.Cross);
     private static readonly Cursor ArrowCursor = new(StandardCursorType.Arrow);
@@ -95,6 +99,7 @@ public partial class CaptureWindow : Window
     private int _probeGeneration;
     private Point _lastPointerPoint;
     private Rect _selection;
+    private Rect _candidateDip;
     private Rect _selectionOrigin;
     private Point _dragOrigin;
     private Point _createStart;
@@ -187,6 +192,7 @@ public partial class CaptureWindow : Window
         OcrLayer.PointerMoved += OnOcrLayerPointerMoved;
         OcrLayer.PointerExited += OnOcrLayerPointerExited;
         UpdateStyleButtons();
+        UpdateToolButtons();
     }
 
     /// <summary>显示前是否先冻结整屏；测试/无桌面场景由调用方关掉。</summary>
@@ -213,13 +219,14 @@ public partial class CaptureWindow : Window
                      ResizeHandle.SE, ResizeHandle.S, ResizeHandle.SW, ResizeHandle.W
                  })
         {
+            // 白底 + 深色描边：亮背景和暗背景上都能看清
             var dot = new Ellipse
             {
-                Width = 10,
-                Height = 10,
+                Width = 9,
+                Height = 9,
                 Fill = HandleFill,
                 Stroke = HandleStroke,
-                StrokeThickness = 2,
+                StrokeThickness = 1.5,
                 IsVisible = false
             };
 
@@ -383,6 +390,11 @@ public partial class CaptureWindow : Window
         Position = _origin;
         Width = (right - left) / _scaling;
         Height = (bottom - top) / _scaling;
+
+        // Name=HintBar 是 Canvas 子项：居中要自己算，Alignment 在 Canvas 里不生效
+        HintBar.Measure(Size.Infinity);
+        Canvas.SetLeft(HintBar, Math.Max(8, (Width - HintBar.DesiredSize.Width) / 2));
+        UpdateDim();
     }
 
     /// <summary>
@@ -540,6 +552,8 @@ public partial class CaptureWindow : Window
         if (_draggingToolbar)
         {
             MoveToolbar(point);
+            Magnifier.IsVisible = false;
+            CrosshairLayer.IsVisible = false;
             e.Handled = true;
             return;
         }
@@ -549,6 +563,8 @@ public partial class CaptureWindow : Window
         {
             UpdatePendingAnnotation(point);
             RebuildNotePreview();
+            Magnifier.IsVisible = false;
+            CrosshairLayer.IsVisible = false;
             e.Handled = true;
             return;
         }
@@ -563,22 +579,28 @@ public partial class CaptureWindow : Window
             HideCandidate();
         }
 
+        UpdateCrosshair(point);
+
         switch (_mode)
         {
             case DragMode.Create:
                 ApplyCreate(point);
+                UpdateMagnifier(point);
                 e.Handled = true;
                 return;
             case DragMode.Move:
                 ApplyMove(point);
+                UpdateMagnifier(point);
                 e.Handled = true;
                 return;
             case DragMode.Resize:
                 ApplyResize(point);
+                UpdateMagnifier(point);
                 e.Handled = true;
                 return;
         }
 
+        Magnifier.IsVisible = false;
         UpdateCursor(point);
     }
 
@@ -607,6 +629,7 @@ public partial class CaptureWindow : Window
 
         var mode = _mode;
         _mode = DragMode.None;
+        Magnifier.IsVisible = false;
 
         var candidateAtPress = _candidateAtPress;
         var uiCandidateAtPress = _uiCandidateAtPress;
@@ -665,7 +688,7 @@ public partial class CaptureWindow : Window
         HandleLayer.IsVisible = false;
         OcrStatus.IsVisible = false;
         CopyAllButton.IsVisible = false;
-        RecognizeButton.Content = "识别文字";
+        HintBar.IsVisible = false;
         HideResultCard();
         _notes.Clear();
         _pendingAnnotation = null;
@@ -766,6 +789,10 @@ public partial class CaptureWindow : Window
         CandidateBox.Height = height;
         CandidateBox.IsVisible = true;
 
+        // 候选窗口也挖开遮罩：悬停时整窗预览更接近参考工具的「智能选区」
+        _candidateDip = new Rect(x, y, width, height);
+        UpdateDim();
+
         var name = title.Length <= 32 ? title : title[..32] + "…";
 
         CandidateText.Text = kind is null
@@ -784,6 +811,8 @@ public partial class CaptureWindow : Window
         _uiCandidate = null;
         CandidateBox.IsVisible = false;
         CandidateBadge.IsVisible = false;
+        _candidateDip = default;
+        UpdateDim();
     }
 
     /// <summary>单击候选：控件优先，否则整个窗口。</summary>
@@ -975,19 +1004,173 @@ public partial class CaptureWindow : Window
 
     private void UpdateSelectionVisuals()
     {
-        Selection.IsVisible = _selection.Width > 0 && _selection.Height > 0;
+        var visible = _selection.Width > 0 && _selection.Height > 0;
+
+        Selection.IsVisible = visible;
+        SelectionHalo.IsVisible = visible;
+
         Canvas.SetLeft(Selection, _selection.X);
         Canvas.SetTop(Selection, _selection.Y);
         Selection.Width = _selection.Width;
         Selection.Height = _selection.Height;
 
+        // 外圈 1px 深色描边：亮背景上也能把选区边界和内容分开
+        Canvas.SetLeft(SelectionHalo, _selection.X - 1);
+        Canvas.SetTop(SelectionHalo, _selection.Y - 1);
+        SelectionHalo.Width = _selection.Width + 2;
+        SelectionHalo.Height = _selection.Height + 2;
+
         UpdateSizeBadge(_selection);
+        UpdateDim();
 
         if (_hasSelection)
         {
             UpdateHandles();
             PositionActionBar(_selection);
         }
+    }
+
+    /// <summary>
+    /// 遮罩只压暗选区之外：全屏矩形减去选区（或悬停候选）挖洞。
+    /// 选区保持原图亮度，这是选区和参考工具最直观的差别。
+    /// </summary>
+    private void UpdateDim()
+    {
+        var bounds = new Rect(0, 0, Math.Max(Width, 1), Math.Max(Height, 1));
+
+        Rect? hole = null;
+
+        if (_selection.Width > 0 && _selection.Height > 0)
+            hole = _selection;
+        else if (CandidateBox.IsVisible && _candidateDip.Width > 0 && _candidateDip.Height > 0)
+            hole = _candidateDip;
+
+        if (hole is not { Width: > 0, Height: > 0 })
+        {
+            DimLayer.Data = new RectangleGeometry(bounds);
+            return;
+        }
+
+        DimLayer.Data = new CombinedGeometry(
+            GeometryCombineMode.Exclude,
+            new RectangleGeometry(bounds),
+            new RectangleGeometry(hole.Value));
+    }
+
+    /// <summary>光标十字线：还没框选时帮助对齐（参考 snow-shot 的实时参考线）。</summary>
+    private void UpdateCrosshair(Point point)
+    {
+        var show = !_hasSelection
+            && !OcrLayer.IsVisible
+            && !IsPointInActionBar(point)
+            && !_isActing;
+
+        CrosshairLayer.IsVisible = show;
+
+        if (!show)
+            return;
+
+        CrosshairV.StartPoint = new Point(point.X, 0);
+        CrosshairV.EndPoint = new Point(point.X, Math.Max(Height, 1));
+        CrosshairH.StartPoint = new Point(0, point.Y);
+        CrosshairH.EndPoint = new Point(Math.Max(Width, 1), point.Y);
+    }
+
+    /// <summary>
+    /// 拖动/拉伸时在光标旁显示 4 倍放大镜。
+    /// 直接用冻结帧按比例缩放，不做像素重采样，没有额外内存。
+    /// </summary>
+    private void UpdateMagnifier(Point point)
+    {
+        var show = _frozenBitmap is not null
+            && _mode != DragMode.None
+            && _pendingAnnotation is null
+            && !IsPointInActionBar(point);
+
+        if (!show)
+        {
+            Magnifier.IsVisible = false;
+            return;
+        }
+
+        Magnifier.IsVisible = true;
+        MagnifierImage.Source = _frozenBitmap;
+        MagnifierImage.Width = Math.Max(Width, 1);
+        MagnifierImage.Height = Math.Max(Height, 1);
+
+        if (MagnifierImage.RenderTransform is ScaleTransform scale)
+        {
+            scale.ScaleX = MagnifierZoom;
+            scale.ScaleY = MagnifierZoom;
+        }
+
+        // 让光标位置正好落在放大镜中心
+        Canvas.SetLeft(MagnifierImage, -(point.X * MagnifierZoom) + MagnifierSize / 2);
+        Canvas.SetTop(MagnifierImage, -(point.Y * MagnifierZoom) + MagnifierSize / 2);
+
+        // 依次尝试右下 / 左下 / 右上 / 左上，避开工具条和窗口边缘
+        var toolbarLeft = Canvas.GetLeft(ActionBar);
+        var toolbarTop = Canvas.GetTop(ActionBar);
+        var hasToolbar = ActionBar.IsVisible
+            && !double.IsNaN(toolbarLeft)
+            && !double.IsNaN(toolbarTop)
+            && ActionBar.Bounds.Width > 0;
+
+        var toolbar = hasToolbar
+            ? new Rect(
+                toolbarLeft,
+                toolbarTop,
+                ActionBar.Bounds.Width,
+                ActionBar.Bounds.Height).Inflate(8)
+            : default;
+
+        var placed = PlaceMagnifier(
+            point,
+            MagnifierSize,
+            new Size(Width, Height),
+            hasToolbar ? toolbar : null);
+
+        Canvas.SetLeft(Magnifier, placed.X);
+        Canvas.SetTop(Magnifier, placed.Y);
+    }
+
+    /// <summary>
+    /// 放大镜位置：优先右下，贴边或压到工具条就换到另一侧；都放不下就钳制在窗口内。
+    /// 抽成纯函数，方便验证「不压工具条」这条规则。
+    /// </summary>
+    internal static Rect PlaceMagnifier(Point cursor, double size, Size bounds, Rect? avoid, double gap = 28)
+    {
+        var offsets = new[]
+        {
+            new Point(gap, gap),
+            new Point(-size - gap, gap),
+            new Point(gap, -size - gap),
+            new Point(-size - gap, -size - gap)
+        };
+
+        foreach (var offset in offsets)
+        {
+            var rect = new Rect(cursor.X + offset.X, cursor.Y + offset.Y, size, size);
+
+            if (rect.X < 8 || rect.Y < 8 || rect.Right > bounds.Width - 8 || rect.Bottom > bounds.Height - 8)
+                continue;
+
+            if (avoid is { Width: > 0 } && rect.Intersects(avoid.Value))
+                continue;
+
+            return rect;
+        }
+
+        var left = Math.Clamp(
+            cursor.X + gap,
+            8,
+            Math.Max(8, bounds.Width - size - 8));
+        var top = Math.Clamp(
+            cursor.Y + gap,
+            8,
+            Math.Max(8, bounds.Height - size - 8));
+
+        return new Rect(left, top, size, size);
     }
 
     private void UpdateHandles()
@@ -1081,23 +1264,33 @@ public partial class CaptureWindow : Window
         _hasSelection = false;
         _selection = default;
         Selection.IsVisible = false;
+        SelectionHalo.IsVisible = false;
+        Magnifier.IsVisible = false;
         HideCandidate();
         HandleLayer.IsVisible = false;
         ActionBar.IsVisible = false;
         SizeBadge.IsVisible = false;
+        HintBar.IsVisible = true;
         HideResultCard();
         _notes.Clear();
         _pendingAnnotation = null;
         _penPoints = null;
         RebuildNotePreview();
         UpdateToolButtons();
+        UpdateDim();
         Cursor = CrossCursor;
     }
 
     // ---------- 标注 ----------
 
-    private void OnRectToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Rectangle);
+    /// <summary>指针工具：退出标注模式，回到移动/拉伸选区。</summary>
+    private void OnSelectToolClick(object? sender, RoutedEventArgs e)
+    {
+        _tool = AnnotationTool.None;
+        UpdateToolButtons();
+    }
 
+    private void OnRectToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Rectangle);
     private void OnEllipseToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Ellipse);
 
     private void OnArrowToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Arrow);
@@ -1154,8 +1347,12 @@ public partial class CaptureWindow : Window
         SetSelected(Width4Button, Math.Abs(_noteWidth - 4) < 0.01);
         SetSelected(Width8Button, Math.Abs(_noteWidth - 8) < 0.01);
 
-        MosaicModeButton.Content = _mosaicBlur ? "马赛克·模糊" : "马赛克·像素";
+        // 模式靠图标切换：网格 = 像素，波浪 = 模糊
+        MosaicPixelIcon.IsVisible = !_mosaicBlur;
+        MosaicBlurIcon.IsVisible = _mosaicBlur;
         SetSelected(MosaicModeButton, _mosaicBlur);
+        ToolTip.SetTip(MosaicModeButton, _mosaicBlur ? "马赛克：模糊（点击切到像素）" : "马赛克：像素（点击切到模糊）");
+
         SetSelected(CornerRadiusButton, _cornerRadius > 0);
     }
 
@@ -1213,6 +1410,7 @@ public partial class CaptureWindow : Window
 
     private void UpdateToolButtons()
     {
+        SetSelected(SelectToolButton, _tool == AnnotationTool.None);
         SetSelected(RectToolButton, _tool == AnnotationTool.Rectangle);
         SetSelected(EllipseToolButton, _tool == AnnotationTool.Ellipse);
         SetSelected(ArrowToolButton, _tool == AnnotationTool.Arrow);
@@ -1225,6 +1423,28 @@ public partial class CaptureWindow : Window
 
         // 属性行只在选中标注工具时出现：没选工具时整条让出去，别挡截图
         StyleRow.IsVisible = _tool != AnnotationTool.None;
+
+        // 每组属性只在当前工具用得上时出现：
+        // 马赛克没有颜色/线宽；文字和序号没有线宽。
+        var drawing = _tool is AnnotationTool.Rectangle or AnnotationTool.Ellipse
+            or AnnotationTool.Arrow or AnnotationTool.Pen or AnnotationTool.Highlighter;
+
+        var colors = _tool != AnnotationTool.Mosaic;
+
+        ColorAmberButton.IsVisible = colors;
+        ColorWhiteButton.IsVisible = colors;
+        ColorRedButton.IsVisible = colors;
+        ColorGreenButton.IsVisible = colors;
+        ColorBlueButton.IsVisible = colors;
+
+        Width2Button.IsVisible = drawing;
+        Width4Button.IsVisible = drawing;
+        Width8Button.IsVisible = drawing;
+
+        MosaicModeButton.IsVisible = _tool == AnnotationTool.Mosaic;
+
+        StyleSeparator1.IsVisible = colors && (drawing || _tool == AnnotationTool.Mosaic);
+        StyleSeparator2.IsVisible = _tool == AnnotationTool.Mosaic;
     }
 
     private static void SetSelected(Button button, bool selected)
@@ -1773,6 +1993,8 @@ public partial class CaptureWindow : Window
     private void ShowActionBar(Rect selection)
     {
         ActionBar.IsVisible = true;
+        HintBar.IsVisible = false;
+        CrosshairLayer.IsVisible = false;
         PositionActionBar(selection);
     }
 
@@ -1783,8 +2005,8 @@ public partial class CaptureWindow : Window
     /// </summary>
     private bool _compactToolbar;
 
-    /// <summary>窗口窄于这个宽度（DIP）就把低频动作收起来。</summary>
-    internal static bool ShouldCompact(double width) => width > 0 && width < 900;
+    /// <summary>窗口窄于这个宽度（DIP）就把低频动作收起来。图标工具条比原来的文字按钮窄得多。</summary>
+    internal static bool ShouldCompact(double width) => width > 0 && width < 560;
 
     /// <summary>
     /// 窄窗口把低频动作收进「更多」。
@@ -2148,7 +2370,7 @@ public partial class CaptureWindow : Window
             Canvas.SetTop(box, line.Y / _scaling - OcrLinePadding);
         }
 
-        RecognizeButton.Content = "重新识别";
+        ToolTip.SetTip(RecognizeButton, "重新识别选区文字（Enter / R）");
         CopyAllButton.IsVisible = true;
         OcrBoxButton.IsVisible = true;
         OcrStatus.IsVisible = true;
@@ -2170,7 +2392,7 @@ public partial class CaptureWindow : Window
         CopyAllButton.IsVisible = false;
         OcrBoxButton.IsVisible = false;
         OcrStatus.IsVisible = false;
-        RecognizeButton.Content = "识别文字";
+        ToolTip.SetTip(RecognizeButton, "识别选区文字（Enter / R）");
         HideResultCard();
         _ocrText = null;
         UpdateHandles();
@@ -2188,7 +2410,8 @@ public partial class CaptureWindow : Window
     /// <summary>按模式统一设置行框：全部显示 / 悬停 / 关闭。</summary>
     private void ApplyOcrBoxMode()
     {
-        OcrBoxButton.Content = OcrBoxModes.Label(_ocrBoxMode);
+        // 图标按钮：状态只体现在 tooltip 和行框可见性上
+        ToolTip.SetTip(OcrBoxButton, $"识别框：{OcrBoxModes.Label(_ocrBoxMode)}（B）");
         OcrBoxButton.IsVisible = OcrLayer.IsVisible;
         OcrLayer.IsHitTestVisible = _ocrBoxMode != OcrBoxMode.Off;
         _hoveredOcrBox = null;
@@ -2340,7 +2563,15 @@ public partial class CaptureWindow : Window
             return;
         }
 
-        // 数字键 2..9 切标注工具（和按钮提示一致）
+        // 数字键 1 回到指针；2..9 切标注工具（和按钮提示一致）
+        if (e.KeyModifiers == KeyModifiers.None && _hasSelection && (key is Key.D1 or Key.NumPad1))
+        {
+            _tool = AnnotationTool.None;
+            UpdateToolButtons();
+            e.Handled = true;
+            return;
+        }
+
         if (e.KeyModifiers == KeyModifiers.None && TryMapToolKey(key, out var tool)
             && _hasSelection)
         {
@@ -2503,16 +2734,14 @@ public partial class CaptureWindow : Window
 
         SizeBadge.IsVisible = true;
 
-        var x = _origin.X + (int)Math.Round(rect.X * _scaling);
-        var y = _origin.Y + (int)Math.Round(rect.Y * _scaling);
         var width = (int)Math.Round(rect.Width * _scaling);
         var height = (int)Math.Round(rect.Height * _scaling);
 
         SizeText.Text = _sizeInPixels
-            ? $"{x}, {y}  {width} × {height}"
-            : $"{x}, {y}  {rect.Width:0} × {rect.Height:0} DIP";
+            ? $"{width} × {height} px"
+            : $"{rect.Width:0} × {rect.Height:0} DIP";
 
-        const double badgeWidth = 180;
+        const double badgeWidth = 150;
         const double badgeHeight = 26;
         const double gap = 8;
 

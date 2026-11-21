@@ -257,9 +257,16 @@ public sealed class AnnotationTests
     {
         var window = new CaptureWindow();
 
-        window.MosaicModeButton.Content.ShouldBe("马赛克·像素");
+        // 图标按钮：像素 = 网格，模糊 = 波浪；当前模式由图标 + tooltip 表达
+        window.MosaicPixelIcon.IsVisible.ShouldBeTrue();
+        window.MosaicBlurIcon.IsVisible.ShouldBeFalse();
+        ToolTip.GetTip(window.MosaicModeButton)?.ToString().ShouldNotBeNull().ShouldContain("像素");
+
         window.MosaicModeButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        window.MosaicModeButton.Content.ShouldBe("马赛克·模糊");
+
+        window.MosaicPixelIcon.IsVisible.ShouldBeFalse();
+        window.MosaicBlurIcon.IsVisible.ShouldBeTrue();
+        ToolTip.GetTip(window.MosaicModeButton)?.ToString().ShouldNotBeNull().ShouldContain("模糊");
     }
 
     [AvaloniaFact]

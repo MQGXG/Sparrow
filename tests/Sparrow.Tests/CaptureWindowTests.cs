@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Media;
 using Shouldly;
 using Sparrow.App.Services;
 using Sparrow.App.Views;
@@ -276,8 +277,9 @@ public sealed class CaptureWindowTests
     [AvaloniaFact]
     public void 窄窗口_低频动作收进更多菜单()
     {
-        // 阈值判断
-        CaptureWindow.ShouldCompact(800).ShouldBeTrue();
+        // 阈值判断：图标工具条更窄，800 宽已经放得下
+        CaptureWindow.ShouldCompact(500).ShouldBeTrue();
+        CaptureWindow.ShouldCompact(800).ShouldBeFalse();
         CaptureWindow.ShouldCompact(1600).ShouldBeFalse();
 
         // 布局切换：收起四个低频动作，露出「更多」
@@ -417,5 +419,64 @@ public sealed class CaptureWindowTests
         window.Selection.Height.ShouldBe(150, 0.01);
 
         window.Close();
+    }
+
+    /// <summary>选区之外压暗、选区内保持原图亮度：遮罩用 Exclude 挖洞。</summary>
+    [AvaloniaFact]
+    public void 选区遮罩_按选区挖洞只压暗外面()
+    {
+        var window = new CaptureWindow();
+        window.Show();
+
+        window.MouseDown(new Point(100, 100), MouseButton.Left);
+        window.MouseMove(new Point(300, 250));
+        window.MouseUp(new Point(300, 250), MouseButton.Left);
+
+        var combined = window.DimLayer.Data.ShouldBeOfType<CombinedGeometry>();
+        combined.GeometryCombineMode.ShouldBe(GeometryCombineMode.Exclude);
+
+        var hole = combined.Geometry2.ShouldBeOfType<RectangleGeometry>();
+        hole.Rect.ShouldBe(new Rect(
+            Canvas.GetLeft(window.Selection),
+            Canvas.GetTop(window.Selection),
+            window.Selection.Width,
+            window.Selection.Height));
+
+        window.CrosshairLayer.IsVisible.ShouldBeFalse("已经有选区，不再画十字线");
+        window.Close();
+    }
+
+    /// <summary>还没框选时，十字线跟随光标，帮助对齐内容。</summary>
+    [AvaloniaFact]
+    public void 未框选时_十字线跟随光标()
+    {
+        var window = new CaptureWindow();
+        window.Show();
+
+        window.MouseMove(new Point(240, 160));
+
+        window.CrosshairLayer.IsVisible.ShouldBeTrue();
+        window.CrosshairV.StartPoint.X.ShouldBe(240);
+        window.CrosshairV.EndPoint.Y.ShouldBe(window.Height);
+        window.CrosshairH.StartPoint.Y.ShouldBe(160);
+        window.CrosshairH.EndPoint.X.ShouldBe(window.Width);
+
+        window.Close();
+    }
+
+    /// <summary>放大镜不能压在工具条上：右下不行就换另外三个角。</summary>
+    [Fact]
+    public void 放大镜位置_避开工具条和窗口边缘()
+    {
+        var bounds = new Size(1280, 760);
+        var toolbar = new Rect(580, 520, 400, 140);
+
+        var placed = CaptureWindow.PlaceMagnifier(new Point(700, 500), 132, bounds, toolbar);
+
+        placed.Intersects(toolbar).ShouldBeFalse();
+        placed.X.ShouldBeGreaterThanOrEqualTo(8);
+        placed.Y.ShouldBeGreaterThanOrEqualTo(8);
+        placed.Right.ShouldBeLessThanOrEqualTo(bounds.Width - 8);
+        placed.Bottom.ShouldBeLessThanOrEqualTo(bounds.Height - 8);
     }
 }
