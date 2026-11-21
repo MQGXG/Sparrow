@@ -1571,10 +1571,37 @@ public partial class CaptureWindow : Window
     /// 最后横向/纵向钳制在窗口内（参考 snow-shot 的 anchoredToolbarPlacement）。
     /// 用实测尺寸而不是估算宽度——按钮数量一变估算就失效。
     /// </summary>
+    private bool _compactToolbar;
+
+    /// <summary>窗口窄于这个宽度（DIP）就把低频动作收起来。</summary>
+    internal static bool ShouldCompact(double width) => width > 0 && width < 900;
+
+    /// <summary>
+    /// 窄窗口把低频动作收进「更多」。
+    /// 学 snow-shot 的 layout compaction，只是规则更简单（按窗口宽度，而不是逐项量宽）。
+    /// </summary>
+    private void ApplyToolbarCompaction() => SetToolbarCompaction(ShouldCompact(Width));
+
+    internal void SetToolbarCompaction(bool compact)
+    {
+        if (compact == _compactToolbar)
+            return;
+
+        _compactToolbar = compact;
+
+        CopyImageButton.IsVisible = !compact;
+        SaveButton.IsVisible = !compact;
+        PinButton.IsVisible = !compact;
+        ScrollButton.IsVisible = !compact;
+        MoreButton.IsVisible = compact;
+    }
+
     private void PositionActionBar(Rect selection)
     {
         if (!ActionBar.IsVisible)
             return;
+
+        ApplyToolbarCompaction();
 
         // 用户拖过工具条之后就不再自动跟随选区
         if (_toolbarManual)

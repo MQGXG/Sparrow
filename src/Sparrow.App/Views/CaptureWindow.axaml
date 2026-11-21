@@ -341,10 +341,29 @@
             <MenuFlyout Placement="TopEdgeAlignedRight" />
           </Button.Flyout>
         </Button>
-        <Button Focusable="False" Content="复制图片" Click="OnCopyImageClick" ToolTip.Tip="复制选区图片（C）" />
-        <Button Focusable="False" Content="保存" Click="OnSaveClick" ToolTip.Tip="保存为 PNG（S）" />
-        <Button Focusable="False" Content="固定" Click="OnPinClick" ToolTip.Tip="固定到屏幕，滚轮缩放（P）" />
-        <Button Focusable="False" Content="滚动" Click="OnScrollClick" ToolTip.Tip="进入滚动截图（G）" />
+        <Button Focusable="False" x:Name="CopyImageButton"
+                Content="复制图片" Click="OnCopyImageClick" ToolTip.Tip="复制选区图片（C）" />
+        <Button Focusable="False" x:Name="SaveButton"
+                Content="保存" Click="OnSaveClick" ToolTip.Tip="保存为 PNG（S）" />
+        <Button Focusable="False" x:Name="PinButton"
+                Content="固定" Click="OnPinClick" ToolTip.Tip="固定到屏幕，滚轮缩放（P）" />
+        <Button Focusable="False" x:Name="ScrollButton"
+                Content="滚动" Click="OnScrollClick" ToolTip.Tip="进入滚动截图（G）" />
+
+        <!-- 窄窗口下把上面四个低频动作收进这里 -->
+        <Button Focusable="False" x:Name="MoreButton"
+                IsVisible="False"
+                Content="更多 ▾"
+                ToolTip.Tip="窄窗口下收起的动作">
+          <Button.Flyout>
+            <MenuFlyout Placement="TopEdgeAlignedRight">
+              <MenuItem Header="复制图片（C）" Click="OnCopyImageClick" />
+              <MenuItem Header="保存（S）" Click="OnSaveClick" />
+              <MenuItem Header="固定（P）" Click="OnPinClick" />
+              <MenuItem Header="滚动（G）" Click="OnScrollClick" />
+            </MenuFlyout>
+          </Button.Flyout>
+        </Button>
         <Button Focusable="False" x:Name="CopyAllButton"
                 IsVisible="False"
                 Content="复制全文"

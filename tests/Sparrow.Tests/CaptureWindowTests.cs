@@ -273,6 +273,28 @@ public sealed class CaptureWindowTests
         Canvas.GetLeft(window.ActionBar).ShouldBe(moved);
     }
 
+    [AvaloniaFact]
+    public void 窄窗口_低频动作收进更多菜单()
+    {
+        // 阈值判断
+        CaptureWindow.ShouldCompact(800).ShouldBeTrue();
+        CaptureWindow.ShouldCompact(1600).ShouldBeFalse();
+
+        // 布局切换：收起四个低频动作，露出「更多」
+        var window = new CaptureWindow();
+        window.SetToolbarCompaction(true);
+
+        window.MoreButton.IsVisible.ShouldBeTrue();
+        window.CopyImageButton.IsVisible.ShouldBeFalse();
+        window.SaveButton.IsVisible.ShouldBeFalse();
+        window.PinButton.IsVisible.ShouldBeFalse();
+        window.ScrollButton.IsVisible.ShouldBeFalse();
+
+        window.SetToolbarCompaction(false);
+        window.MoreButton.IsVisible.ShouldBeFalse();
+        window.CopyImageButton.IsVisible.ShouldBeTrue();
+    }
+
     /// <summary>拖出选区并松手：窗口不关，进入可编辑态。</summary>
     private static CaptureWindow CreateWithSelection()
     {
