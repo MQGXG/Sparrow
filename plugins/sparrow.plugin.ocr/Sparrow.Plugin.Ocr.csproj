@@ -44,6 +44,13 @@
       <_OcrWorkerFiles Include="worker\bin\$(Configuration)\$(TargetFramework)\win-x64\**\*" />
     </ItemGroup>
 
+    <!--
+      先清掉旧 worker 再复制：SkipUnchangedFiles 不会删除多余文件，
+      切换配置（自包含 ↔ 框架依赖）时新旧运行库混在一起，worker 会起不来
+      （典型报错：Could not resolve CoreCLR path）。
+    -->
+    <RemoveDir Directories="$(TargetDir)worker" />
+
     <Copy SourceFiles="@(_OcrWorkerFiles)"
           DestinationFiles="@(_OcrWorkerFiles->'$(TargetDir)worker\%(RecursiveDir)%(Filename)%(Extension)')"
           SkipUnchangedFiles="true" />

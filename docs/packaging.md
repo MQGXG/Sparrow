@@ -24,7 +24,7 @@ pwsh build\pack.ps1 -Version 0.1.0 -SkipOcr
 | 发布目录（自包含） | **135.3 MB** |
 | `Sparrow-win-Portable.zip` | 61.7 MB |
 | `Sparrow-0.1.0-full.nupkg`（增量基线） | 61.7 MB |
-| `Sparrow-win-Setup.exe` | **68.8 MB** |
+| `Sparrow-win-Setup.exe` | **68.9 MB** |
 
 发布目录构成：
 
@@ -36,6 +36,10 @@ pwsh build\pack.ps1 -Version 0.1.0 -SkipOcr
 
 **已剔除**：第三方包带出来的调试符号。`libSkiaSharp.pdb` 80 MB、`libHarfBuzzSharp.pdb` 20 MB，
 发布后不再需要，`publish.ps1` 会统一删掉 —— 这一项把 235 MB 降到了 135 MB。
+
+**OCR 子进程的一个坑（已修）**：`CopyOcrWorker` 原来只做增量复制，切换配置（自包含 ↔ 框架依赖）
+后旧运行库会留在 `worker/` 里，worker 启动直接报 `Could not resolve CoreCLR path`。
+现在复制前先 `RemoveDir`。Release 版的 OCR 已实测：2.2s 识别出测试图里的文字。
 
 ## 三、和验收线（< 60 MB）的差距
 
@@ -60,6 +64,8 @@ pwsh build\pack.ps1 -Version 0.1.0 -SkipOcr
 不是安装版         → 当前不是安装版，无法检查更新（开发态）
 有新版本           → 显示版本号 → 下载 → 自动重启
 ```
+
+**不内置官方源**：地址默认留空，由用户填自己信任的更新目录；宿主不会自行请求任何地址。
 
 地址会保存到 `settings.json` 的 `UpdateFeedUrl`，下次进来直接可用。
 

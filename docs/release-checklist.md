@@ -79,12 +79,12 @@ dotnet list package --include-transitive | findstr SkiaSharp
 
 | 指标 | 阈值 | 怎么测 |
 |---|---|---|
-| 冷启动 | < 2.5s | 5 次取中位 |
+| 冷启动 | < 2.5s | 5 次取中位；实测 946ms（2026-11-21） |
 | 二次唤起 | < 150ms | 按键到可见 |
 | 命令搜索 | < 50ms | 13 个工具 |
 | 文本工具 | < 100ms | JSON 格式化 1MB |
 | 常驻内存（主进程） | < 150MB | 无 OCR 运行；实测 120MB（见 `docs/performance.md`） |
-| 安装包 | < 60MB（待定） | 不含 OCR；当前自包含 68.9MB，见 `docs/packaging.md` |
+| 安装包 | < 80MB | 不含 OCR；自包含 + 本地推理实测 68.9MB（原 60MB 目标已不现实） |
 
 ### 1.7 安全
 
