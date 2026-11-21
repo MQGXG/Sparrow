@@ -56,6 +56,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _aiTemperature = settings.AiTemperature;
         _aiMaxTokens = settings.AiMaxTokens;
         _localModelMirror = settings.LocalModelMirror;
+        _updateFeedUrl = settings.UpdateFeedUrl;
 
         ReloadLocalModels();
         Reload();
@@ -199,6 +200,21 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
     /// <summary>离线模型的自托管镜像根地址；空表示只用内置源。</summary>
     [ObservableProperty]
     private string _localModelMirror = string.Empty;
+
+    /// <summary>Velopack 更新源地址。</summary>
+    [ObservableProperty]
+    private string _updateFeedUrl = string.Empty;
+
+    [ObservableProperty]
+    private string? _updateStatus;
+
+    [ObservableProperty]
+    private bool _isCheckingUpdate;
+
+    public bool IsNotCheckingUpdate => !IsCheckingUpdate;
+
+    partial void OnIsCheckingUpdateChanged(bool value) =>
+        OnPropertyChanged(nameof(IsNotCheckingUpdate));
 
     /// <summary>当前设置分段；默认插件页，和进入设置的习惯一致。</summary>
     [ObservableProperty]
@@ -527,6 +543,70 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _secrets?.Save(null);
         _ai?.Configure(_settings);
         AiStatus = "API Key 已清除";
+    }
+
+    /// <summary>
+    /// 检查更新：Velopack 只在安装版里可用；开发态（dotnet run）会明确告知。
+    /// 地址留空或不是 http(s) 时直接返回提示，不去碰网络。
+    /// </summary>
+    public async Task CheckForUpdatesAsync()
+    {
+        var url = UpdateFeedUrl.Trim();
+
+        if (url.Length == 0)
+        {
+            UpdateStatus = "未配置更新源";
+            return;
+        }
+
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var feed)
+            || (feed.Scheme != Uri.UriSchemeHttp && feed.Scheme != Uri.UriSchemeHttps))
+        {
+            UpdateStatus = "更新源必须是 http(s) 地址";
+            return;
+        }
+
+        // 记住地址，下次进来直接可用
+        if (!string.Equals(url, _settings.UpdateFeedUrl, StringComparison.Ordinal))
+        {
+            _settings = _settings with { UpdateFeedUrl = url };
+            _store.Save(_settings);
+        }
+
+        IsCheckingUpdate = true;
+        UpdateStatus = "正在检查…";
+
+        try
+        {
+            var manager = new Velopack.UpdateManager(url);
+
+            if (!manager.IsInstalled)
+            {
+                UpdateStatus = "当前不是安装版，无法检查更新";
+                return;
+            }
+
+            var update = await manager.CheckForUpdatesAsync();
+            if (update is null)
+            {
+                UpdateStatus = "已是最新版本";
+                return;
+            }
+
+            UpdateStatus = $"发现 {update.TargetFullRelease.Version}，正在下载…";
+            await manager.DownloadUpdatesAsync(update);
+
+            UpdateStatus = "下载完成，正在重启…";
+            manager.ApplyUpdatesAndRestart(update);
+        }
+        catch (Exception ex)
+        {
+            UpdateStatus = $"检查更新失败：{ex.Message}";
+        }
+        finally
+        {
+            IsCheckingUpdate = false;
+        }
     }
 
     /// <summary>

@@ -51,11 +51,26 @@ pwsh build\pack.ps1 -Version 0.1.0 -SkipOcr
 ## 四、更新
 
 `Program.Main` 第一行已经接上 `VelopackApp.Build().Run()`（开发态是空操作，不影响 `dotnet run`）。
-剩余的是**更新源**：
 
-1. 把 `artifacts/releases/` 里的 `RELEASES`、`*.nupkg`、`Setup.exe` 传到 HTTPS 静态目录（自托管也行）
-2. 在宿主里用 `UpdateManager` 指向该地址，做一个「检查更新」入口
-3. 首次安装后升级一次，确认热键、托盘、插件目录都在
+**设置 › 关于 › 更新** 里填「更新源地址」，点「检查更新」：
+
+```
+地址留空           → 未配置更新源
+不是 http(s)       → 更新源必须是 http(s) 地址
+不是安装版         → 当前不是安装版，无法检查更新（开发态）
+有新版本           → 显示版本号 → 下载 → 自动重启
+```
+
+地址会保存到 `settings.json` 的 `UpdateFeedUrl`，下次进来直接可用。
+
+### 怎么发布一次更新
+
+1. `pwsh build\pack.ps1 -Version 0.2.0 -SkipOcr`
+2. 把 `artifacts/releases/` 里的 `RELEASES`、`releases.win.json`、`*.nupkg` 上传到同一个 HTTPS 目录
+3. 旧版本设置里填这个目录的 URL，点「检查更新」
+4. 首次升级后确认：热键、托盘、插件目录、设置都还在
+
+增量包只包含变化的部分，第二次以后的更新体积会明显小于首次的全量包。
 
 ## 五、干净机器验收清单
 

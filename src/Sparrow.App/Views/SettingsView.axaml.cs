@@ -103,6 +103,12 @@ public partial class SettingsView : UserControl
             viewModel.SaveLocalModelMirror();
     }
 
+    private async void OnCheckUpdateClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is SettingsViewModel viewModel)
+            await viewModel.CheckForUpdatesAsync();
+    }
+
     private static string LocalAppData =>
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 

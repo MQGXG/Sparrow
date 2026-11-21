@@ -105,4 +105,7 @@ public sealed record AppSettings
 
     /// <summary>保存的标注样式（最多三个槽）。</summary>
     public List<AnnotationPreset> AnnotationPresets { get; init; } = [];
+
+    /// <summary>Velopack 更新源地址（HTTPS 静态目录或本地路径）。</summary>
+    public string UpdateFeedUrl { get; init; } = string.Empty;
 }

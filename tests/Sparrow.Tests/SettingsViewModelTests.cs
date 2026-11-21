@@ -184,6 +184,29 @@ public sealed class SettingsViewModelTests
         store.Load().ClipboardExcludedApps.Count.ShouldBe(2);
     }
 
+    [Fact]
+    public async Task 检查更新_未配置地址时直接提示()
+    {
+        var (viewModel, _, _) = Create();
+
+        await viewModel.CheckForUpdatesAsync();
+
+        viewModel.UpdateStatus.ShouldBe("未配置更新源");
+        viewModel.IsCheckingUpdate.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task 检查更新_非http地址被拒绝且不落盘()
+    {
+        var (viewModel, store, _) = Create();
+        viewModel.UpdateFeedUrl = "ftp://example.com/updates";
+
+        await viewModel.CheckForUpdatesAsync();
+
+        viewModel.UpdateStatus.ShouldBe("更新源必须是 http(s) 地址");
+        store.Load().UpdateFeedUrl.ShouldBeEmpty();
+    }
+
     [AvaloniaFact]
     public void 设置页_模型分段_显示离线模型列表()
     {
