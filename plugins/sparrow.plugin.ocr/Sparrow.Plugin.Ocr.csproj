@@ -48,12 +48,16 @@
       先清掉旧 worker 再复制：SkipUnchangedFiles 不会删除多余文件，
       切换配置（自包含 ↔ 框架依赖）时新旧运行库混在一起，worker 会起不来
       （典型报错：Could not resolve CoreCLR path）。
+      杀毒软件可能短暂锁住刚写出的原生 dll，所以清目录失败不视为致命，
+      由下一次构建继续清理；复制本身带重试。
     -->
-    <RemoveDir Directories="$(TargetDir)worker" />
+    <RemoveDir Directories="$(TargetDir)worker" ContinueOnError="WarnAndContinue" />
 
     <Copy SourceFiles="@(_OcrWorkerFiles)"
           DestinationFiles="@(_OcrWorkerFiles->'$(TargetDir)worker\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
+          SkipUnchangedFiles="true"
+          Retries="5"
+          RetryDelayMilliseconds="400" />
   </Target>
 
 </Project>
