@@ -232,6 +232,20 @@ record MosaicNote(Rect Rect, MosaicMode Mode, MosaicMethod Method, double Cell, 
 - 存 `settings.json` 的 `AnnotationPresets`，窗口关闭时回写
 - 命名自定义还没做（现在固定叫「槽 N」）
 
+### 图标渲染（2026-11-21）
+
+工具条图标「缺一块、还偏心」的两个原因，都在 `CaptureWindow.axaml` 里修掉：
+
+| 问题 | 原因 | 处理 |
+|---|---|---|
+| 右边 / 下边被切掉 | Avalonia 的 `Path` 默认 `Stretch=None`，24 单位几何按原尺寸从左上角画进 18 的框 | `Button.tool Path` 设 `Stretch="Uniform"`（等比缩放并居中），锁图标同样处理 |
+| 粗细不一 | `Uniform` 会把每个几何都撑满 18px，缩放比 = 18 ÷ 自然宽度，线宽跟着放大 | 基准 `StrokeThickness=1.33`（= 1.5 × 16/18），其余图标按 `1.5 × 自然宽度 / 18` 逐个补偿 |
+
+- 补偿后**所有工具图标渲染线宽都是 1.5px**，和全局 `Path.icon` 一致；图标大小统一撑满 18px。
+- 改了图标几何要重新量自然宽度（`StreamGeometry.Parse(...).Bounds` 取 `max(w,h)`）并同步补偿值。
+- `Button.tool.primary` 不再单独加粗 ✓，主按钮靠琥珀底区分。
+- 抽查方式：Headless 渲染工具条再裁剪放大 3 倍，逐个比对大小与线宽。
+
 ### 尺寸可编辑与锁比例（2026-11-21，第四轮）
 
 参考 snow-shot 工具条里的尺寸输入框：选区角标从「只读读数」升级成**可编辑**。

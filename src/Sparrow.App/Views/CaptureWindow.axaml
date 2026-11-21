@@ -154,6 +154,7 @@
       <Setter Property="StrokeThickness" Value="1.5" />
       <Setter Property="StrokeLineCap" Value="Round" />
       <Setter Property="StrokeJoin" Value="Round" />
+      <Setter Property="Stretch" Value="Uniform" />
       <Setter Property="Width" Value="14" />
       <Setter Property="Height" Value="14" />
     </Style>
@@ -164,11 +165,22 @@
       <Setter Property="Width" Value="26" />
       <Setter Property="Height" Value="26" />
     </Style>
+    <!--
+      Stretch 必须是 Uniform：Avalonia 的 Path 默认 None，会把 24 单位的几何
+      按原尺寸从左上角画进 18 的框里，超出的右边和下边直接被裁掉——
+      这就是工具图标「缺一块、还偏心」的原因。Uniform 才会等比缩放并居中。
+
+      基准线宽 1.33 = 1.5 × 16/18：几何自然宽度 16 栅格缩到 18px 时正好 1.5px。
+      其余图标在各自 Path 上写了 StrokeThickness = 1.5 × 自然宽度 / 18，
+      缩放比虽然不同，渲染出来的线宽统一是 1.5px（和全局 Path.icon 一致）。
+      改了几何要重新量自然宽度并同步这个值。
+    -->
     <Style Selector="Button.tool Path">
       <Setter Property="Stroke" Value="{DynamicResource TextSecondaryBrush}" />
-      <Setter Property="StrokeThickness" Value="1.6" />
+      <Setter Property="StrokeThickness" Value="1.33" />
       <Setter Property="StrokeLineCap" Value="Round" />
       <Setter Property="StrokeJoin" Value="Round" />
+      <Setter Property="Stretch" Value="Uniform" />
       <Setter Property="Width" Value="18" />
       <Setter Property="Height" Value="18" />
     </Style>
@@ -191,7 +203,7 @@
     </Style>
     <Style Selector="Button.tool.primary Path">
       <Setter Property="Stroke" Value="{DynamicResource AccentOnBrush}" />
-      <Setter Property="StrokeThickness" Value="1.8" />
+      <!-- 线宽不再单独加粗：统一走基准 1.33 + 各图标补偿，缩放后都是 1.5px -->
     </Style>
     <Style Selector="Button.tool.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource AccentGradientHoverBrush}" />
@@ -504,15 +516,15 @@
           </Button>
           <Button Focusable="False" x:Name="ArrowToolButton" Classes="tool"
                   ToolTip.Tip="箭头（4）" Click="OnArrowToolClick">
-            <Path Data="{StaticResource ToolArrow}" />
+            <Path Data="{StaticResource ToolArrow}" StrokeThickness="1.17" />
           </Button>
           <Button Focusable="False" x:Name="PenToolButton" Classes="tool"
                   ToolTip.Tip="画笔（5）" Click="OnPenToolClick">
-            <Path Data="{StaticResource ToolPen}" />
+            <Path Data="{StaticResource ToolPen}" StrokeThickness="1.25" />
           </Button>
           <Button Focusable="False" x:Name="HighlighterToolButton" Classes="tool"
                   ToolTip.Tip="高亮（6）" Click="OnHighlighterToolClick">
-            <Path Data="{StaticResource ToolHighlighter}" />
+            <Path Data="{StaticResource ToolHighlighter}" StrokeThickness="1.29" />
           </Button>
           <Button Focusable="False" x:Name="MosaicToolButton" Classes="tool"
                   ToolTip.Tip="马赛克（7）" Click="OnMosaicToolClick">
@@ -520,7 +532,7 @@
           </Button>
           <Button Focusable="False" x:Name="TextToolButton" Classes="tool"
                   ToolTip.Tip="文字（8）" Click="OnTextToolClick">
-            <Path Data="{StaticResource ToolText}" />
+            <Path Data="{StaticResource ToolText}" StrokeThickness="1.08" />
           </Button>
           <Button Focusable="False" x:Name="NumberToolButton" Classes="tool"
                   ToolTip.Tip="序号（9）" Click="OnNumberToolClick">
@@ -532,15 +544,15 @@
           <!-- 指针：退出标注，回到移动/拉伸选区 -->
           <Button Focusable="False" x:Name="SelectToolButton" Classes="tool"
                   ToolTip.Tip="选择 / 移动选区（1）" Click="OnSelectToolClick">
-            <Path Data="{StaticResource ToolCursor}" />
+            <Path Data="{StaticResource ToolCursor}" StrokeThickness="1.14" />
           </Button>
           <Button Focusable="False" x:Name="UndoButton" Classes="tool"
                   ToolTip.Tip="撤销（Ctrl+Z）" Click="OnUndoClick">
-            <Path Data="{StaticResource IconUndo}" />
+            <Path Data="{StaticResource IconUndo}" StrokeThickness="1.29" />
           </Button>
           <Button Focusable="False" x:Name="RedoButton" Classes="tool"
                   ToolTip.Tip="重做（Ctrl+Shift+Z）" Click="OnRedoClick">
-            <Path Data="{StaticResource IconRedo}" />
+            <Path Data="{StaticResource IconRedo}" StrokeThickness="1.29" />
           </Button>
 
           <Border Classes="tool-separator" />
@@ -555,18 +567,18 @@
                   Classes="tool"
                   IsVisible="False"
                   ToolTip.Tip="识别并翻译（点击选目标语言）">
-            <Path Data="{StaticResource IconTranslate}" />
+            <Path Data="{StaticResource IconTranslate}" StrokeThickness="1.27" />
             <Button.Flyout>
               <MenuFlyout Placement="TopEdgeAlignedRight" />
             </Button.Flyout>
           </Button>
           <Button Focusable="False" x:Name="SaveButton"
                   Classes="tool" Click="OnSaveClick" ToolTip.Tip="保存为 PNG（S）">
-            <Path Data="{StaticResource IconSave}" />
+            <Path Data="{StaticResource IconSave}" StrokeThickness="1.29" />
           </Button>
           <Button Focusable="False" x:Name="PinButton"
                   Classes="tool" Click="OnPinClick" ToolTip.Tip="固定到屏幕，滚轮缩放（P）">
-            <Path Data="{StaticResource IconPin}" />
+            <Path Data="{StaticResource IconPin}" StrokeThickness="1.54" />
           </Button>
           <Button Focusable="False" x:Name="ScrollButton"
                   Classes="tool" Click="OnScrollClick" ToolTip.Tip="滚动截图（G）">
@@ -574,14 +586,14 @@
           </Button>
           <Button Focusable="False" x:Name="CornerRadiusButton" Classes="tool"
                   Click="OnCornerRadiusClick" ToolTip.Tip="导出时四角切圆角">
-            <Path Data="{StaticResource IconCornerRadius}" />
+            <Path Data="{StaticResource IconCornerRadius}" StrokeThickness="1.25" />
           </Button>
           <Button Focusable="False" x:Name="CopyAllButton"
                   Classes="tool"
                   IsVisible="False"
                   Click="OnCopyAllClick"
                   ToolTip.Tip="复制全部识别文字（Ctrl+C）">
-            <Path Data="{StaticResource IconCopy}" />
+            <Path Data="{StaticResource IconCopy}" StrokeThickness="1.25" />
           </Button>
           <Button Focusable="False" x:Name="OcrBoxButton"
                   Classes="tool"
@@ -594,7 +606,7 @@
                   Classes="tool"
                   IsVisible="False"
                   ToolTip.Tip="更多动作">
-            <Path Data="{StaticResource IconMore}" />
+            <Path Data="{StaticResource IconMore}" StrokeThickness="0.97" />
             <Button.Flyout>
               <MenuFlyout Placement="TopEdgeAlignedRight">
                 <MenuItem Header="保存（S）" Click="OnSaveClick" />
@@ -620,14 +632,14 @@
                   Classes="tool"
                   Click="OnCancelClick"
                   ToolTip.Tip="取消截图（Esc）">
-            <Path Data="{StaticResource IconClose}" />
+            <Path Data="{StaticResource IconClose}" StrokeThickness="0.92" />
           </Button>
           <!-- ✓：完成并复制（和 LumaShot / snow-shot 的确认键一致） -->
           <Button Focusable="False" x:Name="CopyImageButton"
                   Classes="tool primary"
                   Click="OnCopyImageClick"
                   ToolTip.Tip="完成并复制图片（C）">
-            <Path Data="{StaticResource IconCheck}" />
+            <Path Data="{StaticResource IconCheck}" StrokeThickness="1.17" />
           </Button>
         </StackPanel>
       </Border>
