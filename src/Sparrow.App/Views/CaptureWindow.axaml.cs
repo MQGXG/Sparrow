@@ -130,6 +130,46 @@ public partial class CaptureWindow : Window
     private Point _toolbarDragStart;
     private Point _toolbarStartPosition;
 
+    /// <summary>选区覆盖的那个窗口（DIP）；拖动/拉伸时吸附它的边和中线。</summary>
+    private Rect? _snapBox;
+
+    /// <summary>尺寸角标显示物理像素还是 DIP。</summary>
+    private bool _sizeInPixels = true;
+
+    /// <summary>导出圆角半径（0 = 不切）。</summary>
+    private double _cornerRadius;
+
+    public double ExportCornerRadius
+    {
+        get => _cornerRadius;
+        set => _cornerRadius = Math.Max(0, value);
+    }
+
+    /// <summary>标注样式（颜色/粗细/马赛克模式），由宿主读写持久化。</summary>
+    public uint NoteColorValue
+    {
+        get => _noteColor.ToUInt32();
+        set => _noteColor = Color.FromUInt32(value);
+    }
+
+    public double NoteStrokeWidth
+    {
+        get => _noteWidth;
+        set => _noteWidth = value;
+    }
+
+    public bool NoteMosaicBlur
+    {
+        get => _mosaicBlur;
+        set => _mosaicBlur = value;
+    }
+
+    public bool SizeInPixels
+    {
+        get => _sizeInPixels;
+        set => _sizeInPixels = value;
+    }
+
     // 当前画笔样式：只影响之后画的图元
     private Color _noteColor = NoteColor;
     private double _noteWidth = NoteWidth;
@@ -243,6 +283,17 @@ public partial class CaptureWindow : Window
 
         if (FreezeOnOpen)
             _ = FreezeScreenAsync();
+
+        // 宿主在构造后注入上次的样式；这里把按钮状态同步过来
+        RefreshNoteStyle();
+    }
+
+    private void RefreshNoteStyle()
+    {
+        UpdateStyleButtons();
+
+        if (_hasSelection)
+            UpdateSizeBadge(_selection);
     }
 
     /// <summary>按当前光标位置立刻显示候选（含控件级细化）。</summary>
@@ -411,6 +462,14 @@ public partial class CaptureWindow : Window
         // 点在动作栏上：交给按钮，不要当成新选区
         if (IsPointInActionBar(point))
             return;
+
+        // 点在尺寸角标上：切换单位，不要当成新选区
+        if (SizeBadge.IsVisible
+            && SizeBadge.TranslatePoint(new Point(0, 0), this) is { } badgeOrigin
+            && new Rect(badgeOrigin, SizeBadge.Bounds.Size).Contains(point))
+        {
+            return;
+        }
 
         // 选了标注工具：在选区内按下就是开始画，不移动选区
         if (BeginAnnotation(point))
@@ -589,6 +648,9 @@ public partial class CaptureWindow : Window
         _selection = new Rect(point, new Size());
         _selectionOrigin = _selection;
         ClearGuides();
+
+        // 记住新选区落在哪个窗口上：拖动/拉伸时吸它的边和中线
+        _snapBox = _candidateAtPress is { } candidate ? ToDip(candidate.Bounds) : null;
 
         Result = null;
         FallbackText = null;
@@ -821,11 +883,15 @@ public partial class CaptureWindow : Window
             0,
             Math.Max(0, Height - _selectionOrigin.Height));
 
-        // 吸附：左右/上下边缘靠近屏幕边或中线时贴过去
+        // 吸附：屏幕边/中线，以及选区所在窗口的边/中线
         var (snapX, guideX) = SnapGuides.SnapEdges(
-            left, left + _selectionOrigin.Width, SnapGuides.ScreenGuides(Width));
+            left,
+            left + _selectionOrigin.Width,
+            SnapGuides.Combine(Width, _snapBox, vertical: true));
         var (snapY, guideY) = SnapGuides.SnapEdges(
-            top, top + _selectionOrigin.Height, SnapGuides.ScreenGuides(Height));
+            top,
+            top + _selectionOrigin.Height,
+            SnapGuides.Combine(Height, _snapBox, vertical: false));
 
         left = Math.Clamp(left + snapX, 0, Math.Max(0, Width - _selectionOrigin.Width));
         top = Math.Clamp(top + snapY, 0, Math.Max(0, Height - _selectionOrigin.Height));
@@ -870,26 +936,26 @@ public partial class CaptureWindow : Window
 
         if (_resizeHandle is ResizeHandle.NW or ResizeHandle.W or ResizeHandle.SW)
         {
-            var (value, guide) = SnapGuides.Snap(left, SnapGuides.ScreenGuides(Width));
+            var (value, guide) = SnapGuides.Snap(left, SnapGuides.Combine(Width, _snapBox, vertical: true));
             left = value;
             guideX = guide;
         }
         else if (_resizeHandle is ResizeHandle.NE or ResizeHandle.E or ResizeHandle.SE)
         {
-            var (value, guide) = SnapGuides.Snap(right, SnapGuides.ScreenGuides(Width));
+            var (value, guide) = SnapGuides.Snap(right, SnapGuides.Combine(Width, _snapBox, vertical: true));
             right = value;
             guideX = guide;
         }
 
         if (_resizeHandle is ResizeHandle.NW or ResizeHandle.N or ResizeHandle.NE)
         {
-            var (value, guide) = SnapGuides.Snap(top, SnapGuides.ScreenGuides(Height));
+            var (value, guide) = SnapGuides.Snap(top, SnapGuides.Combine(Height, _snapBox, vertical: false));
             top = value;
             guideY = guide;
         }
         else if (_resizeHandle is ResizeHandle.SW or ResizeHandle.S or ResizeHandle.SE)
         {
-            var (value, guide) = SnapGuides.Snap(bottom, SnapGuides.ScreenGuides(Height));
+            var (value, guide) = SnapGuides.Snap(bottom, SnapGuides.Combine(Height, _snapBox, vertical: false));
             bottom = value;
             guideY = guide;
         }
@@ -1063,6 +1129,12 @@ public partial class CaptureWindow : Window
         UpdateStyleButtons();
     }
 
+    private void OnCornerRadiusClick(object? sender, RoutedEventArgs e)
+    {
+        _cornerRadius = _cornerRadius > 0 ? 0 : 10;
+        UpdateStyleButtons();
+    }
+
     private void UpdateStyleButtons()
     {
         SetSelected(ColorAmberButton, IsColor("#E5A44C"));
@@ -1077,6 +1149,7 @@ public partial class CaptureWindow : Window
 
         MosaicModeButton.Content = _mosaicBlur ? "马赛克·模糊" : "马赛克·像素";
         SetSelected(MosaicModeButton, _mosaicBlur);
+        SetSelected(CornerRadiusButton, _cornerRadius > 0);
     }
 
     private bool IsColor(string hex) => _noteColor.ToUInt32() == Color.Parse(hex).ToUInt32();
@@ -1481,6 +1554,31 @@ public partial class CaptureWindow : Window
             StrokeLineCap = PenLineCap.Round
         });
 
+    private Rect ToDip(PixelRect bounds) => new(
+        (bounds.X - _origin.X) / _scaling,
+        (bounds.Y - _origin.Y) / _scaling,
+        bounds.Width / _scaling,
+        bounds.Height / _scaling);
+
+    /// <summary>导出前的合成：先画标注，再按需切圆角。</summary>
+    private byte[] ComposeResult(byte[] png)
+    {
+        var composed = AnnotationRenderer.Compose(png, _notes.Items, _scaling);
+        return AnnotationRenderer.RoundCorners(composed, _cornerRadius * _scaling);
+    }
+
+    private void OnSizeBadgeClick(object? sender, PointerPressedEventArgs e)
+    {
+        ToggleSizeUnit();
+        e.Handled = true;
+    }
+
+    internal void ToggleSizeUnit()
+    {
+        _sizeInPixels = !_sizeInPixels;
+        UpdateSizeBadge(_selection);
+    }
+
     private void ShowGuides(double? x, double? y)
     {
         GuideLayer.Children.Clear();
@@ -1702,9 +1800,9 @@ public partial class CaptureWindow : Window
                 return;
 
             // 标注合成进导出的图：复制 / 保存 / 固定 / 识别拿到的都是带标注的版本
-            Result = action == CaptureAction.Scroll || _notes.Items.Count == 0
+            Result = action == CaptureAction.Scroll
                 ? png
-                : await Task.Run(() => AnnotationRenderer.Compose(png, _notes.Items, _scaling));
+                : await Task.Run(() => ComposeResult(png));
 
             Action = action;
 
@@ -1856,9 +1954,7 @@ public partial class CaptureWindow : Window
             if (!IsVisible)
                 return;
 
-            Result = _notes.Items.Count == 0
-                ? png
-                : await Task.Run(() => AnnotationRenderer.Compose(png, _notes.Items, _scaling));
+            Result = await Task.Run(() => ComposeResult(png));
             Action = CaptureAction.Recognize;
 
             await RunOcrAsync(new CaptureOcrOptions(target), showText: true);
@@ -2300,7 +2396,9 @@ public partial class CaptureWindow : Window
         var width = (int)Math.Round(rect.Width * _scaling);
         var height = (int)Math.Round(rect.Height * _scaling);
 
-        SizeText.Text = $"{x}, {y}  {width} × {height}";
+        SizeText.Text = _sizeInPixels
+            ? $"{x}, {y}  {width} × {height}"
+            : $"{x}, {y}  {rect.Width:0} × {rect.Height:0} DIP";
 
         const double badgeWidth = 180;
         const double badgeHeight = 26;

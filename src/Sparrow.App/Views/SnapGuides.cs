@@ -79,6 +79,21 @@ public static class SnapGuides
     /// <summary>选区内的参考线（相对选区）：两边 + 中线。</summary>
     public static IReadOnlyList<double> BoxGuides(double size) => [0, size / 2, size];
 
+    /// <summary>屏幕边 + 中线；给了框就再加上框的边和中线（吸附检测到的窗口）。</summary>
+    public static IReadOnlyList<double> Combine(double size, Rect? box, bool vertical)
+    {
+        var list = new List<double>(ScreenGuides(size));
+
+        if (box is { } b)
+        {
+            list.AddRange(vertical
+                ? [b.Left, b.X + b.Width / 2, b.Right]
+                : [b.Top, b.Y + b.Height / 2, b.Bottom]);
+        }
+
+        return list;
+    }
+
     /// <summary>把标注落点吸附到选区参考线上，并换回窗口坐标。</summary>
     public static (Point Point, double? Vertical, double? Horizontal) SnapToBox(
         Point point,

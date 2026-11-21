@@ -87,4 +87,19 @@ public sealed record AppSettings
     /// 填了就先从 <c>{镜像}/{原文件名}</c> 下载，失败再回落到内置源。
     /// </summary>
     public string LocalModelMirror { get; init; } = string.Empty;
+
+    /// <summary>截图标注颜色（#RRGGBB）。</summary>
+    public string AnnotationColor { get; init; } = "#E5A44C";
+
+    /// <summary>截图标注线宽（DIP）。</summary>
+    public double AnnotationWidth { get; init; } = 3;
+
+    /// <summary>马赛克默认用模糊（false = 像素化）。</summary>
+    public bool AnnotationMosaicBlur { get; init; }
+
+    /// <summary>选区尺寸角标单位：px（物理像素）或 dip。</summary>
+    public string CaptureSizeUnit { get; init; } = "px";
+
+    /// <summary>导出圆角半径（DIP）；0 = 不切。</summary>
+    public double CaptureCornerRadius { get; init; }
 }

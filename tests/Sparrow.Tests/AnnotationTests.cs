@@ -277,6 +277,34 @@ public sealed class AnnotationTests
         window.StyleRow.IsVisible.ShouldBeFalse();
     }
 
+    [Fact]
+    public void 圆角导出_四角透明中间保留()
+    {
+        var png = CreateWhitePng(100, 100);
+
+        var rounded = AnnotationRenderer.RoundCorners(png, 24);
+
+        using var decoded = SKBitmap.Decode(rounded);
+        decoded.Width.ShouldBe(100);
+
+        ((int)decoded.GetPixel(2, 2).Alpha).ShouldBe(0);
+        ((int)decoded.GetPixel(50, 50).Alpha).ShouldBe(255);
+    }
+
+    [AvaloniaFact]
+    public void 截图窗口_圆角开关切换导出半径()
+    {
+        var window = new CaptureWindow();
+        window.ExportCornerRadius.ShouldBe(0);
+
+        window.CornerRadiusButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.ExportCornerRadius.ShouldBe(10);
+        window.CornerRadiusButton.Classes.Contains("selected").ShouldBeTrue();
+
+        window.CornerRadiusButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.ExportCornerRadius.ShouldBe(0);
+    }
+
     private static CaptureWindow CreateWindowWithSelection()
     {
         var window = new CaptureWindow();

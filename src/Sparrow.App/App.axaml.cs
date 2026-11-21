@@ -524,7 +524,12 @@ public partial class App : Application
             OcrRunner = RunCaptureOcrAsync,
             CopyText = CopyTextToClipboard,
             FreezeOnOpen = true,
-            CaptureOcrBoxMode = _settingsViewModel?.CaptureOcrBoxMode ?? OcrBoxMode.Hover
+            CaptureOcrBoxMode = _settingsViewModel?.CaptureOcrBoxMode ?? OcrBoxMode.Hover,
+            NoteColorValue = ParseNoteColor(_appSettings.AnnotationColor),
+            NoteStrokeWidth = _appSettings.AnnotationWidth,
+            NoteMosaicBlur = _appSettings.AnnotationMosaicBlur,
+            SizeInPixels = _appSettings.CaptureSizeUnit != "dip",
+            ExportCornerRadius = _appSettings.CaptureCornerRadius
         };
 
         capture.OcrBoxModeChanged += mode =>
@@ -537,6 +542,9 @@ public partial class App : Application
         Log.Info($"截图窗口已显示：visible={capture.IsVisible}，title={capture.Title}");
 
         await WaitForClosedAsync(capture);
+
+        // 记住这次的标注样式和尺寸单位，下次截图直接沿用
+        SaveCapturePreferences(capture);
 
         // 旧 OCR 插件只返回文本：窗口已关，直接回退到面板，避免重复识别
         if (capture.FallbackText is { Length: > 0 } fallback)
@@ -557,6 +565,49 @@ public partial class App : Application
 
         await HandleCaptureActionAsync(png, capture.Action);
     }
+
+    /// <summary>截图窗口关掉后，把标注样式和尺寸单位写回设置（变了才写）。</summary>
+    private void SaveCapturePreferences(CaptureWindow capture)
+    {
+        var color = $"#{capture.NoteColorValue & 0xFFFFFF:X6}";
+        var unit = capture.SizeInPixels ? "px" : "dip";
+
+        if (color == _appSettings.AnnotationColor
+            && Math.Abs(capture.NoteStrokeWidth - _appSettings.AnnotationWidth) < 0.01
+            && capture.NoteMosaicBlur == _appSettings.AnnotationMosaicBlur
+            && unit == _appSettings.CaptureSizeUnit
+            && Math.Abs(capture.ExportCornerRadius - _appSettings.CaptureCornerRadius) < 0.01)
+        {
+            return;
+        }
+
+        _appSettings = _appSettings with
+        {
+            AnnotationColor = color,
+            AnnotationWidth = capture.NoteStrokeWidth,
+            AnnotationMosaicBlur = capture.NoteMosaicBlur,
+            CaptureSizeUnit = unit,
+            CaptureCornerRadius = capture.ExportCornerRadius
+        };
+
+        try
+        {
+            _settingsStore?.Save(_appSettings);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"保存截图样式失败：{ex.Message}");
+        }
+    }
+
+    private static uint ParseNoteColor(string? value) =>
+        uint.TryParse(
+            value?.TrimStart('#'),
+            System.Globalization.NumberStyles.HexNumber,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var rgb)
+            ? 0xFF000000u | (rgb & 0xFFFFFF)
+            : 0xFFE5A44Cu;
 
     /// <summary>截图结果的动作分发：普通截图和滚动截图共用。</summary>
     private async Task HandleCaptureActionAsync(byte[] png, CaptureAction action)

@@ -52,6 +52,37 @@ public sealed class SnapGuidesTests
         horizontal.ShouldBeNull();
     }
 
+    [Fact]
+    public void 参考线合并_包含窗口边和中线()
+    {
+        var box = new Rect(100, 100, 200, 100);
+
+        SnapGuides.Combine(1000, null, vertical: true).Count.ShouldBe(3);
+        SnapGuides.Combine(1000, box, vertical: true)
+            .ShouldBe([0, 500, 1000, 100, 200, 300]);
+
+        SnapGuides.Combine(800, box, vertical: false)
+            .ShouldBe([0, 400, 800, 100, 150, 200]);
+    }
+
+    [AvaloniaFact]
+    public void 截图窗口_尺寸角标可切换像素与DIP()
+    {
+        var window = new CaptureWindow();
+        window.Show();
+        window.MouseDown(new Point(100, 100), MouseButton.Left);
+        window.MouseMove(new Point(300, 250));
+        window.MouseUp(new Point(300, 250), MouseButton.Left);
+
+        window.SizeInPixels.ShouldBeTrue();
+        window.SizeText.Text.ShouldNotBeNull().ShouldNotContain("DIP");
+
+        window.ToggleSizeUnit();
+
+        window.SizeInPixels.ShouldBeFalse();
+        window.SizeText.Text.ShouldNotBeNull().ShouldContain("DIP");
+    }
+
     [AvaloniaFact]
     public void 截图窗口_拖动选区贴边时出现参考线且松手消失()
     {

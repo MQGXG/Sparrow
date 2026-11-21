@@ -151,7 +151,10 @@
     <!-- 选区尺寸：显示物理像素，和最终截图尺寸一致 -->
     <Border x:Name="SizeBadge"
             IsVisible="False"
-            IsHitTestVisible="False"
+            IsHitTestVisible="True"
+            Cursor="Hand"
+            ToolTip.Tip="点击切换物理像素 / DIP"
+            PointerPressed="OnSizeBadgeClick"
             Background="{StaticResource OverlayBrush}"
             BorderBrush="{StaticResource LineStrongBrush}"
             BorderThickness="1"
@@ -317,6 +320,9 @@
 
           <Button Focusable="False" x:Name="MosaicModeButton" Classes="tool" Content="马赛克·像素"
                   ToolTip.Tip="切换像素 / 模糊" Click="OnMosaicModeClick" />
+
+          <Button Focusable="False" x:Name="CornerRadiusButton" Classes="tool" Content="圆角"
+                  ToolTip.Tip="导出时四角切圆角" Click="OnCornerRadiusClick" />
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="6">

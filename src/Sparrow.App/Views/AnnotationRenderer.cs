@@ -230,4 +230,35 @@ internal static class AnnotationRenderer
         var alpha = (byte)Math.Clamp(color.Alpha * Math.Clamp(opacity, 0, 1), 0, 255);
         return color.WithAlpha(alpha);
     }
+
+    /// <summary>把图片四角切成圆角（透明背景）；半径按物理像素给。</summary>
+    public static byte[] RoundCorners(byte[] png, double radiusPixels)
+    {
+        if (radiusPixels <= 0.5)
+            return png;
+
+        using var source = SKBitmap.Decode(png);
+        if (source is null)
+            return png;
+
+        using var output = new SKBitmap(source.Width, source.Height);
+
+        using (var canvas = new SKCanvas(output))
+        {
+            canvas.Clear(SKColors.Transparent);
+
+            using var path = new SKPath();
+            path.AddRoundRect(
+                new SKRect(0, 0, source.Width, source.Height),
+                (float)radiusPixels,
+                (float)radiusPixels);
+
+            canvas.ClipPath(path, SKClipOperation.Intersect, antialias: true);
+            canvas.DrawBitmap(source, 0, 0);
+        }
+
+        using var image = SKImage.FromBitmap(output);
+        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
+    }
 }
