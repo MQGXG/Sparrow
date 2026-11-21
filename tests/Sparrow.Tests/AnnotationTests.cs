@@ -262,6 +262,21 @@ public sealed class AnnotationTests
         window.MosaicModeButton.Content.ShouldBe("马赛克·模糊");
     }
 
+    [AvaloniaFact]
+    public void 截图窗口_样式行只在选中工具时出现()
+    {
+        var window = new CaptureWindow();
+
+        window.StyleRow.IsVisible.ShouldBeFalse("没选工具时属性行不该占位置");
+
+        window.RectToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.StyleRow.IsVisible.ShouldBeTrue();
+
+        // 再点一次同一工具：回到无工具状态，属性行收起
+        window.RectToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.StyleRow.IsVisible.ShouldBeFalse();
+    }
+
     private static CaptureWindow CreateWindowWithSelection()
     {
         var window = new CaptureWindow();

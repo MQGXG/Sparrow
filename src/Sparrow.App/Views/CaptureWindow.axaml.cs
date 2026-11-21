@@ -1121,6 +1121,9 @@ public partial class CaptureWindow : Window
         SetSelected(TextToolButton, _tool == AnnotationTool.Text);
         SetSelected(NumberToolButton, _tool == AnnotationTool.Number);
         UndoButton.IsEnabled = _notes.CanUndo;
+
+        // 属性行只在选中标注工具时出现：没选工具时整条让出去，别挡截图
+        StyleRow.IsVisible = _tool != AnnotationTool.None;
     }
 
     private static void SetSelected(Button button, bool selected)
