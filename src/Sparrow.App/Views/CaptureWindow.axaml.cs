@@ -1,7 +1,9 @@
+using System.Globalization;
 using System.Runtime;
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -41,7 +43,10 @@ public partial class CaptureWindow : Window
         None,
         Create,
         Move,
-        Resize
+        Resize,
+
+        /// <summary>拖动编辑已有标注。</summary>
+        NoteEdit
     }
 
     private enum ResizeHandle
@@ -76,7 +81,7 @@ public partial class CaptureWindow : Window
     private static readonly Cursor NwseCursor = new(StandardCursorType.TopLeftCorner);
     private static readonly Cursor NeswCursor = new(StandardCursorType.TopRightCorner);
 
-    private readonly Dictionary<ResizeHandle, Ellipse> _handles = [];
+    private readonly Dictionary<ResizeHandle, Rectangle> _handles = [];
 
     private PixelPoint _origin;
     private double _scaling = 1;
@@ -119,6 +124,12 @@ public partial class CaptureWindow : Window
     private IAnnotation? _pendingAnnotation;
     private List<Point>? _penPoints;
 
+    // 标注的选中 / 拖动编辑：索引指向 _notes.Items
+    private int _selectedNote = -1;
+    private int _draggingNote = -1;
+    private Point _noteDragStart;
+    private IAnnotation? _noteDragOriginal;
+
     private static readonly Color NoteColor = Color.Parse("#E5A44C");
     private const double NoteWidth = 3;
     private const double HighlighterWidth = 18;
@@ -126,6 +137,16 @@ public partial class CaptureWindow : Window
     private const int MosaicCell = 12;
     private const double TextFontSize = 16;
     private const double NumberSize = 24;
+
+    // 当前画笔样式（属性栏驱动，只影响之后画的图元）
+    private double _noteOpacity = 1;
+    private ShapeFill _noteFill = ShapeFill.None;
+    private double _noteRadius;
+    private LineDash _noteDash = LineDash.Solid;
+    private double _noteFontSize = TextFontSize;
+    private bool _noteBold;
+    private int _mosaicCell = MosaicCell;
+    private double _numberSize = NumberSize;
 
     private int _nextNumber = 1;
     private Point _textOrigin;
@@ -144,6 +165,12 @@ public partial class CaptureWindow : Window
 
     /// <summary>尺寸角标显示物理像素还是 DIP。</summary>
     private bool _sizeInPixels = true;
+
+    /// <summary>锁定宽高比。</summary>
+    private bool _aspectLocked;
+
+    /// <summary>回填输入框期间不触发提交，避免拖动选区时反复换算。</summary>
+    private bool _sizeEditGuard;
 
     /// <summary>导出圆角半径（0 = 不切）。</summary>
     private double _cornerRadius;
@@ -193,6 +220,21 @@ public partial class CaptureWindow : Window
         OcrLayer.PointerExited += OnOcrLayerPointerExited;
         UpdateStyleButtons();
         UpdateToolButtons();
+
+        // 属性行显隐 / OCR 状态文字都会改变工具条宽度：
+        // 布局完成后再校正一次居中（Bounds 才是最终尺寸，DesiredSize 可能还是上一帧的）
+        ActionBar.LayoutUpdated += OnActionBarLayoutUpdated;
+
+        // 自定义颜色的历史色：先从主题色起步
+        _recentColors.AddRange(
+        [
+            Color.Parse("#E5A44C"),
+            Color.Parse("#FFFFFF"),
+            Color.Parse("#FF5F5F"),
+            Color.Parse("#5FD08C"),
+            Color.Parse("#5FA8FF")
+        ]);
+        BuildRecentColors();
     }
 
     /// <summary>显示前是否先冻结整屏；测试/无桌面场景由调用方关掉。</summary>
@@ -219,14 +261,16 @@ public partial class CaptureWindow : Window
                      ResizeHandle.SE, ResizeHandle.S, ResizeHandle.SW, ResizeHandle.W
                  })
         {
-            // 白底 + 深色描边：亮背景和暗背景上都能看清
-            var dot = new Ellipse
+            // 小方块控制点：白底 + 深色描边，参考 LumaShot 的角点样式
+            var dot = new Rectangle
             {
-                Width = 9,
-                Height = 9,
+                Width = 7,
+                Height = 7,
+                RadiusX = 1.5,
+                RadiusY = 1.5,
                 Fill = HandleFill,
                 Stroke = HandleStroke,
-                StrokeThickness = 1.5,
+                StrokeThickness = 1,
                 IsVisible = false
             };
 
@@ -476,6 +520,23 @@ public partial class CaptureWindow : Window
 
         var point = e.GetPosition(this);
 
+        // 右键逐级退出（参考 snow-shot / LumaShot 的手感）
+        if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+        {
+            HandleRightClick();
+            e.Handled = true;
+            return;
+        }
+
+        // 自定义颜色面板：点里面交给控件，点外面先收起
+        if (CustomColorPanel.IsVisible)
+        {
+            if (IsPointInCustomColorPanel(point))
+                return;
+
+            CustomColorPanel.IsVisible = false;
+        }
+
         // 点在动作栏上：交给按钮，不要当成新选区
         if (IsPointInActionBar(point))
             return;
@@ -493,6 +554,25 @@ public partial class CaptureWindow : Window
         {
             e.Handled = true;
             return;
+        }
+
+        // 指针工具：先看点没点中已有标注（点中就拖动它），否则继续移动选区
+        if (_tool == AnnotationTool.None && _hasSelection && _selection.Contains(point))
+        {
+            var hit = HitNote(point);
+            if (hit >= 0)
+            {
+                SelectNote(hit);
+                _draggingNote = hit;
+                _noteDragOriginal = _notes.Items[hit];
+                _noteDragStart = new Point(point.X - _selection.X, point.Y - _selection.Y);
+                _mode = DragMode.NoteEdit;
+                Cursor = MoveCursor;
+                e.Handled = true;
+                return;
+            }
+
+            SelectNote(-1);   // 点空白：先取消选中，再走原来的移动/拉伸
         }
 
         // 第一次点击先清掉识别结果，不直接开始拉新框
@@ -598,6 +678,11 @@ public partial class CaptureWindow : Window
                 UpdateMagnifier(point);
                 e.Handled = true;
                 return;
+            case DragMode.NoteEdit:
+                ApplyNoteDrag(point);
+                Magnifier.IsVisible = false;
+                e.Handled = true;
+                return;
         }
 
         Magnifier.IsVisible = false;
@@ -623,6 +708,17 @@ public partial class CaptureWindow : Window
         }
 
         ClearGuides();
+
+        // 拖动编辑结束：标注已经落在新位置，保持选中方便继续微调 / 删除
+        if (_mode == DragMode.NoteEdit)
+        {
+            _mode = DragMode.None;
+            _draggingNote = -1;
+            _noteDragOriginal = null;
+            RebuildNotePreview();
+            e.Handled = true;
+            return;
+        }
 
         if (_mode == DragMode.None)
             return;
@@ -1259,9 +1355,47 @@ public partial class CaptureWindow : Window
         };
     }
 
+    /// <summary>
+    /// 右键逐级后退，和参考工具的肌肉记忆一致：
+    /// 拾色器 / 标注工具 → 指针；有选区 → 清空重选；什么都没有 → 取消截图。
+    /// </summary>
+    private void HandleRightClick()
+    {
+        if (CustomColorPanel.IsVisible)
+        {
+            CustomColorPanel.IsVisible = false;
+            return;
+        }
+
+        if (_tool != AnnotationTool.None)
+        {
+            _tool = AnnotationTool.None;
+            UpdateToolButtons();
+            return;
+        }
+
+        if (OcrLayer.IsVisible)
+        {
+            ClearOcrOverlay();
+            return;
+        }
+
+        if (_hasSelection)
+        {
+            ResetSelection();
+            return;
+        }
+
+        Action = CaptureAction.None;
+        Close();
+    }
+
     private void ResetSelection()
     {
         _hasSelection = false;
+        _selectedNote = -1;
+        _draggingNote = -1;
+        _noteDragOriginal = null;
         _selection = default;
         Selection.IsVisible = false;
         SelectionHalo.IsVisible = false;
@@ -1273,6 +1407,7 @@ public partial class CaptureWindow : Window
         HintBar.IsVisible = true;
         HideResultCard();
         _notes.Clear();
+        _nextNumber = 1;
         _pendingAnnotation = null;
         _penPoints = null;
         RebuildNotePreview();
@@ -1314,18 +1449,295 @@ public partial class CaptureWindow : Window
         }
     }
 
-    private void OnWidthClick(object? sender, RoutedEventArgs e)
+    // ---------- 自定义颜色 ----------
+
+    private readonly List<Color> _recentColors = [];
+    private double _pickerHue;
+    private double _pickerSaturation = 1;
+    private double _pickerValue = 1;
+    private Color _pickerColor = NoteColor;
+
+    private void OnCustomColorClick(object? sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: string text } && double.TryParse(text, out var width))
+        if (CustomColorPanel.IsVisible)
         {
-            _noteWidth = width;
-            UpdateStyleButtons();
+            CustomColorPanel.IsVisible = false;
+            return;
+        }
+
+        ShowColorPanel();
+    }
+
+    private void ShowColorPanel()
+    {
+        _pickerColor = _noteColor;
+        (_pickerHue, _pickerSaturation, _pickerValue) = RgbToHsv(_noteColor);
+        RenderColorPicker();
+
+        CustomColorPanel.IsVisible = true;
+        CustomColorPanel.Measure(Size.Infinity);
+        var size = CustomColorPanel.DesiredSize;
+
+        var anchorLeft = Canvas.GetLeft(ActionBar);
+        var anchorTop = Canvas.GetTop(ActionBar);
+        if (double.IsNaN(anchorLeft))
+            anchorLeft = 8;
+        if (double.IsNaN(anchorTop))
+            anchorTop = Height - size.Height - 8;
+
+        var left = Math.Clamp(anchorLeft + 8, 8, Math.Max(8, Width - size.Width - 8));
+        var top = Math.Clamp(anchorTop - size.Height - 8, 8, Math.Max(8, Height - size.Height - 8));
+
+        Canvas.SetLeft(CustomColorPanel, left);
+        Canvas.SetTop(CustomColorPanel, top);
+    }
+
+    private void OnCloseColorPanel(object? sender, RoutedEventArgs e) =>
+        CustomColorPanel.IsVisible = false;
+
+    private void OnSvPressed(object? sender, PointerPressedEventArgs e) =>
+        UpdateSaturationValue(e.GetPosition(SvArea));
+
+    private void OnSvMoved(object? sender, PointerEventArgs e)
+    {
+        if (e.GetCurrentPoint(SvArea).Properties.IsLeftButtonPressed)
+            UpdateSaturationValue(e.GetPosition(SvArea));
+    }
+
+    private void UpdateSaturationValue(Point point)
+    {
+        var width = Math.Max(1, SvArea.Bounds.Width);
+        var height = Math.Max(1, SvArea.Bounds.Height);
+
+        _pickerSaturation = Math.Clamp(point.X / width, 0, 1);
+        _pickerValue = 1 - Math.Clamp(point.Y / height, 0, 1);
+        RenderColorPicker();
+    }
+
+    private void OnHuePressed(object? sender, PointerPressedEventArgs e) =>
+        UpdateHue(e.GetPosition(HueBar));
+
+    private void OnHueMoved(object? sender, PointerEventArgs e)
+    {
+        if (e.GetCurrentPoint(HueBar).Properties.IsLeftButtonPressed)
+            UpdateHue(e.GetPosition(HueBar));
+    }
+
+    private void UpdateHue(Point point)
+    {
+        var width = Math.Max(1, HueBar.Bounds.Width);
+        _pickerHue = 360 * Math.Clamp(point.X / width, 0, 1);
+        RenderColorPicker();
+    }
+
+    private void RenderColorPicker()
+    {
+        _pickerColor = HsvToRgb(_pickerHue, _pickerSaturation, _pickerValue);
+        HueBase.Background = new SolidColorBrush(HsvToRgb(_pickerHue, 1, 1));
+        HexText.Text = $"#{_pickerColor.R:X2}{_pickerColor.G:X2}{_pickerColor.B:X2}";
+
+        var width = SvArea.Bounds.Width > 1 ? SvArea.Bounds.Width : 192;
+        var height = SvArea.Bounds.Height > 1 ? SvArea.Bounds.Height : 110;
+
+        SvCursor.Margin = new Thickness(
+            _pickerSaturation * width - 6,
+            (1 - _pickerValue) * height - 6,
+            0,
+            0);
+    }
+
+    private void OnApplyCustomColor(object? sender, RoutedEventArgs e)
+    {
+        _noteColor = _pickerColor;
+        PushRecentColor(_pickerColor);
+        UpdateStyleButtons();
+        CustomColorPanel.IsVisible = false;
+    }
+
+    private void PushRecentColor(Color color)
+    {
+        _recentColors.RemoveAll(item => item.ToUInt32() == color.ToUInt32());
+        _recentColors.Insert(0, color);
+
+        if (_recentColors.Count > 8)
+            _recentColors.RemoveAt(_recentColors.Count - 1);
+
+        BuildRecentColors();
+    }
+
+    private void BuildRecentColors()
+    {
+        RecentColors.Children.Clear();
+
+        foreach (var color in _recentColors)
+        {
+            var picked = color;
+            var swatch = new Button
+            {
+                Width = 22,
+                Height = 22,
+                Padding = new Thickness(0),
+                CornerRadius = new CornerRadius(11),
+                Background = new SolidColorBrush(color),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.Parse("#66000000")),
+                Margin = new Thickness(0, 0, 6, 6)
+            };
+
+            ToolTip.SetTip(swatch, $"#{picked.R:X2}{picked.G:X2}{picked.B:X2}");
+            swatch.Click += (_, _) =>
+            {
+                _pickerColor = picked;
+                (_pickerHue, _pickerSaturation, _pickerValue) = RgbToHsv(picked);
+                RenderColorPicker();
+            };
+
+            RecentColors.Children.Add(swatch);
         }
     }
 
-    private void OnMosaicModeClick(object? sender, RoutedEventArgs e)
+    private static (double Hue, double Saturation, double Value) RgbToHsv(Color color)
     {
-        _mosaicBlur = !_mosaicBlur;
+        double r = color.R / 255.0;
+        double g = color.G / 255.0;
+        double b = color.B / 255.0;
+
+        var max = Math.Max(r, Math.Max(g, b));
+        var min = Math.Min(r, Math.Min(g, b));
+        var delta = max - min;
+
+        double hue = 0;
+
+        if (delta > 0)
+        {
+            if (max == r)
+                hue = 60 * (((g - b) / delta) % 6);
+            else if (max == g)
+                hue = 60 * (((b - r) / delta) + 2);
+            else
+                hue = 60 * (((r - g) / delta) + 4);
+        }
+
+        if (hue < 0)
+            hue += 360;
+
+        return (hue, max <= 0 ? 0 : delta / max, max);
+    }
+
+    private static Color HsvToRgb(double hue, double saturation, double value)
+    {
+        hue = (hue % 360 + 360) % 360;
+
+        var c = value * saturation;
+        var x = c * (1 - Math.Abs(hue / 60 % 2 - 1));
+        var m = value - c;
+
+        var (r, g, b) = hue switch
+        {
+            < 60 => (c, x, 0.0),
+            < 120 => (x, c, 0.0),
+            < 180 => (0.0, c, x),
+            < 240 => (0.0, x, c),
+            < 300 => (x, 0.0, c),
+            _ => (c, 0.0, x)
+        };
+
+        return Color.FromRgb(
+            (byte)Math.Round((r + m) * 255),
+            (byte)Math.Round((g + m) * 255),
+            (byte)Math.Round((b + m) * 255));
+    }
+
+    private void OnWidth2Menu(object? sender, RoutedEventArgs e) => SetNoteWidth(2);
+    private void OnWidth3Menu(object? sender, RoutedEventArgs e) => SetNoteWidth(3);
+    private void OnWidth4Menu(object? sender, RoutedEventArgs e) => SetNoteWidth(4);
+    private void OnWidth8Menu(object? sender, RoutedEventArgs e) => SetNoteWidth(8);
+    private void OnWidth12Menu(object? sender, RoutedEventArgs e) => SetNoteWidth(12);
+
+    private void SetNoteWidth(double width)
+    {
+        _noteWidth = width;
+        UpdateStyleButtons();
+    }
+
+    private void OnDashSolidMenu(object? sender, RoutedEventArgs e) => SetNoteDash(LineDash.Solid);
+    private void OnDashDashMenu(object? sender, RoutedEventArgs e) => SetNoteDash(LineDash.Dash);
+    private void OnDashDotMenu(object? sender, RoutedEventArgs e) => SetNoteDash(LineDash.Dot);
+
+    private void SetNoteDash(LineDash dash)
+    {
+        _noteDash = dash;
+        UpdateStyleButtons();
+    }
+
+    private void OnFillNoneMenu(object? sender, RoutedEventArgs e) => SetNoteFill(ShapeFill.None);
+    private void OnFillSoftMenu(object? sender, RoutedEventArgs e) => SetNoteFill(ShapeFill.Soft);
+    private void OnFillSolidMenu(object? sender, RoutedEventArgs e) => SetNoteFill(ShapeFill.Solid);
+
+    private void SetNoteFill(ShapeFill fill)
+    {
+        _noteFill = fill;
+        UpdateStyleButtons();
+    }
+
+    private void OnOpacityChanged(object? sender, RangeBaseValueChangedEventArgs e)
+    {
+        _noteOpacity = Math.Clamp(e.NewValue / 100, 0.2, 1);
+        OpacityValue.Text = $"{e.NewValue:0}%";
+    }
+
+    private void OnRadiusChanged(object? sender, RangeBaseValueChangedEventArgs e)
+    {
+        _noteRadius = Math.Max(0, e.NewValue);
+        RadiusValue.Text = $"{e.NewValue:0} px";
+    }
+
+    private void OnFont14Menu(object? sender, RoutedEventArgs e) => SetFontSize(14);
+    private void OnFont16Menu(object? sender, RoutedEventArgs e) => SetFontSize(16);
+    private void OnFont20Menu(object? sender, RoutedEventArgs e) => SetFontSize(20);
+    private void OnFont24Menu(object? sender, RoutedEventArgs e) => SetFontSize(24);
+    private void OnFont32Menu(object? sender, RoutedEventArgs e) => SetFontSize(32);
+
+    private void SetFontSize(double size)
+    {
+        _noteFontSize = size;
+        UpdateStyleButtons();
+    }
+
+    private void OnBoldClick(object? sender, RoutedEventArgs e)
+    {
+        _noteBold = !_noteBold;
+        UpdateStyleButtons();
+    }
+
+    private void OnNumber16Menu(object? sender, RoutedEventArgs e) => SetNumberSize(16);
+    private void OnNumber24Menu(object? sender, RoutedEventArgs e) => SetNumberSize(24);
+    private void OnNumber32Menu(object? sender, RoutedEventArgs e) => SetNumberSize(32);
+    private void OnNumber48Menu(object? sender, RoutedEventArgs e) => SetNumberSize(48);
+
+    private void SetNumberSize(double size)
+    {
+        _numberSize = size;
+        UpdateStyleButtons();
+    }
+
+    private void OnMosaicPixelMenu(object? sender, RoutedEventArgs e) => ToggleMosaicBlur(false);
+    private void OnMosaicBlurMenu(object? sender, RoutedEventArgs e) => ToggleMosaicBlur(true);
+
+    /// <summary>切换马赛克像素 / 模糊；菜单和测试共用。</summary>
+    internal void ToggleMosaicBlur(bool blur)
+    {
+        _mosaicBlur = blur;
+        UpdateStyleButtons();
+    }
+
+    private void OnBrush8Menu(object? sender, RoutedEventArgs e) => SetMosaicCell(8);
+    private void OnBrush12Menu(object? sender, RoutedEventArgs e) => SetMosaicCell(12);
+    private void OnBrush20Menu(object? sender, RoutedEventArgs e) => SetMosaicCell(20);
+
+    private void SetMosaicCell(int cell)
+    {
+        _mosaicCell = cell;
         UpdateStyleButtons();
     }
 
@@ -1343,15 +1755,31 @@ public partial class CaptureWindow : Window
         SetSelected(ColorGreenButton, IsColor("#5FD08C"));
         SetSelected(ColorBlueButton, IsColor("#5FA8FF"));
 
-        SetSelected(Width2Button, Math.Abs(_noteWidth - 2) < 0.01);
-        SetSelected(Width4Button, Math.Abs(_noteWidth - 4) < 0.01);
-        SetSelected(Width8Button, Math.Abs(_noteWidth - 8) < 0.01);
+        WidthMenuButton.Content = $"{_noteWidth:0} px";
+        DashMenuButton.Content = _noteDash switch
+        {
+            LineDash.Dash => "虚线",
+            LineDash.Dot => "点线",
+            _ => "实线"
+        };
+        FillMenuButton.Content = _noteFill switch
+        {
+            ShapeFill.Solid => "实心",
+            ShapeFill.Soft => "淡色",
+            _ => "无"
+        };
 
-        // 模式靠图标切换：网格 = 像素，波浪 = 模糊
-        MosaicPixelIcon.IsVisible = !_mosaicBlur;
-        MosaicBlurIcon.IsVisible = _mosaicBlur;
-        SetSelected(MosaicModeButton, _mosaicBlur);
-        ToolTip.SetTip(MosaicModeButton, _mosaicBlur ? "马赛克：模糊（点击切到像素）" : "马赛克：像素（点击切到模糊）");
+        OpacitySlider.Value = Math.Round(_noteOpacity * 100);
+        OpacityValue.Text = $"{_noteOpacity * 100:0}%";
+        RadiusSlider.Value = _noteRadius;
+        RadiusValue.Text = $"{_noteRadius:0} px";
+
+        FontSizeMenuButton.Content = $"{_noteFontSize:0} px";
+        SetSelected(BoldButton, _noteBold);
+        NumberSizeMenuButton.Content = $"{_numberSize:0} px";
+
+        MosaicModeButton.Content = _mosaicBlur ? "模糊" : "像素";
+        BrushMenuButton.Content = $"{_mosaicCell} px";
 
         SetSelected(CornerRadiusButton, _cornerRadius > 0);
     }
@@ -1363,8 +1791,237 @@ public partial class CaptureWindow : Window
     private void UndoAnnotation()
     {
         _notes.Undo();
+        _selectedNote = -1;
         RebuildNotePreview();
         UpdateToolButtons();
+    }
+
+    private void OnRedoClick(object? sender, RoutedEventArgs e) => RedoAnnotation();
+
+    private void RedoAnnotation()
+    {
+        _notes.Redo();
+        _selectedNote = -1;
+        RebuildNotePreview();
+        UpdateToolButtons();
+    }
+
+    // ---------- 标注的选中 / 拖动编辑 ----------
+
+    /// <summary>选中一条标注（-1 = 取消选中），选中态画虚线外框。</summary>
+    internal void SelectNote(int index)
+    {
+        if (_selectedNote == index)
+            return;
+
+        _selectedNote = index >= 0 && index < _notes.Items.Count ? index : -1;
+        RebuildNotePreview();
+    }
+
+    /// <summary>指针下面最上面的一条标注；没有返回 -1。</summary>
+    private int HitNote(Point point)
+    {
+        var local = new Point(point.X - _selection.X, point.Y - _selection.Y);
+
+        for (var index = _notes.Items.Count - 1; index >= 0; index--)
+        {
+            if (HitTestNote(_notes.Items[index], local))
+                return index;
+        }
+
+        return -1;
+    }
+
+    private void ApplyNoteDrag(Point point)
+    {
+        if (_draggingNote < 0 || _noteDragOriginal is null || _draggingNote >= _notes.Items.Count)
+            return;
+
+        // 鼠标点换算成选区相对坐标，位移直接加在原始图元上
+        var dx = point.X - _selection.X - _noteDragStart.X;
+        var dy = point.Y - _selection.Y - _noteDragStart.Y;
+
+        _notes.Replace(_draggingNote, TranslateNote(_noteDragOriginal, dx, dy));
+        RebuildNotePreview();
+    }
+
+    /// <summary>删除选中的标注（Delete / Backspace）。</summary>
+    internal void DeleteSelectedNote()
+    {
+        if (_selectedNote < 0 || _selectedNote >= _notes.Items.Count)
+            return;
+
+        _notes.RemoveAt(_selectedNote);
+        _selectedNote = -1;
+        RebuildNotePreview();
+        UpdateToolButtons();
+    }
+
+    private static IAnnotation TranslateNote(IAnnotation item, double dx, double dy) => item switch
+    {
+        ShapeAnnotation shape => shape with
+        {
+            Rect = new Rect(shape.Rect.X + dx, shape.Rect.Y + dy, shape.Rect.Width, shape.Rect.Height)
+        },
+        ArrowAnnotation arrow => arrow with
+        {
+            From = new Point(arrow.From.X + dx, arrow.From.Y + dy),
+            To = new Point(arrow.To.X + dx, arrow.To.Y + dy)
+        },
+        PenAnnotation pen => pen with
+        {
+            Points = pen.Points.Select(point => new Point(point.X + dx, point.Y + dy)).ToList()
+        },
+        MosaicAnnotation mosaic => mosaic with
+        {
+            Rect = new Rect(mosaic.Rect.X + dx, mosaic.Rect.Y + dy, mosaic.Rect.Width, mosaic.Rect.Height)
+        },
+        TextAnnotation text => text with
+        {
+            Origin = new Point(text.Origin.X + dx, text.Origin.Y + dy)
+        },
+        NumberAnnotation number => number with
+        {
+            Center = new Point(number.Center.X + dx, number.Center.Y + dy)
+        },
+        _ => item
+    };
+
+    /// <summary>命中测试：空心形状要求靠近边框，实心形状整块可点。</summary>
+    private static bool HitTestNote(IAnnotation item, Point point)
+    {
+        const double slop = 6;
+
+        switch (item)
+        {
+            case ShapeAnnotation shape:
+                var outer = Grow(shape.Rect, shape.Width / 2 + slop);
+
+                if (shape.Fill != ShapeFill.None)
+                    return outer.Contains(point);
+
+                // 空心：中间留空，点进去是移动选区 / 画新东西
+                var inner = Grow(shape.Rect, -(shape.Width / 2 + slop));
+                return outer.Contains(point)
+                    && (inner.Width <= 0 || inner.Height <= 0 || !inner.Contains(point));
+
+            case ArrowAnnotation arrow:
+                return DistanceToSegment(point, arrow.From, arrow.To) <= arrow.Width / 2 + slop;
+
+            case PenAnnotation pen:
+                for (var index = 1; index < pen.Points.Count; index++)
+                {
+                    if (DistanceToSegment(point, pen.Points[index - 1], pen.Points[index])
+                        <= pen.Width / 2 + slop)
+                        return true;
+                }
+
+                return false;
+
+            case MosaicAnnotation mosaic:
+                return mosaic.Rect.Contains(point);
+
+            case TextAnnotation text:
+                return NoteBounds(text).Contains(point);
+
+            case NumberAnnotation number:
+                return Distance(point, number.Center) <= number.Size / 2 + slop;
+
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>标注在选区坐标系里的包围盒；选中框和命中测试共用。</summary>
+    private static Rect NoteBounds(IAnnotation item)
+    {
+        switch (item)
+        {
+            case ShapeAnnotation shape:
+                return shape.Rect;
+
+            case ArrowAnnotation arrow:
+                return FromPoints(arrow.From, arrow.To);
+
+            case PenAnnotation { Points.Count: > 0 } pen:
+                return FromPoints(pen.Points);
+
+            case MosaicAnnotation mosaic:
+                return mosaic.Rect;
+
+            case TextAnnotation text:
+                // 没有排版信息，按字宽粗估：中日韩一个字号宽，西文约 0.6
+                return new Rect(
+                    text.Origin.X,
+                    text.Origin.Y - text.FontSize,
+                    EstimateTextWidth(text.Text, text.FontSize),
+                    text.FontSize * 1.25);
+
+            case NumberAnnotation number:
+                return new Rect(
+                    number.Center.X - number.Size / 2,
+                    number.Center.Y - number.Size / 2,
+                    number.Size,
+                    number.Size);
+
+            default:
+                return default;
+        }
+    }
+
+    private static double EstimateTextWidth(string text, double fontSize)
+    {
+        var width = 0.0;
+
+        foreach (var ch in text)
+            width += ch > 0x2E7F ? fontSize : fontSize * 0.6;
+
+        return Math.Max(fontSize, width);
+    }
+
+    private static Rect Grow(Rect rect, double amount) => new(
+        rect.X - amount,
+        rect.Y - amount,
+        Math.Max(0, rect.Width + amount * 2),
+        Math.Max(0, rect.Height + amount * 2));
+
+    private static Rect FromPoints(Point a, Point b) => new(
+        Math.Min(a.X, b.X),
+        Math.Min(a.Y, b.Y),
+        Math.Abs(a.X - b.X),
+        Math.Abs(a.Y - b.Y));
+
+    private static Rect FromPoints(IReadOnlyList<Point> points)
+    {
+        var left = double.MaxValue;
+        var top = double.MaxValue;
+        var right = double.MinValue;
+        var bottom = double.MinValue;
+
+        foreach (var point in points)
+        {
+            left = Math.Min(left, point.X);
+            top = Math.Min(top, point.Y);
+            right = Math.Max(right, point.X);
+            bottom = Math.Max(bottom, point.Y);
+        }
+
+        return new Rect(left, top, right - left, bottom - top);
+    }
+
+    /// <summary>点到线段的最短距离。</summary>
+    private static double DistanceToSegment(Point point, Point from, Point to)
+    {
+        var dx = to.X - from.X;
+        var dy = to.Y - from.Y;
+        var lengthSquared = dx * dx + dy * dy;
+
+        if (lengthSquared < 0.0001)
+            return Distance(point, from);
+
+        var t = Math.Clamp(((point.X - from.X) * dx + (point.Y - from.Y) * dy) / lengthSquared, 0, 1);
+
+        return Distance(point, new Point(from.X + dx * t, from.Y + dy * t));
     }
 
     /// <summary>数字键 → 工具；和按钮 ToolTip 里的数字保持一致。</summary>
@@ -1395,6 +2052,9 @@ public partial class CaptureWindow : Window
             return;
 
         _notes.Clear();
+        _selectedNote = -1;
+        _draggingNote = -1;
+        _noteDragOriginal = null;
         _pendingAnnotation = null;
         _penPoints = null;
         _nextNumber = 1;
@@ -1405,6 +2065,11 @@ public partial class CaptureWindow : Window
     private void SetTool(AnnotationTool tool)
     {
         _tool = _tool == tool ? AnnotationTool.None : tool;
+
+        // 切到画图工具时取消选中，避免虚线框挡着下一笔
+        if (_tool != AnnotationTool.None)
+            SelectNote(-1);
+
         UpdateToolButtons();
     }
 
@@ -1420,31 +2085,32 @@ public partial class CaptureWindow : Window
         SetSelected(TextToolButton, _tool == AnnotationTool.Text);
         SetSelected(NumberToolButton, _tool == AnnotationTool.Number);
         UndoButton.IsEnabled = _notes.CanUndo;
+        RedoButton.IsEnabled = _notes.CanRedo;
 
         // 属性行只在选中标注工具时出现：没选工具时整条让出去，别挡截图
         StyleRow.IsVisible = _tool != AnnotationTool.None;
 
-        // 每组属性只在当前工具用得上时出现：
-        // 马赛克没有颜色/线宽；文字和序号没有线宽。
+        // 每组属性只在当前工具用得上时出现（LumaShot 的属性卡思路）
         var drawing = _tool is AnnotationTool.Rectangle or AnnotationTool.Ellipse
             or AnnotationTool.Arrow or AnnotationTool.Pen or AnnotationTool.Highlighter;
 
-        var colors = _tool != AnnotationTool.Mosaic;
+        ColorGroup.IsVisible = _tool is not (AnnotationTool.None or AnnotationTool.Mosaic);
+        WidthGroup.IsVisible = drawing;
+        DashGroup.IsVisible = _tool is AnnotationTool.Rectangle or AnnotationTool.Arrow
+            or AnnotationTool.Pen or AnnotationTool.Highlighter;
+        FillGroup.IsVisible = _tool is AnnotationTool.Rectangle or AnnotationTool.Ellipse;
+        OpacityGroup.IsVisible = drawing;
+        RadiusGroup.IsVisible = _tool == AnnotationTool.Rectangle;
+        FontGroup.IsVisible = _tool == AnnotationTool.Text;
+        NumberGroup.IsVisible = _tool == AnnotationTool.Number;
+        MosaicGroup.IsVisible = _tool == AnnotationTool.Mosaic;
 
-        ColorAmberButton.IsVisible = colors;
-        ColorWhiteButton.IsVisible = colors;
-        ColorRedButton.IsVisible = colors;
-        ColorGreenButton.IsVisible = colors;
-        ColorBlueButton.IsVisible = colors;
+        // 属性行显隐会改变工具条宽度：先让它重新测量，再重新居中（用户拖过就不再跟随）
+        ActionBar.InvalidateMeasure();
+        ActionBar.Measure(Size.Infinity);
 
-        Width2Button.IsVisible = drawing;
-        Width4Button.IsVisible = drawing;
-        Width8Button.IsVisible = drawing;
-
-        MosaicModeButton.IsVisible = _tool == AnnotationTool.Mosaic;
-
-        StyleSeparator1.IsVisible = colors && (drawing || _tool == AnnotationTool.Mosaic);
-        StyleSeparator2.IsVisible = _tool == AnnotationTool.Mosaic;
+        if (ActionBar.IsVisible && !_toolbarManual)
+            PositionActionBar(_selection);
     }
 
     private static void SetSelected(Button button, bool selected)
@@ -1477,18 +2143,31 @@ public partial class CaptureWindow : Window
                     new Rect(_annotationStart, new Size()),
                     _noteColor.ToUInt32(),
                     _noteWidth,
-                    _tool == AnnotationTool.Ellipse);
+                    _tool == AnnotationTool.Ellipse,
+                    _noteOpacity,
+                    _noteFill,
+                    _noteRadius,
+                    _noteDash);
                 break;
 
             case AnnotationTool.Arrow:
                 _pendingAnnotation = new ArrowAnnotation(
-                    _annotationStart, _annotationStart, _noteColor.ToUInt32(), _noteWidth);
+                    _annotationStart,
+                    _annotationStart,
+                    _noteColor.ToUInt32(),
+                    _noteWidth,
+                    _noteOpacity,
+                    _noteDash);
                 break;
 
             case AnnotationTool.Pen:
                 _penPoints = [_annotationStart];
                 _pendingAnnotation = new PenAnnotation(
-                    _penPoints, _noteColor.ToUInt32(), _noteWidth);
+                    _penPoints,
+                    _noteColor.ToUInt32(),
+                    _noteWidth,
+                    _noteOpacity,
+                    _noteDash);
                 break;
 
             case AnnotationTool.Highlighter:
@@ -1502,7 +2181,7 @@ public partial class CaptureWindow : Window
 
             case AnnotationTool.Mosaic:
                 _pendingAnnotation = new MosaicAnnotation(
-                    new Rect(_annotationStart, new Size()), MosaicCell, _mosaicBlur);
+                    new Rect(_annotationStart, new Size()), _mosaicCell, _mosaicBlur);
                 break;
 
             case AnnotationTool.Text:
@@ -1511,7 +2190,7 @@ public partial class CaptureWindow : Window
 
             case AnnotationTool.Number:
                 _notes.Add(new NumberAnnotation(
-                    _annotationStart, _nextNumber++, _noteColor.ToUInt32(), NumberSize));
+                    _annotationStart, _nextNumber++, _noteColor.ToUInt32(), _numberSize));
                 RebuildNotePreview();
                 UpdateToolButtons();
                 return true;
@@ -1594,6 +2273,10 @@ public partial class CaptureWindow : Window
     {
         NoteLayer.Children.Clear();
 
+        // 撤销 / 删除之后索引可能越界
+        if (_selectedNote >= _notes.Items.Count)
+            _selectedNote = -1;
+
         if (!_hasSelection || (_notes.Items.Count == 0 && _pendingAnnotation is null))
         {
             NoteLayer.IsVisible = false;
@@ -1611,6 +2294,27 @@ public partial class CaptureWindow : Window
 
         if (_pendingAnnotation is not null)
             AddPreviewShape(_pendingAnnotation);
+
+        // 选中态：虚线外框，告诉用户现在拖的是哪一条
+        if (_selectedNote >= 0 && _selectedNote < _notes.Items.Count)
+            AddNoteSelectionOutline(NoteBounds(_notes.Items[_selectedNote]));
+    }
+
+    private void AddNoteSelectionOutline(Rect bounds)
+    {
+        var outline = new Rectangle
+        {
+            Width = bounds.Width + 6,
+            Height = bounds.Height + 6,
+            Stroke = new SolidColorBrush(Color.Parse("#FFE5A44C")),
+            StrokeThickness = 1,
+            StrokeDashArray = [3, 2],
+            IsHitTestVisible = false
+        };
+
+        Canvas.SetLeft(outline, bounds.X - 3);
+        Canvas.SetTop(outline, bounds.Y - 3);
+        NoteLayer.Children.Add(outline);
     }
 
     private void AddPreviewShape(IAnnotation item)
@@ -1622,9 +2326,15 @@ public partial class CaptureWindow : Window
                 {
                     Width = shape.Rect.Width,
                     Height = shape.Rect.Height,
-                    Stroke = new SolidColorBrush(Color.FromUInt32(shape.Color)),
-                    StrokeThickness = shape.Width
+                    Stroke = new SolidColorBrush(Color.FromUInt32(shape.Color), shape.Opacity),
+                    StrokeThickness = shape.Width,
+                    Fill = shape.Fill == ShapeFill.None
+                        ? null
+                        : new SolidColorBrush(
+                            Color.FromUInt32(shape.Color),
+                            shape.Fill == ShapeFill.Solid ? shape.Opacity : shape.Opacity * 0.28)
                 };
+                ApplyDash(ellipse, shape.Dash);
                 Canvas.SetLeft(ellipse, shape.Rect.X);
                 Canvas.SetTop(ellipse, shape.Rect.Y);
                 NoteLayer.Children.Add(ellipse);
@@ -1635,17 +2345,25 @@ public partial class CaptureWindow : Window
                 {
                     Width = shape.Rect.Width,
                     Height = shape.Rect.Height,
-                    Stroke = new SolidColorBrush(Color.FromUInt32(shape.Color)),
-                    StrokeThickness = shape.Width
+                    RadiusX = shape.Radius,
+                    RadiusY = shape.Radius,
+                    Stroke = new SolidColorBrush(Color.FromUInt32(shape.Color), shape.Opacity),
+                    StrokeThickness = shape.Width,
+                    Fill = shape.Fill == ShapeFill.None
+                        ? null
+                        : new SolidColorBrush(
+                            Color.FromUInt32(shape.Color),
+                            shape.Fill == ShapeFill.Solid ? shape.Opacity : shape.Opacity * 0.28)
                 };
+                ApplyDash(rectangle, shape.Dash);
                 Canvas.SetLeft(rectangle, shape.Rect.X);
                 Canvas.SetTop(rectangle, shape.Rect.Y);
                 NoteLayer.Children.Add(rectangle);
                 break;
 
             case ArrowAnnotation arrow:
-                var arrowBrush = new SolidColorBrush(Color.FromUInt32(arrow.Color));
-                AddPreviewLine(arrowBrush, arrow.From, arrow.To, arrow.Width);
+                var arrowBrush = new SolidColorBrush(Color.FromUInt32(arrow.Color), arrow.Opacity);
+                AddPreviewLine(arrowBrush, arrow.From, arrow.To, arrow.Width, arrow.Dash);
                 var (left, right) = ArrowGeometry.Head(
                     arrow.From, arrow.To, Math.Max(8, arrow.Width * 3.5));
                 AddPreviewLine(arrowBrush, arrow.To, left, arrow.Width);
@@ -1653,14 +2371,16 @@ public partial class CaptureWindow : Window
                 break;
 
             case PenAnnotation { Points.Count: >= 2 } pen:
-                NoteLayer.Children.Add(new Polyline
+                var polyline = new Polyline
                 {
                     Stroke = new SolidColorBrush(Color.FromUInt32(pen.Color), pen.Opacity),
                     StrokeThickness = pen.Width,
                     StrokeLineCap = PenLineCap.Round,
                     StrokeJoin = PenLineJoin.Round,
                     Points = new List<Point>(pen.Points)
-                });
+                };
+                ApplyDash(polyline, pen.Dash);
+                NoteLayer.Children.Add(polyline);
                 break;
 
             case MosaicAnnotation mosaic:
@@ -1682,6 +2402,7 @@ public partial class CaptureWindow : Window
                 {
                     Text = text.Text,
                     FontSize = text.FontSize,
+                    FontWeight = text.Bold ? FontWeight.Bold : FontWeight.Normal,
                     Foreground = new SolidColorBrush(Color.FromUInt32(text.Color))
                 };
                 Canvas.SetLeft(label, text.Origin.X);
@@ -1720,6 +2441,9 @@ public partial class CaptureWindow : Window
     {
         _textOrigin = origin;
         TextNoteBox.Text = string.Empty;
+        TextNoteBox.FontSize = _noteFontSize;
+        TextNoteBox.FontWeight = _noteBold ? FontWeight.Bold : FontWeight.Normal;
+        TextNoteBox.Foreground = new SolidColorBrush(_noteColor);
         Canvas.SetLeft(TextNoteBox, _selection.X + origin.X);
         Canvas.SetTop(TextNoteBox, _selection.Y + origin.Y);
         TextNoteBox.IsVisible = true;
@@ -1746,10 +2470,11 @@ public partial class CaptureWindow : Window
 
         // 编辑器左上角对齐，Skia 的 DrawText 用基线：往下让一个字高
         _notes.Add(new TextAnnotation(
-            new Point(origin.X, origin.Y + TextFontSize),
+            new Point(origin.X, origin.Y + _noteFontSize),
             text,
             _noteColor.ToUInt32(),
-            TextFontSize));
+            _noteFontSize,
+            _noteBold));
 
         RebuildNotePreview();
         UpdateToolButtons();
@@ -1771,15 +2496,29 @@ public partial class CaptureWindow : Window
 
     private void OnTextNoteLostFocus(object? sender, RoutedEventArgs e) => CommitTextNote();
 
-    private void AddPreviewLine(IBrush brush, Point from, Point to, double width) =>
-        NoteLayer.Children.Add(new Line
+    private void AddPreviewLine(IBrush brush, Point from, Point to, double width, LineDash dash = LineDash.Solid)
+    {
+        var line = new Line
         {
             StartPoint = from,
             EndPoint = to,
             Stroke = brush,
             StrokeThickness = width,
             StrokeLineCap = PenLineCap.Round
-        });
+        };
+
+        ApplyDash(line, dash);
+        NoteLayer.Children.Add(line);
+    }
+
+    /// <summary>预览层的虚线 / 点线：dash 长度按线宽倍数给，和导出保持一致。</summary>
+    private static void ApplyDash(Shape shape, LineDash dash)
+    {
+        if (dash == LineDash.Solid)
+            return;
+
+        shape.StrokeDashArray = dash == LineDash.Dot ? [0.1, 1.8] : [3, 2];
+    }
 
     private Rect ToDip(PixelRect bounds) => new(
         (bounds.X - _origin.X) / _scaling,
@@ -1813,11 +2552,86 @@ public partial class CaptureWindow : Window
         return AnnotationRenderer.RoundCorners(composed, _cornerRadius * _scaling);
     }
 
-    private void OnSizeBadgeClick(object? sender, PointerPressedEventArgs e)
+    private void OnSizeUnitClick(object? sender, RoutedEventArgs e) => ToggleSizeUnit();
+
+    private void OnSizeLockClick(object? sender, RoutedEventArgs e)
     {
-        ToggleSizeUnit();
-        e.Handled = true;
+        _aspectLocked = SizeLockButton.IsChecked == true;
+        LockOpenIcon.IsVisible = !_aspectLocked;
+        LockClosedIcon.IsVisible = _aspectLocked;
+        ToolTip.SetTip(SizeLockButton, _aspectLocked ? "已锁定宽高比" : "锁定宽高比");
     }
+
+    private void OnSizeBoxKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            CommitSizeEdit(ReferenceEquals(sender, HeightBox) ? 1 : 0);
+            Focus();   // 交还焦点，数字键继续用来切工具
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            // 放弃这次输入，恢复成当前选区的尺寸
+            UpdateSizeBadge(_selection);
+            Focus();
+            e.Handled = true;
+        }
+    }
+
+    private void OnSizeBoxLostFocus(object? sender, RoutedEventArgs e)
+    {
+        // 点单位 / 锁按钮时先不提交：否则会按旧单位先换算一遍再切换
+        var focused = FocusManager?.GetFocusedElement();
+        if (ReferenceEquals(focused, SizeUnitButton) || ReferenceEquals(focused, SizeLockButton))
+            return;
+
+        CommitSizeEdit(ReferenceEquals(sender, HeightBox) ? 1 : 0);
+    }
+
+    /// <summary>把尺寸框里的数值应用到选区：左上角不动，超出窗口就钳制。</summary>
+    internal void CommitSizeEdit(int axis)
+    {
+        if (_sizeEditGuard || !_hasSelection)
+            return;
+
+        if (!TryParseSize(WidthBox.Text, out var width) || !TryParseSize(HeightBox.Text, out var height))
+        {
+            UpdateSizeBadge(_selection);
+            return;
+        }
+
+        // 输入单位跟当前显示单位一致
+        var unit = _sizeInPixels ? 1 / _scaling : 1;
+        var w = width * unit;
+        var h = height * unit;
+
+        // 锁定比例：以最后编辑的那个框为准
+        if (_aspectLocked && _selection.Width > 0 && _selection.Height > 0)
+        {
+            var aspect = _selection.Width / _selection.Height;
+
+            if (axis == 0)
+                h = w / aspect;
+            else
+                w = h * aspect;
+        }
+
+        // 最小 8 DIP，且不能越过窗口右下边
+        w = Math.Clamp(w, 8, Math.Max(8, Width - _selection.X));
+        h = Math.Clamp(h, 8, Math.Max(8, Height - _selection.Y));
+
+        _selection = new Rect(_selection.X, _selection.Y, w, h);
+        UpdateSelectionVisuals();
+        RebuildNotePreview();
+    }
+
+    private static bool TryParseSize(string? text, out double value) =>
+        double.TryParse(
+            text?.Trim(),
+            NumberStyles.Float,
+            CultureInfo.InvariantCulture,
+            out value) && value > 0;
 
     internal void ToggleSizeUnit()
     {
@@ -1829,6 +2643,9 @@ public partial class CaptureWindow : Window
 
     /// <summary>三槽样式模板；由宿主在窗口显示前灌入，关闭后读回持久化。</summary>
     public AnnotationPreset?[] Presets { get; } = new AnnotationPreset?[3];
+
+    /// <summary>当前标注（测试和导出共用，顺序就是叠放顺序）。</summary>
+    internal IReadOnlyList<IAnnotation> Notes => _notes.Items;
 
     internal void SavePreset(int index)
     {
@@ -2006,7 +2823,7 @@ public partial class CaptureWindow : Window
     private bool _compactToolbar;
 
     /// <summary>窗口窄于这个宽度（DIP）就把低频动作收起来。图标工具条比原来的文字按钮窄得多。</summary>
-    internal static bool ShouldCompact(double width) => width > 0 && width < 560;
+    internal static bool ShouldCompact(double width) => width > 0 && width < 720;
 
     /// <summary>
     /// 窄窗口把低频动作收进「更多」。
@@ -2021,10 +2838,11 @@ public partial class CaptureWindow : Window
 
         _compactToolbar = compact;
 
-        CopyImageButton.IsVisible = !compact;
+        // ✓ 是主操作，任何宽度都保留；低频动作收进「更多」
         SaveButton.IsVisible = !compact;
         PinButton.IsVisible = !compact;
         ScrollButton.IsVisible = !compact;
+        CornerRadiusButton.IsVisible = !compact;
         MoreButton.IsVisible = compact;
     }
 
@@ -2047,6 +2865,27 @@ public partial class CaptureWindow : Window
         Canvas.SetTop(ActionBar, position.Y);
     }
 
+    /// <summary>布局完成后再按实际 Bounds 校正一次居中，避免用到上一帧的尺寸。</summary>
+    private void OnActionBarLayoutUpdated(object? sender, EventArgs e)
+    {
+        if (!ActionBar.IsVisible || _toolbarManual)
+            return;
+
+        var size = ActionBar.Bounds.Size;
+        if (size.Width <= 0 || size.Height <= 0)
+            return;
+
+        var position = ComputeToolbarPosition(_selection, size, new Size(Width, Height));
+        var currentLeft = Canvas.GetLeft(ActionBar);
+        var currentTop = Canvas.GetTop(ActionBar);
+
+        if (Math.Abs(currentLeft - position.X) < 0.5 && Math.Abs(currentTop - position.Y) < 0.5)
+            return;
+
+        Canvas.SetLeft(ActionBar, position.X);
+        Canvas.SetTop(ActionBar, position.Y);
+    }
+
     internal static Point ComputeToolbarPosition(
         Rect selection,
         Size toolbar,
@@ -2054,8 +2893,8 @@ public partial class CaptureWindow : Window
         double gap = 8,
         double margin = 8)
     {
-        // 首选：右边缘对齐选区右边缘，放在下方
-        var left = selection.Right - toolbar.Width;
+        // 锚定在选区下方并水平居中（和 LumaShot / snow-shot 的观感一致）
+        var left = selection.Center.X - toolbar.Width / 2;
         var top = selection.Bottom + gap;
 
         // 下方放不下就翻到上方（snow-shot 的 bottom-first 规则）
@@ -2099,6 +2938,17 @@ public partial class CaptureWindow : Window
             return false;
 
         return new Rect(origin, ActionBar.Bounds.Size).Contains(point);
+    }
+
+    private bool IsPointInCustomColorPanel(Point point)
+    {
+        if (!CustomColorPanel.IsVisible)
+            return false;
+
+        if (CustomColorPanel.TranslatePoint(new Point(0, 0), this) is not { } origin)
+            return false;
+
+        return new Rect(origin, CustomColorPanel.Bounds.Size).Contains(point);
     }
 
     private async void OnRecognizeClick(object? sender, RoutedEventArgs e) => await ActAsync(CaptureAction.Recognize);
@@ -2555,7 +3405,37 @@ public partial class CaptureWindow : Window
         // 截图窗口没有文本输入，按物理键还原即可，不需要放行给输入法。
         var key = e.Key == Key.ImeProcessed ? MapPhysicalKey(e.PhysicalKey) : e.Key;
 
-        // Ctrl+Z：撤销最后一条标注
+        // 焦点停在输入框（尺寸 / 文字）时，按键交给输入框，
+        // 否则在尺寸框里输入数字会被当成切换工具
+        if (FocusManager?.GetFocusedElement() is TextBox)
+        {
+            base.OnKeyDown(e);
+            return;
+        }
+
+        // Ctrl+Shift+Z / Ctrl+Y：重做；Ctrl+Z：撤销
+        if (key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        {
+            RedoAnnotation();
+            e.Handled = true;
+            return;
+        }
+
+        if (key == Key.Y && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            RedoAnnotation();
+            e.Handled = true;
+            return;
+        }
+
+        // Delete / Backspace：删掉当前选中的那条标注
+        if (key is Key.Delete or Key.Back && _selectedNote >= 0)
+        {
+            DeleteSelectedNote();
+            e.Handled = true;
+            return;
+        }
+
         if (key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
             UndoAnnotation();
@@ -2737,19 +3617,23 @@ public partial class CaptureWindow : Window
         var width = (int)Math.Round(rect.Width * _scaling);
         var height = (int)Math.Round(rect.Height * _scaling);
 
-        SizeText.Text = _sizeInPixels
-            ? $"{width} × {height} px"
-            : $"{rect.Width:0} × {rect.Height:0} DIP";
+        // 回填读数：拖动 / 拉伸选区时跟着刷新，但不触发提交
+        _sizeEditGuard = true;
+        WidthBox.Text = _sizeInPixels ? width.ToString() : $"{rect.Width:0}";
+        HeightBox.Text = _sizeInPixels ? height.ToString() : $"{rect.Height:0}";
+        SizeUnitButton.Content = _sizeInPixels ? "px" : "DIP";
+        _sizeEditGuard = false;
 
-        const double badgeWidth = 150;
-        const double badgeHeight = 26;
+        // 角标宽度随内容变化（单位文字 / 数字位数），放置前先量一次
+        SizeBadge.Measure(Size.Infinity);
+        var size = SizeBadge.DesiredSize;
         const double gap = 8;
 
-        var left = Math.Max(4, Math.Min(rect.X, Width - badgeWidth - 4));
-        var top = rect.Y - badgeHeight - gap;
+        var left = Math.Max(4, Math.Min(rect.X, Width - size.Width - 4));
+        var top = rect.Y - size.Height - gap;
         if (top < 4)
             top = rect.Y + 4; // 顶到屏幕边缘时放进选区内侧，避免压住动作栏
-        top = Math.Max(4, Math.Min(top, Height - badgeHeight - 4));
+        top = Math.Max(4, Math.Min(top, Height - size.Height - 4));
 
         Canvas.SetLeft(SizeBadge, left);
         Canvas.SetTop(SizeBadge, top);

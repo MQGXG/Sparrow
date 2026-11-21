@@ -88,12 +88,12 @@ public sealed class SnapGuidesTests
         window.MouseUp(new Point(300, 250), MouseButton.Left);
 
         window.SizeInPixels.ShouldBeTrue();
-        window.SizeText.Text.ShouldNotBeNull().ShouldNotContain("DIP");
+        window.SizeUnitButton.Content?.ToString().ShouldBe("px");
 
         window.ToggleSizeUnit();
 
         window.SizeInPixels.ShouldBeFalse();
-        window.SizeText.Text.ShouldNotBeNull().ShouldContain("DIP");
+        window.SizeUnitButton.Content?.ToString().ShouldBe("DIP");
     }
 
     [AvaloniaFact]

@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Shouldly;
 using Sparrow.App.Services;
@@ -81,8 +82,8 @@ public sealed class CaptureWindowTests
         window.MouseMove(new Point(300, 250));
 
         window.SizeBadge.IsVisible.ShouldBeTrue();
-        window.SizeText.Text.ShouldNotBeNullOrEmpty();
-        window.SizeText.Text.ShouldContain("×");
+        window.WidthBox.Text.ShouldNotBeNullOrEmpty();
+        window.HeightBox.Text.ShouldNotBeNullOrEmpty();
 
         window.Close();
     }
@@ -190,7 +191,7 @@ public sealed class CaptureWindowTests
             selection, new Size(400, 40), new Size(1280, 1000));
 
         position.Y.ShouldBe(900 - 40 - 8);
-        position.X.ShouldBe(8);   // 右对齐后贴到左边距（选区右边缘只有 400）
+        position.X.ShouldBe(50);   // 居中到选区中点（100 + 300/2 - 400/2）
     }
 
     [Fact]
@@ -287,14 +288,100 @@ public sealed class CaptureWindowTests
         window.SetToolbarCompaction(true);
 
         window.MoreButton.IsVisible.ShouldBeTrue();
-        window.CopyImageButton.IsVisible.ShouldBeFalse();
         window.SaveButton.IsVisible.ShouldBeFalse();
         window.PinButton.IsVisible.ShouldBeFalse();
         window.ScrollButton.IsVisible.ShouldBeFalse();
 
+        // ✓（完成并复制）是主操作，任何宽度都保留
+        window.CopyImageButton.IsVisible.ShouldBeTrue();
+
         window.SetToolbarCompaction(false);
         window.MoreButton.IsVisible.ShouldBeFalse();
-        window.CopyImageButton.IsVisible.ShouldBeTrue();
+        window.SaveButton.IsVisible.ShouldBeTrue();
+    }
+
+    [AvaloniaFact]
+    public void 尺寸框_输入宽高直接改选区()
+    {
+        var window = CreateWithSelection();   // 100,100 → 300,250 = 200×150
+        window.SizeInPixels = false;
+
+        window.WidthBox.Text = "320";
+        window.HeightBox.Text = "180";
+        window.CommitSizeEdit(0);
+
+        window.Selection.Width.ShouldBe(320, 0.01);
+        window.Selection.Height.ShouldBe(180, 0.01);
+        window.Selection.Bounds.X.ShouldBe(100, 0.01);   // 左上角不动
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 尺寸框_锁定比例按编辑的一边推算另一边()
+    {
+        var window = CreateWithSelection();   // 200×150 → 4:3
+        window.SizeInPixels = false;
+
+        window.SizeLockButton.IsChecked = true;
+        window.SizeLockButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        window.WidthBox.Text = "400";
+        window.HeightBox.Text = "150";
+        window.CommitSizeEdit(0);   // 改宽：高按 4:3 跟着变成 300
+
+        window.Selection.Width.ShouldBe(400, 0.01);
+        window.Selection.Height.ShouldBe(300, 0.01);
+
+        window.HeightBox.Text = "150";
+        window.CommitSizeEdit(1);   // 改高：宽反算回 200
+
+        window.Selection.Width.ShouldBe(200, 0.01);
+        window.Selection.Height.ShouldBe(150, 0.01);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 右键_逐级退出工具_选区_截图()
+    {
+        var window = CreateWithSelection();
+        window.ActionBar.IsVisible.ShouldBeTrue();
+
+        // 1) 选中工具后右键：只退出工具，选区和工具条都还在
+        window.KeyPress(Key.D2, RawInputModifiers.None, PhysicalKey.Digit2, null);
+        window.MouseDown(new Point(50, 50), MouseButton.Right);
+        window.ActionBar.IsVisible.ShouldBeTrue();
+        window.Selection.IsVisible.ShouldBeTrue();
+
+        // 2) 再右键：清空选区，回到框选
+        window.MouseDown(new Point(50, 50), MouseButton.Right);
+        window.ActionBar.IsVisible.ShouldBeFalse();
+        window.Selection.IsVisible.ShouldBeFalse();
+        window.HintBar.IsVisible.ShouldBeTrue();
+
+        // 3) 再右键：取消截图
+        window.MouseDown(new Point(50, 50), MouseButton.Right);
+        window.IsVisible.ShouldBeFalse();
+        window.Action.ShouldBe(CaptureAction.None);
+    }
+
+    [AvaloniaFact]
+    public void 尺寸框_超出窗口时钳制()
+    {
+        var window = CreateWithSelection();
+        window.SizeInPixels = false;
+
+        window.WidthBox.Text = "99999";
+        window.HeightBox.Text = "99999";
+        window.CommitSizeEdit(0);
+
+        (window.Selection.Bounds.X + window.Selection.Width)
+            .ShouldBeLessThanOrEqualTo(window.Width + 0.01);
+        (window.Selection.Bounds.Y + window.Selection.Height)
+            .ShouldBeLessThanOrEqualTo(window.Height + 0.01);
+
+        window.Close();
     }
 
     /// <summary>拖出选区并松手：窗口不关，进入可编辑态。</summary>

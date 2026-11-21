@@ -48,65 +48,31 @@ internal static class AnnotationRenderer
         switch (item)
         {
             case ShapeAnnotation shape:
-                paint.Color = new SKColor(shape.Color);
-                paint.StrokeWidth = (float)shape.Width;
-                paint.Style = SKPaintStyle.Stroke;
-
-                var rect = new SKRect(
-                    (float)shape.Rect.X,
-                    (float)shape.Rect.Y,
-                    (float)shape.Rect.Right,
-                    (float)shape.Rect.Bottom);
-
-                if (shape.Ellipse)
-                    canvas.DrawOval(rect, paint);
-                else
-                    canvas.DrawRect(rect, paint);
+                DrawShape(canvas, shape, paint);
                 break;
 
             case ArrowAnnotation arrow:
-                paint.Color = new SKColor(arrow.Color);
-                paint.StrokeWidth = (float)arrow.Width;
-                paint.Style = SKPaintStyle.Stroke;
-                canvas.DrawLine(
-                    (float)arrow.From.X,
-                    (float)arrow.From.Y,
-                    (float)arrow.To.X,
-                    (float)arrow.To.Y,
-                    paint);
-
-                var (left, right) = ArrowGeometry.Head(
-                    arrow.From,
-                    arrow.To,
-                    Math.Max(8, arrow.Width * 3.5));
-
-                using (var head = new SKPath())
-                {
-                    head.MoveTo((float)arrow.To.X, (float)arrow.To.Y);
-                    head.LineTo((float)left.X, (float)left.Y);
-                    head.LineTo((float)right.X, (float)right.Y);
-                    head.Close();
-
-                    paint.Style = SKPaintStyle.Fill;
-                    canvas.DrawPath(head, paint);
-                }
+                DrawArrow(canvas, arrow, paint);
                 break;
 
             case PenAnnotation pen:
                 if (pen.Points.Count < 2)
                     break;
 
-                paint.Color = WithOpacity(pen.Color, pen.Opacity);
-                paint.StrokeWidth = (float)pen.Width;
-                paint.Style = SKPaintStyle.Stroke;
-
-                using (var path = new SKPath())
+                using (var effect = DashEffect(pen.Dash, pen.Width))
                 {
+                    paint.PathEffect = effect;
+                    paint.Color = WithOpacity(pen.Color, pen.Opacity);
+                    paint.StrokeWidth = (float)pen.Width;
+                    paint.Style = SKPaintStyle.Stroke;
+
+                    using var path = new SKPath();
                     path.MoveTo((float)pen.Points[0].X, (float)pen.Points[0].Y);
                     for (var index = 1; index < pen.Points.Count; index++)
                         path.LineTo((float)pen.Points[index].X, (float)pen.Points[index].Y);
 
                     canvas.DrawPath(path, paint);
+                    paint.PathEffect = null;
                 }
                 break;
 
@@ -118,7 +84,8 @@ internal static class AnnotationRenderer
                 if (string.IsNullOrEmpty(text.Text))
                     break;
 
-                using (var typeface = SKTypeface.FromFamilyName("Microsoft YaHei UI") ?? SKTypeface.Default)
+                var fontStyle = text.Bold ? SKFontStyle.Bold : SKFontStyle.Normal;
+                using (var typeface = SKTypeface.FromFamilyName("Microsoft YaHei UI", fontStyle) ?? SKTypeface.Default)
                 using (var font = new SKFont(typeface, (float)text.FontSize))
                 {
                     paint.Color = new SKColor(text.Color);
@@ -137,6 +104,97 @@ internal static class AnnotationRenderer
                 DrawNumber(canvas, number, paint);
                 break;
         }
+    }
+
+    private static void DrawShape(SKCanvas canvas, ShapeAnnotation shape, SKPaint paint)
+    {
+        var rect = new SKRect(
+            (float)shape.Rect.X,
+            (float)shape.Rect.Y,
+            (float)shape.Rect.Right,
+            (float)shape.Rect.Bottom);
+
+        // 圆角不能超过短边的一半，否则 Skia 会画出怪形状
+        var radius = (float)Math.Clamp(shape.Radius, 0, Math.Min(shape.Rect.Width, shape.Rect.Height) / 2);
+
+        if (shape.Fill != ShapeFill.None)
+        {
+            var fillAlpha = shape.Fill == ShapeFill.Solid ? shape.Opacity : shape.Opacity * 0.28;
+            using var fill = new SKPaint
+            {
+                IsAntialias = true,
+                Style = SKPaintStyle.Fill,
+                Color = WithOpacity(shape.Color, fillAlpha)
+            };
+
+            if (shape.Ellipse)
+                canvas.DrawOval(rect, fill);
+            else if (radius > 0)
+                canvas.DrawRoundRect(rect, radius, radius, fill);
+            else
+                canvas.DrawRect(rect, fill);
+        }
+
+        using var effect = DashEffect(shape.Dash, shape.Width);
+        paint.PathEffect = effect;
+        paint.Color = WithOpacity(shape.Color, shape.Opacity);
+        paint.StrokeWidth = (float)shape.Width;
+        paint.Style = SKPaintStyle.Stroke;
+
+        if (shape.Ellipse)
+            canvas.DrawOval(rect, paint);
+        else if (radius > 0)
+            canvas.DrawRoundRect(rect, radius, radius, paint);
+        else
+            canvas.DrawRect(rect, paint);
+
+        paint.PathEffect = null;
+    }
+
+    private static void DrawArrow(SKCanvas canvas, ArrowAnnotation arrow, SKPaint paint)
+    {
+        using (var effect = DashEffect(arrow.Dash, arrow.Width))
+        {
+            paint.PathEffect = effect;
+            paint.Color = WithOpacity(arrow.Color, arrow.Opacity);
+            paint.StrokeWidth = (float)arrow.Width;
+            paint.Style = SKPaintStyle.Stroke;
+            canvas.DrawLine(
+                (float)arrow.From.X,
+                (float)arrow.From.Y,
+                (float)arrow.To.X,
+                (float)arrow.To.Y,
+                paint);
+            paint.PathEffect = null;
+        }
+
+        var (left, right) = ArrowGeometry.Head(
+            arrow.From,
+            arrow.To,
+            Math.Max(8, arrow.Width * 3.5));
+
+        using var head = new SKPath();
+        head.MoveTo((float)arrow.To.X, (float)arrow.To.Y);
+        head.LineTo((float)left.X, (float)left.Y);
+        head.LineTo((float)right.X, (float)right.Y);
+        head.Close();
+
+        paint.Color = WithOpacity(arrow.Color, arrow.Opacity);
+        paint.Style = SKPaintStyle.Fill;
+        canvas.DrawPath(head, paint);
+    }
+
+    /// <summary>虚线 / 点线：dash 长度跟着线宽走，粗细变化时观感一致。</summary>
+    private static SKPathEffect? DashEffect(LineDash dash, double width)
+    {
+        var w = (float)Math.Max(1, width);
+
+        return dash switch
+        {
+            LineDash.Dash => SKPathEffect.CreateDash([w * 3, w * 2], 0),
+            LineDash.Dot => SKPathEffect.CreateDash([w * 0.1f, w * 1.8f], 0),
+            _ => null
+        };
     }
 
     /// <summary>马赛克：像素化用「缩小再最近邻放大」，模糊用 Skia 的模糊滤镜。</summary>

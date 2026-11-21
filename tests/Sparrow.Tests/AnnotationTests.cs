@@ -130,6 +130,82 @@ public sealed class AnnotationTests
         window.NoteLayer.Children.Count.ShouldBe(0);
     }
 
+    /// <summary>画一个矩形并切回指针工具，返回窗口。</summary>
+    private static CaptureWindow CreateWithRectangle()
+    {
+        var window = new CaptureWindow();
+        window.Show();
+
+        window.MouseDown(new Point(100, 100), MouseButton.Left);
+        window.MouseMove(new Point(400, 300));
+        window.MouseUp(new Point(400, 300), MouseButton.Left);
+
+        window.RectToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.MouseDown(new Point(150, 150), MouseButton.Left);
+        window.MouseMove(new Point(250, 220));
+        window.MouseUp(new Point(250, 220), MouseButton.Left);
+
+        window.SelectToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        return window;
+    }
+
+    [AvaloniaFact]
+    public void 指针工具_点中标注可以拖动移动()
+    {
+        var window = CreateWithRectangle();
+        window.Notes.Count.ShouldBe(1);
+
+        // 矩形的左边框在选区坐标 (50, 50..120)，窗口坐标 150
+        window.MouseDown(new Point(150, 185), MouseButton.Left);
+        window.MouseMove(new Point(190, 215));
+        window.MouseUp(new Point(190, 215), MouseButton.Left);
+
+        var shape = window.Notes[0].ShouldBeOfType<ShapeAnnotation>();
+        shape.Rect.X.ShouldBe(90, 0.01);
+        shape.Rect.Y.ShouldBe(80, 0.01);
+        shape.Rect.Width.ShouldBe(100, 0.01);
+        shape.Rect.Height.ShouldBe(70, 0.01);
+
+        // 选中态多一层虚线框
+        window.NoteLayer.Children.Count.ShouldBe(2);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 指针工具_选中后按删除键移除()
+    {
+        var window = CreateWithRectangle();
+
+        window.MouseDown(new Point(150, 185), MouseButton.Left);
+        window.MouseUp(new Point(150, 185), MouseButton.Left);
+        window.KeyPress(Key.Delete, RawInputModifiers.None, PhysicalKey.Delete, null);
+
+        window.Notes.ShouldBeEmpty();
+        window.NoteLayer.IsVisible.ShouldBeFalse();
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 指针工具_点空白处取消选中()
+    {
+        var window = CreateWithRectangle();
+
+        window.MouseDown(new Point(150, 185), MouseButton.Left);
+        window.MouseUp(new Point(150, 185), MouseButton.Left);
+        window.NoteLayer.Children.Count.ShouldBe(2);
+
+        // 选区内的空白（矩形中间是空心的）：只取消选中，不删标注
+        window.MouseDown(new Point(200, 185), MouseButton.Left);
+        window.MouseUp(new Point(200, 185), MouseButton.Left);
+
+        window.NoteLayer.Children.Count.ShouldBe(1);
+        window.Notes.Count.ShouldBe(1);
+
+        window.Close();
+    }
+
     [AvaloniaFact]
     public void 截图窗口_切换工具会取消选中()
     {
@@ -257,16 +333,14 @@ public sealed class AnnotationTests
     {
         var window = new CaptureWindow();
 
-        // 图标按钮：像素 = 网格，模糊 = 波浪；当前模式由图标 + tooltip 表达
-        window.MosaicPixelIcon.IsVisible.ShouldBeTrue();
-        window.MosaicBlurIcon.IsVisible.ShouldBeFalse();
-        ToolTip.GetTip(window.MosaicModeButton)?.ToString().ShouldNotBeNull().ShouldContain("像素");
+        // 属性栏的下拉按钮直接显示当前模式
+        window.MosaicModeButton.Content.ShouldBe("像素");
 
-        window.MosaicModeButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.ToggleMosaicBlur(true);
+        window.MosaicModeButton.Content.ShouldBe("模糊");
 
-        window.MosaicPixelIcon.IsVisible.ShouldBeFalse();
-        window.MosaicBlurIcon.IsVisible.ShouldBeTrue();
-        ToolTip.GetTip(window.MosaicModeButton)?.ToString().ShouldNotBeNull().ShouldContain("模糊");
+        window.ToggleMosaicBlur(false);
+        window.MosaicModeButton.Content.ShouldBe("像素");
     }
 
     [AvaloniaFact]
@@ -391,5 +465,53 @@ public sealed class AnnotationTests
         using var image = SKImage.FromBitmap(bitmap);
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
         return data.ToArray();
+    }
+
+    [Fact]
+    public void 形状标注_填充与圆角进导出()
+    {
+        var png = CreateWhitePng(120, 120);
+
+        var shape = new ShapeAnnotation(
+            new Rect(10, 10, 100, 100),
+            0xFFFF0000,
+            2,
+            false,
+            Opacity: 1,
+            Fill: ShapeFill.Soft,
+            Radius: 30);
+
+        var result = AnnotationRenderer.Compose(png, [shape], 1);
+        using var decoded = SKBitmap.Decode(result);
+
+        // 圆角切掉的位置保持原图白色
+        decoded.GetPixel(12, 12).Red.ShouldBe((byte)255);
+        decoded.GetPixel(12, 12).Green.ShouldBe((byte)255);
+
+        // 内部被淡红覆盖
+        var center = decoded.GetPixel(60, 60);
+        center.Red.ShouldBe((byte)255);
+        center.Green.ShouldBeLessThan((byte)240);
+    }
+
+    [Fact]
+    public void 形状标注_透明度越低覆盖越浅()
+    {
+        var png = CreateWhitePng(80, 80);
+
+        var solid = new ShapeAnnotation(
+            new Rect(10, 10, 60, 60),
+            0xFFFF0000,
+            2,
+            false,
+            Opacity: 1,
+            Fill: ShapeFill.Soft);
+
+        var faint = solid with { Opacity = 0.3 };
+
+        using var strong = SKBitmap.Decode(AnnotationRenderer.Compose(png, [solid], 1));
+        using var light = SKBitmap.Decode(AnnotationRenderer.Compose(png, [faint], 1));
+
+        strong.GetPixel(40, 40).Green.ShouldBeLessThan(light.GetPixel(40, 40).Green);
     }
 }
