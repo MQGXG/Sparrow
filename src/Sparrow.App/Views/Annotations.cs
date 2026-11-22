@@ -10,9 +10,11 @@ public enum AnnotationTool
     Ellipse,
     Arrow,
     Line,
+    Distance,
     Eraser,
     Spotlight,
     Magnifier,
+    Bracket,
     Watermark,
     Pen,
     Highlighter,
@@ -69,6 +71,29 @@ public sealed record LineAnnotation(
     double Width,
     double Opacity = 1,
     LineDash Dash = LineDash.Solid) : IAnnotation;
+
+/// <summary>测距：线 + 两端刻度 + 长度标签；Label 在创建时按当时的单位算好，切单位不回溯。</summary>
+public sealed record DistanceAnnotation(
+    Point From,
+    Point To,
+    uint Color,
+    double Width,
+    string Label,
+    double Opacity = 1,
+    LineDash Dash = LineDash.Solid) : IAnnotation;
+
+/// <summary>括号：竖边 + 两条横臂；OpenRight = 开口朝右（`[`）。</summary>
+public sealed record BracketAnnotation(
+    Rect Rect,
+    bool OpenRight,
+    uint Color,
+    double Width,
+    double Opacity = 1,
+    LineDash Dash = LineDash.Solid) : IAnnotation
+{
+    /// <summary>横臂长度：不超过 24，也不超过短边的一半。</summary>
+    public double Depth => Math.Min(Math.Min(24, Rect.Height / 3), Rect.Width / 2);
+}
 
 /// <summary>聚光灯：整幅压暗，只在 Rect 处挖洞。Opacity 是“暗度”。</summary>
 public sealed record SpotlightAnnotation(

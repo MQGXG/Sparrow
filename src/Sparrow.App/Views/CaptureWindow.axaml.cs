@@ -759,7 +759,19 @@ public partial class CaptureWindow : Window
         // 正在画标注：更新预览，不参与移动/拉伸选区
         if (_pendingAnnotation is not null)
         {
-            UpdatePendingAnnotation(point);
+            var target = point;
+
+            // 测距按住 Shift：方向吸附到 45° 的整数倍
+            if (_pendingAnnotation is DistanceAnnotation &&
+                e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+            {
+                var origin = new Point(
+                    _selection.X + _annotationStart.X,
+                    _selection.Y + _annotationStart.Y);
+                target = AnnotationGeometry.SnapToAngle(origin, point);
+            }
+
+            UpdatePendingAnnotation(target);
             RebuildNotePreview();
             Magnifier.IsVisible = false;
             CrosshairLayer.IsVisible = false;
@@ -1718,6 +1730,10 @@ public partial class CaptureWindow : Window
 
     private void OnWatermarkToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Watermark);
 
+    private void OnDistanceToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Distance);
+
+    private void OnBracketToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Bracket);
+
     private void OnTextToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Text);
 
     private void OnNumberToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Number);
@@ -2199,6 +2215,17 @@ public partial class CaptureWindow : Window
             From = new Point(line.From.X + dx, line.From.Y + dy),
             To = new Point(line.To.X + dx, line.To.Y + dy)
         },
+        DistanceAnnotation distance => distance with
+        {
+            From = new Point(distance.From.X + dx, distance.From.Y + dy),
+            To = new Point(distance.To.X + dx, distance.To.Y + dy)
+        },
+        BracketAnnotation bracket => bracket with
+        {
+            Rect = new Rect(
+                bracket.Rect.X + dx, bracket.Rect.Y + dy,
+                bracket.Rect.Width, bracket.Rect.Height)
+        },
         PenAnnotation pen => pen with
         {
             Points = pen.Points.Select(point => new Point(point.X + dx, point.Y + dy)).ToList()
@@ -2260,6 +2287,21 @@ public partial class CaptureWindow : Window
             case LineAnnotation line:
                 return DistanceToSegment(point, line.From, line.To) <= line.Width / 2 + slop;
 
+            case DistanceAnnotation distance:
+                return DistanceToSegment(point, distance.From, distance.To)
+                       <= distance.Width / 2 + slop;
+
+            case BracketAnnotation bracket:
+                var bracketPoints = AnnotationGeometry.BracketPoints(bracket);
+                for (var index = 1; index < bracketPoints.Length; index++)
+                {
+                    if (DistanceToSegment(point, bracketPoints[index - 1], bracketPoints[index])
+                        <= bracket.Width / 2 + slop)
+                        return true;
+                }
+
+                return false;
+
             case PenAnnotation pen:
                 for (var index = 1; index < pen.Points.Count; index++)
                 {
@@ -2306,6 +2348,12 @@ public partial class CaptureWindow : Window
 
             case LineAnnotation line:
                 return FromPoints(line.From, line.To);
+
+            case DistanceAnnotation distance:
+                return FromPoints(distance.From, distance.To);
+
+            case BracketAnnotation bracket:
+                return bracket.Rect;
 
             case PenAnnotation { Points.Count: > 0 } pen:
                 return FromPoints(pen.Points);
@@ -2411,10 +2459,12 @@ public partial class CaptureWindow : Window
             Key.D8 or Key.NumPad8 => AnnotationTool.Text,
             Key.D9 or Key.NumPad9 => AnnotationTool.Number,
             Key.L => AnnotationTool.Line,
+            Key.D => AnnotationTool.Distance,
             Key.E => AnnotationTool.Eraser,
             Key.K => AnnotationTool.Spotlight,
             Key.Z => AnnotationTool.Magnifier,
             Key.W => AnnotationTool.Watermark,
+            Key.OemOpenBrackets => AnnotationTool.Bracket,
             _ => AnnotationTool.None
         };
 
@@ -2484,6 +2534,8 @@ public partial class CaptureWindow : Window
             [AnnotationTool.Ellipse] = ("ToolEllipse", 1.2),
             [AnnotationTool.Arrow] = ("ToolArrow", 1.053),
             [AnnotationTool.Line] = ("ToolLine", 1.05),
+            [AnnotationTool.Distance] = ("ToolDistance", 1.2),
+            [AnnotationTool.Bracket] = ("ToolBracket", 1.2),
             [AnnotationTool.Pen] = ("ToolPen", 1.125),
             [AnnotationTool.Highlighter] = ("ToolHighlighter", 1.161),
             [AnnotationTool.Mosaic] = ("ToolMosaic", 1.2),
@@ -2498,14 +2550,14 @@ public partial class CaptureWindow : Window
         {
             Trigger = ShapeGroupButton,
             Icon = ShapeGroupIcon,
-            Members = [AnnotationTool.Ellipse, AnnotationTool.Rectangle],
+            Members = [AnnotationTool.Ellipse, AnnotationTool.Rectangle, AnnotationTool.Bracket],
             EntryIndex = 1
         });
         _toolGroups.Add(new ToolGroup
         {
             Trigger = ArrowGroupButton,
             Icon = ArrowGroupIcon,
-            Members = [AnnotationTool.Line, AnnotationTool.Arrow],
+            Members = [AnnotationTool.Line, AnnotationTool.Arrow, AnnotationTool.Distance],
             EntryIndex = 1
         });
         _toolGroups.Add(new ToolGroup
@@ -2631,6 +2683,8 @@ public partial class CaptureWindow : Window
         AnnotationTool.Spotlight => "聚光灯",
         AnnotationTool.Magnifier => "放大镜",
         AnnotationTool.Watermark => "水印",
+        AnnotationTool.Distance => "测距",
+        AnnotationTool.Bracket => "括号",
         _ => string.Empty
     };
 
@@ -2641,6 +2695,8 @@ public partial class CaptureWindow : Window
         SetSelected(EllipseToolButton, _tool == AnnotationTool.Ellipse);
         SetSelected(ArrowToolButton, _tool == AnnotationTool.Arrow);
         SetSelected(LineToolButton, _tool == AnnotationTool.Line);
+        SetSelected(DistanceToolButton, _tool == AnnotationTool.Distance);
+        SetSelected(BracketToolButton, _tool == AnnotationTool.Bracket);
         SetSelected(EraserToolButton, _tool == AnnotationTool.Eraser);
         SetSelected(SpotlightToolButton, _tool == AnnotationTool.Spotlight);
         SetSelected(MagnifierToolButton, _tool == AnnotationTool.Magnifier);
@@ -2670,15 +2726,16 @@ public partial class CaptureWindow : Window
 
         // 每组属性只在当前工具用得上时出现（LumaShot 的属性卡思路）
         var drawing = _tool is AnnotationTool.Rectangle or AnnotationTool.Ellipse
-            or AnnotationTool.Arrow or AnnotationTool.Line or AnnotationTool.Pen
-            or AnnotationTool.Highlighter;
+            or AnnotationTool.Arrow or AnnotationTool.Line or AnnotationTool.Distance
+            or AnnotationTool.Bracket or AnnotationTool.Pen or AnnotationTool.Highlighter;
 
         ColorGroup.IsVisible = _tool is not (
             AnnotationTool.None or AnnotationTool.Mosaic or AnnotationTool.Spotlight
             or AnnotationTool.Eraser);
         WidthGroup.IsVisible = drawing;
         DashGroup.IsVisible = _tool is AnnotationTool.Rectangle or AnnotationTool.Arrow
-            or AnnotationTool.Line or AnnotationTool.Pen or AnnotationTool.Highlighter;
+            or AnnotationTool.Line or AnnotationTool.Distance or AnnotationTool.Bracket
+            or AnnotationTool.Pen or AnnotationTool.Highlighter;
         FillGroup.IsVisible = _tool is AnnotationTool.Rectangle or AnnotationTool.Ellipse;
         OpacityGroup.IsVisible = drawing || _tool is AnnotationTool.Spotlight or AnnotationTool.Watermark;
 
@@ -2774,6 +2831,17 @@ public partial class CaptureWindow : Window
                     _noteDash);
                 break;
 
+            case AnnotationTool.Distance:
+                _pendingAnnotation = new DistanceAnnotation(
+                    _annotationStart,
+                    _annotationStart,
+                    _noteColor.ToUInt32(),
+                    _noteWidth,
+                    FormatDistance(_annotationStart, _annotationStart),
+                    _noteOpacity,
+                    _noteDash);
+                break;
+
             case AnnotationTool.Pen:
                 _penPoints = [_annotationStart];
                 _pendingAnnotation = new PenAnnotation(
@@ -2820,6 +2888,16 @@ public partial class CaptureWindow : Window
                     _watermarkOpacity,
                     WatermarkAngle,
                     WatermarkSpacing);
+                break;
+
+            case AnnotationTool.Bracket:
+                _pendingAnnotation = new BracketAnnotation(
+                    new Rect(_annotationStart, new Size()),
+                    true,
+                    _noteColor.ToUInt32(),
+                    _noteWidth,
+                    _noteOpacity,
+                    _noteDash);
                 break;
 
             case AnnotationTool.Text:
@@ -2873,6 +2951,16 @@ public partial class CaptureWindow : Window
             {
                 Area = NormalizeRect(_annotationStart, current)
             },
+            DistanceAnnotation distance => distance with
+            {
+                To = current,
+                Label = FormatDistance(distance.From, current)
+            },
+            BracketAnnotation bracket => bracket with
+            {
+                Rect = NormalizeRect(_annotationStart, current),
+                OpenRight = current.X >= _annotationStart.X
+            },
             PenAnnotation pen when _penPoints is not null => AddPenPoint(pen, current),
             _ => _pendingAnnotation
         };
@@ -2899,6 +2987,10 @@ public partial class CaptureWindow : Window
         if (annotation is null)
             return;
 
+        // 测距标签在提交时按当前单位定稿，之后切单位不回溯
+        if (annotation is DistanceAnnotation measured)
+            annotation = measured with { Label = FormatDistance(measured.From, measured.To) };
+
         // 水印单击（没拖出区域）= 铺满整个选区
         if (annotation is WatermarkAnnotation clicked &&
             (clicked.Area.Width < 8 || clicked.Area.Height < 8))
@@ -2920,6 +3012,8 @@ public partial class CaptureWindow : Window
             SpotlightAnnotation spotlight => spotlight.Rect.Width >= 8 && spotlight.Rect.Height >= 8,
             MagnifierAnnotation magnifier => magnifier.Rect.Width >= 8 && magnifier.Rect.Height >= 8,
             WatermarkAnnotation watermark => watermark.Area.Width >= 8 && watermark.Area.Height >= 8,
+            DistanceAnnotation distance => Distance(distance.From, distance.To) >= 6,
+            BracketAnnotation bracket => bracket.Rect.Width >= 8 && bracket.Rect.Height >= 8,
             _ => false
         };
 
@@ -2932,6 +3026,13 @@ public partial class CaptureWindow : Window
 
     private static double Distance(Point a, Point b) =>
         Math.Sqrt(Math.Pow(a.X - b.X, 2) + Math.Pow(a.Y - b.Y, 2));
+
+    /// <summary>测距标签：跟随选区工具条的 px/DIP 单位，创建时定稿。</summary>
+    private string FormatDistance(Point from, Point to)
+    {
+        var dip = Distance(from, to);
+        return _sizeInPixels ? $"{dip * _scaling:0} px" : $"{dip:0} DIP";
+    }
 
     /// <summary>把已提交的标注 + 正在画的那条重画到预览层。</summary>
     private void RebuildNotePreview()
@@ -3039,6 +3140,14 @@ public partial class CaptureWindow : Window
                 AddPreviewLine(
                     new SolidColorBrush(Color.FromUInt32(line.Color), line.Opacity),
                     line.From, line.To, line.Width, line.Dash);
+                break;
+
+            case DistanceAnnotation distance:
+                AddDistancePreview(distance);
+                break;
+
+            case BracketAnnotation bracket:
+                AddBracketPreview(bracket);
                 break;
 
             case SpotlightAnnotation spotlight:
@@ -3339,6 +3448,82 @@ public partial class CaptureWindow : Window
 
         clip.Child = tiles;
         NoteLayer.Children.Add(clip);
+    }
+
+    /// <summary>测距预览：线 + 两端刻度 + 中点上方标签，和导出同几何。</summary>
+    private void AddDistancePreview(DistanceAnnotation distance)
+    {
+        var brush = new SolidColorBrush(Color.FromUInt32(distance.Color), distance.Opacity);
+        AddPreviewLine(brush, distance.From, distance.To, distance.Width, distance.Dash);
+
+        var dx = distance.To.X - distance.From.X;
+        var dy = distance.To.Y - distance.From.Y;
+        var length = Math.Sqrt(dx * dx + dy * dy);
+        if (length < 0.01)
+            return;
+
+        var nx = -dy / length;
+        var ny = dx / length;
+        if (ny > 0)
+        {
+            nx = -nx;
+            ny = -ny;
+        }
+
+        const double tick = 4;
+        AddPreviewLine(
+            brush,
+            new Point(distance.From.X - nx * tick, distance.From.Y - ny * tick),
+            new Point(distance.From.X + nx * tick, distance.From.Y + ny * tick),
+            distance.Width);
+        AddPreviewLine(
+            brush,
+            new Point(distance.To.X - nx * tick, distance.To.Y - ny * tick),
+            new Point(distance.To.X + nx * tick, distance.To.Y + ny * tick),
+            distance.Width);
+
+        if (string.IsNullOrEmpty(distance.Label))
+            return;
+
+        var pill = new Border
+        {
+            Background = new SolidColorBrush(Color.Parse("#B3000000")),
+            CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(4, 2),
+            IsHitTestVisible = false,
+            Child = new TextBlock
+            {
+                Text = distance.Label,
+                FontSize = 11,
+                Foreground = Brushes.White
+            }
+        };
+
+        pill.Measure(Size.Infinity);
+        var centerX = (distance.From.X + distance.To.X) / 2 + nx * 12;
+        var centerY = (distance.From.Y + distance.To.Y) / 2 + ny * 12;
+        Canvas.SetLeft(pill, centerX - pill.DesiredSize.Width / 2);
+        Canvas.SetTop(pill, centerY - pill.DesiredSize.Height / 2);
+        NoteLayer.Children.Add(pill);
+    }
+
+    private void AddBracketPreview(BracketAnnotation bracket)
+    {
+        var points = AnnotationGeometry.BracketPoints(bracket);
+        if (points.Length < 2)
+            return;
+
+        var polyline = new Polyline
+        {
+            Stroke = new SolidColorBrush(Color.FromUInt32(bracket.Color), bracket.Opacity),
+            StrokeThickness = bracket.Width,
+            StrokeLineCap = PenLineCap.Flat,
+            StrokeJoin = PenLineJoin.Miter,
+            Points = new List<Point>(points)
+        };
+
+        ApplyDash(polyline, bracket.Dash);
+        NoteLayer.Children.Add(polyline);
     }
 
     private void AddPreviewLine(IBrush brush, Point from, Point to, double width, LineDash dash = LineDash.Solid)
@@ -4479,6 +4664,14 @@ public partial class CaptureWindow : Window
         if (key == Key.B && OcrLayer.IsVisible)
         {
             CycleOcrBoxMode();
+            e.Handled = true;
+            return;
+        }
+
+        // Shift+B：括号；`[` 在部分键盘布局下取不到，留一个别名
+        if (key == Key.B && e.KeyModifiers == KeyModifiers.Shift && _hasSelection)
+        {
+            SetTool(AnnotationTool.Bracket);
             e.Handled = true;
             return;
         }

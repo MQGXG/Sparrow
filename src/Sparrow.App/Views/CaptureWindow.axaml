@@ -15,6 +15,8 @@
     <StreamGeometry x:Key="ToolEllipse">M12 5.5c4.4 0 8 2.9 8 6.5s-3.6 6.5-8 6.5-8-2.9-8-6.5 3.6-6.5 8-6.5z</StreamGeometry>
     <StreamGeometry x:Key="ToolArrow">M5 19 19 5 M11.5 5H19v7.5</StreamGeometry>
     <StreamGeometry x:Key="ToolLine">M5 19 19 5</StreamGeometry>
+    <StreamGeometry x:Key="ToolDistance">M4 12h16 M4 8v8 M20 8v8</StreamGeometry>
+    <StreamGeometry x:Key="ToolBracket">M8 4H5v16h3</StreamGeometry>
     <StreamGeometry x:Key="ToolEraser">M6 17.5 12.5 11 18.5 17 12 23.5z M6 17.5h12.5 M12.5 11 15 8.5a1.6 1.6 0 0 1 2.3 0l1.2 1.2a1.6 1.6 0 0 1 0 2.3L18.5 17</StreamGeometry>
     <StreamGeometry x:Key="ToolSpotlight">M12 8a4 4 0 1 0 .01 0 M12 1v2 M12 21v2 M1 12h2 M21 12h2 M4.2 4.2l1.4 1.4 M18.4 18.4l1.4 1.4 M19.8 4.2l-1.4 1.4 M5.6 18.4l-1.4 1.4</StreamGeometry>
     <StreamGeometry x:Key="ToolMagnifier">M11 4a7 7 0 1 0 .01 0 M16 16l4.5 4.5</StreamGeometry>
@@ -684,7 +686,7 @@
             组内原有按钮保留在树里（IsVisible=False），键盘和测试仍按工具 ID 走。
           -->
           <Button Focusable="False" x:Name="ShapeGroupButton" Classes="tool group-trigger"
-                  ToolTip.Tip="形状：矩形 / 椭圆">
+                  ToolTip.Tip="形状：矩形 / 椭圆 / 括号">
             <Panel>
               <Path x:Name="ShapeGroupIcon" Data="{StaticResource ToolRect}" />
               <Path Classes="group-caret" Data="M 0 0 L 5 0 L 2.5 3.5 Z" />
@@ -698,9 +700,13 @@
                   ToolTip.Tip="椭圆（3）" Click="OnEllipseToolClick">
             <Path Data="{StaticResource ToolEllipse}" />
           </Button>
+          <Button Focusable="False" x:Name="BracketToolButton" Classes="tool" IsVisible="False"
+                  ToolTip.Tip="括号（[）" Click="OnBracketToolClick">
+            <Path Data="{StaticResource ToolBracket}" />
+          </Button>
 
           <Button Focusable="False" x:Name="ArrowGroupButton" Classes="tool group-trigger"
-                  ToolTip.Tip="箭头 / 直线">
+                  ToolTip.Tip="箭头 / 直线 / 测距">
             <Panel>
               <Path x:Name="ArrowGroupIcon" Data="{StaticResource ToolArrow}" StrokeThickness="1.053" />
               <Path Classes="group-caret" Data="M 0 0 L 5 0 L 2.5 3.5 Z" />
@@ -713,6 +719,10 @@
           <Button Focusable="False" x:Name="LineToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="直线（L）" Click="OnLineToolClick">
             <Path Data="{StaticResource ToolLine}" StrokeThickness="1.05" />
+          </Button>
+          <Button Focusable="False" x:Name="DistanceToolButton" Classes="tool" IsVisible="False"
+                  ToolTip.Tip="测距（D）" Click="OnDistanceToolClick">
+            <Path Data="{StaticResource ToolDistance}" />
           </Button>
 
           <Button Focusable="False" x:Name="PenGroupButton" Classes="tool group-trigger"

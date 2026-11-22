@@ -59,6 +59,14 @@ internal static class AnnotationRenderer
                 DrawStraightLine(canvas, line, paint);
                 break;
 
+            case DistanceAnnotation distance:
+                DrawDistance(canvas, distance, paint);
+                break;
+
+            case BracketAnnotation bracket:
+                DrawBracket(canvas, bracket, paint);
+                break;
+
             case SpotlightAnnotation spotlight:
                 DrawSpotlight(canvas, spotlight);
                 break;
@@ -277,6 +285,98 @@ internal static class AnnotationRenderer
             (float)line.To.Y,
             paint);
         paint.PathEffect = null;
+    }
+
+    /// <summary>测距：线身 + 两端垂直刻度 + 中点上方的深色标签。</summary>
+    private static void DrawDistance(SKCanvas canvas, DistanceAnnotation distance, SKPaint paint)
+    {
+        var from = new SKPoint((float)distance.From.X, (float)distance.From.Y);
+        var to = new SKPoint((float)distance.To.X, (float)distance.To.Y);
+        var dx = to.X - from.X;
+        var dy = to.Y - from.Y;
+        var length = MathF.Sqrt(dx * dx + dy * dy);
+
+        using (var effect = DashEffect(distance.Dash, distance.Width))
+        {
+            paint.PathEffect = effect;
+            paint.Color = WithOpacity(distance.Color, distance.Opacity);
+            paint.StrokeWidth = (float)distance.Width;
+            paint.Style = SKPaintStyle.Stroke;
+            canvas.DrawLine(from, to, paint);
+            paint.PathEffect = null;
+        }
+
+        if (length < 0.01f)
+            return;
+
+        var nx = -dy / length;
+        var ny = dx / length;
+
+        // 标签统一放在线的“上方”（屏幕坐标里 y 更小的那一侧）
+        if (ny > 0)
+        {
+            nx = -nx;
+            ny = -ny;
+        }
+
+        const float tick = 4;
+        paint.Color = WithOpacity(distance.Color, distance.Opacity);
+        paint.StrokeWidth = (float)distance.Width;
+        paint.Style = SKPaintStyle.Stroke;
+        canvas.DrawLine(
+            from.X - nx * tick, from.Y - ny * tick,
+            from.X + nx * tick, from.Y + ny * tick, paint);
+        canvas.DrawLine(
+            to.X - nx * tick, to.Y - ny * tick,
+            to.X + nx * tick, to.Y + ny * tick, paint);
+
+        if (string.IsNullOrEmpty(distance.Label))
+            return;
+
+        using var font = AnnotationText.CreateFont(11);
+        var textWidth = font.MeasureText(distance.Label);
+        var pillWidth = textWidth + (float)(AnnotationText.PaddingX * 2);
+        var pillHeight = 11f + (float)(AnnotationText.PaddingY * 2);
+        var centerX = (from.X + to.X) / 2 + nx * 12;
+        var centerY = (from.Y + to.Y) / 2 + ny * 12;
+        var pill = new SKRect(
+            centerX - pillWidth / 2, centerY - pillHeight / 2,
+            centerX + pillWidth / 2, centerY + pillHeight / 2);
+
+        paint.Style = SKPaintStyle.Fill;
+        paint.Color = new SKColor(0xB3000000);
+        canvas.DrawRoundRect(pill, 3, 3, paint);
+
+        paint.Color = SKColors.White;
+        canvas.DrawText(distance.Label, centerX, centerY + 4, SKTextAlign.Center, font, paint);
+    }
+
+    /// <summary>括号：四点折线；方头端点，圆头会显得软。</summary>
+    private static void DrawBracket(SKCanvas canvas, BracketAnnotation bracket, SKPaint paint)
+    {
+        var points = AnnotationGeometry.BracketPoints(bracket);
+        if (points.Length < 2)
+            return;
+
+        using var effect = DashEffect(bracket.Dash, bracket.Width);
+        paint.PathEffect = effect;
+        paint.Color = WithOpacity(bracket.Color, bracket.Opacity);
+        paint.StrokeWidth = (float)bracket.Width;
+        paint.Style = SKPaintStyle.Stroke;
+        paint.StrokeCap = SKStrokeCap.Butt;
+        paint.StrokeJoin = SKStrokeJoin.Miter;
+
+        using var path = new SKPath();
+        path.MoveTo((float)points[0].X, (float)points[0].Y);
+        for (var index = 1; index < points.Length; index++)
+            path.LineTo((float)points[index].X, (float)points[index].Y);
+
+        canvas.DrawPath(path, paint);
+
+        // 还原共享画笔，避免影响后续标注
+        paint.PathEffect = null;
+        paint.StrokeCap = SKStrokeCap.Round;
+        paint.StrokeJoin = SKStrokeJoin.Round;
     }
 
     private static void DrawArrow(SKCanvas canvas, ArrowAnnotation arrow, SKPaint paint)    {
