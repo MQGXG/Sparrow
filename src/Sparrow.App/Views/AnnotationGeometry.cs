@@ -114,13 +114,40 @@ internal static class AnnotationGeometry
                 Center = Map(number.Center),
                 Size = Math.Clamp(number.Size * Math.Min(scaleX, scaleY), 8, 200)
             },
-            TextAnnotation text => text with { Origin = Map(text.Origin) },
+            TextAnnotation text => text with
+            {
+                Origin = Map(text.Origin),
+                FontSize = Math.Clamp(text.FontSize * Math.Min(scaleX, scaleY), 6, 200)
+            },
             _ => note
         };
     }
 
-    /// <summary>文字不显示缩放控制点；其余类型都支持按包围盒缩放。</summary>
-    public static bool IsScalable(IAnnotation note) => note is not TextAnnotation;
+    /// <summary>文字也支持缩放（字号跟着包围盒比例走）。</summary>
+    public static bool IsScalable(IAnnotation note) => true;
+
+    /// <summary>当前旋转角；只对矩形类/文字生效，点类标注通过移动端点旋转。</summary>
+    public static double RotationOf(IAnnotation note) => note switch
+    {
+        ShapeAnnotation shape => shape.Rotation,
+        BracketAnnotation bracket => bracket.Rotation,
+        SpeechBubbleAnnotation bubble => bubble.Rotation,
+        TextAnnotation text => text.Rotation,
+        _ => 0
+    };
+
+    /// <summary>设置旋转角；只对矩形类/文字生效。</summary>
+    public static IAnnotation RotateTo(IAnnotation note, double angle) => note switch
+    {
+        ShapeAnnotation shape => shape with { Rotation = angle },
+        BracketAnnotation bracket => bracket with { Rotation = angle },
+        SpeechBubbleAnnotation bubble => bubble with { Rotation = angle },
+        TextAnnotation text => text with { Rotation = angle },
+        _ => note
+    };
+
+    public static bool IsRotatable(IAnnotation note) =>
+        note is ShapeAnnotation or BracketAnnotation or SpeechBubbleAnnotation or TextAnnotation;
 
     /// <summary>
     /// 气泡尾尖：拖拽起点一般落在矩形角上，直接画会没有尾巴；

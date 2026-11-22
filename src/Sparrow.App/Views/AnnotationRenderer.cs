@@ -48,7 +48,7 @@ internal static class AnnotationRenderer
         switch (item)
         {
             case ShapeAnnotation shape:
-                DrawShape(canvas, shape, paint);
+                WithRotation(canvas, shape.Rect.Center, shape.Rotation, () => DrawShape(canvas, shape, paint));
                 break;
 
             case ArrowAnnotation arrow:
@@ -68,11 +68,13 @@ internal static class AnnotationRenderer
                 break;
 
             case BracketAnnotation bracket:
-                DrawBracket(canvas, bracket, paint);
+                WithRotation(canvas, bracket.Rect.Center, bracket.Rotation,
+                    () => DrawBracket(canvas, bracket, paint));
                 break;
 
             case SpeechBubbleAnnotation bubble:
-                DrawSpeechBubble(canvas, bubble, paint);
+                WithRotation(canvas, bubble.Rect.Center, bubble.Rotation,
+                    () => DrawSpeechBubble(canvas, bubble, paint));
                 break;
 
             case SpotlightAnnotation spotlight:
@@ -116,8 +118,14 @@ internal static class AnnotationRenderer
                 if (string.IsNullOrEmpty(text.Text))
                     break;
 
-                using (var font = AnnotationText.CreateFont(text.FontSize, text.Bold))
+                var textWidth = AnnotationText.Measure(text.Text, text.FontSize, text.Bold);
+                var textCenter = new Point(
+                    text.Origin.X + textWidth / 2,
+                    text.Origin.Y - text.FontSize * 0.35);
+
+                WithRotation(canvas, textCenter, text.Rotation, () =>
                 {
+                    using var font = AnnotationText.CreateFont(text.FontSize, text.Bold);
                     paint.Color = new SKColor(text.Color);
                     paint.Style = SKPaintStyle.Fill;
                     canvas.DrawText(
@@ -127,7 +135,7 @@ internal static class AnnotationRenderer
                         SKTextAlign.Left,
                         font,
                         paint);
-                }
+                });
                 break;
 
             case NumberAnnotation number:
@@ -715,6 +723,21 @@ internal static class AnnotationRenderer
             SKTextAlign.Left,
             font,
             paint);
+    }
+
+    /// <summary>可选旋转：以 center 为轴执行一次绘制，不影响后续图元。</summary>
+    private static void WithRotation(SKCanvas canvas, Point center, double rotation, Action draw)
+    {
+        if (Math.Abs(rotation) < 0.01)
+        {
+            draw();
+            return;
+        }
+
+        canvas.Save();
+        canvas.RotateDegrees((float)rotation, (float)center.X, (float)center.Y);
+        draw();
+        canvas.Restore();
     }
 
     private static SKColor WithOpacity(uint argb, double opacity)

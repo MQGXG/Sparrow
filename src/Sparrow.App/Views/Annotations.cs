@@ -55,7 +55,8 @@ public sealed record ShapeAnnotation(
     double Opacity = 1,
     ShapeFill Fill = ShapeFill.None,
     double Radius = 0,
-    LineDash Dash = LineDash.Solid) : IAnnotation;
+    LineDash Dash = LineDash.Solid,
+    double Rotation = 0) : IAnnotation;
 
 public sealed record ArrowAnnotation(
     Point From,
@@ -101,7 +102,8 @@ public sealed record BracketAnnotation(
     uint Color,
     double Width,
     double Opacity = 1,
-    LineDash Dash = LineDash.Solid) : IAnnotation
+    LineDash Dash = LineDash.Solid,
+    double Rotation = 0) : IAnnotation
 {
     /// <summary>横臂长度：不超过 24，也不超过短边的一半。</summary>
     public double Depth => Math.Min(Math.Min(24, Rect.Height / 3), Rect.Width / 2);
@@ -130,7 +132,8 @@ public sealed record SpeechBubbleAnnotation(
     double Width,
     double FontSize,
     ShapeFill Fill = ShapeFill.None,
-    double Opacity = 1) : IAnnotation;
+    double Opacity = 1,
+    double Rotation = 0) : IAnnotation;
 
 /// <summary>水印：在 Area 内按 Spacing 平铺 Text，整体绕区域中心旋转 Angle 度。</summary>
 public sealed record WatermarkAnnotation(
@@ -158,7 +161,8 @@ public sealed record TextAnnotation(
     string Text,
     uint Color,
     double FontSize,
-    bool Bold = false) : IAnnotation;
+    bool Bold = false,
+    double Rotation = 0) : IAnnotation;
 
 /// <summary>序号：圆形底 + 数字，Number 从 1 自动递增。</summary>
 public sealed record NumberAnnotation(Point Center, int Number, uint Color, double Size) : IAnnotation;

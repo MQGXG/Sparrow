@@ -50,7 +50,10 @@ public partial class CaptureWindow : Window
         NoteEdit,
 
         /// <summary>拖动选中标注的缩放控制点。</summary>
-        NoteResize
+        NoteResize,
+
+        /// <summary>拖动旋转手柄。</summary>
+        NoteRotate
     }
 
     private enum ResizeHandle
@@ -81,6 +84,7 @@ public partial class CaptureWindow : Window
     private static readonly Cursor ArrowCursor = new(StandardCursorType.Arrow);
     private static readonly Cursor MoveCursor = new(StandardCursorType.SizeAll);
     private static readonly Cursor IbeamCursor = new(StandardCursorType.Ibeam);
+    private static readonly Cursor HandCursor = new(StandardCursorType.Hand);
 
     internal static Cursor CrossCursorValue => CrossCursor;
     internal static Cursor MoveCursorValue => MoveCursor;
@@ -142,11 +146,19 @@ public partial class CaptureWindow : Window
     private bool _noteDragMoved;
 
     private const double MinNoteSize = 12;
+    private const double RotateHandleDistance = 18;
     private ResizeHandle _noteResizeHandle;
     private IAnnotation? _noteResizeOriginal;
     private Rect _noteResizeBounds;
     private int _noteResizeIndex = -1;
     private bool _noteResizeMoved;
+
+    private int _noteRotateIndex = -1;
+    private IAnnotation? _noteRotateOriginal;
+    private double _noteRotateBase;
+    private Point _noteRotateCenter;
+    private Point _noteRotateStartVector;
+    private bool _noteRotateMoved;
 
     /// <summary>移动/拉伸选区前的标注快照；每帧从快照平移，避免累积误差。</summary>
     private List<IAnnotation>? _notesBeforeDrag;
@@ -772,6 +784,13 @@ public partial class CaptureWindow : Window
         // 指针工具：先看点没点中已有标注（点中就拖动它），否则继续移动选区
         if (_tool == AnnotationTool.None && _hasSelection && _selection.Contains(point))
         {
+            if (HitNoteRotateHandle(point))
+            {
+                BeginNoteRotate(point);
+                e.Handled = true;
+                return;
+            }
+
             var noteHandle = HitNoteHandle(point);
             if (noteHandle != ResizeHandle.None)
             {
@@ -945,6 +964,11 @@ public partial class CaptureWindow : Window
                 Magnifier.IsVisible = false;
                 e.Handled = true;
                 return;
+            case DragMode.NoteRotate:
+                ApplyNoteRotate(point, e.KeyModifiers.HasFlag(KeyModifiers.Shift));
+                Magnifier.IsVisible = false;
+                e.Handled = true;
+                return;
         }
 
         Magnifier.IsVisible = false;
@@ -1027,6 +1051,25 @@ public partial class CaptureWindow : Window
             _noteResizeIndex = -1;
             _noteResizeOriginal = null;
             _noteResizeMoved = false;
+            RebuildNotePreview();
+            e.Handled = true;
+            return;
+        }
+
+        if (_mode == DragMode.NoteRotate)
+        {
+            if (_noteRotateMoved
+                && _noteRotateIndex >= 0
+                && _noteRotateOriginal is { } original
+                && _noteRotateIndex < _notes.Items.Count)
+            {
+                _notes.RecordReplace(_noteRotateIndex, original, _notes.Items[_noteRotateIndex]);
+            }
+
+            _mode = DragMode.None;
+            _noteRotateIndex = -1;
+            _noteRotateOriginal = null;
+            _noteRotateMoved = false;
             RebuildNotePreview();
             e.Handled = true;
             return;
@@ -1896,9 +1939,15 @@ public partial class CaptureWindow : Window
             return;
         }
 
-        // 选中标注的缩放点优先于选区移动
+        // 选中标注的旋转/缩放点优先于选区移动
         if (_tool == AnnotationTool.None)
         {
+            if (HitNoteRotateHandle(point))
+            {
+                Cursor = HandCursor;
+                return;
+            }
+
             var noteHandle = HitNoteHandle(point);
             if (noteHandle != ResizeHandle.None)
             {
@@ -1995,6 +2044,12 @@ public partial class CaptureWindow : Window
         {
             _notes.Replace(_noteResizeIndex, resizeOriginal);
         }
+        else if (_mode == DragMode.NoteRotate
+                 && _noteRotateIndex >= 0
+                 && _noteRotateOriginal is { } rotateOriginal)
+        {
+            _notes.Replace(_noteRotateIndex, rotateOriginal);
+        }
 
         _mode = DragMode.None;
         _draggingNote = -1;
@@ -2006,6 +2061,9 @@ public partial class CaptureWindow : Window
         _noteResizeIndex = -1;
         _noteResizeOriginal = null;
         _noteResizeMoved = false;
+        _noteRotateIndex = -1;
+        _noteRotateOriginal = null;
+        _noteRotateMoved = false;
         HideTextEditor();
         Magnifier.IsVisible = false;
         ClearGuides();
@@ -2707,6 +2765,66 @@ public partial class CaptureWindow : Window
         RebuildNotePreview();
     }
 
+    /// <summary>开始拖动旋转手柄。</summary>
+    private void BeginNoteRotate(Point point)
+    {
+        _mode = DragMode.NoteRotate;
+        _noteRotateIndex = _selectedNote;
+        _noteRotateOriginal = _notes.Items[_selectedNote];
+        _noteRotateCenter = NoteRotationCenter(_noteRotateOriginal);
+        _noteRotateBase = AnnotationGeometry.RotationOf(_noteRotateOriginal);
+        _noteRotateStartVector = new Point(
+            point.X - _selection.X - _noteRotateCenter.X,
+            point.Y - _selection.Y - _noteRotateCenter.Y);
+        _noteRotateMoved = false;
+        HideTextEditor();
+    }
+
+    /// <summary>按鼠标相对中心的角度设置旋转；按住 Shift 吸附 15°。</summary>
+    private void ApplyNoteRotate(Point point, bool snap)
+    {
+        if (_noteRotateOriginal is null
+            || _noteRotateIndex < 0
+            || _noteRotateIndex >= _notes.Items.Count)
+            return;
+
+        var local = new Point(point.X - _selection.X, point.Y - _selection.Y);
+        var vector = new Point(
+            local.X - _noteRotateCenter.X,
+            local.Y - _noteRotateCenter.Y);
+
+        if (Math.Abs(vector.X) < 0.001 && Math.Abs(vector.Y) < 0.001)
+            return;
+
+        var startAngle = Math.Atan2(_noteRotateStartVector.Y, _noteRotateStartVector.X);
+        var currentAngle = Math.Atan2(vector.Y, vector.X);
+        var angle = _noteRotateBase + (currentAngle - startAngle) * 180 / Math.PI;
+
+        if (snap)
+            angle = Math.Round(angle / 15) * 15;
+
+        angle = NormalizeAngle(angle);
+
+        if (!_noteRotateMoved)
+        {
+            _noteRotateMoved = true;
+            MarkNoteMutation();
+        }
+
+        _notes.Replace(
+            _noteRotateIndex,
+            AnnotationGeometry.RotateTo(_noteRotateOriginal, angle));
+        RebuildNotePreview();
+    }
+
+    private static double NormalizeAngle(double angle)
+    {
+        angle %= 360;
+        if (angle > 180) angle -= 360;
+        if (angle < -180) angle += 360;
+        return angle;
+    }
+
     private void ApplyNoteDrag(Point point)    {        if (_draggingNote < 0 || _noteDragOriginal is null || _draggingNote >= _notes.Items.Count)
             return;
 
@@ -2819,6 +2937,10 @@ public partial class CaptureWindow : Window
     {
         const double slop = 6;
 
+        var rotation = AnnotationGeometry.RotationOf(item);
+        if (Math.Abs(rotation) > 0.01)
+            point = RotatePoint(point, NoteRotationCenter(item), -rotation);
+
         switch (item)
         {
             case ShapeAnnotation shape:
@@ -2919,6 +3041,31 @@ public partial class CaptureWindow : Window
         _ => new Point(bounds.Center.X, bounds.Center.Y)
     };
 
+    private static Point NoteRotateHandlePoint(Rect bounds)
+    {
+        var y = bounds.Top - RotateHandleDistance;
+        if (y < 0)
+            y = bounds.Bottom + RotateHandleDistance;
+
+        return new Point(bounds.Center.X, y);
+    }
+
+    /// <summary>命中旋转手柄（局部坐标）。</summary>
+    private bool HitNoteRotateHandle(Point point)
+    {
+        if (_tool != AnnotationTool.None
+            || _selectedNote < 0
+            || _selectedNote >= _notes.Items.Count)
+            return false;
+
+        var note = _notes.Items[_selectedNote];
+        if (!AnnotationGeometry.IsRotatable(note))
+            return false;
+
+        var local = new Point(point.X - _selection.X, point.Y - _selection.Y);
+        return Distance(local, NoteRotateHandlePoint(NoteBounds(note))) <= 7;
+    }
+
     /// <summary>命中选中标注的缩放控制点（局部坐标）。</summary>
     private ResizeHandle HitNoteHandle(Point point)
     {
@@ -2982,8 +3129,45 @@ public partial class CaptureWindow : Window
             NoteHandleLayer.Children.Add(dot);
         }
 
+        if (AnnotationGeometry.IsRotatable(note))
+        {
+            var rotate = NoteRotateHandlePoint(bounds);
+            var anchor = rotate.Y < bounds.Top
+                ? new Point(bounds.Center.X, bounds.Top)
+                : new Point(bounds.Center.X, bounds.Bottom);
+            var stem = new Line
+            {
+                StartPoint = anchor,
+                EndPoint = rotate,
+                Stroke = new SolidColorBrush(Color.Parse("#B3E5A44C")),
+                StrokeThickness = 1,
+                IsHitTestVisible = false
+            };
+            NoteHandleLayer.Children.Add(stem);
+
+            var knob = new Ellipse
+            {
+                Width = 9,
+                Height = 9,
+                Fill = Brushes.White,
+                Stroke = new SolidColorBrush(Color.Parse("#FFE5A44C")),
+                StrokeThickness = 1,
+                IsHitTestVisible = false
+            };
+            Canvas.SetLeft(knob, rotate.X - 4.5);
+            Canvas.SetTop(knob, rotate.Y - 4.5);
+            NoteHandleLayer.Children.Add(knob);
+        }
+
         NoteHandleLayer.IsVisible = true;
     }
+
+    /// <summary>旋转中心；气泡用矩形中心，和导出保持一致（不含尾巴）。</summary>
+    private static Point NoteRotationCenter(IAnnotation item) => item switch
+    {
+        SpeechBubbleAnnotation bubble => bubble.Rect.Center,
+        _ => NoteBounds(item).Center
+    };
 
     /// <summary>标注在选区坐标系里的包围盒；选中框和命中测试共用。</summary>
     private static Rect NoteBounds(IAnnotation item)
@@ -4031,6 +4215,20 @@ public partial class CaptureWindow : Window
     private static double Distance(Point a, Point b) =>
         Math.Sqrt(Math.Pow(a.X - b.X, 2) + Math.Pow(a.Y - b.Y, 2));
 
+        /// <summary>绕 center 旋转 point（度，屏幕坐标，顺时针为正）。</summary>
+    private static Point RotatePoint(Point point, Point center, double degrees)
+    {
+        var radians = degrees * Math.PI / 180;
+        var cos = Math.Cos(radians);
+        var sin = Math.Sin(radians);
+        var dx = point.X - center.X;
+        var dy = point.Y - center.Y;
+
+        return new Point(
+            center.X + dx * cos - dy * sin,
+            center.Y + dx * sin + dy * cos);
+    }
+
     private static Point Direction(Point from, Point to)
     {
         var dx = to.X - from.X;
@@ -4190,12 +4388,18 @@ public partial class CaptureWindow : Window
 
         // 选中态：虚线外框，告诉用户现在拖的是哪一条
         if (_selectedNote >= 0 && _selectedNote < _notes.Items.Count)
-            AddNoteSelectionOutline(NoteBounds(_notes.Items[_selectedNote]));
+        {
+            var selected = _notes.Items[_selectedNote];
+            AddNoteSelectionOutline(
+                NoteBounds(selected),
+                NoteRotationCenter(selected),
+                AnnotationGeometry.RotationOf(selected));
+        }
 
         UpdateNoteHandles();
     }
 
-    private void AddNoteSelectionOutline(Rect bounds)
+    private void AddNoteSelectionOutline(Rect bounds, Point center, double rotation = 0)
     {
         var outline = new Rectangle
         {
@@ -4207,6 +4411,20 @@ public partial class CaptureWindow : Window
             IsHitTestVisible = false
         };
 
+        if (Math.Abs(rotation) > 0.01)
+        {
+            var left = bounds.X - 3;
+            var top = bounds.Y - 3;
+            var width = bounds.Width + 6;
+            var height = bounds.Height + 6;
+
+            outline.RenderTransformOrigin = new RelativePoint(
+                (center.X - left) / Math.Max(1, width),
+                (center.Y - top) / Math.Max(1, height),
+                RelativeUnit.Relative);
+            outline.RenderTransform = new RotateTransform(rotation);
+        }
+
         Canvas.SetLeft(outline, bounds.X - 3);
         Canvas.SetTop(outline, bounds.Y - 3);
         NoteLayer.Children.Add(outline);
@@ -4214,6 +4432,8 @@ public partial class CaptureWindow : Window
 
     private void AddPreviewShape(IAnnotation item)
     {
+        var start = NoteLayer.Children.Count;
+
         switch (item)
         {
             case ShapeAnnotation { Ellipse: true } shape:
@@ -4407,6 +4627,34 @@ public partial class CaptureWindow : Window
                 Canvas.SetTop(badge, number.Center.Y - number.Size * 0.34);
                 NoteLayer.Children.Add(badge);
                 break;
+        }
+
+        var rotation = AnnotationGeometry.RotationOf(item);
+        if (Math.Abs(rotation) > 0.01 && NoteLayer.Children.Count > start)
+        {
+            var added = new List<Control>();
+            for (var index = NoteLayer.Children.Count - 1; index >= start; index--)
+            {
+                added.Insert(0, NoteLayer.Children[index]);
+                NoteLayer.Children.RemoveAt(index);
+            }
+
+            var center = NoteRotationCenter(item);
+            var container = new Canvas
+            {
+                Width = _selection.Width,
+                Height = _selection.Height,
+                RenderTransformOrigin = new RelativePoint(
+                    center.X / Math.Max(1, _selection.Width),
+                    center.Y / Math.Max(1, _selection.Height),
+                    RelativeUnit.Relative),
+                RenderTransform = new RotateTransform(rotation)
+            };
+
+            foreach (var child in added)
+                container.Children.Add(child);
+
+            NoteLayer.Children.Add(container);
         }
     }
 

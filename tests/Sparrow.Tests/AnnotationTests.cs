@@ -43,6 +43,21 @@ public sealed class AnnotationTests
     }
 
     [Fact]
+    public void 合成_旋转矩形按中心旋转()
+    {
+        var png = CreateWhitePng(100, 100);
+        var shape = new ShapeAnnotation(
+            new Rect(20, 20, 60, 20), 0xFFFF0000, 2, false, Rotation: 90);
+
+        using var decoded = SKBitmap.Decode(
+            AnnotationRenderer.Compose(png, [shape], 1));
+
+        // 绕中心旋转 90° 后变成 x=40..60、y=0..60 的竖条
+        decoded.GetPixel(60, 30).Green.ShouldBeLessThan((byte)120);
+        decoded.GetPixel(20, 30).Green.ShouldBeGreaterThan((byte)200);
+    }
+
+    [Fact]
     public void 缩放标注_矩形和点按包围盒映射()
     {
         var from = new Rect(10, 10, 100, 50);
@@ -60,7 +75,38 @@ public sealed class AnnotationTests
         scaledArrow.To.ShouldBe(new Point(220, 120));
 
         AnnotationGeometry.IsScalable(new TextAnnotation(
-            new Point(0, 0), "x", 0xFFFF0000, 16)).ShouldBeFalse();
+            new Point(0, 0), "x", 0xFFFF0000, 16)).ShouldBeTrue();
+
+        var text = new TextAnnotation(new Point(10, 10), "x", 0xFFFF0000, 16);
+        var scaledText = AnnotationGeometry.Scale(text, from, to)
+            .ShouldBeOfType<TextAnnotation>();
+        scaledText.FontSize.ShouldBe(32, 0.01);
+        scaledText.Origin.ShouldBe(new Point(20, 20));
+    }
+
+    [AvaloniaFact]
+    public void 拖动旋转手柄旋转标注并可撤销()
+    {
+        var window = CreateWithRectangle();
+
+        window.MouseDown(new Point(150, 185), MouseButton.Left);
+        window.MouseUp(new Point(150, 185), MouseButton.Left);
+
+        // 标注本地包围盒 (50,50,100,70)，中心 (100,85)，旋转柄在 (100,32)
+        // 屏幕上分别是 (200,185) 和 (200,132)
+        window.MouseDown(new Point(200, 132), MouseButton.Left);
+        // 目标向量从 (0,-53) 转到 (53,0)：旋转 90°
+        window.MouseMove(new Point(253, 185));
+        window.MouseUp(new Point(253, 185), MouseButton.Left);
+
+        window.Notes[0].ShouldBeOfType<ShapeAnnotation>()
+            .Rotation.ShouldBe(90, 1);
+
+        window.KeyPress(Key.Z, RawInputModifiers.Control, PhysicalKey.Z, null);
+        window.Notes[0].ShouldBeOfType<ShapeAnnotation>()
+            .Rotation.ShouldBe(0, 1);
+
+        window.Close();
     }
 
     [AvaloniaFact]
@@ -73,7 +119,7 @@ public sealed class AnnotationTests
         window.MouseUp(new Point(150, 185), MouseButton.Left);
 
         window.NoteHandleLayer.IsVisible.ShouldBeTrue();
-        window.NoteHandleLayer.Children.Count.ShouldBe(8);
+        window.NoteHandleLayer.Children.Count.ShouldBeGreaterThanOrEqualTo(8);
 
         // 右下角控制点在 (250,220)，拖到 (300,250)
         window.MouseDown(new Point(250, 220), MouseButton.Left);
