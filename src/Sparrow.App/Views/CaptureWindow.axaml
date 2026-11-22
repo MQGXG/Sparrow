@@ -11,6 +11,16 @@
         Background="Transparent">
 
   <Window.Resources>
+    <!-- 紧凑滑块：默认 Fluent 是 20px 拇指 / 32px 高，塞进 40px 属性条里像大圆点 -->
+    <x:Double x:Key="SliderHorizontalHeight">16</x:Double>
+    <x:Double x:Key="SliderHorizontalThumbWidth">12</x:Double>
+    <x:Double x:Key="SliderHorizontalThumbHeight">12</x:Double>
+    <CornerRadius x:Key="SliderThumbCornerRadius">6</CornerRadius>
+    <x:Double x:Key="SliderTrackThemeHeight">3</x:Double>
+    <!-- 默认上下各留 15；属性条只有 20 高，收到 4 才能让轨道真正居中 -->
+    <GridLength x:Key="SliderPreContentMargin">4</GridLength>
+    <GridLength x:Key="SliderPostContentMargin">4</GridLength>
+
     <!-- 标注工具图标（24×24 线稿） -->
     <StreamGeometry x:Key="ToolRect">M4 6.5h16v11H4z</StreamGeometry>
     <StreamGeometry x:Key="ToolEllipse">M12 5.5c4.4 0 8 2.9 8 6.5s-3.6 6.5-8 6.5-8-2.9-8-6.5 3.6-6.5 8-6.5z</StreamGeometry>
@@ -370,6 +380,16 @@
       <Setter Property="Width" Value="88" />
       <Setter Property="Height" Value="20" />
       <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Background" Value="#33FFFFFF" />
+    </Style>
+    <Style Selector="Slider.prop /template/ Thumb">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderBrush" Value="#CCFFFFFF" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Slider.prop /template/ Thumb:pointerover">
+      <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
     </Style>
   </Window.Styles>
 
