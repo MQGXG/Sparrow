@@ -215,6 +215,17 @@ public partial class CaptureWindow : Window
     /// <summary>水印/气泡工具按在已有同类标注上：松手不新建，避免双击时先叠一层。</summary>
     private bool _notePressOnExisting;
 
+    /// <summary>角度工具的两步输入阶段。</summary>
+    private enum AnglePhase
+    {
+        None,
+        First,
+        Second
+    }
+
+    private readonly AngleDraftState _angleDraft = new();
+    private AnglePhase _anglePhase;
+
     /// <summary>聚光灯的暗度（0..1），和标注透明度分开存。</summary>
     private double _spotlightOpacity = 0.55;
 
@@ -614,6 +625,14 @@ public partial class CaptureWindow : Window
             return;
         }
 
+        // 角度：两次拖拽；草稿存在时第二段优先于边框拉伸
+        if (_tool == AnnotationTool.Angle && _hasSelection && _selection.Contains(point))
+        {
+            BeginAngleDrag(point);
+            e.Handled = true;
+            return;
+        }
+
         // 边框带优先于当前工具：画着标注时按在边框 8 内也能拉选区（参考 snow-shot），
         // 松手后把工具恢复回去
         _toolBeforeResize = null;
@@ -857,7 +876,11 @@ public partial class CaptureWindow : Window
         // 画完一条标注：小于阈值当误触丢掉
         if (_pendingAnnotation is not null)
         {
-            CommitPendingAnnotation();
+            if (_tool == AnnotationTool.Angle)
+                CommitAngleDrag();
+            else
+                CommitPendingAnnotation();
+
             ClearGuides();
             e.Handled = true;
             return;
@@ -952,6 +975,8 @@ public partial class CaptureWindow : Window
         _notes.Clear();
         _pendingAnnotation = null;
         _penPoints = null;
+        _notePressOnExisting = false;
+        CancelAngleDraft();
         RebuildNotePreview();
         UpdateToolButtons();
         _ocrText = null;
@@ -1648,6 +1673,13 @@ public partial class CaptureWindow : Window
     /// </summary>
     private void HandleRightClick()
     {
+        // 角度草稿：先清草稿，不退出工具（再按一次右键才退）
+        if (_angleDraft.IsActive || _anglePhase != AnglePhase.None)
+        {
+            CancelAngleDraft();
+            return;
+        }
+
         // 取色是最外层：先退出取色，再谈别的
         if (_colorSampling)
         {
@@ -1746,6 +1778,8 @@ public partial class CaptureWindow : Window
     private void OnBracketToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Bracket);
 
     private void OnBubbleToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Bubble);
+
+    private void OnAngleToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Angle);
 
     private void OnTextToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Text);
 
@@ -2250,6 +2284,12 @@ public partial class CaptureWindow : Window
             From = new Point(distance.From.X + dx, distance.From.Y + dy),
             To = new Point(distance.To.X + dx, distance.To.Y + dy)
         },
+        AngleAnnotation angle => angle with
+        {
+            Vertex = new Point(angle.Vertex.X + dx, angle.Vertex.Y + dy),
+            A = new Point(angle.A.X + dx, angle.A.Y + dy),
+            B = new Point(angle.B.X + dx, angle.B.Y + dy)
+        },
         BracketAnnotation bracket => bracket with
         {
             Rect = new Rect(
@@ -2328,6 +2368,10 @@ public partial class CaptureWindow : Window
                 return DistanceToSegment(point, distance.From, distance.To)
                        <= distance.Width / 2 + slop;
 
+            case AngleAnnotation angle:
+                return DistanceToSegment(point, angle.Vertex, angle.A) <= angle.Width / 2 + slop
+                       || DistanceToSegment(point, angle.Vertex, angle.B) <= angle.Width / 2 + slop;
+
             case BracketAnnotation bracket:
                 var bracketPoints = AnnotationGeometry.BracketPoints(bracket);
                 for (var index = 1; index < bracketPoints.Length; index++)
@@ -2398,6 +2442,9 @@ public partial class CaptureWindow : Window
 
             case DistanceAnnotation distance:
                 return FromPoints(distance.From, distance.To);
+
+            case AngleAnnotation angle:
+                return FromPoints([angle.Vertex, angle.A, angle.B]);
 
             case BracketAnnotation bracket:
                 return bracket.Rect;
@@ -2527,6 +2574,7 @@ public partial class CaptureWindow : Window
     private void ClearAnnotations()
     {
         HideTextEditor();
+        CancelAngleDraft();
 
         if (_notes.Items.Count == 0 && _pendingAnnotation is null)
             return;
@@ -2544,7 +2592,12 @@ public partial class CaptureWindow : Window
 
     private void SetTool(AnnotationTool tool)
     {
-        _tool = _tool == tool ? AnnotationTool.None : tool;
+        var next = _tool == tool ? AnnotationTool.None : tool;
+
+        if (next != AnnotationTool.Angle)
+            CancelAngleDraft();
+
+        _tool = next;
 
         // 切到画图工具时取消选中，避免虚线框挡着下一笔
         if (_tool != AnnotationTool.None)
@@ -2556,6 +2609,9 @@ public partial class CaptureWindow : Window
     /// <summary>直接设成某个工具（不做「再点一次取消」的切换语义），用于临时让位。</summary>
     private void ForceTool(AnnotationTool tool)
     {
+        if (tool != AnnotationTool.Angle)
+            CancelAngleDraft();
+
         _tool = tool;
 
         if (tool != AnnotationTool.None)
@@ -2587,6 +2643,7 @@ public partial class CaptureWindow : Window
             [AnnotationTool.Arrow] = ("ToolArrow", 1.053),
             [AnnotationTool.Line] = ("ToolLine", 1.05),
             [AnnotationTool.Distance] = ("ToolDistance", 1.2),
+            [AnnotationTool.Angle] = ("ToolAngle", 1.2),
             [AnnotationTool.Bracket] = ("ToolBracket", 1.2),
             [AnnotationTool.Bubble] = ("ToolBubble", 1.2),
             [AnnotationTool.Pen] = ("ToolPen", 1.125),
@@ -2610,7 +2667,8 @@ public partial class CaptureWindow : Window
         {
             Trigger = ArrowGroupButton,
             Icon = ArrowGroupIcon,
-            Members = [AnnotationTool.Line, AnnotationTool.Arrow, AnnotationTool.Distance],
+            Members = [AnnotationTool.Line, AnnotationTool.Arrow, AnnotationTool.Distance,
+                AnnotationTool.Angle],
             EntryIndex = 1
         });
         _toolGroups.Add(new ToolGroup
@@ -2740,6 +2798,7 @@ public partial class CaptureWindow : Window
         AnnotationTool.Distance => "测距",
         AnnotationTool.Bracket => "括号",
         AnnotationTool.Bubble => "气泡",
+        AnnotationTool.Angle => "角度",
         _ => string.Empty
     };
 
@@ -2753,6 +2812,7 @@ public partial class CaptureWindow : Window
         SetSelected(DistanceToolButton, _tool == AnnotationTool.Distance);
         SetSelected(BracketToolButton, _tool == AnnotationTool.Bracket);
         SetSelected(BubbleToolButton, _tool == AnnotationTool.Bubble);
+        SetSelected(AngleToolButton, _tool == AnnotationTool.Angle);
         SetSelected(EraserToolButton, _tool == AnnotationTool.Eraser);
         SetSelected(SpotlightToolButton, _tool == AnnotationTool.Spotlight);
         SetSelected(MagnifierToolButton, _tool == AnnotationTool.Magnifier);
@@ -2783,7 +2843,7 @@ public partial class CaptureWindow : Window
         // 每组属性只在当前工具用得上时出现（LumaShot 的属性卡思路）
         var drawing = _tool is AnnotationTool.Rectangle or AnnotationTool.Ellipse
             or AnnotationTool.Arrow or AnnotationTool.Line or AnnotationTool.Distance
-            or AnnotationTool.Bracket or AnnotationTool.Bubble
+            or AnnotationTool.Angle or AnnotationTool.Bracket or AnnotationTool.Bubble
             or AnnotationTool.Pen or AnnotationTool.Highlighter;
 
         ColorGroup.IsVisible = _tool is not (
@@ -2802,7 +2862,7 @@ public partial class CaptureWindow : Window
             SetSelected(FillSoftButton, activeFill == ShapeFill.Soft);
             SetSelected(FillSolidButton, activeFill == ShapeFill.Solid);
         }
-        OpacityGroup.IsVisible = (drawing && _tool != AnnotationTool.Bubble)
+        OpacityGroup.IsVisible = (drawing && _tool is not (AnnotationTool.Bubble or AnnotationTool.Angle))
             || _tool is AnnotationTool.Spotlight or AnnotationTool.Watermark;
 
         // 聚光灯、水印和普通标注共用同一个滑块，但各存各的字段
@@ -3034,6 +3094,11 @@ public partial class CaptureWindow : Window
                 To = current,
                 Label = FormatDistance(distance.From, current)
             },
+            AngleAnnotation angle => angle with
+            {
+                B = current,
+                Label = FormatAngle(angle.Vertex, angle.A, current)
+            },
             BracketAnnotation bracket => bracket with
             {
                 Rect = NormalizeRect(_annotationStart, current),
@@ -3112,12 +3177,132 @@ public partial class CaptureWindow : Window
     private static double Distance(Point a, Point b) =>
         Math.Sqrt(Math.Pow(a.X - b.X, 2) + Math.Pow(a.Y - b.Y, 2));
 
+    private static Point Direction(Point from, Point to)
+    {
+        var dx = to.X - from.X;
+        var dy = to.Y - from.Y;
+        var length = Math.Sqrt(dx * dx + dy * dy);
+        return length < 0.001 ? new Point(1, 0) : new Point(dx / length, dy / length);
+    }
+
+    private static Point Bisector(Point a, Point b)
+    {
+        var x = a.X + b.X;
+        var y = a.Y + b.Y;
+        var length = Math.Sqrt(x * x + y * y);
+        return length < 0.001 ? new Point(-a.Y, a.X) : new Point(x / length, y / length);
+    }
+
     /// <summary>测距标签：跟随选区工具条的 px/DIP 单位，创建时定稿。</summary>
     private string FormatDistance(Point from, Point to)
     {
         var dip = Distance(from, to);
         return _sizeInPixels ? $"{dip * _scaling:0} px" : $"{dip:0} DIP";
     }
+
+    /// <summary>角度第一步：按下开始第一条边；草稿已存在时开始第二条边。</summary>
+    private void BeginAngleDrag(Point point)
+    {
+        _annotationStart = new Point(point.X - _selection.X, point.Y - _selection.Y);
+        _penPoints = null;
+
+        if (_angleDraft.IsActive)
+        {
+            _anglePhase = AnglePhase.Second;
+            _pendingAnnotation = new AngleAnnotation(
+                _angleDraft.Vertex!.Value,
+                _angleDraft.First!.Value,
+                _annotationStart,
+                _noteColor.ToUInt32(),
+                _noteWidth,
+                FormatAngle(_angleDraft.Vertex.Value, _angleDraft.First.Value, _annotationStart),
+                _noteOpacity);
+        }
+        else
+        {
+            _anglePhase = AnglePhase.First;
+            _pendingAnnotation = new LineAnnotation(
+                _annotationStart,
+                _annotationStart,
+                _noteColor.ToUInt32(),
+                _noteWidth,
+                _noteOpacity,
+                _noteDash);
+        }
+
+        RebuildNotePreview();
+    }
+
+    /// <summary>角度松手：第一段只存草稿，第二段才真正提交标注。</summary>
+    private void CommitAngleDrag()
+    {
+        var annotation = _pendingAnnotation;
+        _pendingAnnotation = null;
+        _penPoints = null;
+        var phase = _anglePhase;
+        _anglePhase = AnglePhase.None;
+
+        if (phase == AnglePhase.First)
+        {
+            if (annotation is LineAnnotation { } line && Distance(line.From, line.To) >= 6)
+            {
+                _angleDraft.Begin(line.From, line.To);
+                ShowAngleHint();
+            }
+            else
+            {
+                _angleDraft.Clear();
+                HideAngleHint();
+            }
+        }
+        else if (phase == AnglePhase.Second && annotation is AngleAnnotation pending)
+        {
+            if (_angleDraft.TryBuild(pending.B, out _))
+            {
+                _notes.Add(pending with
+                {
+                    Label = FormatAngle(pending.Vertex, pending.A, pending.B)
+                });
+                _angleDraft.Clear();
+                HideAngleHint();
+            }
+            else
+            {
+                // 第二条边太短：保留草稿，用户可以再拖一次
+                ShowAngleHint();
+            }
+        }
+
+        RebuildNotePreview();
+        UpdateToolButtons();
+    }
+
+    /// <summary>清掉角度草稿；Esc / 右键 / 切工具共用。</summary>
+    private void CancelAngleDraft()
+    {
+        if (!_angleDraft.IsActive && _anglePhase == AnglePhase.None)
+            return;
+
+        _angleDraft.Clear();
+        _anglePhase = AnglePhase.None;
+        _pendingAnnotation = null;
+        _penPoints = null;
+        HideAngleHint();
+        RebuildNotePreview();
+        UpdateToolButtons();
+    }
+
+    private static string FormatAngle(Point vertex, Point a, Point b) =>
+        $"{AnnotationGeometry.AngleBetween(vertex, a, b):0}°";
+
+    private void ShowAngleHint()
+    {
+        AngleHint.Measure(Size.Infinity);
+        Canvas.SetLeft(AngleHint, Math.Max(8, (Width - AngleHint.DesiredSize.Width) / 2));
+        AngleHint.IsVisible = true;
+    }
+
+    private void HideAngleHint() => AngleHint.IsVisible = false;
 
     /// <summary>把已提交的标注 + 正在画的那条重画到预览层。</summary>
     private void RebuildNotePreview()
@@ -3229,6 +3414,10 @@ public partial class CaptureWindow : Window
 
             case DistanceAnnotation distance:
                 AddDistancePreview(distance);
+                break;
+
+            case AngleAnnotation angle:
+                AddAnglePreview(angle);
                 break;
 
             case BracketAnnotation bracket:
@@ -3603,6 +3792,78 @@ public partial class CaptureWindow : Window
         var centerY = (distance.From.Y + distance.To.Y) / 2 + ny * 12;
         Canvas.SetLeft(pill, centerX - pill.DesiredSize.Width / 2);
         Canvas.SetTop(pill, centerY - pill.DesiredSize.Height / 2);
+        NoteLayer.Children.Add(pill);
+    }
+
+    /// <summary>角度预览：两条射线 + 圆弧 + 弧外侧标签，圆弧半径随短边收缩。</summary>
+    private void AddAnglePreview(AngleAnnotation angle)
+    {
+        var brush = new SolidColorBrush(Color.FromUInt32(angle.Color), angle.Opacity);
+        AddPreviewLine(brush, angle.Vertex, angle.A, angle.Width);
+        AddPreviewLine(brush, angle.Vertex, angle.B, angle.Width);
+
+        var lengthA = Distance(angle.Vertex, angle.A);
+        var lengthB = Distance(angle.Vertex, angle.B);
+        var radius = Math.Min(36, Math.Min(lengthA, lengthB) * 0.7);
+        if (radius < 6)
+            return;
+
+        var unitA = Direction(angle.Vertex, angle.A);
+        var unitB = Direction(angle.Vertex, angle.B);
+        var start = new Point(
+            angle.Vertex.X + unitA.X * radius,
+            angle.Vertex.Y + unitA.Y * radius);
+        var end = new Point(
+            angle.Vertex.X + unitB.X * radius,
+            angle.Vertex.Y + unitB.Y * radius);
+        var cross = unitA.X * unitB.Y - unitA.Y * unitB.X;
+
+        var geometry = new StreamGeometry();
+        using (var context = geometry.Open())
+        {
+            context.BeginFigure(start, false);
+            context.ArcTo(
+                end,
+                new Size(radius, radius),
+                0,
+                false,
+                cross >= 0 ? SweepDirection.Clockwise : SweepDirection.CounterClockwise);
+        }
+
+        NoteLayer.Children.Add(new Path
+        {
+            Data = geometry,
+            Stroke = brush,
+            StrokeThickness = angle.Width,
+            StrokeLineCap = PenLineCap.Flat,
+            IsHitTestVisible = false
+        });
+
+        if (string.IsNullOrEmpty(angle.Label))
+            return;
+
+        var bisector = Bisector(unitA, unitB);
+        var center = new Point(
+            angle.Vertex.X + bisector.X * (radius + 18),
+            angle.Vertex.Y + bisector.Y * (radius + 18));
+
+        var pill = new Border
+        {
+            Background = new SolidColorBrush(Color.Parse("#B3000000")),
+            CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(4, 2),
+            IsHitTestVisible = false,
+            Child = new TextBlock
+            {
+                Text = angle.Label,
+                FontSize = 11,
+                Foreground = Brushes.White
+            }
+        };
+
+        pill.Measure(Size.Infinity);
+        Canvas.SetLeft(pill, center.X - pill.DesiredSize.Width / 2);
+        Canvas.SetTop(pill, center.Y - pill.DesiredSize.Height / 2);
         NoteLayer.Children.Add(pill);
     }
 
@@ -4835,11 +5096,26 @@ public partial class CaptureWindow : Window
             return;
         }
 
+        // Shift+G：角度；G 单独留给滚动截图
+        if (key == Key.G && e.KeyModifiers == KeyModifiers.Shift && _hasSelection)
+        {
+            SetTool(AnnotationTool.Angle);
+            e.Handled = true;
+            return;
+        }
+
         if (key == Key.Escape)
         {
             if (_colorSampling)
             {
                 ExitColorSampling();
+                e.Handled = true;
+                return;
+            }
+
+            if (_angleDraft.IsActive || _anglePhase != AnglePhase.None)
+            {
+                CancelAngleDraft();
                 e.Handled = true;
                 return;
             }

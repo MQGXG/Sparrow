@@ -45,6 +45,25 @@ internal static class AnnotationGeometry
     }
 
     /// <summary>
+    /// 两条边的夹角（0–180）。退化边返回 0，调用方用长度阈值决定是否提交。
+    /// </summary>
+    public static double AngleBetween(Point vertex, Point a, Point b)
+    {
+        var ax = a.X - vertex.X;
+        var ay = a.Y - vertex.Y;
+        var bx = b.X - vertex.X;
+        var by = b.Y - vertex.Y;
+        var lengthA = Math.Sqrt(ax * ax + ay * ay);
+        var lengthB = Math.Sqrt(bx * bx + by * by);
+
+        if (lengthA < 0.001 || lengthB < 0.001)
+            return 0;
+
+        var cosine = (ax * bx + ay * by) / (lengthA * lengthB);
+        return Math.Acos(Math.Clamp(cosine, -1, 1)) * 180 / Math.PI;
+    }
+
+    /// <summary>
     /// 气泡尾尖：拖拽起点一般落在矩形角上，直接画会没有尾巴；
     /// 落在矩形内时沿“中心 → 起点”方向推出 minLength。
     /// </summary>

@@ -63,6 +63,10 @@ internal static class AnnotationRenderer
                 DrawDistance(canvas, distance, paint);
                 break;
 
+            case AngleAnnotation angle:
+                DrawAngle(canvas, angle, paint);
+                break;
+
             case BracketAnnotation bracket:
                 DrawBracket(canvas, bracket, paint);
                 break;
@@ -353,6 +357,90 @@ internal static class AnnotationRenderer
 
         paint.Color = SKColors.White;
         canvas.DrawText(distance.Label, centerX, centerY + 4, SKTextAlign.Center, font, paint);
+    }
+
+    /// <summary>角度：两条射线 + 圆弧 + 弧外侧标签。</summary>
+    private static void DrawAngle(SKCanvas canvas, AngleAnnotation angle, SKPaint paint)
+    {
+        var vertex = new SKPoint((float)angle.Vertex.X, (float)angle.Vertex.Y);
+        var a = new SKPoint((float)angle.A.X, (float)angle.A.Y);
+        var b = new SKPoint((float)angle.B.X, (float)angle.B.Y);
+
+        var ax = a.X - vertex.X;
+        var ay = a.Y - vertex.Y;
+        var bx = b.X - vertex.X;
+        var by = b.Y - vertex.Y;
+        var lengthA = MathF.Sqrt(ax * ax + ay * ay);
+        var lengthB = MathF.Sqrt(bx * bx + by * by);
+
+        paint.PathEffect = null;
+        paint.Color = WithOpacity(angle.Color, angle.Opacity);
+        paint.StrokeWidth = (float)angle.Width;
+        paint.Style = SKPaintStyle.Stroke;
+        canvas.DrawLine(vertex, a, paint);
+        canvas.DrawLine(vertex, b, paint);
+
+        var radius = (float)Math.Min(36, Math.Min(lengthA, lengthB) * 0.7);
+        if (radius >= 6 && lengthA >= 6 && lengthB >= 6)
+        {
+            var startAngle = (float)(Math.Atan2(ay, ax) * 180 / Math.PI);
+            var endAngle = (float)(Math.Atan2(by, bx) * 180 / Math.PI);
+            var sweep = endAngle - startAngle;
+
+            while (sweep > 180)
+                sweep -= 360;
+            while (sweep < -180)
+                sweep += 360;
+
+            var oval = new SKRect(
+                vertex.X - radius, vertex.Y - radius,
+                vertex.X + radius, vertex.Y + radius);
+
+            using var arc = new SKPath();
+            arc.MoveTo(vertex.X + ax / lengthA * radius, vertex.Y + ay / lengthA * radius);
+            arc.ArcTo(oval, startAngle, sweep, false);
+            canvas.DrawPath(arc, paint);
+        }
+
+        if (string.IsNullOrEmpty(angle.Label))
+            return;
+
+        var unitAX = lengthA > 0.001f ? ax / lengthA : 1;
+        var unitAY = lengthA > 0.001f ? ay / lengthA : 0;
+        var unitBX = lengthB > 0.001f ? bx / lengthB : 0;
+        var unitBY = lengthB > 0.001f ? by / lengthB : 1;
+
+        var bisectorX = unitAX + unitBX;
+        var bisectorY = unitAY + unitBY;
+        var bisectorLength = MathF.Sqrt(bisectorX * bisectorX + bisectorY * bisectorY);
+
+        if (bisectorLength < 0.001f)
+        {
+            bisectorX = -unitAY;
+            bisectorY = unitAX;
+        }
+        else
+        {
+            bisectorX /= bisectorLength;
+            bisectorY /= bisectorLength;
+        }
+
+        using var font = AnnotationText.CreateFont(11);
+        var textWidth = font.MeasureText(angle.Label);
+        var pillWidth = textWidth + (float)(AnnotationText.PaddingX * 2);
+        var pillHeight = 11f + (float)(AnnotationText.PaddingY * 2);
+        var centerX = vertex.X + bisectorX * (radius + 18);
+        var centerY = vertex.Y + bisectorY * (radius + 18);
+        var pill = new SKRect(
+            centerX - pillWidth / 2, centerY - pillHeight / 2,
+            centerX + pillWidth / 2, centerY + pillHeight / 2);
+
+        paint.Style = SKPaintStyle.Fill;
+        paint.Color = new SKColor(0xB3000000);
+        canvas.DrawRoundRect(pill, 3, 3, paint);
+
+        paint.Color = SKColors.White;
+        canvas.DrawText(angle.Label, centerX, centerY + 4, SKTextAlign.Center, font, paint);
     }
 
     /// <summary>括号：四点折线；方头端点，圆头会显得软。</summary>

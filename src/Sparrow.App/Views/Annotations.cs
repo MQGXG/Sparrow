@@ -11,6 +11,7 @@ public enum AnnotationTool
     Arrow,
     Line,
     Distance,
+    Angle,
     Eraser,
     Spotlight,
     Magnifier,
@@ -82,6 +83,16 @@ public sealed record DistanceAnnotation(
     string Label,
     double Opacity = 1,
     LineDash Dash = LineDash.Solid) : IAnnotation;
+
+/// <summary>角度：顶点 + 两条边 + 0–180° 标签；Label 在提交时定稿。</summary>
+public sealed record AngleAnnotation(
+    Point Vertex,
+    Point A,
+    Point B,
+    uint Color,
+    double Width,
+    string Label,
+    double Opacity = 1) : IAnnotation;
 
 /// <summary>括号：竖边 + 两条横臂；OpenRight = 开口朝右（`[`）。</summary>
 public sealed record BracketAnnotation(

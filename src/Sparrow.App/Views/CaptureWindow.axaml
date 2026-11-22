@@ -16,6 +16,7 @@
     <StreamGeometry x:Key="ToolArrow">M5 19 19 5 M11.5 5H19v7.5</StreamGeometry>
     <StreamGeometry x:Key="ToolLine">M5 19 19 5</StreamGeometry>
     <StreamGeometry x:Key="ToolDistance">M4 12h16 M4 8v8 M20 8v8</StreamGeometry>
+    <StreamGeometry x:Key="ToolAngle">M4 20 10 5 M4 20h16 M11 20a7 7 0 0 0-1.8-4.7</StreamGeometry>
     <StreamGeometry x:Key="ToolBracket">M8 4H5v16h3</StreamGeometry>
     <StreamGeometry x:Key="ToolBubble">M6 4h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4 4v-4H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z</StreamGeometry>
     <StreamGeometry x:Key="ToolEraser">M6 17.5 12.5 11 18.5 17 12 23.5z M6 17.5h12.5 M12.5 11 15 8.5a1.6 1.6 0 0 1 2.3 0l1.2 1.2a1.6 1.6 0 0 1 0 2.3L18.5 17</StreamGeometry>
@@ -660,6 +661,22 @@
       </StackPanel>
     </Border>
 
+    <!-- 角度第二步提示：只在草稿已有一条边时出现 -->
+    <Border x:Name="AngleHint"
+            Canvas.Left="0"
+            Canvas.Top="24"
+            IsVisible="False"
+            IsHitTestVisible="False"
+            Background="{StaticResource OverlayBrush}"
+            BorderBrush="{StaticResource LineStrongBrush}"
+            BorderThickness="1"
+            CornerRadius="999"
+            Padding="14,6">
+      <TextBlock FontSize="11.5"
+                 Text="已定一条边 · 再拖一条边定角度 · Esc 取消"
+                 Foreground="{StaticResource TextPrimaryBrush}" />
+    </Border>
+
     <!-- 两段式浮层：主工具条一行，属性栏按当前工具出现（参考 LumaShot） -->
     <StackPanel x:Name="ActionBar" IsVisible="False" Cursor="Arrow" Spacing="8">
 
@@ -707,7 +724,7 @@
           </Button>
 
           <Button Focusable="False" x:Name="ArrowGroupButton" Classes="tool group-trigger"
-                  ToolTip.Tip="箭头 / 直线 / 测距">
+                  ToolTip.Tip="箭头 / 直线 / 测距 / 角度">
             <Panel>
               <Path x:Name="ArrowGroupIcon" Data="{StaticResource ToolArrow}" StrokeThickness="1.053" />
               <Path Classes="group-caret" Data="M 0 0 L 5 0 L 2.5 3.5 Z" />
@@ -724,6 +741,10 @@
           <Button Focusable="False" x:Name="DistanceToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="测距（D）" Click="OnDistanceToolClick">
             <Path Data="{StaticResource ToolDistance}" />
+          </Button>
+          <Button Focusable="False" x:Name="AngleToolButton" Classes="tool" IsVisible="False"
+                  ToolTip.Tip="角度（Shift+G）" Click="OnAngleToolClick">
+            <Path Data="{StaticResource ToolAngle}" />
           </Button>
 
           <Button Focusable="False" x:Name="PenGroupButton" Classes="tool group-trigger"
