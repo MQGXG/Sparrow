@@ -1,5 +1,6 @@
 using Avalonia;
 using SkiaSharp;
+using System.Text;
 
 namespace Sparrow.App.Views;
 
@@ -36,5 +37,49 @@ internal static class AnnotationText
         var width = Measure(text, size, bold) + PaddingX * 2;
         var height = size + PaddingY * 2;
         return new Rect(center.X - width / 2, center.Y - height / 2, width, height);
+    }
+
+    /// <summary>
+    /// 按字符换行（中英文都适用），保留显式换行；
+    /// 气泡预览用 TextBlock 自动换行，导出用这里的结果近似对齐。
+    /// </summary>
+    public static IReadOnlyList<string> Wrap(
+        string text, double size, double maxWidth, bool bold = false)
+    {
+        if (string.IsNullOrEmpty(text))
+            return [];
+
+        using var font = CreateFont(size, bold);
+        var widthLimit = Math.Max(8, maxWidth);
+        var lines = new List<string>();
+
+        foreach (var paragraph in text.Replace("\r\n", "\n").Split('\n'))
+        {
+            if (paragraph.Length == 0)
+            {
+                lines.Add(string.Empty);
+                continue;
+            }
+
+            var current = new StringBuilder();
+
+            foreach (var ch in paragraph)
+            {
+                current.Append(ch);
+
+                if (font.MeasureText(current.ToString()) <= widthLimit || current.Length == 1)
+                    continue;
+
+                current.Length--;
+                lines.Add(current.ToString());
+                current.Clear();
+                current.Append(ch);
+            }
+
+            if (current.Length > 0)
+                lines.Add(current.ToString());
+        }
+
+        return lines;
     }
 }

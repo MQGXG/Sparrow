@@ -16,6 +16,7 @@ public enum AnnotationTool
     Magnifier,
     Bracket,
     Watermark,
+    Bubble,
     Pen,
     Highlighter,
     Mosaic,
@@ -108,6 +109,17 @@ public sealed record MagnifierAnnotation(
     double Zoom = 2.5,
     bool Circle = false,
     uint BorderColor = 0xFFE5A44C) : IAnnotation;
+
+/// <summary>对话气泡：圆角矩形 + 指向 Tail 的三角尾；Text 允许为空。</summary>
+public sealed record SpeechBubbleAnnotation(
+    Rect Rect,
+    Point Tail,
+    string Text,
+    uint Color,
+    double Width,
+    double FontSize,
+    ShapeFill Fill = ShapeFill.None,
+    double Opacity = 1) : IAnnotation;
 
 /// <summary>水印：在 Area 内按 Spacing 平铺 Text，整体绕区域中心旋转 Angle 度。</summary>
 public sealed record WatermarkAnnotation(

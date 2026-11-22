@@ -43,4 +43,65 @@ internal static class AnnotationGeometry
             new Point(arm, rect.Bottom)
         ];
     }
+
+    /// <summary>
+    /// 气泡尾尖：拖拽起点一般落在矩形角上，直接画会没有尾巴；
+    /// 落在矩形内时沿“中心 → 起点”方向推出 minLength。
+    /// </summary>
+    public static Point BubbleTail(Rect rect, Point tip, double minLength = 16)
+    {
+        if (!rect.Contains(tip))
+            return tip;
+
+        var center = rect.Center;
+        var dx = tip.X - center.X;
+        var dy = tip.Y - center.Y;
+        var length = Math.Sqrt(dx * dx + dy * dy);
+
+        if (length < 0.001)
+            return new Point(center.X, rect.Bottom + minLength);
+
+        return new Point(
+            tip.X + dx / length * minLength,
+            tip.Y + dy / length * minLength);
+    }
+
+    /// <summary>三角尾与矩形相接的两个点：投影到最近的一条边，并沿边留出半宽。</summary>
+    public static (Point A, Point B) BubbleTailBase(Rect rect, Point tip)
+    {
+        var center = rect.Center;
+        var half = Math.Min(12, Math.Min(rect.Width, rect.Height) * 0.22);
+
+        if (half < 2 || rect.Width < 8 || rect.Height < 8)
+            return (center, center);
+
+        var sx = (tip.X - center.X) / Math.Max(1, rect.Width / 2);
+        var sy = (tip.Y - center.Y) / Math.Max(1, rect.Height / 2);
+        var margin = half + 2;
+
+        if (Math.Abs(sx) >= Math.Abs(sy))
+        {
+            var x = sx >= 0 ? rect.Right : rect.Left;
+            var top = rect.Top + margin;
+            var bottom = rect.Bottom - margin;
+
+            if (bottom < top)
+                return (new Point(x, center.Y), new Point(x, center.Y));
+
+            var y = Math.Clamp(tip.Y, top, bottom);
+            return (new Point(x, y - half), new Point(x, y + half));
+        }
+        else
+        {
+            var y = sy >= 0 ? rect.Bottom : rect.Top;
+            var left = rect.Left + margin;
+            var right = rect.Right - margin;
+
+            if (right < left)
+                return (new Point(center.X, y), new Point(center.X, y));
+
+            var x = Math.Clamp(tip.X, left, right);
+            return (new Point(x - half, y), new Point(x + half, y));
+        }
+    }
 }

@@ -169,6 +169,10 @@ public partial class CaptureWindow : Window
     private const double WatermarkAngle = 30;
     private const double WatermarkSpacing = 160;
 
+    // 气泡样式
+    private double _bubbleFontSize = TextFontSize;
+    private ShapeFill _bubbleFill = ShapeFill.None;
+
     // 工具条拖动：手动位置之后不再跟随选区
     private bool _draggingToolbar;
     private bool _toolbarManual;
@@ -208,8 +212,8 @@ public partial class CaptureWindow : Window
     // 橡皮擦正在拖动擦除。
     private bool _erasing;
 
-    /// <summary>水印工具按在已有水印上：松手不新建，避免双击时先叠一层。</summary>
-    private bool _watermarkPressOnExisting;
+    /// <summary>水印/气泡工具按在已有同类标注上：松手不新建，避免双击时先叠一层。</summary>
+    private bool _notePressOnExisting;
 
     /// <summary>聚光灯的暗度（0..1），和标注透明度分开存。</summary>
     private double _spotlightOpacity = 0.55;
@@ -620,19 +624,26 @@ public partial class CaptureWindow : Window
             ForceTool(AnnotationTool.None);
         }
 
-        // 水印：按在已有水印上先不新建（双击用来改文字，单击只选中）
-        _watermarkPressOnExisting = false;
-        if (_tool == AnnotationTool.Watermark && _hasSelection)
+        // 水印 / 气泡：按在已有同类标注上先不新建（双击改文字，单击只选中）
+        _notePressOnExisting = false;
+        if (_tool is AnnotationTool.Watermark or AnnotationTool.Bubble && _hasSelection)
         {
-            var watermarkHit = HitNote(point);
-            if (watermarkHit >= 0 && _notes.Items[watermarkHit] is WatermarkAnnotation)
+            var hit = HitNote(point);
+            var sameKind = hit >= 0 && _notes.Items[hit] switch
+            {
+                WatermarkAnnotation when _tool == AnnotationTool.Watermark => true,
+                SpeechBubbleAnnotation when _tool == AnnotationTool.Bubble => true,
+                _ => false
+            };
+
+            if (sameKind)
             {
                 if (e.ClickCount == 2)
-                    EditNoteText(watermarkHit);
+                    EditNoteText(hit);
                 else
-                    SelectNote(watermarkHit);
+                    SelectNote(hit);
 
-                _watermarkPressOnExisting = e.ClickCount != 2;
+                _notePressOnExisting = e.ClickCount != 2;
                 e.Handled = true;
                 return;
             }
@@ -836,9 +847,9 @@ public partial class CaptureWindow : Window
         }
 
         // 按在已有水印上松手：本次不新建
-        if (_watermarkPressOnExisting)
+        if (_notePressOnExisting)
         {
-            _watermarkPressOnExisting = false;
+            _notePressOnExisting = false;
             e.Handled = true;
             return;
         }
@@ -1734,6 +1745,8 @@ public partial class CaptureWindow : Window
 
     private void OnBracketToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Bracket);
 
+    private void OnBubbleToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Bubble);
+
     private void OnTextToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Text);
 
     private void OnNumberToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Number);
@@ -1974,12 +1987,20 @@ public partial class CaptureWindow : Window
 
     private void SetNoteFill(ShapeFill fill)
     {
-        _noteFill = fill;
+        if (_tool == AnnotationTool.Bubble)
+            _bubbleFill = fill;
+        else
+            _noteFill = fill;
+
         UpdateStyleButtons();
     }
 
-    private double ActiveFontSize =>
-        _tool == AnnotationTool.Watermark ? _watermarkFontSize : _noteFontSize;
+    private double ActiveFontSize => _tool switch
+    {
+        AnnotationTool.Watermark => _watermarkFontSize,
+        AnnotationTool.Bubble => _bubbleFontSize,
+        _ => _noteFontSize
+    };
 
     private void OnOpacityChanged(object? sender, RangeBaseValueChangedEventArgs e)
     {
@@ -2015,10 +2036,18 @@ public partial class CaptureWindow : Window
 
     private void SetFontSize(double size)
     {
-        if (_tool == AnnotationTool.Watermark)
-            _watermarkFontSize = size;
-        else
-            _noteFontSize = size;
+        switch (_tool)
+        {
+            case AnnotationTool.Watermark:
+                _watermarkFontSize = size;
+                break;
+            case AnnotationTool.Bubble:
+                _bubbleFontSize = size;
+                break;
+            default:
+                _noteFontSize = size;
+                break;
+        }
 
         UpdateStyleButtons();
     }
@@ -2078,9 +2107,10 @@ public partial class CaptureWindow : Window
         SetSelected(DashSolidButton, _noteDash == LineDash.Solid);
         SetSelected(DashDashButton, _noteDash == LineDash.Dash);
         SetSelected(DashDotButton, _noteDash == LineDash.Dot);
-        SetSelected(FillNoneButton, _noteFill == ShapeFill.None);
-        SetSelected(FillSoftButton, _noteFill == ShapeFill.Soft);
-        SetSelected(FillSolidButton, _noteFill == ShapeFill.Solid);
+        var fill = _tool == AnnotationTool.Bubble ? _bubbleFill : _noteFill;
+        SetSelected(FillNoneButton, fill == ShapeFill.None);
+        SetSelected(FillSoftButton, fill == ShapeFill.Soft);
+        SetSelected(FillSolidButton, fill == ShapeFill.Solid);
 
         var opacity = _tool switch
         {
@@ -2226,6 +2256,13 @@ public partial class CaptureWindow : Window
                 bracket.Rect.X + dx, bracket.Rect.Y + dy,
                 bracket.Rect.Width, bracket.Rect.Height)
         },
+        SpeechBubbleAnnotation bubble => bubble with
+        {
+            Rect = new Rect(
+                bubble.Rect.X + dx, bubble.Rect.Y + dy,
+                bubble.Rect.Width, bubble.Rect.Height),
+            Tail = new Point(bubble.Tail.X + dx, bubble.Tail.Y + dy)
+        },
         PenAnnotation pen => pen with
         {
             Points = pen.Points.Select(point => new Point(point.X + dx, point.Y + dy)).ToList()
@@ -2302,6 +2339,16 @@ public partial class CaptureWindow : Window
 
                 return false;
 
+            case SpeechBubbleAnnotation bubble:
+            {
+                if (bubble.Rect.Contains(point))
+                    return true;
+
+                var (first, second) = AnnotationGeometry.BubbleTailBase(bubble.Rect, bubble.Tail);
+                return DistanceToSegment(point, first, bubble.Tail) <= bubble.Width / 2 + slop
+                       || DistanceToSegment(point, bubble.Tail, second) <= bubble.Width / 2 + slop;
+            }
+
             case PenAnnotation pen:
                 for (var index = 1; index < pen.Points.Count; index++)
                 {
@@ -2354,6 +2401,10 @@ public partial class CaptureWindow : Window
 
             case BracketAnnotation bracket:
                 return bracket.Rect;
+
+            case SpeechBubbleAnnotation bubble:
+                return FromPoints(
+                    [bubble.Rect.TopLeft, bubble.Rect.BottomRight, bubble.Tail]);
 
             case PenAnnotation { Points.Count: > 0 } pen:
                 return FromPoints(pen.Points);
@@ -2464,6 +2515,7 @@ public partial class CaptureWindow : Window
             Key.K => AnnotationTool.Spotlight,
             Key.Z => AnnotationTool.Magnifier,
             Key.W => AnnotationTool.Watermark,
+            Key.Q => AnnotationTool.Bubble,
             Key.OemOpenBrackets => AnnotationTool.Bracket,
             _ => AnnotationTool.None
         };
@@ -2536,6 +2588,7 @@ public partial class CaptureWindow : Window
             [AnnotationTool.Line] = ("ToolLine", 1.05),
             [AnnotationTool.Distance] = ("ToolDistance", 1.2),
             [AnnotationTool.Bracket] = ("ToolBracket", 1.2),
+            [AnnotationTool.Bubble] = ("ToolBubble", 1.2),
             [AnnotationTool.Pen] = ("ToolPen", 1.125),
             [AnnotationTool.Highlighter] = ("ToolHighlighter", 1.161),
             [AnnotationTool.Mosaic] = ("ToolMosaic", 1.2),
@@ -2571,7 +2624,8 @@ public partial class CaptureWindow : Window
         {
             Trigger = TextGroupButton,
             Icon = TextGroupIcon,
-            Members = [AnnotationTool.Number, AnnotationTool.Text, AnnotationTool.Watermark],
+            Members = [AnnotationTool.Number, AnnotationTool.Text, AnnotationTool.Watermark,
+                AnnotationTool.Bubble],
             EntryIndex = 1
         });
 
@@ -2685,6 +2739,7 @@ public partial class CaptureWindow : Window
         AnnotationTool.Watermark => "水印",
         AnnotationTool.Distance => "测距",
         AnnotationTool.Bracket => "括号",
+        AnnotationTool.Bubble => "气泡",
         _ => string.Empty
     };
 
@@ -2697,6 +2752,7 @@ public partial class CaptureWindow : Window
         SetSelected(LineToolButton, _tool == AnnotationTool.Line);
         SetSelected(DistanceToolButton, _tool == AnnotationTool.Distance);
         SetSelected(BracketToolButton, _tool == AnnotationTool.Bracket);
+        SetSelected(BubbleToolButton, _tool == AnnotationTool.Bubble);
         SetSelected(EraserToolButton, _tool == AnnotationTool.Eraser);
         SetSelected(SpotlightToolButton, _tool == AnnotationTool.Spotlight);
         SetSelected(MagnifierToolButton, _tool == AnnotationTool.Magnifier);
@@ -2727,7 +2783,8 @@ public partial class CaptureWindow : Window
         // 每组属性只在当前工具用得上时出现（LumaShot 的属性卡思路）
         var drawing = _tool is AnnotationTool.Rectangle or AnnotationTool.Ellipse
             or AnnotationTool.Arrow or AnnotationTool.Line or AnnotationTool.Distance
-            or AnnotationTool.Bracket or AnnotationTool.Pen or AnnotationTool.Highlighter;
+            or AnnotationTool.Bracket or AnnotationTool.Bubble
+            or AnnotationTool.Pen or AnnotationTool.Highlighter;
 
         ColorGroup.IsVisible = _tool is not (
             AnnotationTool.None or AnnotationTool.Mosaic or AnnotationTool.Spotlight
@@ -2736,8 +2793,17 @@ public partial class CaptureWindow : Window
         DashGroup.IsVisible = _tool is AnnotationTool.Rectangle or AnnotationTool.Arrow
             or AnnotationTool.Line or AnnotationTool.Distance or AnnotationTool.Bracket
             or AnnotationTool.Pen or AnnotationTool.Highlighter;
-        FillGroup.IsVisible = _tool is AnnotationTool.Rectangle or AnnotationTool.Ellipse;
-        OpacityGroup.IsVisible = drawing || _tool is AnnotationTool.Spotlight or AnnotationTool.Watermark;
+        FillGroup.IsVisible = _tool is AnnotationTool.Rectangle or AnnotationTool.Ellipse
+            or AnnotationTool.Bubble;
+        if (FillGroup.IsVisible)
+        {
+            var activeFill = _tool == AnnotationTool.Bubble ? _bubbleFill : _noteFill;
+            SetSelected(FillNoneButton, activeFill == ShapeFill.None);
+            SetSelected(FillSoftButton, activeFill == ShapeFill.Soft);
+            SetSelected(FillSolidButton, activeFill == ShapeFill.Solid);
+        }
+        OpacityGroup.IsVisible = (drawing && _tool != AnnotationTool.Bubble)
+            || _tool is AnnotationTool.Spotlight or AnnotationTool.Watermark;
 
         // 聚光灯、水印和普通标注共用同一个滑块，但各存各的字段
         if (OpacityGroup.IsVisible)
@@ -2754,7 +2820,8 @@ public partial class CaptureWindow : Window
         RadiusGroup.IsVisible = _tool == AnnotationTool.Rectangle;
 
         // 水印和文字共用字号档位；加粗只对文字有意义
-        FontGroup.IsVisible = _tool is AnnotationTool.Text or AnnotationTool.Watermark;
+        FontGroup.IsVisible = _tool is AnnotationTool.Text or AnnotationTool.Watermark
+            or AnnotationTool.Bubble;
         BoldButton.IsVisible = _tool == AnnotationTool.Text;
         if (FontGroup.IsVisible)
         {
@@ -2900,6 +2967,17 @@ public partial class CaptureWindow : Window
                     _noteDash);
                 break;
 
+            case AnnotationTool.Bubble:
+                _pendingAnnotation = new SpeechBubbleAnnotation(
+                    new Rect(_annotationStart, new Size()),
+                    _annotationStart,
+                    string.Empty,
+                    _noteColor.ToUInt32(),
+                    _noteWidth,
+                    _bubbleFontSize,
+                    _bubbleFill);
+                break;
+
             case AnnotationTool.Text:
                 ShowTextEditor(_annotationStart);
                 return true;
@@ -2961,6 +3039,12 @@ public partial class CaptureWindow : Window
                 Rect = NormalizeRect(_annotationStart, current),
                 OpenRight = current.X >= _annotationStart.X
             },
+            SpeechBubbleAnnotation bubble => bubble with
+            {
+                Rect = NormalizeRect(_annotationStart, current),
+                Tail = AnnotationGeometry.BubbleTail(
+                    NormalizeRect(_annotationStart, current), _annotationStart)
+            },
             PenAnnotation pen when _penPoints is not null => AddPenPoint(pen, current),
             _ => _pendingAnnotation
         };
@@ -3014,6 +3098,7 @@ public partial class CaptureWindow : Window
             WatermarkAnnotation watermark => watermark.Area.Width >= 8 && watermark.Area.Height >= 8,
             DistanceAnnotation distance => Distance(distance.From, distance.To) >= 6,
             BracketAnnotation bracket => bracket.Rect.Width >= 8 && bracket.Rect.Height >= 8,
+            SpeechBubbleAnnotation bubble => bubble.Rect.Width >= 8 && bubble.Rect.Height >= 8,
             _ => false
         };
 
@@ -3148,6 +3233,10 @@ public partial class CaptureWindow : Window
 
             case BracketAnnotation bracket:
                 AddBracketPreview(bracket);
+                break;
+
+            case SpeechBubbleAnnotation bubble:
+                AddBubblePreview(bubble);
                 break;
 
             case SpotlightAnnotation spotlight:
@@ -3296,7 +3385,7 @@ public partial class CaptureWindow : Window
         if (index < 0 || index >= _notes.Items.Count)
             return false;
 
-        var (origin, text, fontSize, color) = _notes.Items[index] switch
+        var (origin, text, fontSize, color, bold) = _notes.Items[index] switch
         {
             WatermarkAnnotation watermark => (
                 new Point(
@@ -3304,8 +3393,17 @@ public partial class CaptureWindow : Window
                     Math.Clamp(watermark.Area.Y + 8, 0, Math.Max(0, _selection.Height - 40))),
                 watermark.Text,
                 watermark.FontSize,
-                Color.FromUInt32(watermark.Color)),
-            _ => (default(Point), string.Empty, 0d, default(Color))
+                Color.FromUInt32(watermark.Color),
+                true),
+            SpeechBubbleAnnotation bubble => (
+                new Point(
+                    Math.Clamp(bubble.Rect.X + 8, 0, Math.Max(0, _selection.Width - 120)),
+                    Math.Clamp(bubble.Rect.Y + 6, 0, Math.Max(0, _selection.Height - 40))),
+                bubble.Text,
+                bubble.FontSize,
+                Color.FromUInt32(bubble.Color),
+                false),
+            _ => (default(Point), string.Empty, 0d, default(Color), false)
         };
 
         if (fontSize <= 0)
@@ -3316,7 +3414,7 @@ public partial class CaptureWindow : Window
         _textOrigin = origin;
         TextNoteBox.Text = text;
         TextNoteBox.FontSize = fontSize;
-        TextNoteBox.FontWeight = FontWeight.Bold;
+        TextNoteBox.FontWeight = bold ? FontWeight.Bold : FontWeight.Normal;
         TextNoteBox.Foreground = new SolidColorBrush(color);
         Canvas.SetLeft(TextNoteBox, _selection.X + origin.X);
         Canvas.SetTop(TextNoteBox, _selection.Y + origin.Y);
@@ -3349,10 +3447,11 @@ public partial class CaptureWindow : Window
         {
             if (index >= 0 && index < _notes.Items.Count)
             {
-                var updated = _notes.Items[index] switch
+                IAnnotation? updated = _notes.Items[index] switch
                 {
                     WatermarkAnnotation watermark when text.Length > 0 => watermark with { Text = text },
                     WatermarkAnnotation watermark => watermark,
+                    SpeechBubbleAnnotation bubble => bubble with { Text = text },
                     _ => null
                 };
 
@@ -3524,6 +3623,66 @@ public partial class CaptureWindow : Window
 
         ApplyDash(polyline, bracket.Dash);
         NoteLayer.Children.Add(polyline);
+    }
+
+    /// <summary>气泡预览：尾三角（有填充时）→ 圆角矩形 → 尾两条边，顺序保证接缝被盖住。</summary>
+    private void AddBubblePreview(SpeechBubbleAnnotation bubble)
+    {
+        var rect = bubble.Rect;
+        if (rect.Width < 4 || rect.Height < 4)
+            return;
+
+        var color = Color.FromUInt32(bubble.Color);
+        var fillAlpha = bubble.Fill == ShapeFill.Solid ? 1 : 0.28;
+        var (first, second) = AnnotationGeometry.BubbleTailBase(rect, bubble.Tail);
+
+        if (bubble.Fill != ShapeFill.None)
+        {
+            NoteLayer.Children.Add(new Polygon
+            {
+                Points = new List<Point> { first, bubble.Tail, second },
+                Fill = new SolidColorBrush(color, fillAlpha),
+                IsHitTestVisible = false
+            });
+        }
+
+        var body = new Border
+        {
+            Width = rect.Width,
+            Height = rect.Height,
+            CornerRadius = new CornerRadius(Math.Min(10, Math.Min(rect.Width, rect.Height) / 2)),
+            BorderThickness = new Thickness(bubble.Width),
+            BorderBrush = new SolidColorBrush(color, bubble.Opacity),
+            Background = bubble.Fill == ShapeFill.None
+                ? null
+                : new SolidColorBrush(color, fillAlpha),
+            Padding = new Thickness(8, 6),
+            IsHitTestVisible = false
+        };
+
+        if (!string.IsNullOrEmpty(bubble.Text))
+        {
+            body.Child = new TextBlock
+            {
+                Text = bubble.Text,
+                FontSize = bubble.FontSize,
+                Foreground = bubble.Fill == ShapeFill.Solid
+                    ? Brushes.White
+                    : new SolidColorBrush(color),
+                TextWrapping = TextWrapping.Wrap,
+                TextAlignment = Avalonia.Media.TextAlignment.Center,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+            };
+        }
+
+        Canvas.SetLeft(body, rect.X);
+        Canvas.SetTop(body, rect.Y);
+        NoteLayer.Children.Add(body);
+
+        // 尾巴只画两条边，底边不画：接缝处由矩形边框盖住
+        var stroke = new SolidColorBrush(color, bubble.Opacity);
+        AddPreviewLine(stroke, first, bubble.Tail, bubble.Width);
+        AddPreviewLine(stroke, bubble.Tail, second, bubble.Width);
     }
 
     private void AddPreviewLine(IBrush brush, Point from, Point to, double width, LineDash dash = LineDash.Solid)

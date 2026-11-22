@@ -67,6 +67,10 @@ internal static class AnnotationRenderer
                 DrawBracket(canvas, bracket, paint);
                 break;
 
+            case SpeechBubbleAnnotation bubble:
+                DrawSpeechBubble(canvas, bubble, paint);
+                break;
+
             case SpotlightAnnotation spotlight:
                 DrawSpotlight(canvas, spotlight);
                 break;
@@ -377,6 +381,73 @@ internal static class AnnotationRenderer
         paint.PathEffect = null;
         paint.StrokeCap = SKStrokeCap.Round;
         paint.StrokeJoin = SKStrokeJoin.Round;
+    }
+
+    private static void DrawSpeechBubble(SKCanvas canvas, SpeechBubbleAnnotation bubble, SKPaint paint)
+    {
+        var rect = new SKRect(
+            (float)bubble.Rect.X,
+            (float)bubble.Rect.Y,
+            (float)bubble.Rect.Right,
+            (float)bubble.Rect.Bottom);
+
+        if (rect.Width < 4 || rect.Height < 4)
+            return;
+
+        var radius = (float)Math.Min(10, Math.Min(bubble.Rect.Width, bubble.Rect.Height) / 2);
+        var (a, b) = AnnotationGeometry.BubbleTailBase(bubble.Rect, bubble.Tail);
+        var tip = new SKPoint((float)bubble.Tail.X, (float)bubble.Tail.Y);
+        var first = new SKPoint((float)a.X, (float)a.Y);
+        var second = new SKPoint((float)b.X, (float)b.Y);
+
+        if (bubble.Fill != ShapeFill.None)
+        {
+            var alpha = bubble.Fill == ShapeFill.Solid ? bubble.Opacity : bubble.Opacity * 0.28;
+            using var fill = new SKPaint
+            {
+                IsAntialias = true,
+                Style = SKPaintStyle.Fill,
+                Color = WithOpacity(bubble.Color, alpha)
+            };
+
+            canvas.DrawRoundRect(rect, radius, radius, fill);
+
+            using var tail = new SKPath();
+            tail.MoveTo(first);
+            tail.LineTo(tip);
+            tail.LineTo(second);
+            tail.Close();
+            canvas.DrawPath(tail, fill);
+        }
+
+        // 描边：矩形 + 尾巴两条边；不画尾巴底边，避免接缝
+        paint.PathEffect = null;
+        paint.Color = WithOpacity(bubble.Color, bubble.Opacity);
+        paint.StrokeWidth = (float)bubble.Width;
+        paint.Style = SKPaintStyle.Stroke;
+        canvas.DrawRoundRect(rect, radius, radius, paint);
+        canvas.DrawLine(first, tip, paint);
+        canvas.DrawLine(tip, second, paint);
+
+        if (string.IsNullOrWhiteSpace(bubble.Text))
+            return;
+
+        using var font = AnnotationText.CreateFont(bubble.FontSize);
+        var lines = AnnotationText.Wrap(bubble.Text, bubble.FontSize, rect.Width - 16);
+        var lineHeight = (float)(bubble.FontSize * 1.25);
+        var total = lineHeight * lines.Count;
+        var baseline = rect.MidY - total / 2 + lineHeight * 0.8f;
+
+        paint.Style = SKPaintStyle.Fill;
+        paint.Color = bubble.Fill == ShapeFill.Solid
+            ? SKColors.White
+            : new SKColor(bubble.Color);
+
+        foreach (var line in lines)
+        {
+            canvas.DrawText(line, rect.MidX, baseline, SKTextAlign.Center, font, paint);
+            baseline += lineHeight;
+        }
     }
 
     private static void DrawArrow(SKCanvas canvas, ArrowAnnotation arrow, SKPaint paint)    {

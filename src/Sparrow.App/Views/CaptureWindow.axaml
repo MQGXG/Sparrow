@@ -17,6 +17,7 @@
     <StreamGeometry x:Key="ToolLine">M5 19 19 5</StreamGeometry>
     <StreamGeometry x:Key="ToolDistance">M4 12h16 M4 8v8 M20 8v8</StreamGeometry>
     <StreamGeometry x:Key="ToolBracket">M8 4H5v16h3</StreamGeometry>
+    <StreamGeometry x:Key="ToolBubble">M6 4h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4 4v-4H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z</StreamGeometry>
     <StreamGeometry x:Key="ToolEraser">M6 17.5 12.5 11 18.5 17 12 23.5z M6 17.5h12.5 M12.5 11 15 8.5a1.6 1.6 0 0 1 2.3 0l1.2 1.2a1.6 1.6 0 0 1 0 2.3L18.5 17</StreamGeometry>
     <StreamGeometry x:Key="ToolSpotlight">M12 8a4 4 0 1 0 .01 0 M12 1v2 M12 21v2 M1 12h2 M21 12h2 M4.2 4.2l1.4 1.4 M18.4 18.4l1.4 1.4 M19.8 4.2l-1.4 1.4 M5.6 18.4l-1.4 1.4</StreamGeometry>
     <StreamGeometry x:Key="ToolMagnifier">M11 4a7 7 0 1 0 .01 0 M16 16l4.5 4.5</StreamGeometry>
@@ -759,7 +760,7 @@
           </Button>
 
           <Button Focusable="False" x:Name="TextGroupButton" Classes="tool group-trigger"
-                  ToolTip.Tip="文字 / 序号 / 水印">
+                  ToolTip.Tip="文字 / 序号 / 水印 / 气泡">
             <Panel>
               <Path x:Name="TextGroupIcon" Data="{StaticResource ToolText}" StrokeThickness="0.972" />
               <Path Classes="group-caret" Data="M 0 0 L 5 0 L 2.5 3.5 Z" />
@@ -776,6 +777,10 @@
           <Button Focusable="False" x:Name="WatermarkToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="水印（W）" Click="OnWatermarkToolClick">
             <Path Data="{StaticResource ToolWatermark}" />
+          </Button>
+          <Button Focusable="False" x:Name="BubbleToolButton" Classes="tool" IsVisible="False"
+                  ToolTip.Tip="对话气泡（Q）" Click="OnBubbleToolClick">
+            <Path Data="{StaticResource ToolBubble}" />
           </Button>
 
           <Border Classes="tool-separator" />
