@@ -270,6 +270,7 @@ public partial class CaptureWindow : Window
         InitializeComponent();
         CreateHandles();
         BuildToolGroups();
+        RenderToolbar();
 
         OcrLayer.PointerMoved += OnOcrLayerPointerMoved;
         OcrLayer.PointerExited += OnOcrLayerPointerExited;
@@ -307,6 +308,20 @@ public partial class CaptureWindow : Window
     }
 
     public Action<OcrBoxMode>? OcrBoxModeChanged { get; set; }
+
+    /// <summary>工具条布局；宿主读写持久化。空列表回落默认。</summary>
+    public IReadOnlyList<string> CaptureToolPositions
+    {
+        get => _layout.SerializePositions();
+        set => ApplyToolbarLayout(ToolbarLayout.Parse(value, _layout.SerializeHidden()));
+    }
+
+    /// <summary>被隐藏的工具 id；宿主读写持久化。</summary>
+    public IReadOnlyList<string> CaptureToolHidden
+    {
+        get => _layout.SerializeHidden();
+        set => ApplyToolbarLayout(ToolbarLayout.Parse(_layout.SerializePositions(), value));
+    }
 
     private void CreateHandles()
     {
@@ -2627,12 +2642,13 @@ public partial class CaptureWindow : Window
     {
         public required Button Trigger { get; init; }
         public required Path Icon { get; init; }
-        public required AnnotationTool[] Members { get; init; }
+        public required AnnotationTool[] Members { get; set; }
         public int EntryIndex { get; set; }
     }
 
     private readonly List<ToolGroup> _toolGroups = new();
     private DispatcherTimer? _groupHideTimer;
+    private ToolbarLayout _layout = ToolbarLayout.Default();
 
     /// <summary>工具 → (几何资源键, 线宽补偿)；补偿值必须和 XAML 里那个按钮写的一致。</summary>
     private static readonly Dictionary<AnnotationTool, (string Key, double Thickness)> ToolIcons =
@@ -2660,16 +2676,16 @@ public partial class CaptureWindow : Window
         {
             Trigger = ShapeGroupButton,
             Icon = ShapeGroupIcon,
-            Members = [AnnotationTool.Ellipse, AnnotationTool.Rectangle, AnnotationTool.Bracket],
-            EntryIndex = 1
+            Members = [AnnotationTool.Ellipse, AnnotationTool.Bracket, AnnotationTool.Rectangle],
+            EntryIndex = 2
         });
         _toolGroups.Add(new ToolGroup
         {
             Trigger = ArrowGroupButton,
             Icon = ArrowGroupIcon,
-            Members = [AnnotationTool.Line, AnnotationTool.Arrow, AnnotationTool.Distance,
-                AnnotationTool.Angle],
-            EntryIndex = 1
+            Members = [AnnotationTool.Line, AnnotationTool.Distance, AnnotationTool.Angle,
+                AnnotationTool.Arrow],
+            EntryIndex = 3
         });
         _toolGroups.Add(new ToolGroup
         {
@@ -2682,9 +2698,9 @@ public partial class CaptureWindow : Window
         {
             Trigger = TextGroupButton,
             Icon = TextGroupIcon,
-            Members = [AnnotationTool.Number, AnnotationTool.Text, AnnotationTool.Watermark,
-                AnnotationTool.Bubble],
-            EntryIndex = 1
+            Members = [AnnotationTool.Number, AnnotationTool.Watermark, AnnotationTool.Bubble,
+                AnnotationTool.Text],
+            EntryIndex = 3
         });
 
         foreach (var group in _toolGroups)
@@ -2700,6 +2716,206 @@ public partial class CaptureWindow : Window
 
         ToolGroupPopover.PointerEntered += (_, _) => _groupHideTimer?.Stop();
         ToolGroupPopover.PointerExited += (_, _) => ScheduleHideToolGroupPopover();
+    }
+
+    /// <summary>按当前布局重建工具区：单成员显示普通按钮，多成员显示折叠组。</summary>
+    private void RenderToolbar()
+    {
+        ToolButtons.Children.Clear();
+
+        foreach (var position in _layout.Positions)
+        {
+            var tools = position.Where(_layout.IsVisible).ToList();
+            if (tools.Count == 0)
+                continue;
+
+            if (tools.Count == 1)
+            {
+                if (ToolButton(tools[0]) is { } single)
+                {
+                    single.IsVisible = true;
+                    ToolButtons.Children.Add(single);
+                }
+
+                continue;
+            }
+
+            var groupIndex = ToolbarLayout.GroupIndexFor(tools[0]);
+            var sameGroup = groupIndex >= 0
+                && tools.All(tool => ToolbarLayout.GroupIndexFor(tool) == groupIndex);
+
+            if (sameGroup)
+            {
+                var group = _toolGroups[groupIndex];
+                group.Members = tools.ToArray();
+                group.EntryIndex = group.Members.Length - 1;
+                group.Trigger.IsVisible = true;
+                ToolTip.SetTip(
+                    group.Trigger,
+                    $"{ToolbarLayout.GroupLabel(groupIndex)}：{string.Join(" / ", tools.Select(ToolName))}");
+                ToolButtons.Children.Add(group.Trigger);
+            }
+            else
+            {
+                // 兜底：跨组的手改配置拆成独立按钮
+                foreach (var tool in tools)
+                {
+                    if (ToolButton(tool) is not { } button)
+                        continue;
+
+                    button.IsVisible = true;
+                    ToolButtons.Children.Add(button);
+                }
+            }
+        }
+
+        foreach (var tool in Enum.GetValues<AnnotationTool>())
+        {
+            if (ToolButton(tool) is { } button && !ToolButtons.Children.Contains(button))
+                button.IsVisible = false;
+        }
+
+        foreach (var group in _toolGroups)
+        {
+            if (!ToolButtons.Children.Contains(group.Trigger))
+                group.Trigger.IsVisible = false;
+        }
+
+        UpdateToolButtons();
+    }
+
+    private void ApplyToolbarLayout(ToolbarLayout layout)
+    {
+        _layout = layout;
+        RenderToolbar();
+    }
+
+    /// <summary>测试和编辑器共用：把工具设成所在折叠组的入口。</summary>
+    internal void SetToolEntry(AnnotationTool tool)
+    {
+        _layout.SetEntry(tool);
+        RenderToolbar();
+    }
+
+    private Button? ToolButton(AnnotationTool tool) => tool switch
+    {
+        AnnotationTool.Rectangle => RectToolButton,
+        AnnotationTool.Ellipse => EllipseToolButton,
+        AnnotationTool.Bracket => BracketToolButton,
+        AnnotationTool.Arrow => ArrowToolButton,
+        AnnotationTool.Line => LineToolButton,
+        AnnotationTool.Distance => DistanceToolButton,
+        AnnotationTool.Angle => AngleToolButton,
+        AnnotationTool.Pen => PenToolButton,
+        AnnotationTool.Highlighter => HighlighterToolButton,
+        AnnotationTool.Mosaic => MosaicToolButton,
+        AnnotationTool.Eraser => EraserToolButton,
+        AnnotationTool.Spotlight => SpotlightToolButton,
+        AnnotationTool.Magnifier => MagnifierToolButton,
+        AnnotationTool.Number => NumberToolButton,
+        AnnotationTool.Text => TextToolButton,
+        AnnotationTool.Watermark => WatermarkToolButton,
+        AnnotationTool.Bubble => BubbleToolButton,
+        _ => null
+    };
+
+    /// <summary>右键拖拽把手：工具显示、组入口、分组顺序、恢复默认。</summary>
+    private void ShowToolLayoutMenu()
+    {
+        var menu = new ContextMenu();
+
+        var visibility = new MenuItem { Header = "显示工具" };
+        foreach (var tool in ToolbarLayout.AllTools())
+        {
+            var item = new MenuItem
+            {
+                Header = ToolName(tool),
+                ToggleType = MenuItemToggleType.CheckBox,
+                IsChecked = _layout.IsVisible(tool)
+            };
+
+            item.Click += (_, _) =>
+            {
+                _layout.Toggle(tool);
+                RenderToolbar();
+            };
+
+            visibility.Items.Add(item);
+        }
+
+        menu.Items.Add(visibility);
+
+        var entries = new MenuItem { Header = "组入口" };
+        for (var groupIndex = 0; groupIndex < ToolbarLayout.Groups.Length; groupIndex++)
+        {
+            var group = new MenuItem { Header = ToolbarLayout.GroupLabel(groupIndex) };
+
+            foreach (var tool in ToolbarLayout.Groups[groupIndex])
+            {
+                var position = _layout.Positions.FirstOrDefault(item => item.Contains(tool));
+                var item = new MenuItem
+                {
+                    Header = ToolName(tool),
+                    ToggleType = MenuItemToggleType.Radio,
+                    IsChecked = position is not null && position[^1] == tool
+                };
+
+                item.Click += (_, _) =>
+                {
+                    _layout.SetEntry(tool);
+                    RenderToolbar();
+                };
+
+                group.Items.Add(item);
+            }
+
+            entries.Items.Add(group);
+        }
+
+        menu.Items.Add(entries);
+
+        var order = new MenuItem { Header = "分组顺序" };
+        for (var index = 0; index < _layout.Positions.Count; index++)
+        {
+            var position = _layout.Positions[index];
+            if (position.Count == 0)
+                continue;
+
+            var groupIndex = ToolbarLayout.GroupIndexFor(position[0]);
+            var label = groupIndex >= 0
+                && position.All(tool => ToolbarLayout.GroupIndexFor(tool) == groupIndex)
+                    ? ToolbarLayout.GroupLabel(groupIndex)
+                    : ToolName(position[0]);
+
+            var entry = new MenuItem { Header = label };
+            var up = new MenuItem { Header = "上移" };
+            var down = new MenuItem { Header = "下移" };
+            var captured = index;
+
+            up.Click += (_, _) =>
+            {
+                _layout.MovePosition(captured, -1);
+                RenderToolbar();
+            };
+            down.Click += (_, _) =>
+            {
+                _layout.MovePosition(captured, +1);
+                RenderToolbar();
+            };
+
+            entry.Items.Add(up);
+            entry.Items.Add(down);
+            order.Items.Add(entry);
+        }
+
+        menu.Items.Add(order);
+        menu.Items.Add(new Separator());
+
+        var reset = new MenuItem { Header = "恢复默认" };
+        reset.Click += (_, _) => ApplyToolbarLayout(ToolbarLayout.Default());
+        menu.Items.Add(reset);
+
+        menu.Open(ToolbarDragHandle);
     }
 
     /// <summary>展开某个工具的选项条，摆在触发按钮正上方。</summary>
@@ -4334,6 +4550,13 @@ public partial class CaptureWindow : Window
 
     private void OnToolbarDragPressed(object? sender, PointerPressedEventArgs e)
     {
+        if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+        {
+            ShowToolLayoutMenu();
+            e.Handled = true;
+            return;
+        }
+
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             return;
 

@@ -529,7 +529,9 @@ public partial class App : Application
             NoteStrokeWidth = _appSettings.AnnotationWidth,
             NoteMosaicBlur = _appSettings.AnnotationMosaicBlur,
             SizeInPixels = _appSettings.CaptureSizeUnit != "dip",
-            ExportCornerRadius = _appSettings.CaptureCornerRadius
+            ExportCornerRadius = _appSettings.CaptureCornerRadius,
+            CaptureToolPositions = _appSettings.CaptureToolPositions,
+            CaptureToolHidden = _appSettings.CaptureToolHidden
         };
 
         // 三槽样式模板：灌进去，关闭时读回
@@ -579,13 +581,17 @@ public partial class App : Application
         var color = $"#{capture.NoteColorValue & 0xFFFFFF:X6}";
         var unit = capture.SizeInPixels ? "px" : "dip";
         var presets = capture.Presets.Where(preset => preset is not null).Cast<AnnotationPreset>().ToList();
+        var toolPositions = capture.CaptureToolPositions.ToList();
+        var toolHidden = capture.CaptureToolHidden.ToList();
 
         if (color == _appSettings.AnnotationColor
             && Math.Abs(capture.NoteStrokeWidth - _appSettings.AnnotationWidth) < 0.01
             && capture.NoteMosaicBlur == _appSettings.AnnotationMosaicBlur
             && unit == _appSettings.CaptureSizeUnit
             && Math.Abs(capture.ExportCornerRadius - _appSettings.CaptureCornerRadius) < 0.01
-            && presets.SequenceEqual(_appSettings.AnnotationPresets))
+            && presets.SequenceEqual(_appSettings.AnnotationPresets)
+            && toolPositions.SequenceEqual(_appSettings.CaptureToolPositions)
+            && toolHidden.SequenceEqual(_appSettings.CaptureToolHidden))
         {
             return;
         }
@@ -597,7 +603,9 @@ public partial class App : Application
             AnnotationMosaicBlur = capture.NoteMosaicBlur,
             CaptureSizeUnit = unit,
             CaptureCornerRadius = capture.ExportCornerRadius,
-            AnnotationPresets = presets
+            AnnotationPresets = presets,
+            CaptureToolPositions = toolPositions,
+            CaptureToolHidden = toolHidden
         };
 
         try

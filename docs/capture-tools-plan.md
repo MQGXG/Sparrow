@@ -2,7 +2,7 @@
 
 覆盖 `docs/reference-parity.md` 批次 5（剩余 5 个工具）和批次 6（自定义布局）。
 
-现状：批次 5 已完成 9/9（直线、橡皮擦、聚光灯、放大镜、水印、测距、括号、气泡、角度），批次 6 未开始。
+现状：批次 5 已完成 9/9（直线、橡皮擦、聚光灯、放大镜、水印、测距、括号、气泡、角度），批次 6 已完成。
 本文只写**怎么做**，不重复参考实现的调研。
 
 ---
@@ -122,6 +122,10 @@ private sealed record AngleDraft(Point Vertex, Point First);
 ---
 
 ## 三、批次 6：自定义布局
+
+> 已落地：`ToolbarLayout` + `AppSettings.CaptureToolPositions` / `CaptureToolHidden`。
+> 隐藏状态单独存（不删除槽位），槽位最后一项就是入口；编辑器为右键把手菜单，
+> 不做拖拽排序，也不做「收进更多」。
 
 ### 3.1 数据模型
 

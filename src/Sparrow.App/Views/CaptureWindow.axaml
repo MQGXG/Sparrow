@@ -697,6 +697,7 @@
                   Height="18" />
           </Border>
 
+          <StackPanel x:Name="ToolButtons" Orientation="Horizontal" Spacing="8">
           <!--
             工具组折叠：一个 position 内多个工具折叠成一个按钮，
             悬停弹出水平选项条（参考 snow-shot 的 positions）。
@@ -803,6 +804,7 @@
                   ToolTip.Tip="对话气泡（Q）" Click="OnBubbleToolClick">
             <Path Data="{StaticResource ToolBubble}" />
           </Button>
+          </StackPanel>
 
           <Border Classes="tool-separator" />
 

@@ -106,6 +106,12 @@ public sealed record AppSettings
     /// <summary>保存的标注样式（最多三个槽）。</summary>
     public List<AnnotationPreset> AnnotationPresets { get; init; } = [];
 
+    /// <summary>截图工具条布局：每个 position 用 "|" 连接工具 id；空 = 默认。</summary>
+    public List<string> CaptureToolPositions { get; init; } = [];
+
+    /// <summary>被隐藏的截图工具 id（枚举名）。</summary>
+    public List<string> CaptureToolHidden { get; init; } = [];
+
     /// <summary>Velopack 更新源地址（HTTPS 静态目录或本地路径）。</summary>
     public string UpdateFeedUrl { get; init; } = string.Empty;
 }
