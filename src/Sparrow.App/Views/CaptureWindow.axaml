@@ -72,6 +72,19 @@
       <Setter Property="BorderBrush" Value="{DynamicResource AccentHoverBrush}" />
     </Style>
 
+    <!-- 键盘焦点：白色描边，和琥珀选中态区分 -->
+    <Style Selector="Button.tool:focus-visible">
+      <Setter Property="BorderBrush" Value="#FFFFFFFF" />
+      <Setter Property="BorderThickness" Value="1.5" />
+    </Style>
+    <Style Selector="Button.swatch:focus-visible">
+      <Setter Property="BorderBrush" Value="#FFFFFFFF" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="Button.prop:focus-visible">
+      <Setter Property="BorderBrush" Value="#FFFFFFFF" />
+    </Style>
+
     <!-- 颜色色块：小圆点，选中加琥珀描边 -->
     <Style Selector="Button.swatch">
       <Setter Property="Width" Value="18" />
@@ -725,103 +738,103 @@
             入口 = 组内最后一个工具；点折叠按钮直接激活入口。
             组内原有按钮保留在树里（IsVisible=False），键盘和测试仍按工具 ID 走。
           -->
-          <Button Focusable="False" x:Name="ShapeGroupButton" Classes="tool group-trigger"
+          <Button x:Name="ShapeGroupButton" Classes="tool group-trigger"
                   ToolTip.Tip="形状：矩形 / 椭圆 / 括号">
             <Panel>
               <Path x:Name="ShapeGroupIcon" Data="{StaticResource ToolRect}" />
               <Path Classes="group-caret" Data="M 0 0 L 5 0 L 2.5 3.5 Z" />
             </Panel>
           </Button>
-          <Button Focusable="False" x:Name="RectToolButton" Classes="tool" IsVisible="False"
+          <Button x:Name="RectToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="矩形（2）" Click="OnRectToolClick">
             <Path Data="{StaticResource ToolRect}" />
           </Button>
-          <Button Focusable="False" x:Name="EllipseToolButton" Classes="tool" IsVisible="False"
+          <Button x:Name="EllipseToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="椭圆（3）" Click="OnEllipseToolClick">
             <Path Data="{StaticResource ToolEllipse}" />
           </Button>
-          <Button Focusable="False" x:Name="BracketToolButton" Classes="tool" IsVisible="False"
+          <Button x:Name="BracketToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="括号（[）" Click="OnBracketToolClick">
             <Path Data="{StaticResource ToolBracket}" />
           </Button>
 
-          <Button Focusable="False" x:Name="ArrowGroupButton" Classes="tool group-trigger"
+          <Button x:Name="ArrowGroupButton" Classes="tool group-trigger"
                   ToolTip.Tip="箭头 / 直线 / 测距 / 角度">
             <Panel>
               <Path x:Name="ArrowGroupIcon" Data="{StaticResource ToolArrow}" StrokeThickness="1.053" />
               <Path Classes="group-caret" Data="M 0 0 L 5 0 L 2.5 3.5 Z" />
             </Panel>
           </Button>
-          <Button Focusable="False" x:Name="ArrowToolButton" Classes="tool" IsVisible="False"
+          <Button x:Name="ArrowToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="箭头（4）" Click="OnArrowToolClick">
             <Path Data="{StaticResource ToolArrow}" StrokeThickness="1.053" />
           </Button>
-          <Button Focusable="False" x:Name="LineToolButton" Classes="tool" IsVisible="False"
+          <Button x:Name="LineToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="直线（L）" Click="OnLineToolClick">
             <Path Data="{StaticResource ToolLine}" StrokeThickness="1.05" />
           </Button>
-          <Button Focusable="False" x:Name="DistanceToolButton" Classes="tool" IsVisible="False"
+          <Button x:Name="DistanceToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="测距（D）" Click="OnDistanceToolClick">
             <Path Data="{StaticResource ToolDistance}" />
           </Button>
-          <Button Focusable="False" x:Name="AngleToolButton" Classes="tool" IsVisible="False"
+          <Button x:Name="AngleToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="角度（Shift+G）" Click="OnAngleToolClick">
             <Path Data="{StaticResource ToolAngle}" />
           </Button>
 
-          <Button Focusable="False" x:Name="PenGroupButton" Classes="tool group-trigger"
+          <Button x:Name="PenGroupButton" Classes="tool group-trigger"
                   ToolTip.Tip="画笔 / 高亮">
             <Panel>
               <Path x:Name="PenGroupIcon" Data="{StaticResource ToolPen}" StrokeThickness="1.125" />
               <Path Classes="group-caret" Data="M 0 0 L 5 0 L 2.5 3.5 Z" />
             </Panel>
           </Button>
-          <Button Focusable="False" x:Name="PenToolButton" Classes="tool" IsVisible="False"
+          <Button x:Name="PenToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="画笔（5）" Click="OnPenToolClick">
             <Path Data="{StaticResource ToolPen}" StrokeThickness="1.125" />
           </Button>
-          <Button Focusable="False" x:Name="HighlighterToolButton" Classes="tool" IsVisible="False"
+          <Button x:Name="HighlighterToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="高亮（6）" Click="OnHighlighterToolClick">
             <Path Data="{StaticResource ToolHighlighter}" StrokeThickness="1.161" />
           </Button>
 
-          <Button Focusable="False" x:Name="MosaicToolButton" Classes="tool"
+          <Button x:Name="MosaicToolButton" Classes="tool"
                   ToolTip.Tip="马赛克（7）" Click="OnMosaicToolClick">
             <Path Data="{StaticResource ToolMosaic}" />
           </Button>
-          <Button Focusable="False" x:Name="EraserToolButton" Classes="tool"
+          <Button x:Name="EraserToolButton" Classes="tool"
                   ToolTip.Tip="橡皮擦（E）" Click="OnEraserToolClick">
             <Path Data="{StaticResource ToolEraser}" StrokeThickness="1.125" />
           </Button>
-          <Button Focusable="False" x:Name="SpotlightToolButton" Classes="tool"
+          <Button x:Name="SpotlightToolButton" Classes="tool"
                   ToolTip.Tip="聚光灯（K）" Click="OnSpotlightToolClick">
             <Path Data="{StaticResource ToolSpotlight}" StrokeThickness="1.65" />
           </Button>
-          <Button Focusable="False" x:Name="MagnifierToolButton" Classes="tool"
+          <Button x:Name="MagnifierToolButton" Classes="tool"
                   ToolTip.Tip="放大镜（Z）" Click="OnMagnifierToolClick">
             <Path Data="{StaticResource ToolMagnifier}" StrokeThickness="1.55" />
           </Button>
 
-          <Button Focusable="False" x:Name="TextGroupButton" Classes="tool group-trigger"
+          <Button x:Name="TextGroupButton" Classes="tool group-trigger"
                   ToolTip.Tip="文字 / 序号 / 水印 / 气泡">
             <Panel>
               <Path x:Name="TextGroupIcon" Data="{StaticResource ToolText}" StrokeThickness="0.972" />
               <Path Classes="group-caret" Data="M 0 0 L 5 0 L 2.5 3.5 Z" />
             </Panel>
           </Button>
-          <Button Focusable="False" x:Name="TextToolButton" Classes="tool" IsVisible="False"
+          <Button x:Name="TextToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="文字（8）" Click="OnTextToolClick">
             <Path Data="{StaticResource ToolText}" StrokeThickness="0.972" />
           </Button>
-          <Button Focusable="False" x:Name="NumberToolButton" Classes="tool" IsVisible="False"
+          <Button x:Name="NumberToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="序号（9）" Click="OnNumberToolClick">
             <Path Data="{StaticResource ToolNumber}" />
           </Button>
-          <Button Focusable="False" x:Name="WatermarkToolButton" Classes="tool" IsVisible="False"
+          <Button x:Name="WatermarkToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="水印（W）" Click="OnWatermarkToolClick">
             <Path Data="{StaticResource ToolWatermark}" />
           </Button>
-          <Button Focusable="False" x:Name="BubbleToolButton" Classes="tool" IsVisible="False"
+          <Button x:Name="BubbleToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="对话气泡（Q）" Click="OnBubbleToolClick">
             <Path Data="{StaticResource ToolBubble}" />
           </Button>
@@ -830,28 +843,28 @@
           <Border Classes="tool-separator" />
 
           <!-- 指针：退出标注，回到移动/拉伸选区 -->
-          <Button Focusable="False" x:Name="SelectToolButton" Classes="tool"
+          <Button x:Name="SelectToolButton" Classes="tool"
                   ToolTip.Tip="选择 / 移动选区（1）" Click="OnSelectToolClick">
             <Path Data="{StaticResource ToolCursor}" StrokeThickness="1.026" />
           </Button>
-          <Button Focusable="False" x:Name="UndoButton" Classes="tool"
+          <Button x:Name="UndoButton" Classes="tool"
                   ToolTip.Tip="撤销（Ctrl+Z）" Click="OnUndoClick">
             <Path Data="{StaticResource IconUndo}" StrokeThickness="1.161" />
           </Button>
-          <Button Focusable="False" x:Name="RedoButton" Classes="tool"
+          <Button x:Name="RedoButton" Classes="tool"
                   ToolTip.Tip="重做（Ctrl+Shift+Z）" Click="OnRedoClick">
             <Path Data="{StaticResource IconRedo}" StrokeThickness="1.161" />
           </Button>
 
           <Border Classes="tool-separator" />
 
-          <Button Focusable="False" x:Name="RecognizeButton"
+          <Button x:Name="RecognizeButton"
                   Classes="tool"
                   Click="OnRecognizeClick"
                   ToolTip.Tip="识别选区文字（Enter / R）">
             <Path Data="{StaticResource IconScan}" />
           </Button>
-          <Button Focusable="False" x:Name="TranslateButton"
+          <Button x:Name="TranslateButton"
                   Classes="tool"
                   IsVisible="False"
                   ToolTip.Tip="识别并翻译（点击选目标语言）">
@@ -860,37 +873,37 @@
               <MenuFlyout Placement="TopEdgeAlignedRight" />
             </Button.Flyout>
           </Button>
-          <Button Focusable="False" x:Name="SaveButton"
+          <Button x:Name="SaveButton"
                   Classes="tool" Click="OnSaveClick" ToolTip.Tip="保存为 PNG（S）">
             <Path Data="{StaticResource IconSave}" StrokeThickness="1.161" />
           </Button>
-          <Button Focusable="False" x:Name="PinButton"
+          <Button x:Name="PinButton"
                   Classes="tool" Click="OnPinClick" ToolTip.Tip="固定到屏幕，滚轮缩放（P）">
             <Path Data="{StaticResource IconPin}" StrokeThickness="1.386" />
           </Button>
-          <Button Focusable="False" x:Name="ScrollButton"
+          <Button x:Name="ScrollButton"
                   Classes="tool" Click="OnScrollClick" ToolTip.Tip="滚动截图（G）">
             <Path Data="{StaticResource IconScrollCapture}" />
           </Button>
-          <Button Focusable="False" x:Name="CornerRadiusButton" Classes="tool"
+          <Button x:Name="CornerRadiusButton" Classes="tool"
                   Click="OnCornerRadiusClick" ToolTip.Tip="导出时四角切圆角">
             <Path Data="{StaticResource IconCornerRadius}" StrokeThickness="1.125" />
           </Button>
-          <Button Focusable="False" x:Name="CopyAllButton"
+          <Button x:Name="CopyAllButton"
                   Classes="tool"
                   IsVisible="False"
                   Click="OnCopyAllClick"
                   ToolTip.Tip="复制全部识别文字（Ctrl+C）">
             <Path Data="{StaticResource IconCopy}" StrokeThickness="1.125" />
           </Button>
-          <Button Focusable="False" x:Name="OcrBoxButton"
+          <Button x:Name="OcrBoxButton"
                   Classes="tool"
                   IsVisible="False"
                   Click="OnOcrBoxModeClick"
                   ToolTip.Tip="识别框：全部 / 悬停 / 关闭（B）">
             <Path Data="{StaticResource IconOcrFrame}" />
           </Button>
-          <Button Focusable="False" x:Name="MoreButton"
+          <Button x:Name="MoreButton"
                   Classes="tool"
                   IsVisible="False"
                   ToolTip.Tip="更多动作">
@@ -916,14 +929,14 @@
 
           <Border Classes="tool-separator" />
 
-          <Button Focusable="False" x:Name="CancelButton"
+          <Button x:Name="CancelButton"
                   Classes="tool"
                   Click="OnCancelClick"
                   ToolTip.Tip="取消截图（Esc）">
             <Path Data="{StaticResource IconClose}" StrokeThickness="0.828" />
           </Button>
           <!-- ✓：完成并复制（和 LumaShot / snow-shot 的确认键一致） -->
-          <Button Focusable="False" x:Name="CopyImageButton"
+          <Button x:Name="CopyImageButton"
                   Classes="tool primary"
                   Click="OnCopyImageClick"
                   ToolTip.Tip="完成并复制图片（C）">
@@ -938,17 +951,17 @@
 
           <StackPanel x:Name="ColorGroup" Orientation="Horizontal" Spacing="4">
             <TextBlock Classes="prop-label" Text="颜色" />
-            <Button Focusable="False" x:Name="ColorAmberButton" Classes="swatch" Tag="#E5A44C"
+            <Button x:Name="ColorAmberButton" Classes="swatch" Tag="#E5A44C"
                     Background="#E5A44C" ToolTip.Tip="琥珀" Click="OnColorClick" />
-            <Button Focusable="False" x:Name="ColorWhiteButton" Classes="swatch" Tag="#FFFFFF"
+            <Button x:Name="ColorWhiteButton" Classes="swatch" Tag="#FFFFFF"
                     Background="#FFFFFF" ToolTip.Tip="白色" Click="OnColorClick" />
-            <Button Focusable="False" x:Name="ColorRedButton" Classes="swatch" Tag="#FF5F5F"
+            <Button x:Name="ColorRedButton" Classes="swatch" Tag="#FF5F5F"
                     Background="#FF5F5F" ToolTip.Tip="红色" Click="OnColorClick" />
-            <Button Focusable="False" x:Name="ColorGreenButton" Classes="swatch" Tag="#5FD08C"
+            <Button x:Name="ColorGreenButton" Classes="swatch" Tag="#5FD08C"
                     Background="#5FD08C" ToolTip.Tip="绿色" Click="OnColorClick" />
-            <Button Focusable="False" x:Name="ColorBlueButton" Classes="swatch" Tag="#5FA8FF"
+            <Button x:Name="ColorBlueButton" Classes="swatch" Tag="#5FA8FF"
                     Background="#5FA8FF" ToolTip.Tip="蓝色" Click="OnColorClick" />
-            <Button Focusable="False" x:Name="CustomColorButton" Classes="swatch"
+            <Button x:Name="CustomColorButton" Classes="swatch"
                     ToolTip.Tip="自定义颜色" Click="OnCustomColorClick">
               <Button.Background>
                 <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
@@ -965,7 +978,7 @@
           <StackPanel x:Name="WidthGroup" Orientation="Horizontal" Spacing="4">
             <Border Classes="prop-sep" />
             <TextBlock Classes="prop-label" Text="线宽" />
-            <Button Focusable="False" x:Name="WidthMenuButton" Classes="prop" Content="2 px">
+            <Button x:Name="WidthMenuButton" Classes="prop" Content="2 px">
               <Button.Flyout>
                 <MenuFlyout Placement="Top">
                   <MenuItem Header="2 px" Click="OnWidth2Menu" />
@@ -982,11 +995,11 @@
             <Border Classes="prop-sep" />
             <TextBlock Classes="prop-label" Text="线型" />
             <!-- 枚举改分段按钮：参考里所有小选项都是并排的，不是下拉 -->
-            <Button Focusable="False" x:Name="DashSolidButton" Classes="prop seg"
+            <Button x:Name="DashSolidButton" Classes="prop seg"
                     Click="OnDashSolidMenu" ToolTip.Tip="实线">
               <Border Classes="seg-line" Width="16" Height="2" />
             </Button>
-            <Button Focusable="False" x:Name="DashDashButton" Classes="prop seg"
+            <Button x:Name="DashDashButton" Classes="prop seg"
                     Click="OnDashDashMenu" ToolTip.Tip="虚线">
               <StackPanel Orientation="Horizontal" Spacing="2">
                 <Border Classes="seg-line" Width="4" Height="2" />
@@ -994,7 +1007,7 @@
                 <Border Classes="seg-line" Width="4" Height="2" />
               </StackPanel>
             </Button>
-            <Button Focusable="False" x:Name="DashDotButton" Classes="prop seg"
+            <Button x:Name="DashDotButton" Classes="prop seg"
                     Click="OnDashDotMenu" ToolTip.Tip="点线">
               <StackPanel Orientation="Horizontal" Spacing="2">
                 <Border Classes="seg-line" Width="2" Height="2" CornerRadius="1" />
@@ -1007,16 +1020,16 @@
           <StackPanel x:Name="FillGroup" Orientation="Horizontal" Spacing="4">
             <Border Classes="prop-sep" />
             <TextBlock Classes="prop-label" Text="填充" />
-            <Button Focusable="False" x:Name="FillNoneButton" Classes="prop seg swatch-seg"
+            <Button x:Name="FillNoneButton" Classes="prop seg swatch-seg"
                     Click="OnFillNoneMenu" ToolTip.Tip="无填充">
               <Border Classes="seg-swatch" Width="12" Height="12" CornerRadius="2"
                       Background="Transparent" BorderThickness="1" />
             </Button>
-            <Button Focusable="False" x:Name="FillSoftButton" Classes="prop seg swatch-seg"
+            <Button x:Name="FillSoftButton" Classes="prop seg swatch-seg"
                     Click="OnFillSoftMenu" ToolTip.Tip="淡色填充">
               <Border Classes="seg-swatch soft" Width="12" Height="12" CornerRadius="2" />
             </Button>
-            <Button Focusable="False" x:Name="FillSolidButton" Classes="prop seg swatch-seg"
+            <Button x:Name="FillSolidButton" Classes="prop seg swatch-seg"
                     Click="OnFillSolidMenu" ToolTip.Tip="实心填充">
               <Border Classes="seg-swatch solid" Width="12" Height="12" CornerRadius="2" />
             </Button>
@@ -1044,15 +1057,15 @@
             <Border Classes="prop-sep" />
             <TextBlock Classes="prop-label" Text="字号" />
             <!-- S/M/L/XL 档位 + 数值（参考做法），比下拉少两次点击 -->
-            <Button Focusable="False" x:Name="FontSButton" Classes="prop seg"
+            <Button x:Name="FontSButton" Classes="prop seg"
                     Content="S" Click="OnFont14Menu" ToolTip.Tip="14 px" />
-            <Button Focusable="False" x:Name="FontMButton" Classes="prop seg"
+            <Button x:Name="FontMButton" Classes="prop seg"
                     Content="M" Click="OnFont16Menu" ToolTip.Tip="16 px" />
-            <Button Focusable="False" x:Name="FontLButton" Classes="prop seg"
+            <Button x:Name="FontLButton" Classes="prop seg"
                     Content="L" Click="OnFont20Menu" ToolTip.Tip="20 px" />
-            <Button Focusable="False" x:Name="FontXlButton" Classes="prop seg"
+            <Button x:Name="FontXlButton" Classes="prop seg"
                     Content="XL" Click="OnFont32Menu" ToolTip.Tip="32 px" />
-            <Button Focusable="False" x:Name="BoldButton" Classes="prop" Content="B"
+            <Button x:Name="BoldButton" Classes="prop" Content="B"
                     FontWeight="Bold" Padding="8,0" Click="OnBoldClick"
                     ToolTip.Tip="加粗" />
           </StackPanel>
@@ -1060,7 +1073,7 @@
           <StackPanel x:Name="NumberGroup" Orientation="Horizontal" Spacing="4">
             <Border Classes="prop-sep" />
             <TextBlock Classes="prop-label" Text="大小" />
-            <Button Focusable="False" x:Name="NumberSizeMenuButton" Classes="prop" Content="24 px">
+            <Button x:Name="NumberSizeMenuButton" Classes="prop" Content="24 px">
               <Button.Flyout>
                 <MenuFlyout Placement="Top">
                   <MenuItem Header="16 px" Click="OnNumber16Menu" />
@@ -1074,12 +1087,12 @@
 
           <StackPanel x:Name="MosaicGroup" Orientation="Horizontal" Spacing="4">
             <TextBlock Classes="prop-label" Text="方式" />
-            <Button Focusable="False" x:Name="MosaicPixelButton" Classes="prop seg"
+            <Button x:Name="MosaicPixelButton" Classes="prop seg"
                     Content="像素" Click="OnMosaicPixelMenu" />
-            <Button Focusable="False" x:Name="MosaicBlurButton" Classes="prop seg"
+            <Button x:Name="MosaicBlurButton" Classes="prop seg"
                     Content="模糊" Click="OnMosaicBlurMenu" />
             <TextBlock Classes="prop-label" Text="笔刷" />
-            <Button Focusable="False" x:Name="BrushMenuButton" Classes="prop" Content="12 px">
+            <Button x:Name="BrushMenuButton" Classes="prop" Content="12 px">
               <Button.Flyout>
                 <MenuFlyout Placement="Top">
                   <MenuItem Header="8 px" Click="OnBrush8Menu" />
@@ -1090,7 +1103,7 @@
             </Button>
           </StackPanel>
 
-          <Button Focusable="False" x:Name="PresetButton" Classes="tool small"
+          <Button x:Name="PresetButton" Classes="tool small"
                   ToolTip.Tip="标注样式模板">
             <Path Data="{StaticResource IconStar}" />
             <Button.Flyout>

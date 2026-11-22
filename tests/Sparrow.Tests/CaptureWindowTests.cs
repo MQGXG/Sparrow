@@ -472,6 +472,29 @@ public sealed class CaptureWindowTests
     }
 
     [AvaloniaFact]
+    public void 工具按钮可键盘聚焦_方向键打开工具组()
+    {
+        var window = CreateWithSelection();
+        window.ToolGroupShowDelayMs = 0;
+
+        window.ShapeGroupButton.Focusable.ShouldBeTrue();
+        window.ShapeGroupButton.Focus();
+        window.ShapeGroupButton.IsFocused.ShouldBeTrue();
+
+        window.KeyPress(Key.Down, RawInputModifiers.None, PhysicalKey.ArrowDown, null);
+
+        window.ToolGroupPopover.IsVisible.ShouldBeTrue();
+        window.ToolGroupOptions.Children[0].IsFocused.ShouldBeTrue();
+
+        window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
+
+        window.ToolGroupPopover.IsVisible.ShouldBeFalse();
+        window.ShapeGroupButton.IsFocused.ShouldBeTrue();
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void 工具组悬停有显示延迟()
     {
         var window = CreateWithSelection();

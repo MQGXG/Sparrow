@@ -2991,6 +2991,7 @@ public partial class CaptureWindow : Window
     private DispatcherTimer? _groupHideTimer;
     private DispatcherTimer? _groupShowTimer;
     private ToolGroup? _pendingGroup;
+    private ToolGroup? _activeGroup;
     private int _groupShowDelayMs = 120;
     private ToolbarLayout _layout = ToolbarLayout.Default();
 
@@ -3067,6 +3068,20 @@ public partial class CaptureWindow : Window
                 CancelPendingToolGroupPopover();
                 ScheduleHideToolGroupPopover();
             };
+            group.Trigger.KeyDown += (_, e) =>
+            {
+                if (e.Key != Key.Down)
+                    return;
+
+                ShowToolGroupPopover(group);
+                if (ToolGroupOptions.Children.Count > 0
+                    && ToolGroupOptions.Children[0] is Button entry)
+                {
+                    entry.Focus();
+                }
+
+                e.Handled = true;
+            };
         }
 
         ToolGroupPopover.PointerEntered += (_, _) =>
@@ -3075,6 +3090,21 @@ public partial class CaptureWindow : Window
             CancelPendingToolGroupPopover();
         };
         ToolGroupPopover.PointerExited += (_, _) => ScheduleHideToolGroupPopover();
+        ToolGroupPopover.KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Escape)
+                return;
+
+            var group = _activeGroup;
+            HideToolGroupPopover();
+            group?.Trigger.Focus();
+            e.Handled = true;
+        };
+        ToolGroupPopover.LostFocus += (_, _) =>
+        {
+            if (!ToolGroupPopover.IsKeyboardFocusWithin)
+                HideToolGroupPopover();
+        };
     }
 
     private void ScheduleShowToolGroupPopover(ToolGroup group)
@@ -3316,13 +3346,14 @@ public partial class CaptureWindow : Window
         _groupHideTimer?.Stop();
         _groupShowTimer?.Stop();
         _pendingGroup = null;
+        _activeGroup = group;
         ToolGroupOptions.Children.Clear();
 
         // 反序：入口在最左（参考 stackPresentation 把 popoverItemIds 反了过来）
         for (var i = group.Members.Length - 1; i >= 0; i--)
         {
             var tool = group.Members[i];
-            var option = new Button { Focusable = false };
+            var option = new Button { Focusable = true };
             option.Classes.Add("tool");
 
             var icon = new Path();
@@ -3377,6 +3408,7 @@ public partial class CaptureWindow : Window
         _groupHideTimer?.Stop();
         _groupShowTimer?.Stop();
         _pendingGroup = null;
+        _activeGroup = null;
         ToolGroupPopover.IsVisible = false;
         ToolGroupOptions.Children.Clear();
     }
@@ -5839,6 +5871,22 @@ public partial class CaptureWindow : Window
         // 焦点停在输入框（尺寸 / 文字）时，按键交给输入框，
         // 否则在尺寸框里输入数字会被当成切换工具
         if (FocusManager?.GetFocusedElement() is TextBox)
+        {
+            base.OnKeyDown(e);
+            return;
+        }
+
+        // 焦点在按钮上时，Enter / Space 交给按钮自己触发，避免被全局快捷键抢走
+        if (FocusManager?.GetFocusedElement() is Button
+            && key is Key.Enter or Key.Space)
+        {
+            base.OnKeyDown(e);
+            return;
+        }
+
+        // 焦点在滑块上时，方向键交给滑块
+        if (FocusManager?.GetFocusedElement() is Slider
+            && key is Key.Left or Key.Right or Key.Up or Key.Down)
         {
             base.OnKeyDown(e);
             return;
