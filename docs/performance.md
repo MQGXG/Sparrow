@@ -449,3 +449,42 @@ dotnet-gcdump collect -p <pid>
 - 改成 `Rows` + `VirtualizingStackPanel` 后，打开从 388 → 212 MB，重开从 +115 MB → +9 MB。
 
 这次 2026-11-23 的 119 / 231 / 431 说明：**虚拟化仍然有效，但工作台生命周期、截图冻结帧和图片派生状态还没收口。**
+
+---
+
+## 十、落地记录
+
+### P0（已完成）
+
+- **工作台窗口懒创建**：`ShowWorkspace()` 第一次打开时才创建 `WorkspaceWindow`；启动只保留 `WorkspaceViewModel`。
+- **启动不刷新剪贴板**：`WorkspaceViewModel` 用 `loadClipboardOnCreate: false` 创建 `ClipboardHistoryViewModel`；首次进入剪贴板页/面板才 `Refresh()`。
+- **隐藏 60 秒释放派生状态**：
+  - `WorkspaceWindow.Closing` 安排 `App.ScheduleWorkspaceRelease()`；
+  - 60 秒内重开、或剪贴板面板可见时跳过；
+  - `WorkspaceViewModel.ReleaseTransientState()` 清空剪贴板 `Items/Groups/Rows`、详情图和 `ImageCache`；
+  - 输入图、结果、历史、顺序粘贴队列、删除撤销保留；
+  - 释放后再次打开：如果停在剪贴板页会 `Refresh()`，并恢复之前选中的条目 id。
+- **后台不再重建隐藏列表**：`ClipboardHistoryViewModel` 释放后收到剪贴板变化只标记，不 `Refresh()`；下次打开再读。
+- **截图关闭回落**：
+  - `OnClosed` 先 `FrozenFrame.Source = null`，再 Dispose `WriteableBitmap`；
+  - 按本次释放的冻结帧大小触发 LOH 压缩，不再只看 WorkingSet ≥ 600 MB；
+  - 小屏/测试不付 GC 成本。
+
+### 验收
+
+- 构建：0 warning / 0 error；
+- 测试：**689 通过**；
+- 新增：
+  - `ImageCache.Clear()` 统计归零；
+  - `ClipboardHistoryViewModel` 延迟刷新；
+  - 释放派生状态后 `Refresh()` 恢复选中项。
+
+### 还没做（P1+）
+
+- `PreviewBytes` / `ImageSizeReader` 零拷贝；
+- 缩略图按文件流式解码，不保留原 PNG；
+- 无参数 Bitmap 转换器改有界缓存/自动 Dispose；
+- 历史分页与 diff；
+- UIA 提前释放；
+- OCR/翻译热池；
+- 滚动截图分块落盘。

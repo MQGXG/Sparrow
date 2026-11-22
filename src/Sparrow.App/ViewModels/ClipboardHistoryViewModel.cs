@@ -59,12 +59,15 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     private readonly SynchronizationContext? _ui;
     private readonly List<(ClipboardHistoryEntry Entry, byte[]? Png)> _deleted = [];
     private bool _refreshing;
+    private bool _transientReleased;
+    private string? _releasedSelectedId;
 
     public ClipboardHistoryViewModel(
         ClipboardHistoryStore store,
         IClipboardAccess clipboard,
         ClipboardPasteService? pasteService = null,
-        IClipboardExclusionStore? exclusions = null)
+        IClipboardExclusionStore? exclusions = null,
+        bool refreshOnCreate = true)
     {
         _store = store;
         _clipboard = clipboard;
@@ -83,7 +86,9 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
         ];
 
         _store.Changed += OnStoreChanged;
-        Refresh();
+
+        if (refreshOnCreate)
+            Refresh();
     }
 
     /// <summary>类型筛选 chips。</summary>
@@ -281,6 +286,8 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     /// <summary>重新读取并筛选。订阅自 store.Changed 时会切到 UI 线程。</summary>
     public void Refresh()
     {
+        _transientReleased = false;
+
         if (_refreshing)
             return;
 
@@ -295,7 +302,8 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
                 : _store.Search(Query, MaxLoad);
 
             var filtered = entries.Where(Matches).OrderByDescending(entry => entry.Favorite);
-            var previousId = SelectedItem?.Id;
+            var previousId = SelectedItem?.Id ?? _releasedSelectedId;
+            _releasedSelectedId = null;
 
             Items.Clear();
             foreach (var entry in filtered)
@@ -794,8 +802,35 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// 工作台/面板隐藏一段时间后释放“可再生”的数据：条目 VM、分组、行、详情图。
+    /// 不释放筛选条件、查询词、顺序粘贴队列和删除撤销，保留用户状态。
+    /// </summary>
+    public void ReleaseTransientState()
+    {
+        if (Items.Count == 0 && Groups.Count == 0 && Rows.Count == 0)
+            return;
+
+        _releasedSelectedId = SelectedItem?.Id;
+        _transientReleased = true;
+        SelectedItem = null;
+        DetailText = null;
+        DetailImagePng = null;
+        DetailPaths = null;
+
+        Items.Clear();
+        Groups.Clear();
+        Rows.Clear();
+        HasItems = false;
+        Summary = $"共 {_store.Count} 条";
+    }
+
     private void OnStoreChanged()
     {
+        // 工作台/面板都隐藏且已释放时，不在后台重建列表；下次打开会 Refresh
+        if (_transientReleased)
+            return;
+
         // 监听线程写历史；页面更新必须回到 UI 线程
         if (_ui is null)
         {

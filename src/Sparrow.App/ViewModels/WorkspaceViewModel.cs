@@ -35,7 +35,8 @@ public partial class WorkspaceViewModel : ObservableObject
         ToolParameterStore? parameters = null,
         SvgPreviewService? svgPreview = null,
         ClipboardHistoryStore? clipboardHistory = null,
-        ClipboardPasteService? pasteService = null)
+        ClipboardPasteService? pasteService = null,
+        bool loadClipboardOnCreate = true)
     {
         _catalog = catalog;
         _clipboard = clipboard;
@@ -51,11 +52,22 @@ public partial class WorkspaceViewModel : ObservableObject
                 clipboardHistory,
                 clipboard,
                 pasteService,
-                settings);
+                settings,
+                refreshOnCreate: loadClipboardOnCreate);
         }
     }
 
     public SettingsViewModel Settings { get; }
+
+    /// <summary>
+    /// 隐藏一段时间后释放可再生数据：剪贴板条目/详情、图片缓存。
+    /// 输入图、结果和历史记录保留，避免用户回来时丢正在做的事。
+    /// </summary>
+    public void ReleaseTransientState()
+    {
+        Clipboard?.ReleaseTransientState();
+        ImageCache.Instance.Clear();
+    }
 
     /// <summary>剪贴板页；测试或未接入监听时为 null。</summary>
     public ClipboardHistoryViewModel? Clipboard { get; }

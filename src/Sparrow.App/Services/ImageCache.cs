@@ -149,6 +149,24 @@ public sealed class ImageCache
         return bitmap;
     }
 
+    /// <summary>
+    /// 丢掉所有缓存引用。不主动 Dispose：控件可能仍持有位图，交给 finalizer。
+    /// 在窗口隐藏、视觉树即将卸载时调用，让下一次打开重新解码。
+    /// </summary>
+    public void Clear()
+    {
+        lock (_gate)
+        {
+            _thumbnail.Clear();
+            _thumbnailOrder.Clear();
+            _detail.Clear();
+            _detailOrder.Clear();
+            _thumbnailBytes = 0;
+            _detailBytes = 0;
+            _failed.Clear();
+        }
+    }
+
     /// <summary>缓存现状，写进日志用——下次再遇到内存问题不用翻代码算。</summary>
     public (int ThumbnailEntries, long ThumbnailBytes, int DetailEntries, long DetailBytes, int Failed) Stats()
     {

@@ -526,11 +526,15 @@ public partial class CaptureWindow : Window
         _groupShowTimer?.Stop();
         _groupHideTimer?.Stop();
 
+        var releasedBytes = (_frozenPixels?.Length ?? 0)
+            + (long)_frozenWidth * _frozenHeight * 4;
+
+        FrozenFrame.Source = null;
         _frozenBitmap?.Dispose();
         _frozenBitmap = null;
         _frozenPixels = null;
 
-        TrimFreezeMemory();
+        TrimFreezeMemory(releasedBytes);
 
         base.OnClosed(e);
     }
@@ -539,10 +543,11 @@ public partial class CaptureWindow : Window
     /// 冻结帧是整屏大对象（4K 约 33MB）。抓图会把 LOH 高水位顶上去，
     /// 关窗后在后台压缩一次，把这段内存还给系统，不卡 UI。
     /// </summary>
-    private static void TrimFreezeMemory()
+    private static void TrimFreezeMemory(long releasedBytes)
     {
-        // 没抓过整屏（测试、小屏）时没必要付这次 GC
-        if (Environment.WorkingSet < 600L * 1024 * 1024)
+        // 小屏/测试没必要付这次 GC；释放过大块冻结帧时即使总内存不高也压缩一次
+        if (releasedBytes < 16L * 1024 * 1024
+            && Environment.WorkingSet < 600L * 1024 * 1024)
             return;
 
         ThreadPool.QueueUserWorkItem(static _ =>

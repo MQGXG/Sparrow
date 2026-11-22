@@ -77,6 +77,44 @@ public sealed class ClipboardHistoryViewModelTests : IDisposable
     }
 
     [Fact]
+    public void 延迟刷新_构造时不加载()
+    {
+        _store.AddText("延迟加载");
+
+        var viewModel = new ClipboardHistoryViewModel(
+            _store, _clipboard, refreshOnCreate: false);
+
+        viewModel.Items.ShouldBeEmpty();
+
+        viewModel.Refresh();
+
+        viewModel.Items.ShouldHaveSingleItem().Preview.ShouldBe("延迟加载");
+    }
+
+    [Fact]
+    public void 释放派生状态_保留查询并在刷新后恢复选中()
+    {
+        _store.AddText("第一条");
+        _store.AddText("第二条");
+        _viewModel.Refresh();
+
+        var selectedId = _viewModel.SelectedItem!.Id;
+
+        _viewModel.ReleaseTransientState();
+
+        _viewModel.Items.ShouldBeEmpty();
+        _viewModel.Rows.ShouldBeEmpty();
+        _viewModel.Groups.ShouldBeEmpty();
+        _viewModel.DetailText.ShouldBeNull();
+        _viewModel.HasItems.ShouldBeFalse();
+
+        _viewModel.Refresh();
+
+        _viewModel.Items.Count.ShouldBe(2);
+        _viewModel.SelectedItem!.Id.ShouldBe(selectedId);
+    }
+
+    [Fact]
     public void 刷新后_保留当前选中的条目()
     {
         _store.AddText("第一条");

@@ -72,6 +72,25 @@ public sealed class ImageCacheTests
     }
 
     [AvaloniaFact]
+    public void 清空后统计归零()
+    {
+        var cache = new ImageCache();
+        cache.GetThumbnail(CreatePng(640, 480));
+        cache.GetDetail(CreatePng(640, 480));
+
+        cache.Stats().ThumbnailEntries.ShouldBe(1);
+        cache.Stats().DetailEntries.ShouldBe(1);
+
+        cache.Clear();
+
+        var stats = cache.Stats();
+        stats.ThumbnailEntries.ShouldBe(0);
+        stats.DetailEntries.ShouldBe(0);
+        stats.ThumbnailBytes.ShouldBe(0);
+        stats.DetailBytes.ShouldBe(0);
+    }
+
+    [AvaloniaFact]
     public void 坏图只试一次就记入失败集()
     {
         var cache = new ImageCache();

@@ -33,6 +33,7 @@ public partial class App : Application
     private PaletteViewModel? _paletteViewModel;
     private WorkspaceWindow? _workspace;
     private WorkspaceViewModel? _workspaceViewModel;
+    private CancellationTokenSource? _workspaceRelease;
     private ClipboardPanelWindow? _clipboardPanel;
     private SettingsStore? _settingsStore;
     private AppSettings _appSettings = new();
@@ -197,8 +198,10 @@ public partial class App : Application
             settingsViewModel,
             _parameterStore,
             clipboardHistory: clipboardHistory,
-            pasteService: _pasteService);
-        _workspace = new WorkspaceWindow { DataContext = _workspaceViewModel };
+            pasteService: _pasteService,
+            loadClipboardOnCreate: false);
+
+        // 工作台窗口在第一次打开时才创建：启动阶段只保留 ViewModel（很小）
 
         var (searchModifiers, searchKey) = ResolveHotkey(settings.SearchHotkey, "Ctrl+Alt+S");
         var (captureModifiers, captureKey) = ResolveHotkey(settings.CaptureHotkey, "Ctrl+Alt+C");
@@ -318,6 +321,7 @@ public partial class App : Application
 
         desktop.Exit += (_, _) =>
         {
+            CancelWorkspaceRelease();
             _toasts?.Dispose();
             _windowOverlay?.Dispose();
             _hotkey?.Dispose();
@@ -499,15 +503,65 @@ public partial class App : Application
         return text.Length <= 800 ? text : text[..800] + $"\n…（共 {text.Length} 字）";
     }
 
-    /// <summary>从托盘打开工作区。窗口先显示，插件在后台加载。</summary>
+    /// <summary>从托盘打开工作区。窗口第一次打开时才创建，之后复用。</summary>
     private void ShowWorkspace()
     {
-        if (_workspace is null)
+        if (_workspaceViewModel is null)
             return;
+
+        CancelWorkspaceRelease();
+
+        if (_workspace is null)
+        {
+            _workspace = new WorkspaceWindow { DataContext = _workspaceViewModel };
+            _workspace.Closing += (_, _) => ScheduleWorkspaceRelease();
+        }
 
         _workspace.Show();
         _workspace.Activate();
-        _ = _workspaceViewModel?.ReloadAsync();
+
+        // 上次停留在剪贴板页时，隐藏期间可能释放过列表，重新读一遍
+        if (_workspaceViewModel.IsClipboardOpen)
+            _workspaceViewModel.Clipboard?.Refresh();
+
+        _ = _workspaceViewModel.ReloadAsync();
+    }
+
+    /// <summary>工作台隐藏 60 秒后释放剪贴板条目/详情图和图片缓存；输入与结果保留。</summary>
+    private void ScheduleWorkspaceRelease()
+    {
+        CancelWorkspaceRelease();
+
+        var cts = new CancellationTokenSource();
+        _workspaceRelease = cts;
+        _ = ReleaseWorkspaceAfterDelayAsync(cts.Token);
+    }
+
+    private async Task ReleaseWorkspaceAfterDelayAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(60), token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (_workspace?.IsVisible == true || _clipboardPanel?.IsVisible == true)
+            return;
+
+        _workspaceViewModel?.ReleaseTransientState();
+        Log.Info(
+            $"工作台空闲释放：WorkingSet={Environment.WorkingSet / 1048576}MB, "
+            + $"Managed={GC.GetTotalMemory(false) / 1048576}MB");
+    }
+
+    private void CancelWorkspaceRelease()
+    {
+        _workspaceRelease?.Cancel();
+        _workspaceRelease?.Dispose();
+        _workspaceRelease = null;
     }
 
     /// <summary>
