@@ -310,12 +310,12 @@
       <Border Grid.Row="4"
               Classes="panel"
               Padding="4">
-        <Grid>
+        <Grid RowDefinitions="*,Auto">
           <!--
             虚拟化列表：Rows 是「分组标题 + 条目」拍平后的集合。
             原来用嵌套 ItemsControl，75 条历史会把 75 张卡片全建出来（实测打开面板 +268MB）。
           -->
-          <ScrollViewer IsVisible="{Binding HasItems}">
+          <ScrollViewer Grid.Row="0" IsVisible="{Binding HasItems}">
             <ItemsControl ItemsSource="{Binding Rows}">
               <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
@@ -657,7 +657,16 @@
             </ItemsControl>
           </ScrollViewer>
 
-          <StackPanel IsVisible="{Binding IsEmpty}"
+          <Button Grid.Row="1"
+                  Classes="ghost small"
+                  Content="加载更多"
+                  IsVisible="{Binding HasMore}"
+                  Click="OnClipboardLoadMoreClick"
+                  HorizontalAlignment="Center"
+                  Margin="0,6,0,0" />
+
+          <StackPanel Grid.RowSpan="2"
+                      IsVisible="{Binding IsEmpty}"
                       HorizontalAlignment="Center"
                       VerticalAlignment="Center"
                       Spacing="8">

@@ -103,6 +103,45 @@ public sealed class ClipboardHistoryViewModelTests : IDisposable
     }
 
     [Fact]
+    public void 首屏只加载一页_加载更多后补齐()
+    {
+        for (var i = 0; i < 150; i++)
+            _store.AddText($"第 {i} 条");
+
+        var viewModel = new ClipboardHistoryViewModel(
+            _store, _clipboard, refreshOnCreate: false);
+        viewModel.Refresh();
+
+        viewModel.Items.Count.ShouldBe(100);
+        viewModel.HasMore.ShouldBeTrue();
+
+        var first = viewModel.Items[0];
+
+        viewModel.LoadMore();
+
+        viewModel.Items.Count.ShouldBe(150);
+        viewModel.HasMore.ShouldBeFalse();
+        ReferenceEquals(viewModel.Items[0], first)
+            .ShouldBeTrue("已加载的条目应复用原 VM，不重建");
+    }
+
+    [Fact]
+    public void 刷新时内容没变的条目复用同一个实例()
+    {
+        _store.AddText("第一条");
+        _store.AddText("第二条");
+        _viewModel.Refresh();
+
+        var first = _viewModel.Items[0];
+        var second = _viewModel.Items[1];
+
+        _viewModel.Refresh();
+
+        ReferenceEquals(_viewModel.Items[0], first).ShouldBeTrue();
+        ReferenceEquals(_viewModel.Items[1], second).ShouldBeTrue();
+    }
+
+    [Fact]
     public void 释放派生状态_保留查询并在刷新后恢复选中()
     {
         _store.AddText("第一条");

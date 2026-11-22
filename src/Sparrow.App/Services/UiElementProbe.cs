@@ -105,6 +105,39 @@ public sealed class UiElementProbe : IDisposable
 
     private static readonly Func<bool> AlwaysWanted = static () => true;
 
+    /// <summary>
+    /// 提前丢掉缓存的控件树，保留 UIA 的 COM 对象（下次探测不用重新初始化）。
+    /// 选区确定、进入 OCR 之后不再需要祖先树，早点把上千个 COM 节点还给系统。
+    /// COM 对象必须在 UIA 线程释放，所以投递到队列而不是在调用线程直接清。
+    /// </summary>
+    public void ReleaseTrees()
+    {
+        if (_disposed)
+            return;
+
+        try
+        {
+            _queue.Add(ReleaseCachedTrees);
+        }
+        catch (InvalidOperationException)
+        {
+            // 已 Dispose：队列不再接收，树会随 Release() 一起清理
+        }
+    }
+
+    private void ReleaseCachedTrees()
+    {
+        if (_trees.Count == 0)
+            return;
+
+        foreach (var root in _trees.Values)
+            ReleaseTree(root);
+
+        _trees.Clear();
+        _childWindows.Clear();
+        _nodeCount = 0;
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -167,12 +200,7 @@ public sealed class UiElementProbe : IDisposable
 
     private void Release()
     {
-        foreach (var root in _trees.Values)
-            ReleaseTree(root);
-
-        _trees.Clear();
-        _childWindows.Clear();
-        _nodeCount = 0;
+        ReleaseCachedTrees();
 
         if (_request is not null)
         {

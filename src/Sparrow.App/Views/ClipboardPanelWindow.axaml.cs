@@ -431,6 +431,13 @@ public partial class ClipboardPanelWindow : Window
         e.Handled = true;
     }
 
+    /// <summary>列表底部「加载更多」：每次多读一页。</summary>
+    private void OnClipboardLoadMoreClick(object? sender, RoutedEventArgs e)
+    {
+        History?.LoadMore();
+        e.Handled = true;
+    }
+
     private void OnFavoriteClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: ClipboardEntryViewModel item } && History is { } clipboard)

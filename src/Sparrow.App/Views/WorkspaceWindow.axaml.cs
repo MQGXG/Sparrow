@@ -329,6 +329,15 @@ public partial class WorkspaceWindow : Window
         e.Handled = true;
     }
 
+    /// <summary>列表底部「加载更多」：每次多读一页，已加载的条目复用原 VM。</summary>
+    private void OnClipboardLoadMoreClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel { Clipboard: { } clipboard })
+            clipboard.LoadMore();
+
+        e.Handled = true;
+    }
+
     /// <summary>行内「复制」：写剪贴板，用户自己切窗口粘贴。</summary>
     private void OnClipboardRowCopyClick(object? sender, RoutedEventArgs e)
     {

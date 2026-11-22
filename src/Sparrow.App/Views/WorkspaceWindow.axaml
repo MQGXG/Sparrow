@@ -641,8 +641,8 @@
                 <Border Grid.Row="5"
                         Classes="panel"
                         Padding="4">
-                  <Grid>
-                    <ScrollViewer IsVisible="{Binding HasItems}">
+                  <Grid RowDefinitions="*,Auto">
+                    <ScrollViewer Grid.Row="0" IsVisible="{Binding HasItems}">
                       <!-- 虚拟化：Rows 是「分组头 + 条目」拍平后的集合，只实现视口内的行 -->
                       <ItemsControl ItemsSource="{Binding Rows}">
                         <ItemsControl.ItemsPanel>
@@ -905,7 +905,16 @@
                       </ItemsControl>
                     </ScrollViewer>
 
-                    <StackPanel IsVisible="{Binding IsEmpty}"
+                    <Button Grid.Row="1"
+                            Classes="ghost small"
+                            Content="加载更多"
+                            IsVisible="{Binding HasMore}"
+                            Click="OnClipboardLoadMoreClick"
+                            HorizontalAlignment="Center"
+                            Margin="0,6,0,0" />
+
+                    <StackPanel Grid.RowSpan="2"
+                                IsVisible="{Binding IsEmpty}"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Center"
                                 Spacing="8">

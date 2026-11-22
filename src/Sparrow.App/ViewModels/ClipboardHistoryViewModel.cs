@@ -43,6 +43,7 @@ public sealed partial class ClipboardFilterViewModel : ObservableObject
 public sealed partial class ClipboardHistoryViewModel : ObservableObject
 {
     private const int MaxLoad = 1000;
+    private const int PageSize = 100;
 
     private const string KindAll = "全部";
     private const string KindText = "文本";
@@ -60,6 +61,7 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     private readonly List<(ClipboardHistoryEntry Entry, byte[]? Png)> _deleted = [];
     private bool _refreshing;
     private bool _transientReleased;
+    private int _loadLimit = PageSize;
     private string? _releasedSelectedId;
 
     public ClipboardHistoryViewModel(
@@ -199,6 +201,10 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     [ObservableProperty]
     private bool _hasItems;
 
+    /// <summary>还有没加载到的记录；界面用「加载更多」按钮按页展开。</summary>
+    [ObservableProperty]
+    private bool _hasMore;
+
     [ObservableProperty]
     private string _summary = string.Empty;
 
@@ -284,7 +290,19 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     }
 
     /// <summary>重新读取并筛选。订阅自 store.Changed 时会切到 UI 线程。</summary>
-    public void Refresh()
+    public void Refresh() => Refresh(resetPaging: true);
+
+    /// <summary>加载下一页；保留当前已展开的条目。</summary>
+    public void LoadMore()
+    {
+        if (!HasMore)
+            return;
+
+        _loadLimit = Math.Min(MaxLoad, _loadLimit + PageSize);
+        Refresh(resetPaging: false);
+    }
+
+    private void Refresh(bool resetPaging)
     {
         _transientReleased = false;
 
@@ -295,24 +313,42 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
 
         try
         {
+            if (resetPaging)
+                _loadLimit = PageSize;
+
             SyncSourceFilters();
 
             var entries = string.IsNullOrWhiteSpace(Query)
                 ? _store.Recent(MaxLoad)
                 : _store.Search(Query, MaxLoad);
 
-            var filtered = entries.Where(Matches).OrderByDescending(entry => entry.Favorite);
+            var filtered = entries
+                .Where(Matches)
+                .OrderByDescending(entry => entry.Favorite)
+                .ToList();
             var previousId = SelectedItem?.Id ?? _releasedSelectedId;
             _releasedSelectedId = null;
 
+            var visible = filtered.Take(_loadLimit).ToList();
+            var existing = Items.ToDictionary(item => item.Id, StringComparer.Ordinal);
+            var next = new List<ClipboardEntryViewModel>(visible.Count);
+
+            foreach (var entry in visible)
+            {
+                next.Add(existing.TryGetValue(entry.Id, out var old) && SameEntry(old.Entry, entry)
+                    ? old
+                    : new ClipboardEntryViewModel(entry, _store));
+            }
+
             Items.Clear();
-            foreach (var entry in filtered)
-                Items.Add(new ClipboardEntryViewModel(entry, _store));
+            foreach (var item in next)
+                Items.Add(item);
 
             HasItems = Items.Count > 0;
+            HasMore = filtered.Count > _loadLimit;
             var megabytes = _store.ApproximateBytes / (1024.0 * 1024);
             Summary = Query.Length > 0
-                ? $"匹配 {Items.Count} 条 · {megabytes:F1} MB"
+                ? $"匹配 {filtered.Count} 条 · 已显示 {Items.Count} · {megabytes:F1} MB"
                 : $"共 {_store.Count} 条 · {megabytes:F1} MB · 显示 {Items.Count} 条";
 
             SyncTagFilters();
@@ -331,6 +367,18 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
             _refreshing = false;
         }
     }
+
+    /// <summary>diff 刷新用：内容没变的条目复用同一个 VM，避免整列表重建。</summary>
+    private static bool SameEntry(ClipboardHistoryEntry oldEntry, ClipboardHistoryEntry newEntry) =>
+        oldEntry.Id == newEntry.Id
+        && oldEntry.Preview == newEntry.Preview
+        && oldEntry.Text == newEntry.Text
+        && oldEntry.ByteSize == newEntry.ByteSize
+        && oldEntry.CreatedAt == newEntry.CreatedAt
+        && oldEntry.Favorite == newEntry.Favorite
+        && oldEntry.Tags.SequenceEqual(newEntry.Tags)
+        && oldEntry.AutoTags.SequenceEqual(newEntry.AutoTags)
+        && oldEntry.Paths.SequenceEqual(newEntry.Paths);
 
     public void ToggleFavorite(ClipboardEntryViewModel item)
     {
@@ -813,6 +861,7 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
 
         _releasedSelectedId = SelectedItem?.Id;
         _transientReleased = true;
+        _loadLimit = PageSize;
         SelectedItem = null;
         DetailText = null;
         DetailImagePng = null;
@@ -822,6 +871,7 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
         Groups.Clear();
         Rows.Clear();
         HasItems = false;
+        HasMore = false;
         Summary = $"共 {_store.Count} 条";
     }
 
@@ -834,10 +884,10 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
         // 监听线程写历史；页面更新必须回到 UI 线程
         if (_ui is null)
         {
-            Refresh();
+            Refresh(resetPaging: false);
             return;
         }
 
-        _ui.Post(_ => Refresh(), null);
+        _ui.Post(_ => Refresh(resetPaging: false), null);
     }
 }

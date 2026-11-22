@@ -1116,6 +1116,10 @@ public partial class CaptureWindow : Window
             UpdateHandles();
             UpdateSizeBadge(_selection);
             Cursor = MoveCursor;
+
+            // 选区已经定下来了，候选框和 UIA 树都不会再用：现在就把上千个
+            // COM 节点还掉，别一直压到截图窗口关闭
+            _uiProbe?.ReleaseTrees();
         }
         else
         {
@@ -1462,6 +1466,8 @@ public partial class CaptureWindow : Window
         UpdateHandles();
         UpdateSizeBadge(_selection);
         Cursor = MoveCursor;
+
+        _uiProbe?.ReleaseTrees();
     }
 
     private static bool Contains(PixelRect bounds, PixelPoint point) =>
@@ -6112,6 +6118,9 @@ public partial class CaptureWindow : Window
         Canvas.SetLeft(OcrLayer, left);
         Canvas.SetTop(OcrLayer, top);
         OcrLayer.IsVisible = true;
+
+        // OCR 阶段不会再探测控件框
+        _uiProbe?.ReleaseTrees();
 
         foreach (var line in result.Lines)
         {
