@@ -23,13 +23,20 @@ public sealed class ByteArrayToBitmapConverter : IValueConverter
 
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
+        var mode = parameter as string;
+
+        // 剪贴板缩略图现在给的是文件路径：流式解码到 240px，不读入完整 PNG
+        if (value is string path && mode == "thumb")
+            return ImageCache.Instance.GetThumbnailFromFile(path);
+
         if (value is not byte[] { Length: > 0 } bytes)
             return null;
 
-        return (parameter as string) switch
+        return mode switch
         {
             "thumb" => ImageCache.Instance.GetThumbnail(bytes),
             "detail" => ImageCache.Instance.GetDetail(bytes),
+            "preview" => ImageCache.Instance.GetPreview(bytes),
             _ => ImageCache.DecodeOriginal(bytes),
         };
     }

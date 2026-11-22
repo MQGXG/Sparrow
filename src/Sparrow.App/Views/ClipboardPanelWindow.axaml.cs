@@ -108,6 +108,7 @@ public partial class ClipboardPanelWindow : Window
         App.Log.Info(
             $"图片缓存：缩略图 {stats.ThumbnailEntries} 张 / {stats.ThumbnailBytes / (1024 * 1024)} MB"
             + $"，详情 {stats.DetailEntries} 张 / {stats.DetailBytes / (1024 * 1024)} MB"
+            + $"，预览 {stats.PreviewEntries} 张 / {stats.PreviewBytes / (1024 * 1024)} MB"
             + $"，解码失败 {stats.Failed} 张");
     }
 

@@ -1592,7 +1592,7 @@ public partial class WorkspaceViewModel : ObservableObject
     /// <summary>补上图片宽高：只读文件头，不解码像素。</summary>
     private static ImageInput WithSize(ImageInput input)
     {
-        var (width, height) = ImageSizeReader.Read(input.Data.Span);
+        var (width, height) = ImageSizeReader.Read(input.Data);
         return input with { Width = width, Height = height };
     }
 

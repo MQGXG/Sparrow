@@ -1,4 +1,5 @@
 using Sparrow.Plugin.Sdk.Inputs;
+using System.Runtime.InteropServices;
 
 namespace Sparrow.App.ViewModels;
 
@@ -24,5 +25,17 @@ public sealed class InputImageViewModel
     public string Name => Input.Name;
 
     /// <summary>缩略图字节：直接用原图编码，Avalonia 的位图解码器能处理 PNG / JPEG / WebP。</summary>
-    public byte[] PreviewBytes => Input.Data.ToArray();
+    public byte[] PreviewBytes
+    {
+        get
+        {
+            if (MemoryMarshal.TryGetArray(Input.Data, out var segment)
+                && segment.Array is { } array
+                && segment.Offset == 0
+                && segment.Count == array.Length)
+                return array;
+
+            return Input.Data.ToArray();
+        }
+    }
 }

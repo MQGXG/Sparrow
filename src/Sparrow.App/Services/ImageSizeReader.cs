@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using SkiaSharp;
 
 namespace Sparrow.App.Services;
@@ -11,17 +12,31 @@ namespace Sparrow.App.Services;
 /// </summary>
 public static class ImageSizeReader
 {
-    public static (int Width, int Height) Read(ReadOnlySpan<byte> data)
+    public static (int Width, int Height) Read(ReadOnlyMemory<byte> data)
     {
         if (data.IsEmpty)
             return (0, 0);
 
+        // 常见调用来自完整 byte[]：交给 SKMemoryStream 只读，不再复制整张图。
+        // 非零偏移的切片（少见）退回复制，避免为了头信息引入 unsafe。
+        if (MemoryMarshal.TryGetArray(data, out var segment)
+            && segment.Array is { } array
+            && segment.Offset == 0
+            && segment.Count == array.Length)
+        {
+            using var stream = new SKMemoryStream(array);
+            return Read(stream);
+        }
+
+        return Read(new SKMemoryStream(data.ToArray()));
+    }
+
+    private static (int Width, int Height) Read(SKMemoryStream stream)
+    {
         try
         {
             // SKCodec 只解析文件头，不会把整张图解出来
-            using var stream = new SKMemoryStream(data.ToArray());
             using var codec = SKCodec.Create(stream);
-
             if (codec is null)
                 return (0, 0);
 

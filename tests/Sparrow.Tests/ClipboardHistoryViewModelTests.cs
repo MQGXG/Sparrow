@@ -77,6 +77,17 @@ public sealed class ClipboardHistoryViewModelTests : IDisposable
     }
 
     [Fact]
+    public void 图片条目暴露缩略图文件路径()
+    {
+        _store.AddImage([1, 2, 3], "test");
+        _viewModel.Refresh();
+
+        var item = _viewModel.Items.ShouldHaveSingleItem();
+        item.ThumbnailPath.ShouldNotBeNull();
+        File.Exists(item.ThumbnailPath).ShouldBeTrue();
+    }
+
+    [Fact]
     public void 延迟刷新_构造时不加载()
     {
         _store.AddText("延迟加载");

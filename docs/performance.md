@@ -479,12 +479,36 @@ dotnet-gcdump collect -p <pid>
   - `ClipboardHistoryViewModel` 延迟刷新；
   - 释放派生状态后 `Refresh()` 恢复选中项。
 
-### 还没做（P1+）
+### P1（已完成）
 
-- `PreviewBytes` / `ImageSizeReader` 零拷贝；
-- 缩略图按文件流式解码，不保留原 PNG；
-- 无参数 Bitmap 转换器改有界缓存/自动 Dispose；
-- 历史分页与 diff；
+- **输入图零拷贝**：`InputImageViewModel.PreviewBytes` 在底层是完整数组时直接复用，不再每次 `ToArray()`；`TextSectionViewModel`、`WorkspaceViewModel` 共享同一份字节。
+- **图片头读取不复制整图**：`ImageSizeReader.Read(ReadOnlyMemory<byte>)` 对完整数组走 `SKMemoryStream`，不再显式 `ToArray`。
+- **剪贴板缩略图按文件流式解码**：
+  - `ClipboardHistoryStore.ImagePath(id)` 只按 id 查 `image_file`；
+  - `ClipboardEntryViewModel.ThumbnailPath` 只缓存路径（懒查询一次），不保留完整 PNG；
+  - `ImageCache.GetThumbnailFromFile(path)` 直接 `File.OpenRead` + `DecodeToHeight(240)`，按路径/长度/最后写入时间做 LRU；
+  - 文件条目、文本条目行为不变。
+- **预览缓存分层**：
+  - 缩略图 ≤ 16 MB；
+  - 详情 ≤ 8 MB；
+  - 新增 **preview（1600px 宽）≤ 16 MB**，用于输入图/结果图/SVG 预览；
+  - 工作台里原来的无参数原尺寸解码全部改走 `ConverterParameter=preview`，切换图片不再每次解 4K 原图。
+- **缓存日志**补上 preview 条目和字节数。
+
+### 验收（P1 后）
+
+- 构建：0 warning / 0 error；
+- 测试：**693 通过**；
+- 新增：
+  - 按文件解码缩略图并命中缓存；
+  - preview 按 1600px 宽降采样；
+  - 输入图 `PreviewBytes` 复用底层数组；
+  - 图片条目暴露缩略图路径。
+
+### 还没做（P2+）
+
+- 历史首屏分页与 diff 刷新；
 - UIA 提前释放；
 - OCR/翻译热池；
-- 滚动截图分块落盘。
+- 滚动截图分块落盘；
+- 缓存淘汰后的延迟 Dispose / 自动生命周期。

@@ -1,4 +1,5 @@
 using Avalonia.Media.Imaging;
+using System.Text;
 
 namespace Sparrow.App.Services;
 
@@ -31,21 +32,30 @@ public sealed class ImageCache
     /// <summary>详情大图：详情页在 440 宽的面板里，800px 已是 2 倍过采样（LumaShot 预览窗口用 640px）。</summary>
     private const int DetailWidth = 800;
 
+    /// <summary>输入/结果预览：1600px 宽，足够覆盖常见工作区预览，又不会解 4K 原图。</summary>
+    private const int PreviewWidth = 1600;
+
     /// <summary>缩略图缓存上限：240px 高的图约 400KB，16MB ≈ 40 张。</summary>
     private const long ThumbnailLimit = 16L * 1024 * 1024;
 
     /// <summary>详情缓存上限：800px 宽约 1.4MB，8MB ≈ 6 张。详情一次只看一张，够用。</summary>
     private const long DetailLimit = 8L * 1024 * 1024;
 
+    /// <summary>预览缓存上限：1600px 宽约 8MB，16MB ≈ 2 张。</summary>
+    private const long PreviewLimit = 16L * 1024 * 1024;
+
     private readonly object _gate = new();
     private readonly Dictionary<ulong, LinkedListNode<Entry>> _thumbnail = [];
     private readonly LinkedList<Entry> _thumbnailOrder = [];
     private readonly Dictionary<ulong, LinkedListNode<Entry>> _detail = [];
     private readonly LinkedList<Entry> _detailOrder = [];
+    private readonly Dictionary<ulong, LinkedListNode<Entry>> _preview = [];
+    private readonly LinkedList<Entry> _previewOrder = [];
     private readonly HashSet<ulong> _failed = [];
 
     private long _thumbnailBytes;
     private long _detailBytes;
+    private long _previewBytes;
 
     private sealed record Entry(ulong Key, Bitmap Bitmap, long Bytes);
 
@@ -75,6 +85,44 @@ public sealed class ImageCache
         }
     }
 
+    /// <summary>输入/结果预览：按内容缓存，解码到 1600px 宽，避免解 4K 原图。</summary>
+    public Bitmap? GetPreview(byte[] png) =>
+        Get(png, PreviewWidth, PreviewLimit, _preview, _previewOrder, ref _previewBytes, toHeight: false);
+
+    /// <summary>按文件路径解码缩略图：不读入完整 PNG 字节，只保留 240px 的位图。</summary>
+    public Bitmap? GetThumbnailFromFile(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return null;
+
+        FileInfo info;
+        try
+        {
+            info = new FileInfo(path);
+            if (!info.Exists)
+                return null;
+        }
+        catch
+        {
+            return null;
+        }
+
+        var key = HashPath(path, info.Length, info.LastWriteTimeUtc.Ticks);
+
+        return GetCore(
+            key,
+            ThumbnailLimit,
+            _thumbnail,
+            _thumbnailOrder,
+            ref _thumbnailBytes,
+            () =>
+            {
+                using var stream = File.OpenRead(path);
+                return Bitmap.DecodeToHeight(
+                    stream, ThumbnailHeight, BitmapInterpolationMode.HighQuality);
+            });
+    }
+
     private Bitmap? Get(
         byte[] png,
         int size,
@@ -86,6 +134,23 @@ public sealed class ImageCache
     {
         var key = Hash(png);
 
+        return GetCore(key, limit, map, order, ref bytes, () =>
+        {
+            using var stream = new MemoryStream(png);
+            return toHeight
+                ? Bitmap.DecodeToHeight(stream, size, BitmapInterpolationMode.HighQuality)
+                : Bitmap.DecodeToWidth(stream, size, BitmapInterpolationMode.HighQuality);
+        });
+    }
+
+    private Bitmap? GetCore(
+        ulong key,
+        long limit,
+        Dictionary<ulong, LinkedListNode<Entry>> map,
+        LinkedList<Entry> order,
+        ref long bytes,
+        Func<Bitmap?> decode)
+    {
         lock (_gate)
         {
             if (_failed.Contains(key))
@@ -103,10 +168,7 @@ public sealed class ImageCache
         Bitmap? bitmap;
         try
         {
-            using var stream = new MemoryStream(png);
-            bitmap = toHeight
-                ? Bitmap.DecodeToHeight(stream, size, BitmapInterpolationMode.HighQuality)
-                : Bitmap.DecodeToWidth(stream, size, BitmapInterpolationMode.HighQuality);
+            bitmap = decode();
         }
         catch
         {
@@ -161,18 +223,26 @@ public sealed class ImageCache
             _thumbnailOrder.Clear();
             _detail.Clear();
             _detailOrder.Clear();
+            _preview.Clear();
+            _previewOrder.Clear();
             _thumbnailBytes = 0;
             _detailBytes = 0;
+            _previewBytes = 0;
             _failed.Clear();
         }
     }
 
     /// <summary>缓存现状，写进日志用——下次再遇到内存问题不用翻代码算。</summary>
-    public (int ThumbnailEntries, long ThumbnailBytes, int DetailEntries, long DetailBytes, int Failed) Stats()
+    public (int ThumbnailEntries, long ThumbnailBytes, int DetailEntries, long DetailBytes,
+        int PreviewEntries, long PreviewBytes, int Failed) Stats()
     {
         lock (_gate)
         {
-            return (_thumbnail.Count, _thumbnailBytes, _detail.Count, _detailBytes, _failed.Count);
+            return (
+                _thumbnail.Count, _thumbnailBytes,
+                _detail.Count, _detailBytes,
+                _preview.Count, _previewBytes,
+                _failed.Count);
         }
     }
 
@@ -190,6 +260,34 @@ public sealed class ImageCache
         foreach (var b in data)
         {
             hash ^= b;
+            hash *= prime;
+        }
+
+        return hash;
+    }
+
+    /// <summary>文件路径缩略图缓存键：路径 + 长度 + 最后写入时间，文件变化会自动失效。</summary>
+    private static ulong HashPath(string path, long length, long ticks)
+    {
+        const ulong offsetBasis = 14695981039346656037UL;
+        const ulong prime = 1099511628211UL;
+
+        var hash = offsetBasis;
+        foreach (var value in Encoding.UTF8.GetBytes(path))
+        {
+            hash ^= value;
+            hash *= prime;
+        }
+
+        foreach (var value in BitConverter.GetBytes(length))
+        {
+            hash ^= value;
+            hash *= prime;
+        }
+
+        foreach (var value in BitConverter.GetBytes(ticks))
+        {
+            hash ^= value;
             hash *= prime;
         }
 

@@ -23,7 +23,7 @@ public sealed class ImageSizeReaderTests
     [Fact]
     public void 空数据与坏数据都返回零()
     {
-        ImageSizeReader.Read(ReadOnlySpan<byte>.Empty).ShouldBe((0, 0));
+        ImageSizeReader.Read(ReadOnlyMemory<byte>.Empty).ShouldBe((0, 0));
         ImageSizeReader.Read(new byte[] { 1, 2, 3 }).ShouldBe((0, 0));
     }
 

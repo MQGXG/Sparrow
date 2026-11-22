@@ -398,6 +398,27 @@ public sealed class ClipboardHistoryStore : IClipboardHistory
         }
     }
 
+    /// <summary>图片条目的磁盘路径；只按 id 查 image_file，不把路径暴露给插件。</summary>
+    public string? ImagePath(string id)
+    {
+        try
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT image_file FROM entries WHERE id = $id";
+            command.Parameters.AddWithValue("$id", id);
+
+            return command.ExecuteScalar() is string file && !string.IsNullOrWhiteSpace(file)
+                ? Path.Combine(_imagesDirectory, file)
+                : null;
+        }
+        catch (Exception ex)
+        {
+            _log.Warn($"读取剪贴板图片路径失败：{ex.Message}");
+            return null;
+        }
+    }
+
     public byte[]? LoadImage(ClipboardHistoryEntry entry)
     {
         string? file;

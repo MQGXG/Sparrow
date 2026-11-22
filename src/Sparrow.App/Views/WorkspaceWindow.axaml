@@ -763,7 +763,7 @@
                                            IsVisible="{Binding HasFileIcon}"
                                            Stretch="Uniform"
                                            Margin="4" />
-                                    <Image Source="{Binding Thumbnail, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}, ConverterParameter=thumb}"
+                                    <Image Source="{Binding ThumbnailPath, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}, ConverterParameter=thumb}"
                                            Stretch="UniformToFill"
                                            IsVisible="{Binding HasThumbnail}" />
                                   </Panel>
@@ -1092,7 +1092,7 @@
                   <Viewbox Stretch="Uniform">
                     <Canvas Width="{Binding CurrentImage.Input.Width}"
                             Height="{Binding CurrentImage.Input.Height}">
-                      <Image Source="{Binding CurrentImage.PreviewBytes, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
+                      <Image Source="{Binding CurrentImage.PreviewBytes, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}, ConverterParameter=preview}"
                              Width="{Binding CurrentImage.Input.Width}"
                              Height="{Binding CurrentImage.Input.Height}"
                              Stretch="Fill"
@@ -1228,7 +1228,7 @@
                                 ToolTip.Tip="{Binding Name}"
                                 Tag="{Binding}"
                                 Tapped="OnSelectImageClick">
-                          <Image Source="{Binding PreviewBytes, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
+                          <Image Source="{Binding PreviewBytes, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}, ConverterParameter=preview}"
                                  Stretch="UniformToFill" />
                         </Border>
                       </DataTemplate>
@@ -1513,7 +1513,7 @@
                         CornerRadius="8"
                         Padding="10"
                         ClipToBounds="True">
-                  <Image Source="{Binding SvgPreviewPng, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
+                  <Image Source="{Binding SvgPreviewPng, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}, ConverterParameter=preview}"
                          Stretch="Uniform"
                          HorizontalAlignment="Center"
                          VerticalAlignment="Center" />
@@ -1528,7 +1528,7 @@
                         CornerRadius="8"
                         Padding="10"
                         ClipToBounds="True">
-                  <Image Source="{Binding ImageResultPng, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
+                  <Image Source="{Binding ImageResultPng, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}, ConverterParameter=preview}"
                          Stretch="Uniform"
                          HorizontalAlignment="Center"
                          VerticalAlignment="Center" />
@@ -1573,7 +1573,7 @@
             Background="#D9000000"
             PointerPressed="OnCloseImagePreviewClick"
             Cursor="Hand">
-      <Image Source="{Binding PreviewImagePng, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}}"
+      <Image Source="{Binding PreviewImagePng, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}, ConverterParameter=preview}"
              Stretch="Uniform"
              Margin="48"
              IsHitTestVisible="False" />

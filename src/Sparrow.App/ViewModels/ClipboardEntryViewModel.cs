@@ -11,7 +11,7 @@ namespace Sparrow.App.ViewModels;
 public sealed partial class ClipboardEntryViewModel : ObservableObject
 {
     private readonly ClipboardHistoryStore _store;
-    private readonly Lazy<byte[]?> _thumbnail;
+    private readonly Lazy<string?> _thumbnailPath;
     private readonly Lazy<byte[]?> _sourceIcon;
     private readonly Lazy<byte[]?> _fileIcon;
 
@@ -20,8 +20,8 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
         Entry = entry;
         _store = store;
         LinkHost = ExtractHost(entry);
-        _thumbnail = new Lazy<byte[]?>(() =>
-            entry.Kind == ClipboardEntryKind.Image ? store.LoadImage(entry) : null);
+        _thumbnailPath = new Lazy<string?>(() =>
+            entry.Kind == ClipboardEntryKind.Image ? store.ImagePath(entry.Id) : null);
 
         // 图标提取要枚举进程：懒加载 + 进程级缓存，列表滚动时每个来源只查一次
         _sourceIcon = new Lazy<byte[]?>(() => SourceIconProvider.TryGet(entry.SourceApp));
@@ -105,7 +105,9 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
 
     public bool HasThumbnail => Entry.Kind == ClipboardEntryKind.Image;
 
-    public byte[]? Thumbnail => _thumbnail.Value;
+    /// <summary>缩略图文件路径；解码由 ImageCache 按 240px 流式完成，不保留原 PNG。</summary>
+    public string? ThumbnailPath =>
+        Entry.Kind == ClipboardEntryKind.Image ? _thumbnailPath.Value : null;
 
     public bool HasTags => TagLine.Length > 0;
 
