@@ -903,6 +903,9 @@ m_manuallyDragged = false;
 
 ### 批次 5 · 补工具（4 / 9 完成）
 
+> 剩余 5 个工具的详细方案（模型/交互/预览/导出/属性/键/测试）见
+> [`capture-tools-plan.md`](capture-tools-plan.md)。
+
 顺序：直线 → 橡皮擦 → 聚光灯 → 放大镜 → 水印 → 测距 → 角度 → 括号 → 气泡。
 
 | # | 工具 | 状态 | 说明 |
@@ -920,6 +923,8 @@ m_manuallyDragged = false;
 **验收**：每个工具都要有导出像素断言 + 撤销/重做覆盖。已完成的 2 个都有像素断言。
 
 ### 批次 6 · 自定义布局（依赖批次 4，高风险）
+
+> 方案见 [`capture-tools-plan.md`](capture-tools-plan.md) 第三节（数据模型 / 渲染 / 编辑器 MVP / 验收）。
 
 - 工具顺序、隐藏、收进更多；持久化到设置。
 - 对齐 LumaShot 的「更多 + 图钉」交互。
