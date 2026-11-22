@@ -185,25 +185,36 @@ public static class ArrowGeometry
     }
 }
 
-/// <summary>一次截图会话里的标注集合，带撤销/重做。</summary>
+/// <summary>一次截图会话里的标注集合，带撤销/重做。撤销栈记录的是「增删改」而不是整条列表。</summary>
 public sealed class AnnotationDocument
 {
+    private abstract record Change;
+
+    private sealed record Added(int Index, IAnnotation Item) : Change;
+
+    private sealed record Removed(int Index, IAnnotation Item) : Change;
+
+    private sealed record Replaced(int Index, IAnnotation Before, IAnnotation After) : Change;
+
     private readonly List<IAnnotation> _items = [];
-    private readonly Stack<IAnnotation> _redo = [];
+    private readonly Stack<Change> _undo = new();
+    private readonly Stack<Change> _redo = new();
 
     public IReadOnlyList<IAnnotation> Items => _items;
 
-    public bool CanUndo => _items.Count > 0;
+    public bool CanUndo => _undo.Count > 0;
 
     public bool CanRedo => _redo.Count > 0;
 
     public void Add(IAnnotation annotation)
     {
+        var index = _items.Count;
         _items.Add(annotation);
+        _undo.Push(new Added(index, annotation));
         _redo.Clear();
     }
 
-    /// <summary>就地替换一条（拖动编辑时不改变叠放顺序）。</summary>
+    /// <summary>就地替换，不记录历史；拖动中的逐帧预览用这个。</summary>
     public void Replace(int index, IAnnotation annotation)
     {
         if (index < 0 || index >= _items.Count)
@@ -212,31 +223,60 @@ public sealed class AnnotationDocument
         _items[index] = annotation;
     }
 
-    /// <summary>删除一条。删除会清掉重做栈：撤销仍然是「弹出最后一条」的语义。</summary>
+    /// <summary>替换并记一条历史；文字编辑等一次性修改用这个。</summary>
+    public void ReplaceWithHistory(int index, IAnnotation annotation)
+    {
+        if (index < 0 || index >= _items.Count)
+            return;
+
+        var before = _items[index];
+        if (Equals(before, annotation))
+            return;
+
+        _items[index] = annotation;
+        _undo.Push(new Replaced(index, before, annotation));
+        _redo.Clear();
+    }
+
+    /// <summary>拖动结束后把「原图元 → 当前图元」记成一条历史（当前已由 Replace 应用）。</summary>
+    public void RecordReplace(int index, IAnnotation before, IAnnotation after)
+    {
+        if (index < 0 || index >= _items.Count || Equals(before, after))
+            return;
+
+        _undo.Push(new Replaced(index, before, after));
+        _redo.Clear();
+    }
+
+    /// <summary>删除并记录历史；撤销会把它插回原位置。</summary>
     public void RemoveAt(int index)
     {
         if (index < 0 || index >= _items.Count)
             return;
 
+        var item = _items[index];
         _items.RemoveAt(index);
+        _undo.Push(new Removed(index, item));
         _redo.Clear();
     }
 
-    /// <summary>整批替换（移动/拉伸选区时按快照平移，不改变撤销语义之外的东西）。</summary>
+    /// <summary>整批替换（选区平移/撤销回放用），会清空历史，避免索引失效。</summary>
     public void SetItems(IEnumerable<IAnnotation> items)
     {
         _items.Clear();
         _items.AddRange(items);
+        _undo.Clear();
         _redo.Clear();
     }
 
     public void Undo()
     {
-        if (_items.Count == 0)
+        if (_undo.Count == 0)
             return;
 
-        _redo.Push(_items[^1]);
-        _items.RemoveAt(_items.Count - 1);
+        var change = _undo.Pop();
+        Apply(change, undo: true);
+        _redo.Push(change);
     }
 
     public void Redo()
@@ -244,12 +284,53 @@ public sealed class AnnotationDocument
         if (_redo.Count == 0)
             return;
 
-        _items.Add(_redo.Pop());
+        var change = _redo.Pop();
+        Apply(change, undo: false);
+        _undo.Push(change);
+    }
+
+    private void Apply(Change change, bool undo)
+    {
+        switch (change)
+        {
+            case Added added:
+                if (undo)
+                {
+                    if (added.Index >= 0 && added.Index < _items.Count)
+                        _items.RemoveAt(added.Index);
+                    else
+                        _items.Remove(added.Item);
+                }
+                else
+                {
+                    _items.Insert(Math.Min(added.Index, _items.Count), added.Item);
+                }
+
+                break;
+
+            case Removed removed:
+                if (undo)
+                {
+                    _items.Insert(Math.Min(removed.Index, _items.Count), removed.Item);
+                }
+                else if (removed.Index >= 0 && removed.Index < _items.Count)
+                {
+                    _items.RemoveAt(removed.Index);
+                }
+
+                break;
+
+            case Replaced replaced:
+                if (replaced.Index >= 0 && replaced.Index < _items.Count)
+                    _items[replaced.Index] = undo ? replaced.Before : replaced.After;
+                break;
+        }
     }
 
     public void Clear()
     {
         _items.Clear();
+        _undo.Clear();
         _redo.Clear();
     }
 }

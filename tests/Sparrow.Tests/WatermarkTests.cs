@@ -166,6 +166,10 @@ public sealed class WatermarkTests
         window.Notes[0].ShouldBeOfType<WatermarkAnnotation>().Text.ShouldBe("CONFIDENTIAL");
         window.TextNoteBox.IsVisible.ShouldBeFalse();
 
+        // 改文字也进撤销栈
+        window.KeyPress(Key.Z, RawInputModifiers.Control, PhysicalKey.Z, null);
+        window.Notes[0].ShouldBeOfType<WatermarkAnnotation>().Text.ShouldBe("Sparrow");
+
         window.Close();
     }
 

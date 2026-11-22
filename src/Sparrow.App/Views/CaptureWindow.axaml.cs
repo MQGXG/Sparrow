@@ -938,6 +938,14 @@ public partial class CaptureWindow : Window
         // 拖动编辑结束：标注已经落在新位置，保持选中方便继续微调 / 删除
         if (_mode == DragMode.NoteEdit)
         {
+            if (_noteDragMoved
+                && _draggingNote >= 0
+                && _noteDragOriginal is { } original
+                && _draggingNote < _notes.Items.Count)
+            {
+                _notes.RecordReplace(_draggingNote, original, _notes.Items[_draggingNote]);
+            }
+
             _mode = DragMode.None;
             _draggingNote = -1;
             _noteDragOriginal = null;
@@ -4167,7 +4175,7 @@ public partial class CaptureWindow : Window
 
                 if (updated is not null)
                 {
-                    _notes.Replace(index, updated);
+                    _notes.ReplaceWithHistory(index, updated);
                     MarkNoteMutation();
 
                     // 下次新建水印沿用刚改过的文字

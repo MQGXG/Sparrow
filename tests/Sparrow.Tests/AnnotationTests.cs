@@ -43,6 +43,49 @@ public sealed class AnnotationTests
     }
 
     [Fact]
+    public void 撤销_删除记录原索引并可重做()
+    {
+        var document = new AnnotationDocument();
+        var first = new ShapeAnnotation(new Rect(0, 0, 10, 10), 0xFFFF0000, 2, false);
+        var second = new ArrowAnnotation(new Point(0, 0), new Point(10, 10), 0xFFFF0000, 2);
+        var third = new TextAnnotation(new Point(0, 0), "x", 0xFFFF0000, 16);
+
+        document.Add(first);
+        document.Add(second);
+        document.Add(third);
+
+        document.RemoveAt(1);
+        document.Items.Count.ShouldBe(2);
+        document.Items[1].ShouldBe(third);
+
+        document.Undo();
+        document.Items.Count.ShouldBe(3);
+        document.Items[1].ShouldBe(second);
+
+        document.Redo();
+        document.Items.Count.ShouldBe(2);
+        document.Items[1].ShouldBe(third);
+    }
+
+    [Fact]
+    public void 撤销_替换可恢复到旧内容()
+    {
+        var document = new AnnotationDocument();
+        var before = new TextAnnotation(new Point(0, 0), "A", 0xFFFF0000, 16);
+        document.Add(before);
+
+        var after = before with { Text = "B" };
+        document.ReplaceWithHistory(0, after);
+        document.Items[0].ShouldBe(after);
+
+        document.Undo();
+        document.Items[0].ShouldBe(before);
+
+        document.Redo();
+        document.Items[0].ShouldBe(after);
+    }
+
+    [Fact]
     public void 箭头头部_以终点为顶点并关于轴线对称()
     {
         var from = new Point(0, 0);
@@ -270,6 +313,61 @@ public sealed class AnnotationTests
 
         window.SelectToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         return window;
+    }
+
+    [AvaloniaFact]
+    public void 删除标注后撤销能恢复()
+    {
+        var window = CreateWithRectangle();
+
+        window.MouseDown(new Point(150, 185), MouseButton.Left);
+        window.MouseUp(new Point(150, 185), MouseButton.Left);
+        window.KeyPress(Key.Delete, RawInputModifiers.None, PhysicalKey.Delete, null);
+        window.Notes.ShouldBeEmpty();
+
+        window.KeyPress(Key.Z, RawInputModifiers.Control, PhysicalKey.Z, null);
+        window.Notes.Count.ShouldBe(1);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 橡皮擦删除后撤销能恢复()
+    {
+        var window = CreateWithRectangle();
+
+        window.KeyPress(Key.E, RawInputModifiers.None, PhysicalKey.E, null);
+        window.MouseDown(new Point(150, 185), MouseButton.Left);
+        window.MouseUp(new Point(150, 185), MouseButton.Left);
+        window.Notes.ShouldBeEmpty();
+
+        window.KeyPress(Key.Z, RawInputModifiers.Control, PhysicalKey.Z, null);
+        window.Notes.Count.ShouldBe(1);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 拖动标注后撤销能移回原位()
+    {
+        var window = CreateWithRectangle();
+
+        window.MouseDown(new Point(150, 185), MouseButton.Left);
+        window.MouseMove(new Point(190, 215));
+        window.MouseUp(new Point(190, 215), MouseButton.Left);
+
+        var moved = window.Notes[0].ShouldBeOfType<ShapeAnnotation>().Rect;
+        moved.X.ShouldBe(90, 0.01);
+
+        window.KeyPress(Key.Z, RawInputModifiers.Control, PhysicalKey.Z, null);
+        window.Notes[0].ShouldBeOfType<ShapeAnnotation>()
+            .Rect.ShouldBe(new Rect(50, 50, 100, 70));
+
+        window.KeyPress(Key.Z, RawInputModifiers.Control | RawInputModifiers.Shift,
+            PhysicalKey.Z, null);
+        window.Notes[0].ShouldBeOfType<ShapeAnnotation>().Rect.ShouldBe(moved);
+
+        window.Close();
     }
 
     [AvaloniaFact]
