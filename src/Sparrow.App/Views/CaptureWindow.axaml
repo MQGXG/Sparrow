@@ -43,9 +43,13 @@
       <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
     <Style Selector="Button.tool.selected">
-      <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
-      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <!-- 选中态实心：Fluent 的 pointerover 会把背景刷回浅灰，这里压住 -->
+    <Style Selector="Button.tool.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentHoverBrush}" />
     </Style>
 
     <!-- 颜色色块：小圆点，选中加琥珀描边 -->
@@ -79,9 +83,9 @@
       <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
 
-    <!-- 尺寸角标里的输入框：无边框，悬停/获焦时才亮底，看起来像可编辑的读数 -->
-    <Style Selector="TextBox.size-input">
-      <Setter Property="Width" Value="44" />
+    <!-- 选区工具条的输入框：无边框，悬停/获焦时才亮底，看起来像可编辑的读数 -->
+    <Style Selector="TextBox.sel-input">
+      <Setter Property="Width" Value="42" />
       <Setter Property="Height" Value="20" />
       <Setter Property="MinHeight" Value="0" />
       <Setter Property="Padding" Value="2,0" />
@@ -91,101 +95,128 @@
       <Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="CornerRadius" Value="4" />
-      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
-      <Setter Property="CaretBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="Foreground" Value="#F2F6FC" />
+      <Setter Property="CaretBrush" Value="#F2F6FC" />
     </Style>
-    <Style Selector="TextBox.size-input:pointerover /template/ Border#PART_BorderElement">
-      <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+    <Style Selector="TextBox.sel-input:pointerover /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="#33FFFFFF" />
     </Style>
-    <Style Selector="TextBox.size-input:focus /template/ Border#PART_BorderElement">
-      <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+    <Style Selector="TextBox.sel-input:focus /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="#33FFFFFF" />
     </Style>
 
     <!-- 单位切换：px ↔ DIP -->
-    <Style Selector="Button.size-unit">
+    <Style Selector="Button.sel-unit">
       <Setter Property="Height" Value="20" />
       <Setter Property="MinWidth" Value="0" />
-      <Setter Property="Padding" Value="4,0" />
+      <Setter Property="Padding" Value="3,0" />
       <Setter Property="FontSize" Value="10" />
-      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="CornerRadius" Value="3" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+      <Setter Property="Foreground" Value="#B8C2CE" />
     </Style>
-    <Style Selector="Button.size-unit:pointerover">
-      <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
-      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    <Style Selector="Button.sel-unit:pointerover">
+      <Setter Property="Background" Value="#33FFFFFF" />
+      <Setter Property="Foreground" Value="#F2F6FC" />
     </Style>
 
     <!-- 锁定宽高比 -->
-    <Style Selector="ToggleButton.size-lock">
+    <Style Selector="ToggleButton.sel-lock">
       <Setter Property="Width" Value="22" />
       <Setter Property="Height" Value="20" />
       <Setter Property="Padding" Value="0" />
       <Setter Property="MinWidth" Value="0" />
-      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="CornerRadius" Value="3" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
-    <Style Selector="ToggleButton.size-lock:checked">
-      <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
-    </Style>
-    <!-- Fluent 的 ToggleButton 勾选时会把内容层刷成实心强调色，这里改回淡琥珀底 -->
-    <Style Selector="ToggleButton.size-lock /template/ ContentPresenter#PART_ContentPresenter">
+    <!-- Fluent 的 ToggleButton 勾选时会把内容层刷成实心强调色，这里改回半透明白 -->
+    <Style Selector="ToggleButton.sel-lock /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
-    <Style Selector="ToggleButton.size-lock:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+    <Style Selector="ToggleButton.sel-lock:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#33FFFFFF" />
     </Style>
-    <Style Selector="ToggleButton.size-lock:checked /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
+    <Style Selector="ToggleButton.sel-lock:checked /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#33FFFFFF" />
+      <Setter Property="BorderBrush" Value="#66FFFFFF" />
     </Style>
-    <Style Selector="ToggleButton.size-lock:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
+    <Style Selector="ToggleButton.sel-lock:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#40FFFFFF" />
+      <Setter Property="BorderBrush" Value="#66FFFFFF" />
     </Style>
-    <Style Selector="ToggleButton.size-lock Path">
-      <Setter Property="Stroke" Value="{DynamicResource TextMutedBrush}" />
+    <Style Selector="ToggleButton.sel-lock Path">
+      <Setter Property="Stroke" Value="#B8C2CE" />
       <Setter Property="StrokeThickness" Value="1.5" />
       <Setter Property="StrokeLineCap" Value="Round" />
       <Setter Property="StrokeJoin" Value="Round" />
       <Setter Property="Stretch" Value="Uniform" />
-      <Setter Property="Width" Value="14" />
-      <Setter Property="Height" Value="14" />
+      <Setter Property="Width" Value="12" />
+      <Setter Property="Height" Value="12" />
     </Style>
-    <Style Selector="ToggleButton.size-lock:checked Path">
-      <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+    <Style Selector="ToggleButton.sel-lock:checked Path">
+      <Setter Property="Stroke" Value="#FFFFFF" />
+    </Style>
+
+    <!-- 选区工具条的其余零件 -->
+    <Style Selector="TextBlock.sel-comma">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Margin" Value="1,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="#B8C2CE" />
+    </Style>
+    <Style Selector="TextBlock.sel-label">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="Margin" Value="4,0,2,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="#B8C2CE" />
+    </Style>
+    <Style Selector="Button.sel-ratio">
+      <Setter Property="Height" Value="20" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Padding" Value="5,0" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="#F2F6FC" />
+    </Style>
+    <Style Selector="Button.sel-ratio:pointerover">
+      <Setter Property="Background" Value="#33FFFFFF" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+    </Style>
+    <Style Selector="Border.sel-sep">
+      <Setter Property="Width" Value="1" />
+      <Setter Property="Height" Value="12" />
+      <Setter Property="Margin" Value="6,0" />
+      <Setter Property="Background" Value="#40FFFFFF" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.tool.small">
       <Setter Property="Width" Value="26" />
       <Setter Property="Height" Value="26" />
     </Style>
     <!--
-      Stretch 必须是 Uniform：Avalonia 的 Path 默认 None，会把 24 单位的几何
-      按原尺寸从左上角画进 18 的框里，超出的右边和下边直接被裁掉——
-      这就是工具图标「缺一块、还偏心」的原因。Uniform 才会等比缩放并居中。
-
-      基准线宽 1.33 = 1.5 × 16/18：几何自然宽度 16 栅格缩到 18px 时正好 1.5px。
-      其余图标在各自 Path 上写了 StrokeThickness = 1.5 × 自然宽度 / 18，
-      缩放比虽然不同，渲染出来的线宽统一是 1.5px（和全局 Path.icon 一致）。
-      改了几何要重新量自然宽度并同步这个值。
+      图标 20：参考实现是 24/32（75%），Sparrow 原来 18/32（56%），视觉上偏空。
+      线宽基准 1.2 = 1.5 × 16/20：几何自然宽度 16 栅格缩到 20px 时正好 1.5px。
+      其余图标在各自 Path 上写了 StrokeThickness = 1.5 × 自然宽度 / 20，
+      渲染出来的线宽仍然统一是 1.5px。改了几何要重新量自然宽度并同步这个值。
     -->
     <Style Selector="Button.tool Path">
       <Setter Property="Stroke" Value="{DynamicResource TextSecondaryBrush}" />
-      <Setter Property="StrokeThickness" Value="1.33" />
+      <Setter Property="StrokeThickness" Value="1.2" />
       <Setter Property="StrokeLineCap" Value="Round" />
       <Setter Property="StrokeJoin" Value="Round" />
       <Setter Property="Stretch" Value="Uniform" />
-      <Setter Property="Width" Value="18" />
-      <Setter Property="Height" Value="18" />
+      <Setter Property="Width" Value="20" />
+      <Setter Property="Height" Value="20" />
     </Style>
     <Style Selector="Button.tool.selected Path">
-      <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Stroke" Value="{DynamicResource AccentOnBrush}" />
     </Style>
 
     <!-- 线宽按钮：三个大小不一的实心圆点，比数字更直观 -->
@@ -210,12 +241,35 @@
       <Setter Property="BorderBrush" Value="{DynamicResource AccentHoverBrush}" />
     </Style>
 
-    <!-- 分组分隔线：1×18，两侧各 6 -->
+    <!-- 分组按钮右下角的小三角：提示这个按钮还带着选项 -->
+    <Style Selector="Button.tool Path.group-caret">
+      <Setter Property="Stretch" Value="None" />
+      <Setter Property="Width" Value="5" />
+      <Setter Property="Height" Value="4" />
+      <Setter Property="Stroke" Value="Transparent" />
+      <Setter Property="Fill" Value="{DynamicResource TextMutedBrush}" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="VerticalAlignment" Value="Bottom" />
+      <Setter Property="Margin" Value="0,0,2,2" />
+    </Style>
+    <Style Selector="Button.tool.selected Path.group-caret">
+      <Setter Property="Fill" Value="{DynamicResource AccentOnBrush}" />
+    </Style>
+
+    <!-- 工具组悬停弹出：水平选项条（参考 snow-shot 的 option popover） -->
+    <Style Selector="Border.tool-popover">
+      <Setter Property="Background" Value="{DynamicResource OverlayBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource LineStrongBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="4" />
+      <Setter Property="BoxShadow" Value="0 8 20 0 #99000000" />
+    </Style>
     <Style Selector="Border.tool-separator">
       <Setter Property="Width" Value="1" />
-      <Setter Property="Height" Value="18" />
-      <Setter Property="Margin" Value="6,0" />
-      <Setter Property="Background" Value="{DynamicResource LineBrush}" />
+      <Setter Property="Height" Value="16" />
+      <Setter Property="Margin" Value="4,0" />
+      <Setter Property="Background" Value="{DynamicResource LineStrongBrush}" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
@@ -224,9 +278,18 @@
       <Setter Property="Background" Value="{DynamicResource OverlayBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource LineStrongBrush}" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="CornerRadius" Value="10" />
       <Setter Property="Padding" Value="6" />
-      <Setter Property="BoxShadow" Value="0 12 32 0 #99000000" />
+      <Setter Property="BoxShadow" Value="0 8 24 0 #99000000" />
+    </Style>
+
+    <!-- 属性条的组间分隔线：跟着组一起隐藏 -->
+    <Style Selector="Border.prop-sep">
+      <Setter Property="Width" Value="1" />
+      <Setter Property="Height" Value="18" />
+      <Setter Property="Margin" Value="0,0,4,0" />
+      <Setter Property="Background" Value="{DynamicResource LineStrongBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <!-- 属性栏：左边说明文字 + 右边控件 -->
@@ -255,6 +318,43 @@
       <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
+    <!-- 分段按钮：并排的枚举选项，选中态用实心强调色（参考的 style bar 做法） -->
+    <Style Selector="Button.prop.seg">
+      <Setter Property="MinWidth" Value="26" />
+      <Setter Property="Padding" Value="5,0" />
+      <Setter Property="FontSize" Value="11" />
+    </Style>
+    <Style Selector="Button.prop.seg.selected">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentOnBrush}" />
+    </Style>
+    <!-- 带色块预览的分段按钮：选中时用琥珀描边，不能铺实心底，否则预览被盖住 -->
+    <Style Selector="Button.prop.seg.swatch-seg.selected">
+      <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <!-- 线型预览：实线 / 三段虚线 / 三点 -->
+    <Style Selector="Border.seg-line">
+      <Setter Property="Background" Value="{DynamicResource TextSecondaryBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.prop.seg.selected Border.seg-line">
+      <Setter Property="Background" Value="{DynamicResource AccentOnBrush}" />
+    </Style>
+    <!-- 填充预览：空心 / 半透明 / 实心 -->
+    <Style Selector="Border.seg-swatch">
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Border.seg-swatch.soft">
+      <Setter Property="Background" Value="#66E5A44C" />
+    </Style>
+    <Style Selector="Border.seg-swatch.solid">
+      <Setter Property="Background" Value="#E5A44C" />
     </Style>
     <Style Selector="Slider.prop">
       <Setter Property="Width" Value="88" />
@@ -380,37 +480,69 @@
       </Panel>
     </Border>
 
-    <!-- 选区尺寸：可以直接输入精确宽高；🔒 锁定宽高比（参考 snow-shot 的尺寸框） -->
-    <Border x:Name="SizeBadge"
+    <!-- 取色探针：跟随光标显示色值和坐标 -->
+    <Border x:Name="ColorProbe"
             IsVisible="False"
-            IsHitTestVisible="True"
-            ToolTip.Tip="可直接输入宽高；点单位切换物理像素 / DIP；锁图标锁定比例"
+            IsHitTestVisible="False"
             Background="{StaticResource OverlayBrush}"
             BorderBrush="{StaticResource LineStrongBrush}"
             BorderThickness="1"
             CornerRadius="6"
-            Padding="4,2">
-      <StackPanel Orientation="Horizontal" Spacing="1">
-        <TextBox x:Name="WidthBox"
-                 Classes="size-input"
+            Padding="6,4">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Border x:Name="ProbeSwatch"
+                Width="24"
+                Height="24"
+                CornerRadius="4"
+                BorderBrush="#66FFFFFF"
+                BorderThickness="1" />
+        <StackPanel VerticalAlignment="Center" Spacing="1">
+          <TextBlock x:Name="ProbeValue"
+                     FontSize="11"
+                     FontFamily="{DynamicResource MonoFont}"
+                     Foreground="{StaticResource TextPrimaryBrush}"
+                     Text="#000000" />
+          <TextBlock x:Name="ProbePosition"
+                     FontSize="10"
+                     Foreground="{StaticResource TextMutedBrush}"
+                     Text="0, 0" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <!--
+      选区工具条：26 高、半透明黑底 + 白字，贴在选区左上角上方。
+      字段：X / Y / 单位 / 比例锁 / 宽 × 高 / 比例预设 | 圆角。
+      参考 snow-shot 的独立选区浮条（它没有 X/Y 的标签，靠顺序和 × 区分，这里照做）。
+    -->
+    <Border x:Name="SizeBadge"
+            IsVisible="False"
+            IsHitTestVisible="True"
+            ToolTip.Tip="可直接输入 X/Y/宽/高/圆角；点单位切换物理像素 / DIP；锁图标锁定比例"
+            Background="#73000000"
+            BorderBrush="#33FFFFFF"
+            BorderThickness="1"
+            CornerRadius="6"
+            Padding="6,2">
+      <StackPanel Orientation="Horizontal" Spacing="0">
+        <TextBox x:Name="PosXBox"
+                 Classes="sel-input"
+                 Width="34"
                  KeyDown="OnSizeBoxKeyDown"
                  LostFocus="OnSizeBoxLostFocus" />
-        <TextBlock Text="×"
-                   FontSize="11"
-                   Margin="0,0,2,0"
-                   VerticalAlignment="Center"
-                   Foreground="{DynamicResource TextMutedBrush}" />
-        <TextBox x:Name="HeightBox"
-                 Classes="size-input"
+        <TextBlock Classes="sel-comma" Text="," />
+        <TextBox x:Name="PosYBox"
+                 Classes="sel-input"
+                 Width="34"
                  KeyDown="OnSizeBoxKeyDown"
                  LostFocus="OnSizeBoxLostFocus" />
         <Button x:Name="SizeUnitButton"
-                Classes="size-unit"
+                Classes="sel-unit"
                 Content="px"
                 Click="OnSizeUnitClick"
                 ToolTip.Tip="切换物理像素 / DIP" />
         <ToggleButton x:Name="SizeLockButton"
-                      Classes="size-lock"
+                      Classes="sel-lock"
                       IsChecked="False"
                       Click="OnSizeLockClick"
                       ToolTip.Tip="锁定宽高比">
@@ -419,6 +551,40 @@
             <Path x:Name="LockClosedIcon" Data="{StaticResource IconLockClosed}" IsVisible="False" />
           </Panel>
         </ToggleButton>
+        <TextBox x:Name="WidthBox"
+                 Classes="sel-input"
+                 KeyDown="OnSizeBoxKeyDown"
+                 LostFocus="OnSizeBoxLostFocus" />
+        <TextBlock Classes="sel-comma" Text="×" />
+        <TextBox x:Name="HeightBox"
+                 Classes="sel-input"
+                 KeyDown="OnSizeBoxKeyDown"
+                 LostFocus="OnSizeBoxLostFocus" />
+        <Button x:Name="RatioButton"
+                Classes="sel-ratio"
+                Content="自由"
+                ToolTip.Tip="宽高比预设">
+          <Button.Flyout>
+            <MenuFlyout Placement="BottomEdgeAlignedLeft">
+              <MenuItem Header="自由" Click="OnRatioFreeMenu" />
+              <MenuItem Header="1:1" Click="OnRatio1x1Menu" />
+              <MenuItem Header="3:2" Click="OnRatio3x2Menu" />
+              <MenuItem Header="4:3" Click="OnRatio4x3Menu" />
+              <MenuItem Header="16:9" Click="OnRatio16x9Menu" />
+              <MenuItem Header="2:3" Click="OnRatio2x3Menu" />
+              <MenuItem Header="3:4" Click="OnRatio3x4Menu" />
+              <MenuItem Header="9:16" Click="OnRatio9x16Menu" />
+            </MenuFlyout>
+          </Button.Flyout>
+        </Button>
+        <Border Classes="sel-sep" />
+        <TextBlock Classes="sel-label" Text="圆角" />
+        <TextBox x:Name="RadiusBox"
+                 Classes="sel-input"
+                 Width="30"
+                 KeyDown="OnSizeBoxKeyDown"
+                 LostFocus="OnSizeBoxLostFocus" />
+        <TextBlock Classes="sel-label" Text="px" />
       </StackPanel>
     </Border>
 
@@ -489,8 +655,8 @@
     <!-- 两段式浮层：主工具条一行，属性栏按当前工具出现（参考 LumaShot） -->
     <StackPanel x:Name="ActionBar" IsVisible="False" Cursor="Arrow" Spacing="8">
 
-      <Border Classes="capture-bar">
-        <StackPanel Orientation="Horizontal" Spacing="2">
+      <Border Classes="capture-bar" HorizontalAlignment="Center">
+        <StackPanel Orientation="Horizontal" Spacing="8">
           <Border x:Name="ToolbarDragHandle"
                   Width="12"
                   Height="28"
@@ -506,35 +672,66 @@
                   Height="18" />
           </Border>
 
-          <Button Focusable="False" x:Name="RectToolButton" Classes="tool"
+          <!--
+            工具组折叠：一个 position 内多个工具折叠成一个按钮，
+            悬停弹出水平选项条（参考 snow-shot 的 positions）。
+            入口 = 组内最后一个工具；点折叠按钮直接激活入口。
+            组内原有按钮保留在树里（IsVisible=False），键盘和测试仍按工具 ID 走。
+          -->
+          <Button Focusable="False" x:Name="ShapeGroupButton" Classes="tool group-trigger"
+                  ToolTip.Tip="形状：矩形 / 椭圆">
+            <Panel>
+              <Path x:Name="ShapeGroupIcon" Data="{StaticResource ToolRect}" />
+              <Path Classes="group-caret" Data="M 0 0 L 5 0 L 2.5 3.5 Z" />
+            </Panel>
+          </Button>
+          <Button Focusable="False" x:Name="RectToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="矩形（2）" Click="OnRectToolClick">
             <Path Data="{StaticResource ToolRect}" />
           </Button>
-          <Button Focusable="False" x:Name="EllipseToolButton" Classes="tool"
+          <Button Focusable="False" x:Name="EllipseToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="椭圆（3）" Click="OnEllipseToolClick">
             <Path Data="{StaticResource ToolEllipse}" />
           </Button>
+
           <Button Focusable="False" x:Name="ArrowToolButton" Classes="tool"
                   ToolTip.Tip="箭头（4）" Click="OnArrowToolClick">
-            <Path Data="{StaticResource ToolArrow}" StrokeThickness="1.17" />
+            <Path Data="{StaticResource ToolArrow}" StrokeThickness="1.053" />
           </Button>
-          <Button Focusable="False" x:Name="PenToolButton" Classes="tool"
+
+          <Button Focusable="False" x:Name="PenGroupButton" Classes="tool group-trigger"
+                  ToolTip.Tip="画笔 / 高亮">
+            <Panel>
+              <Path x:Name="PenGroupIcon" Data="{StaticResource ToolPen}" StrokeThickness="1.125" />
+              <Path Classes="group-caret" Data="M 0 0 L 5 0 L 2.5 3.5 Z" />
+            </Panel>
+          </Button>
+          <Button Focusable="False" x:Name="PenToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="画笔（5）" Click="OnPenToolClick">
-            <Path Data="{StaticResource ToolPen}" StrokeThickness="1.25" />
+            <Path Data="{StaticResource ToolPen}" StrokeThickness="1.125" />
           </Button>
-          <Button Focusable="False" x:Name="HighlighterToolButton" Classes="tool"
+          <Button Focusable="False" x:Name="HighlighterToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="高亮（6）" Click="OnHighlighterToolClick">
-            <Path Data="{StaticResource ToolHighlighter}" StrokeThickness="1.29" />
+            <Path Data="{StaticResource ToolHighlighter}" StrokeThickness="1.161" />
           </Button>
+
           <Button Focusable="False" x:Name="MosaicToolButton" Classes="tool"
                   ToolTip.Tip="马赛克（7）" Click="OnMosaicToolClick">
             <Path Data="{StaticResource ToolMosaic}" />
           </Button>
-          <Button Focusable="False" x:Name="TextToolButton" Classes="tool"
-                  ToolTip.Tip="文字（8）" Click="OnTextToolClick">
-            <Path Data="{StaticResource ToolText}" StrokeThickness="1.08" />
+
+          <Button Focusable="False" x:Name="TextGroupButton" Classes="tool group-trigger"
+                  ToolTip.Tip="文字 / 序号">
+            <Panel>
+              <Path x:Name="TextGroupIcon" Data="{StaticResource ToolText}" StrokeThickness="0.972" />
+              <Path Classes="group-caret" Data="M 0 0 L 5 0 L 2.5 3.5 Z" />
+            </Panel>
           </Button>
-          <Button Focusable="False" x:Name="NumberToolButton" Classes="tool"
+          <Button Focusable="False" x:Name="TextToolButton" Classes="tool" IsVisible="False"
+                  ToolTip.Tip="文字（8）" Click="OnTextToolClick">
+            <Path Data="{StaticResource ToolText}" StrokeThickness="0.972" />
+          </Button>
+          <Button Focusable="False" x:Name="NumberToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="序号（9）" Click="OnNumberToolClick">
             <Path Data="{StaticResource ToolNumber}" />
           </Button>
@@ -544,15 +741,15 @@
           <!-- 指针：退出标注，回到移动/拉伸选区 -->
           <Button Focusable="False" x:Name="SelectToolButton" Classes="tool"
                   ToolTip.Tip="选择 / 移动选区（1）" Click="OnSelectToolClick">
-            <Path Data="{StaticResource ToolCursor}" StrokeThickness="1.14" />
+            <Path Data="{StaticResource ToolCursor}" StrokeThickness="1.026" />
           </Button>
           <Button Focusable="False" x:Name="UndoButton" Classes="tool"
                   ToolTip.Tip="撤销（Ctrl+Z）" Click="OnUndoClick">
-            <Path Data="{StaticResource IconUndo}" StrokeThickness="1.29" />
+            <Path Data="{StaticResource IconUndo}" StrokeThickness="1.161" />
           </Button>
           <Button Focusable="False" x:Name="RedoButton" Classes="tool"
                   ToolTip.Tip="重做（Ctrl+Shift+Z）" Click="OnRedoClick">
-            <Path Data="{StaticResource IconRedo}" StrokeThickness="1.29" />
+            <Path Data="{StaticResource IconRedo}" StrokeThickness="1.161" />
           </Button>
 
           <Border Classes="tool-separator" />
@@ -567,18 +764,18 @@
                   Classes="tool"
                   IsVisible="False"
                   ToolTip.Tip="识别并翻译（点击选目标语言）">
-            <Path Data="{StaticResource IconTranslate}" StrokeThickness="1.27" />
+            <Path Data="{StaticResource IconTranslate}" StrokeThickness="1.143" />
             <Button.Flyout>
               <MenuFlyout Placement="TopEdgeAlignedRight" />
             </Button.Flyout>
           </Button>
           <Button Focusable="False" x:Name="SaveButton"
                   Classes="tool" Click="OnSaveClick" ToolTip.Tip="保存为 PNG（S）">
-            <Path Data="{StaticResource IconSave}" StrokeThickness="1.29" />
+            <Path Data="{StaticResource IconSave}" StrokeThickness="1.161" />
           </Button>
           <Button Focusable="False" x:Name="PinButton"
                   Classes="tool" Click="OnPinClick" ToolTip.Tip="固定到屏幕，滚轮缩放（P）">
-            <Path Data="{StaticResource IconPin}" StrokeThickness="1.54" />
+            <Path Data="{StaticResource IconPin}" StrokeThickness="1.386" />
           </Button>
           <Button Focusable="False" x:Name="ScrollButton"
                   Classes="tool" Click="OnScrollClick" ToolTip.Tip="滚动截图（G）">
@@ -586,14 +783,14 @@
           </Button>
           <Button Focusable="False" x:Name="CornerRadiusButton" Classes="tool"
                   Click="OnCornerRadiusClick" ToolTip.Tip="导出时四角切圆角">
-            <Path Data="{StaticResource IconCornerRadius}" StrokeThickness="1.25" />
+            <Path Data="{StaticResource IconCornerRadius}" StrokeThickness="1.125" />
           </Button>
           <Button Focusable="False" x:Name="CopyAllButton"
                   Classes="tool"
                   IsVisible="False"
                   Click="OnCopyAllClick"
                   ToolTip.Tip="复制全部识别文字（Ctrl+C）">
-            <Path Data="{StaticResource IconCopy}" StrokeThickness="1.25" />
+            <Path Data="{StaticResource IconCopy}" StrokeThickness="1.125" />
           </Button>
           <Button Focusable="False" x:Name="OcrBoxButton"
                   Classes="tool"
@@ -606,7 +803,7 @@
                   Classes="tool"
                   IsVisible="False"
                   ToolTip.Tip="更多动作">
-            <Path Data="{StaticResource IconMore}" StrokeThickness="0.97" />
+            <Path Data="{StaticResource IconMore}" StrokeThickness="0.873" />
             <Button.Flyout>
               <MenuFlyout Placement="TopEdgeAlignedRight">
                 <MenuItem Header="保存（S）" Click="OnSaveClick" />
@@ -632,21 +829,21 @@
                   Classes="tool"
                   Click="OnCancelClick"
                   ToolTip.Tip="取消截图（Esc）">
-            <Path Data="{StaticResource IconClose}" StrokeThickness="0.92" />
+            <Path Data="{StaticResource IconClose}" StrokeThickness="0.828" />
           </Button>
           <!-- ✓：完成并复制（和 LumaShot / snow-shot 的确认键一致） -->
           <Button Focusable="False" x:Name="CopyImageButton"
                   Classes="tool primary"
                   Click="OnCopyImageClick"
                   ToolTip.Tip="完成并复制图片（C）">
-            <Path Data="{StaticResource IconCheck}" StrokeThickness="1.17" />
+            <Path Data="{StaticResource IconCheck}" StrokeThickness="1.053" />
           </Button>
         </StackPanel>
       </Border>
 
-      <!-- 属性栏：只显示当前工具用得上的设置 -->
-      <Border x:Name="StyleRow" Classes="capture-bar" IsVisible="False">
-        <StackPanel Orientation="Horizontal" Spacing="12">
+      <!-- 属性栏：只显示当前工具用得上的设置；宽度随内容，居中挂在主条下方 -->
+      <Border x:Name="StyleRow" Classes="capture-bar" HorizontalAlignment="Center" IsVisible="False">
+        <StackPanel Orientation="Horizontal" Spacing="8">
 
           <StackPanel x:Name="ColorGroup" Orientation="Horizontal" Spacing="4">
             <TextBlock Classes="prop-label" Text="颜色" />
@@ -675,6 +872,7 @@
           </StackPanel>
 
           <StackPanel x:Name="WidthGroup" Orientation="Horizontal" Spacing="4">
+            <Border Classes="prop-sep" />
             <TextBlock Classes="prop-label" Text="线宽" />
             <Button Focusable="False" x:Name="WidthMenuButton" Classes="prop" Content="2 px">
               <Button.Flyout>
@@ -690,32 +888,51 @@
           </StackPanel>
 
           <StackPanel x:Name="DashGroup" Orientation="Horizontal" Spacing="4">
+            <Border Classes="prop-sep" />
             <TextBlock Classes="prop-label" Text="线型" />
-            <Button Focusable="False" x:Name="DashMenuButton" Classes="prop" Content="实线">
-              <Button.Flyout>
-                <MenuFlyout Placement="Top">
-                  <MenuItem Header="实线" Click="OnDashSolidMenu" />
-                  <MenuItem Header="虚线" Click="OnDashDashMenu" />
-                  <MenuItem Header="点线" Click="OnDashDotMenu" />
-                </MenuFlyout>
-              </Button.Flyout>
+            <!-- 枚举改分段按钮：参考里所有小选项都是并排的，不是下拉 -->
+            <Button Focusable="False" x:Name="DashSolidButton" Classes="prop seg"
+                    Click="OnDashSolidMenu" ToolTip.Tip="实线">
+              <Border Classes="seg-line" Width="16" Height="2" />
+            </Button>
+            <Button Focusable="False" x:Name="DashDashButton" Classes="prop seg"
+                    Click="OnDashDashMenu" ToolTip.Tip="虚线">
+              <StackPanel Orientation="Horizontal" Spacing="2">
+                <Border Classes="seg-line" Width="4" Height="2" />
+                <Border Classes="seg-line" Width="4" Height="2" />
+                <Border Classes="seg-line" Width="4" Height="2" />
+              </StackPanel>
+            </Button>
+            <Button Focusable="False" x:Name="DashDotButton" Classes="prop seg"
+                    Click="OnDashDotMenu" ToolTip.Tip="点线">
+              <StackPanel Orientation="Horizontal" Spacing="2">
+                <Border Classes="seg-line" Width="2" Height="2" CornerRadius="1" />
+                <Border Classes="seg-line" Width="2" Height="2" CornerRadius="1" />
+                <Border Classes="seg-line" Width="2" Height="2" CornerRadius="1" />
+              </StackPanel>
             </Button>
           </StackPanel>
 
           <StackPanel x:Name="FillGroup" Orientation="Horizontal" Spacing="4">
+            <Border Classes="prop-sep" />
             <TextBlock Classes="prop-label" Text="填充" />
-            <Button Focusable="False" x:Name="FillMenuButton" Classes="prop" Content="无">
-              <Button.Flyout>
-                <MenuFlyout Placement="Top">
-                  <MenuItem Header="无填充" Click="OnFillNoneMenu" />
-                  <MenuItem Header="淡色填充" Click="OnFillSoftMenu" />
-                  <MenuItem Header="实心填充" Click="OnFillSolidMenu" />
-                </MenuFlyout>
-              </Button.Flyout>
+            <Button Focusable="False" x:Name="FillNoneButton" Classes="prop seg swatch-seg"
+                    Click="OnFillNoneMenu" ToolTip.Tip="无填充">
+              <Border Classes="seg-swatch" Width="12" Height="12" CornerRadius="2"
+                      Background="Transparent" BorderThickness="1" />
+            </Button>
+            <Button Focusable="False" x:Name="FillSoftButton" Classes="prop seg swatch-seg"
+                    Click="OnFillSoftMenu" ToolTip.Tip="淡色填充">
+              <Border Classes="seg-swatch soft" Width="12" Height="12" CornerRadius="2" />
+            </Button>
+            <Button Focusable="False" x:Name="FillSolidButton" Classes="prop seg swatch-seg"
+                    Click="OnFillSolidMenu" ToolTip.Tip="实心填充">
+              <Border Classes="seg-swatch solid" Width="12" Height="12" CornerRadius="2" />
             </Button>
           </StackPanel>
 
           <StackPanel x:Name="OpacityGroup" Orientation="Horizontal" Spacing="6">
+            <Border Classes="prop-sep" />
             <TextBlock Classes="prop-label" Text="透明度" />
             <Slider x:Name="OpacitySlider" Classes="prop"
                     Minimum="20" Maximum="100" Value="100"
@@ -724,6 +941,7 @@
           </StackPanel>
 
           <StackPanel x:Name="RadiusGroup" Orientation="Horizontal" Spacing="6">
+            <Border Classes="prop-sep" />
             <TextBlock Classes="prop-label" Text="圆角" />
             <Slider x:Name="RadiusSlider" Classes="prop"
                     Minimum="0" Maximum="40" Value="0"
@@ -732,24 +950,24 @@
           </StackPanel>
 
           <StackPanel x:Name="FontGroup" Orientation="Horizontal" Spacing="4">
+            <Border Classes="prop-sep" />
             <TextBlock Classes="prop-label" Text="字号" />
-            <Button Focusable="False" x:Name="FontSizeMenuButton" Classes="prop" Content="16 px">
-              <Button.Flyout>
-                <MenuFlyout Placement="Top">
-                  <MenuItem Header="14 px" Click="OnFont14Menu" />
-                  <MenuItem Header="16 px" Click="OnFont16Menu" />
-                  <MenuItem Header="20 px" Click="OnFont20Menu" />
-                  <MenuItem Header="24 px" Click="OnFont24Menu" />
-                  <MenuItem Header="32 px" Click="OnFont32Menu" />
-                </MenuFlyout>
-              </Button.Flyout>
-            </Button>
+            <!-- S/M/L/XL 档位 + 数值（参考做法），比下拉少两次点击 -->
+            <Button Focusable="False" x:Name="FontSButton" Classes="prop seg"
+                    Content="S" Click="OnFont14Menu" ToolTip.Tip="14 px" />
+            <Button Focusable="False" x:Name="FontMButton" Classes="prop seg"
+                    Content="M" Click="OnFont16Menu" ToolTip.Tip="16 px" />
+            <Button Focusable="False" x:Name="FontLButton" Classes="prop seg"
+                    Content="L" Click="OnFont20Menu" ToolTip.Tip="20 px" />
+            <Button Focusable="False" x:Name="FontXlButton" Classes="prop seg"
+                    Content="XL" Click="OnFont32Menu" ToolTip.Tip="32 px" />
             <Button Focusable="False" x:Name="BoldButton" Classes="prop" Content="B"
                     FontWeight="Bold" Padding="8,0" Click="OnBoldClick"
                     ToolTip.Tip="加粗" />
           </StackPanel>
 
           <StackPanel x:Name="NumberGroup" Orientation="Horizontal" Spacing="4">
+            <Border Classes="prop-sep" />
             <TextBlock Classes="prop-label" Text="大小" />
             <Button Focusable="False" x:Name="NumberSizeMenuButton" Classes="prop" Content="24 px">
               <Button.Flyout>
@@ -765,14 +983,10 @@
 
           <StackPanel x:Name="MosaicGroup" Orientation="Horizontal" Spacing="4">
             <TextBlock Classes="prop-label" Text="方式" />
-            <Button Focusable="False" x:Name="MosaicModeButton" Classes="prop" Content="像素">
-              <Button.Flyout>
-                <MenuFlyout Placement="Top">
-                  <MenuItem Header="像素" Click="OnMosaicPixelMenu" />
-                  <MenuItem Header="模糊" Click="OnMosaicBlurMenu" />
-                </MenuFlyout>
-              </Button.Flyout>
-            </Button>
+            <Button Focusable="False" x:Name="MosaicPixelButton" Classes="prop seg"
+                    Content="像素" Click="OnMosaicPixelMenu" />
+            <Button Focusable="False" x:Name="MosaicBlurButton" Classes="prop seg"
+                    Content="模糊" Click="OnMosaicBlurMenu" />
             <TextBlock Classes="prop-label" Text="笔刷" />
             <Button Focusable="False" x:Name="BrushMenuButton" Classes="prop" Content="12 px">
               <Button.Flyout>
@@ -785,7 +999,7 @@
             </Button>
           </StackPanel>
 
-          <Button Focusable="False" x:Name="PresetButton" Classes="tool"
+          <Button Focusable="False" x:Name="PresetButton" Classes="tool small"
                   ToolTip.Tip="标注样式模板">
             <Path Data="{StaticResource IconStar}" />
             <Button.Flyout>
@@ -795,6 +1009,14 @@
         </StackPanel>
       </Border>
     </StackPanel>
+
+    <!-- 工具组悬停弹出：内容是代码构建的，位置在触发按钮上方 -->
+    <Border x:Name="ToolGroupPopover"
+            Classes="tool-popover"
+            IsVisible="False"
+            IsHitTestVisible="True">
+      <StackPanel x:Name="ToolGroupOptions" Orientation="Horizontal" Spacing="2" />
+    </Border>
 
     <!-- 自定义颜色：贴在属性栏上方的浮层 -->
     <Border x:Name="CustomColorPanel"

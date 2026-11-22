@@ -333,14 +333,34 @@ public sealed class AnnotationTests
     {
         var window = new CaptureWindow();
 
-        // 属性栏的下拉按钮直接显示当前模式
-        window.MosaicModeButton.Content.ShouldBe("像素");
+        // 属性栏用分段按钮显示当前模式
+        window.MosaicPixelButton.Classes.Contains("selected").ShouldBeTrue();
+        window.MosaicBlurButton.Classes.Contains("selected").ShouldBeFalse();
 
         window.ToggleMosaicBlur(true);
-        window.MosaicModeButton.Content.ShouldBe("模糊");
+        window.MosaicBlurButton.Classes.Contains("selected").ShouldBeTrue();
+        window.MosaicPixelButton.Classes.Contains("selected").ShouldBeFalse();
 
         window.ToggleMosaicBlur(false);
-        window.MosaicModeButton.Content.ShouldBe("像素");
+        window.MosaicPixelButton.Classes.Contains("selected").ShouldBeTrue();
+    }
+
+    [AvaloniaFact]
+    public void 属性条_线型与字号改用分段按钮()
+    {
+        var window = new CaptureWindow();
+
+        // 线型：默认实线
+        window.DashSolidButton.Classes.Contains("selected").ShouldBeTrue();
+        window.DashDashButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.DashDashButton.Classes.Contains("selected").ShouldBeTrue();
+        window.DashSolidButton.Classes.Contains("selected").ShouldBeFalse();
+
+        // 字号：默认 16 对应 M
+        window.FontMButton.Classes.Contains("selected").ShouldBeTrue();
+        window.FontXlButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.FontXlButton.Classes.Contains("selected").ShouldBeTrue();
+        window.FontMButton.Classes.Contains("selected").ShouldBeFalse();
     }
 
     [AvaloniaFact]

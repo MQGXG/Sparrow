@@ -11,6 +11,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using Path = Avalonia.Controls.Shapes.Path;
 using Sparrow.App.Services;
 using Sparrow.App.Settings;
 
@@ -169,11 +170,23 @@ public partial class CaptureWindow : Window
     /// <summary>锁定宽高比。</summary>
     private bool _aspectLocked;
 
+    /// <summary>宽高比预设（0 = 自由）。选了预设就按它约束拖建/拉边/输入三条路径。</summary>
+    private double _ratioPreset;
+
+    /// <summary>按在选区边框上时被临时让位的绘图工具；松手后恢复。</summary>
+    private AnnotationTool? _toolBeforeResize;
+
     /// <summary>回填输入框期间不触发提交，避免拖动选区时反复换算。</summary>
     private bool _sizeEditGuard;
 
     /// <summary>导出圆角半径（0 = 不切）。</summary>
     private double _cornerRadius;
+
+    /// <summary>取色模式：光标处显示色值，点击复制并写回标注颜色。</summary>
+    private bool _colorSampling;
+
+    /// <summary>取色格式：0 = HEX，1 = RGB，2 = HSL（Shift+I 循环）。</summary>
+    private int _colorFormat;
 
     public double ExportCornerRadius
     {
@@ -215,6 +228,7 @@ public partial class CaptureWindow : Window
     {
         InitializeComponent();
         CreateHandles();
+        BuildToolGroups();
 
         OcrLayer.PointerMoved += OnOcrLayerPointerMoved;
         OcrLayer.PointerExited += OnOcrLayerPointerExited;
@@ -549,6 +563,37 @@ public partial class CaptureWindow : Window
             return;
         }
 
+        // 点空白处收起工具组选项条；点选项条本身要放过去，否则按钮在按下时就没了
+        if (ToolGroupPopover.IsVisible)
+        {
+            var insidePopover =
+                ToolGroupPopover.TranslatePoint(new Point(0, 0), this) is { } popoverOrigin
+                && new Rect(popoverOrigin, ToolGroupPopover.Bounds.Size).Contains(point);
+
+            if (insidePopover)
+                return;
+
+            HideToolGroupPopover();
+        }
+
+        // 取色模式：左键取样并退出，不参与框选
+        if (_colorSampling)
+        {
+            CommitColorSample();
+            e.Handled = true;
+            return;
+        }
+
+        // 边框带优先于当前工具：画着标注时按在边框 8 内也能拉选区（参考 snow-shot），
+        // 松手后把工具恢复回去
+        _toolBeforeResize = null;
+        if (_tool != AnnotationTool.None && _hasSelection
+            && HitHandle(point) != ResizeHandle.None)
+        {
+            _toolBeforeResize = _tool;
+            ForceTool(AnnotationTool.None);
+        }
+
         // 选了标注工具：在选区内按下就是开始画，不移动选区
         if (BeginAnnotation(point))
         {
@@ -627,6 +672,14 @@ public partial class CaptureWindow : Window
     {
         var point = e.GetPosition(this);
         _lastPointerPoint = point;
+
+        // 取色模式：光标处只更新探针，不做别的
+        if (_colorSampling)
+        {
+            UpdateColorProbe(point);
+            e.Handled = true;
+            return;
+        }
 
         // 拖动工具条：优先于选区/标注
         if (_draggingToolbar)
@@ -761,6 +814,13 @@ public partial class CaptureWindow : Window
             PositionActionBar(_selection);
             UpdateHandles();
             UpdateSizeBadge(_selection);
+
+            // 边框临时让位的绘图工具在这里恢复
+            if (_toolBeforeResize is { } previous)
+            {
+                _toolBeforeResize = null;
+                ForceTool(previous);
+            }
         }
 
         e.Handled = true;
@@ -803,13 +863,129 @@ public partial class CaptureWindow : Window
 
     private void ApplyCreate(Point current)
     {
+        _toolbarManual = false;
+
         var x = Math.Min(_createStart.X, current.X);
         var y = Math.Min(_createStart.Y, current.Y);
         var width = Math.Abs(current.X - _createStart.X);
         var height = Math.Abs(current.Y - _createStart.Y);
 
+        // 比例锁：以按下点为固定角，按宽度驱动高度
+        var aspect = EffectiveAspect();
+        if (_aspectLocked && aspect > 0)
+        {
+            width = Math.Max(width, MinSelectionSize);
+            height = width / aspect;
+
+            var growsLeft = current.X < _createStart.X;
+            var growsUp = current.Y < _createStart.Y;
+            x = growsLeft ? _createStart.X - width : _createStart.X;
+            y = growsUp ? _createStart.Y - height : _createStart.Y;
+
+            // 越界就按可用空间反算，保证比例不变
+            if (x < 0)
+            {
+                width = Math.Max(MinSelectionSize, width + x);
+                x = 0;
+                height = width / aspect;
+                if (growsUp) y = _createStart.Y - height;
+            }
+
+            if (y < 0)
+            {
+                height = Math.Max(MinSelectionSize, height + y);
+                y = 0;
+                width = height * aspect;
+                if (growsLeft) x = _createStart.X - width;
+            }
+        }
+
         _selection = new Rect(x, y, width, height);
         UpdateSelectionVisuals();
+    }
+
+    /// <summary>
+    /// 比例锁下的拉边修正：拖哪个轴就驱动哪个轴，按比例推另一个轴。
+    /// 边点保持对边和另一轴中线不动；角点钉住对角。
+    /// </summary>
+    private (double left, double top, double right, double bottom) ApplyAspectToResize(
+        double left, double top, double right, double bottom)
+    {
+        var aspect = EffectiveAspect();
+        if (!_aspectLocked || aspect <= 0)
+            return (left, top, right, bottom);
+
+        var w = right - left;
+        var h = bottom - top;
+        if (w <= 0 || h <= 0)
+            return (left, top, right, bottom);
+
+        var isCorner = _resizeHandle
+            is ResizeHandle.NW or ResizeHandle.NE or ResizeHandle.SW or ResizeHandle.SE;
+        var horizontal = _resizeHandle
+            is ResizeHandle.E or ResizeHandle.W or ResizeHandle.NW or ResizeHandle.NE
+            or ResizeHandle.SW or ResizeHandle.SE;
+        var vertical = _resizeHandle
+            is ResizeHandle.N or ResizeHandle.S or ResizeHandle.NW or ResizeHandle.NE
+            or ResizeHandle.SW or ResizeHandle.SE;
+
+        // 角点：哪个轴的相对变化大就用哪个驱动
+        var driveWidth = horizontal && !vertical;
+        if (isCorner)
+        {
+            var dw = Math.Abs(w - _selectionOrigin.Width) / Math.Max(1, _selectionOrigin.Width);
+            var dh = Math.Abs(h - _selectionOrigin.Height) / Math.Max(1, _selectionOrigin.Height);
+            driveWidth = dw >= dh;
+        }
+
+        var centerX = (left + right) / 2;
+        var centerY = (top + bottom) / 2;
+
+        if (driveWidth)
+            h = w / aspect;
+        else
+            w = h * aspect;
+
+        if (w < MinSelectionSize)
+        {
+            w = MinSelectionSize;
+            h = w / aspect;
+        }
+
+        if (h < MinSelectionSize)
+        {
+            h = MinSelectionSize;
+            w = h * aspect;
+        }
+
+        // 钉住不被拖的那一侧
+        if (_resizeHandle is ResizeHandle.W or ResizeHandle.NW or ResizeHandle.SW)
+            left = right - w;
+        else if (_resizeHandle is ResizeHandle.E or ResizeHandle.NE or ResizeHandle.SE)
+            right = left + w;
+        else
+        {
+            left = centerX - w / 2;
+            right = centerX + w / 2;
+        }
+
+        if (_resizeHandle is ResizeHandle.N or ResizeHandle.NW or ResizeHandle.NE)
+            top = bottom - h;
+        else if (_resizeHandle is ResizeHandle.S or ResizeHandle.SW or ResizeHandle.SE)
+            bottom = top + h;
+        else
+        {
+            top = centerY - h / 2;
+            bottom = centerY + h / 2;
+        }
+
+        // 越界时整体平移回窗口内，保证比例不被破坏
+        if (right > Width) { var d = right - Width; left -= d; right -= d; }
+        if (bottom > Height) { var d = bottom - Height; top -= d; bottom -= d; }
+        if (left < 0) { var d = -left; left += d; right += d; }
+        if (top < 0) { var d = -top; top += d; bottom += d; }
+
+        return (left, top, right, bottom);
     }
 
     /// <summary>鼠标悬停：高亮窗口，并在短暂停顿后细化到 UIA 控件。</summary>
@@ -1000,6 +1176,9 @@ public partial class CaptureWindow : Window
 
     private void ApplyMove(Point current)
     {
+        // 选区一动就恢复「工具条跟随」，对齐参考的 resetPositionForSelection 语义
+        _toolbarManual = false;
+
         // 框移动后截图内容变了，旧标注会错位，直接清掉
         ClearAnnotations();
 
@@ -1036,6 +1215,8 @@ public partial class CaptureWindow : Window
 
     private void ApplyResize(Point current)
     {
+        _toolbarManual = false;
+
         // 框尺寸变化后截图内容变了，旧标注会错位，直接清掉
         ClearAnnotations();
 
@@ -1093,6 +1274,9 @@ public partial class CaptureWindow : Window
         }
 
         ShowGuides(guideX, guideY);
+
+        // 比例锁：拖完之后按比例修正另一轴（拖哪条边就驱动哪个轴）
+        (left, top, right, bottom) = ApplyAspectToResize(left, top, right, bottom);
 
         _selection = new Rect(left, top, right - left, bottom - top);
         UpdateSelectionVisuals();
@@ -1361,6 +1545,13 @@ public partial class CaptureWindow : Window
     /// </summary>
     private void HandleRightClick()
     {
+        // 取色是最外层：先退出取色，再谈别的
+        if (_colorSampling)
+        {
+            ExitColorSampling();
+            return;
+        }
+
         if (CustomColorPanel.IsVisible)
         {
             CustomColorPanel.IsVisible = false;
@@ -1404,6 +1595,7 @@ public partial class CaptureWindow : Window
         HandleLayer.IsVisible = false;
         ActionBar.IsVisible = false;
         SizeBadge.IsVisible = false;
+        HideToolGroupPopover();
         HintBar.IsVisible = true;
         HideResultCard();
         _notes.Clear();
@@ -1756,29 +1948,28 @@ public partial class CaptureWindow : Window
         SetSelected(ColorBlueButton, IsColor("#5FA8FF"));
 
         WidthMenuButton.Content = $"{_noteWidth:0} px";
-        DashMenuButton.Content = _noteDash switch
-        {
-            LineDash.Dash => "虚线",
-            LineDash.Dot => "点线",
-            _ => "实线"
-        };
-        FillMenuButton.Content = _noteFill switch
-        {
-            ShapeFill.Solid => "实心",
-            ShapeFill.Soft => "淡色",
-            _ => "无"
-        };
+        SetSelected(DashSolidButton, _noteDash == LineDash.Solid);
+        SetSelected(DashDashButton, _noteDash == LineDash.Dash);
+        SetSelected(DashDotButton, _noteDash == LineDash.Dot);
+        SetSelected(FillNoneButton, _noteFill == ShapeFill.None);
+        SetSelected(FillSoftButton, _noteFill == ShapeFill.Soft);
+        SetSelected(FillSolidButton, _noteFill == ShapeFill.Solid);
 
         OpacitySlider.Value = Math.Round(_noteOpacity * 100);
         OpacityValue.Text = $"{_noteOpacity * 100:0}%";
         RadiusSlider.Value = _noteRadius;
         RadiusValue.Text = $"{_noteRadius:0} px";
 
-        FontSizeMenuButton.Content = $"{_noteFontSize:0} px";
+        // 字号用 S/M/L/XL 档位；不落在档位上时四个都不亮
+        SetSelected(FontSButton, Math.Abs(_noteFontSize - 14) < 0.1);
+        SetSelected(FontMButton, Math.Abs(_noteFontSize - 16) < 0.1);
+        SetSelected(FontLButton, Math.Abs(_noteFontSize - 20) < 0.1);
+        SetSelected(FontXlButton, Math.Abs(_noteFontSize - 32) < 0.1);
         SetSelected(BoldButton, _noteBold);
         NumberSizeMenuButton.Content = $"{_numberSize:0} px";
 
-        MosaicModeButton.Content = _mosaicBlur ? "模糊" : "像素";
+        SetSelected(MosaicPixelButton, !_mosaicBlur);
+        SetSelected(MosaicBlurButton, _mosaicBlur);
         BrushMenuButton.Content = $"{_mosaicCell} px";
 
         SetSelected(CornerRadiusButton, _cornerRadius > 0);
@@ -2073,6 +2264,174 @@ public partial class CaptureWindow : Window
         UpdateToolButtons();
     }
 
+    /// <summary>直接设成某个工具（不做「再点一次取消」的切换语义），用于临时让位。</summary>
+    private void ForceTool(AnnotationTool tool)
+    {
+        _tool = tool;
+
+        if (tool != AnnotationTool.None)
+            SelectNote(-1);
+
+        UpdateToolButtons();
+    }
+
+    // ---------- 工具组折叠（positions） ----------
+
+    /// <summary>一个 position：多个工具折叠成一个触发按钮，入口是组内最后一个。</summary>
+    private sealed class ToolGroup
+    {
+        public required Button Trigger { get; init; }
+        public required Path Icon { get; init; }
+        public required AnnotationTool[] Members { get; init; }
+        public int EntryIndex { get; set; }
+    }
+
+    private readonly List<ToolGroup> _toolGroups = new();
+    private DispatcherTimer? _groupHideTimer;
+
+    /// <summary>工具 → (几何资源键, 线宽补偿)；补偿值必须和 XAML 里那个按钮写的一致。</summary>
+    private static readonly Dictionary<AnnotationTool, (string Key, double Thickness)> ToolIcons =
+        new()
+        {
+            [AnnotationTool.Rectangle] = ("ToolRect", 1.2),
+            [AnnotationTool.Ellipse] = ("ToolEllipse", 1.2),
+            [AnnotationTool.Arrow] = ("ToolArrow", 1.053),
+            [AnnotationTool.Pen] = ("ToolPen", 1.125),
+            [AnnotationTool.Highlighter] = ("ToolHighlighter", 1.161),
+            [AnnotationTool.Mosaic] = ("ToolMosaic", 1.2),
+            [AnnotationTool.Text] = ("ToolText", 0.972),
+            [AnnotationTool.Number] = ("ToolNumber", 1.2)
+        };
+
+    private void BuildToolGroups()
+    {
+        _toolGroups.Add(new ToolGroup
+        {
+            Trigger = ShapeGroupButton,
+            Icon = ShapeGroupIcon,
+            Members = [AnnotationTool.Ellipse, AnnotationTool.Rectangle],
+            EntryIndex = 1
+        });
+        _toolGroups.Add(new ToolGroup
+        {
+            Trigger = PenGroupButton,
+            Icon = PenGroupIcon,
+            Members = [AnnotationTool.Highlighter, AnnotationTool.Pen],
+            EntryIndex = 1
+        });
+        _toolGroups.Add(new ToolGroup
+        {
+            Trigger = TextGroupButton,
+            Icon = TextGroupIcon,
+            Members = [AnnotationTool.Number, AnnotationTool.Text],
+            EntryIndex = 1
+        });
+
+        foreach (var group in _toolGroups)
+        {
+            group.Trigger.Click += (_, _) =>
+            {
+                HideToolGroupPopover();
+                ForceTool(group.Members[group.EntryIndex]);
+            };
+            group.Trigger.PointerEntered += (_, _) => ShowToolGroupPopover(group);
+            group.Trigger.PointerExited += (_, _) => ScheduleHideToolGroupPopover();
+        }
+
+        ToolGroupPopover.PointerEntered += (_, _) => _groupHideTimer?.Stop();
+        ToolGroupPopover.PointerExited += (_, _) => ScheduleHideToolGroupPopover();
+    }
+
+    /// <summary>展开某个工具的选项条，摆在触发按钮正上方。</summary>
+    private void ShowToolGroupPopover(ToolGroup group)
+    {
+        _groupHideTimer?.Stop();
+        ToolGroupOptions.Children.Clear();
+
+        // 反序：入口在最左（参考 stackPresentation 把 popoverItemIds 反了过来）
+        for (var i = group.Members.Length - 1; i >= 0; i--)
+        {
+            var tool = group.Members[i];
+            var option = new Button { Focusable = false };
+            option.Classes.Add("tool");
+
+            var icon = new Path();
+            ApplyToolIcon(icon, tool);
+            option.Content = icon;
+            ToolTip.SetTip(option, ToolName(tool));
+            SetSelected(option, tool == group.Members[group.EntryIndex]);
+
+            option.Click += (_, _) =>
+            {
+                group.EntryIndex = Array.IndexOf(group.Members, tool);
+                HideToolGroupPopover();
+                ForceTool(tool);
+            };
+
+            ToolGroupOptions.Children.Add(option);
+        }
+
+        ToolGroupPopover.IsVisible = true;
+
+        // 尺寸按内容算：32 的按钮 + 2 的间距 + Border 的 padding 4×2 与边框 1×2
+        var width = group.Members.Length * 32 + (group.Members.Length - 1) * 2 + 10;
+        var height = 32 + 10;
+
+        var origin = group.Trigger.TranslatePoint(new Point(0, 0), this) ?? new Point(0, 0);
+        // 与触发按钮左对齐：比居中更稳定，也不会因为按钮宽度取不到而左右跳
+        var left = Math.Clamp(origin.X, 8, Math.Max(8, Width - width - 8));
+        var top = Math.Max(8, origin.Y - height - 6);
+
+        Canvas.SetLeft(ToolGroupPopover, left);
+        Canvas.SetTop(ToolGroupPopover, top);
+    }
+
+    private void ScheduleHideToolGroupPopover()
+    {
+        if (_groupHideTimer is null)
+        {
+            _groupHideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+            _groupHideTimer.Tick += (_, _) =>
+            {
+                _groupHideTimer!.Stop();
+                HideToolGroupPopover();
+            };
+        }
+
+        _groupHideTimer.Stop();
+        _groupHideTimer.Start();
+    }
+
+    private void HideToolGroupPopover()
+    {
+        _groupHideTimer?.Stop();
+        ToolGroupPopover.IsVisible = false;
+        ToolGroupOptions.Children.Clear();
+    }
+
+    private void ApplyToolIcon(Path icon, AnnotationTool tool)
+    {
+        if (!ToolIcons.TryGetValue(tool, out var info))
+            return;
+
+        if (this.TryFindResource(info.Key, out var resource) && resource is Geometry geometry)
+        {
+            icon.Data = geometry;
+            icon.StrokeThickness = info.Thickness;
+        }
+    }
+
+    private static string ToolName(AnnotationTool tool) => tool switch
+    {
+        AnnotationTool.Rectangle => "矩形",
+        AnnotationTool.Ellipse => "椭圆",
+        AnnotationTool.Pen => "画笔",
+        AnnotationTool.Highlighter => "高亮",
+        AnnotationTool.Text => "文字",
+        AnnotationTool.Number => "序号",
+        _ => string.Empty
+    };
+
     private void UpdateToolButtons()
     {
         SetSelected(SelectToolButton, _tool == AnnotationTool.None);
@@ -2086,6 +2445,17 @@ public partial class CaptureWindow : Window
         SetSelected(NumberToolButton, _tool == AnnotationTool.Number);
         UndoButton.IsEnabled = _notes.CanUndo;
         RedoButton.IsEnabled = _notes.CanRedo;
+
+        // 折叠组：入口跟着当前工具走，按钮图标显示组里正在用的那个
+        foreach (var group in _toolGroups)
+        {
+            var active = Array.IndexOf(group.Members, _tool);
+            if (active >= 0)
+                group.EntryIndex = active;
+
+            ApplyToolIcon(group.Icon, active >= 0 ? _tool : group.Members[group.EntryIndex]);
+            SetSelected(group.Trigger, active >= 0);
+        }
 
         // 属性行只在选中标注工具时出现：没选工具时整条让出去，别挡截图
         StyleRow.IsVisible = _tool != AnnotationTool.None;
@@ -2554,19 +2924,14 @@ public partial class CaptureWindow : Window
 
     private void OnSizeUnitClick(object? sender, RoutedEventArgs e) => ToggleSizeUnit();
 
-    private void OnSizeLockClick(object? sender, RoutedEventArgs e)
-    {
-        _aspectLocked = SizeLockButton.IsChecked == true;
-        LockOpenIcon.IsVisible = !_aspectLocked;
-        LockClosedIcon.IsVisible = _aspectLocked;
-        ToolTip.SetTip(SizeLockButton, _aspectLocked ? "已锁定宽高比" : "锁定宽高比");
-    }
+    private void OnSizeLockClick(object? sender, RoutedEventArgs e) =>
+        SetAspectLock(SizeLockButton.IsChecked == true);
 
     private void OnSizeBoxKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key == Key.Enter)
         {
-            CommitSizeEdit(ReferenceEquals(sender, HeightBox) ? 1 : 0);
+            CommitSizeEdit(AxisFor(sender));
             Focus();   // 交还焦点，数字键继续用来切工具
             e.Handled = true;
         }
@@ -2586,14 +2951,67 @@ public partial class CaptureWindow : Window
         if (ReferenceEquals(focused, SizeUnitButton) || ReferenceEquals(focused, SizeLockButton))
             return;
 
-        CommitSizeEdit(ReferenceEquals(sender, HeightBox) ? 1 : 0);
+        CommitSizeEdit(AxisFor(sender));
     }
 
-    /// <summary>把尺寸框里的数值应用到选区：左上角不动，超出窗口就钳制。</summary>
+    /// <summary>输入框 → 提交轴：0 宽 / 1 高 / 2 X / 3 Y / 4 圆角。</summary>
+    private int AxisFor(object? sender)
+    {
+        if (ReferenceEquals(sender, PosXBox)) return 2;
+        if (ReferenceEquals(sender, PosYBox)) return 3;
+        if (ReferenceEquals(sender, RadiusBox)) return 4;
+        if (ReferenceEquals(sender, HeightBox)) return 1;
+        return 0;
+    }
+
+    /// <summary>当前生效的宽高比：优先用预设，否则用选区自身的比例。</summary>
+    private double EffectiveAspect() =>
+        _ratioPreset > 0
+            ? _ratioPreset
+            : _selection.Height > 0 ? _selection.Width / _selection.Height : 0;
+
+    /// <summary>把输入框里的数值应用到选区：左上角不动，超出窗口就钳制。</summary>
     internal void CommitSizeEdit(int axis)
     {
         if (_sizeEditGuard || !_hasSelection)
             return;
+
+        // 圆角不是几何，单独处理
+        if (axis == 4)
+        {
+            if (int.TryParse(RadiusBox.Text?.Trim(), out var radius) && radius >= 0)
+            {
+                _cornerRadius = Math.Min(radius, 128);
+                SetSelected(CornerRadiusButton, _cornerRadius > 0);
+            }
+            UpdateSizeBadge(_selection);
+            return;
+        }
+
+        var unit = _sizeInPixels ? 1 / _scaling : 1;
+
+        // X / Y：整体平移，尺寸不变
+        if (axis is 2 or 3)
+        {
+            var text = axis == 2 ? PosXBox.Text : PosYBox.Text;
+            if (!TryParsePosition(text, out var value))
+            {
+                UpdateSizeBadge(_selection);
+                return;
+            }
+
+            var pos = value * unit;
+            var x = axis == 2
+                ? Math.Clamp(pos, 0, Math.Max(0, Width - _selection.Width))
+                : _selection.X;
+            var y = axis == 3
+                ? Math.Clamp(pos, 0, Math.Max(0, Height - _selection.Height))
+                : _selection.Y;
+            _selection = new Rect(x, y, _selection.Width, _selection.Height);
+            UpdateSelectionVisuals();
+            RebuildNotePreview();
+            return;
+        }
 
         if (!TryParseSize(WidthBox.Text, out var width) || !TryParseSize(HeightBox.Text, out var height))
         {
@@ -2602,15 +3020,13 @@ public partial class CaptureWindow : Window
         }
 
         // 输入单位跟当前显示单位一致
-        var unit = _sizeInPixels ? 1 / _scaling : 1;
         var w = width * unit;
         var h = height * unit;
 
         // 锁定比例：以最后编辑的那个框为准
-        if (_aspectLocked && _selection.Width > 0 && _selection.Height > 0)
+        var aspect = EffectiveAspect();
+        if (_aspectLocked && aspect > 0)
         {
-            var aspect = _selection.Width / _selection.Height;
-
             if (axis == 0)
                 h = w / aspect;
             else
@@ -2632,6 +3048,69 @@ public partial class CaptureWindow : Window
             NumberStyles.Float,
             CultureInfo.InvariantCulture,
             out value) && value > 0;
+
+    private static bool TryParsePosition(string? text, out double value) =>
+        double.TryParse(
+            text?.Trim(),
+            NumberStyles.Float,
+            CultureInfo.InvariantCulture,
+            out value) && value >= 0;
+
+    // ---------- 宽高比预设 ----------
+
+    private void OnRatioFreeMenu(object? sender, RoutedEventArgs e) => ApplyRatioPreset(0, "自由");
+    private void OnRatio1x1Menu(object? sender, RoutedEventArgs e) => ApplyRatioPreset(1.0, "1:1");
+    private void OnRatio3x2Menu(object? sender, RoutedEventArgs e) => ApplyRatioPreset(3.0 / 2.0, "3:2");
+    private void OnRatio4x3Menu(object? sender, RoutedEventArgs e) => ApplyRatioPreset(4.0 / 3.0, "4:3");
+    private void OnRatio16x9Menu(object? sender, RoutedEventArgs e) => ApplyRatioPreset(16.0 / 9.0, "16:9");
+    private void OnRatio2x3Menu(object? sender, RoutedEventArgs e) => ApplyRatioPreset(2.0 / 3.0, "2:3");
+    private void OnRatio3x4Menu(object? sender, RoutedEventArgs e) => ApplyRatioPreset(3.0 / 4.0, "3:4");
+    private void OnRatio9x16Menu(object? sender, RoutedEventArgs e) => ApplyRatioPreset(9.0 / 16.0, "9:16");
+
+    /// <summary>
+    /// 应用比例预设：ratio = 0 表示自由。
+    /// 选预设会顺带打开比例锁（和参考的行为一致），并把当前选区改成该比例。
+    /// </summary>
+    internal void ApplyRatioPreset(double ratio, string label)
+    {
+        _ratioPreset = ratio;
+        RatioButton.Content = label;
+
+        if (ratio <= 0)
+        {
+            UpdateSizeBadge(_selection);
+            return;
+        }
+
+        SetAspectLock(true);
+
+        if (!_hasSelection)
+            return;
+
+        // 以当前宽度为准重算高度；越界就退回高度反算宽度
+        var w = _selection.Width;
+        var h = w / ratio;
+        if (_selection.Y + h > Height)
+        {
+            h = Math.Max(8, Height - _selection.Y);
+            w = h * ratio;
+        }
+
+        w = Math.Max(8, Math.Min(w, Width - _selection.X));
+        _selection = new Rect(_selection.X, _selection.Y, w, h);
+        UpdateSelectionVisuals();
+        RebuildNotePreview();
+    }
+
+    /// <summary>开关比例锁（菜单和锁图标共用）。</summary>
+    private void SetAspectLock(bool locked)
+    {
+        _aspectLocked = locked;
+        SizeLockButton.IsChecked = locked;
+        LockOpenIcon.IsVisible = !locked;
+        LockClosedIcon.IsVisible = locked;
+        ToolTip.SetTip(SizeLockButton, locked ? "已锁定宽高比" : "锁定宽高比");
+    }
 
     internal void ToggleSizeUnit()
     {
@@ -2822,8 +3301,11 @@ public partial class CaptureWindow : Window
     /// </summary>
     private bool _compactToolbar;
 
-    /// <summary>窗口窄于这个宽度（DIP）就把低频动作收起来。图标工具条比原来的文字按钮窄得多。</summary>
-    internal static bool ShouldCompact(double width) => width > 0 && width < 720;
+    /// <summary>
+    /// 窗口窄于这个宽度（DIP）就把低频动作收起来。
+    /// 工具组折叠之后工具条实测 678 宽，加两侧各 8 的边距需要 694，阈值定在 700。
+    /// </summary>
+    internal static bool ShouldCompact(double width) => width > 0 && width < 700;
 
     /// <summary>
     /// 窄窗口把低频动作收进「更多」。
@@ -2839,8 +3321,7 @@ public partial class CaptureWindow : Window
         _compactToolbar = compact;
 
         // ✓ 是主操作，任何宽度都保留；低频动作收进「更多」
-        SaveButton.IsVisible = !compact;
-        PinButton.IsVisible = !compact;
+        SaveButton.IsVisible = !compact;        PinButton.IsVisible = !compact;
         ScrollButton.IsVisible = !compact;
         CornerRadiusButton.IsVisible = !compact;
         MoreButton.IsVisible = compact;
@@ -2853,7 +3334,8 @@ public partial class CaptureWindow : Window
 
         ApplyToolbarCompaction();
 
-        // 用户拖过工具条之后就不再自动跟随选区
+        // 手动拖开后，本次「选区不变」期间保持手动位置；
+        // 一旦选区变动（ApplyCreate/Move/Resize）就复位，重新贴回选区
         if (_toolbarManual)
             return;
 
@@ -2893,18 +3375,31 @@ public partial class CaptureWindow : Window
         double gap = 8,
         double margin = 8)
     {
-        // 锚定在选区下方并水平居中（和 LumaShot / snow-shot 的观感一致）
+        // 锚定在选区下方并水平居中
         var left = selection.Center.X - toolbar.Width / 2;
-        var top = selection.Bottom + gap;
+        var below = new Point(left, selection.Bottom + gap);
+        var above = new Point(left, selection.Y - toolbar.Height - gap);
 
-        // 下方放不下就翻到上方（snow-shot 的 bottom-first 规则）
-        if (top + toolbar.Height > bounds.Height - margin)
-            top = selection.Y - toolbar.Height - gap;
+        bool Fits(Point p) =>
+            p.X >= margin && p.Y >= margin &&
+            p.X + toolbar.Width <= bounds.Width - margin &&
+            p.Y + toolbar.Height <= bounds.Height - margin;
 
-        left = Math.Clamp(left, margin, Math.Max(margin, bounds.Width - toolbar.Width - margin));
-        top = Math.Clamp(top, margin, Math.Max(margin, bounds.Height - toolbar.Height - margin));
+        // 横向先钳制、纵向不钳制：否则「压住选区」的位置也会被判成放得下
+        var clampedX = Math.Clamp(left, margin, Math.Max(margin, bounds.Width - toolbar.Width - margin));
 
-        return new Point(left, top);
+        var belowCandidate = new Point(clampedX, below.Y);
+        if (Fits(belowCandidate))
+            return belowCandidate;
+
+        var aboveCandidate = new Point(clampedX, above.Y);
+        if (Fits(aboveCandidate))
+            return aboveCandidate;
+
+        // 上下都放不下：下方优先，整体钳制，保持确定性
+        return new Point(
+            clampedX,
+            Math.Clamp(below.Y, margin, Math.Max(margin, bounds.Height - toolbar.Height - margin)));
     }
 
     /// <summary>结果卡片：优先选区右侧，其次左侧，最后钳制到窗口内。</summary>
@@ -3413,6 +3908,22 @@ public partial class CaptureWindow : Window
             return;
         }
 
+        // I：取色；取色中 Shift+I：切换格式（HEX / RGB / HSL）
+        if (key == Key.I && _colorSampling && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        {
+            _colorFormat = (_colorFormat + 1) % 3;
+            UpdateColorProbe(_lastPointerPoint);
+            e.Handled = true;
+            return;
+        }
+
+        if (key == Key.I && e.KeyModifiers == KeyModifiers.None)
+        {
+            ToggleColorSampling();
+            e.Handled = true;
+            return;
+        }
+
         // Ctrl+Shift+Z / Ctrl+Y：重做；Ctrl+Z：撤销
         if (key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {
@@ -3499,6 +4010,13 @@ public partial class CaptureWindow : Window
 
         if (key == Key.Escape)
         {
+            if (_colorSampling)
+            {
+                ExitColorSampling();
+                e.Handled = true;
+                return;
+            }
+
             if (_isRecognizing)
             {
                 _ocrCancellation?.Cancel();
@@ -3600,13 +4118,155 @@ public partial class CaptureWindow : Window
         }
     }
 
+    // ---------- 截图内取色 ----------
+
+    /// <summary>是否处于取色模式（测试和宿主都可以查）。</summary>
+    internal bool ColorSampling => _colorSampling;
+
+    /// <summary>进入 / 退出取色模式（I 键和右键共用）。</summary>
+    internal void ToggleColorSampling()
+    {
+        if (_colorSampling)
+        {
+            ExitColorSampling();
+            return;
+        }
+
+        _colorSampling = true;
+        _colorFormat = 0;
+        Magnifier.IsVisible = false;
+        Cursor = CrossCursor;
+        UpdateColorProbe(_lastPointerPoint);
+    }
+
+    internal void ExitColorSampling()
+    {
+        _colorSampling = false;
+        ColorProbe.IsVisible = false;
+        UpdateCursor(_lastPointerPoint);
+    }
+
+    /// <summary>把光标处的颜色和坐标写进探针，并跟着光标摆位。</summary>
+    private void UpdateColorProbe(Point point)
+    {
+        if (!_colorSampling)
+        {
+            ColorProbe.IsVisible = false;
+            return;
+        }
+
+        if (SampleColorAt(point) is not { } color)
+        {
+            ColorProbe.IsVisible = false;
+            return;
+        }
+
+        ProbeSwatch.Background = new SolidColorBrush(color);
+        ProbeValue.Text = FormatColor(color, _colorFormat);
+        ProbePosition.Text = $"{point.X:0}, {point.Y:0}";
+        ColorProbe.IsVisible = true;
+
+        ColorProbe.Measure(Size.Infinity);
+        var size = ColorProbe.DesiredSize;
+        var left = Math.Max(4, Math.Min(point.X + 22, Width - size.Width - 4));
+        var top = Math.Max(4, Math.Min(point.Y + 24, Height - size.Height - 4));
+        Canvas.SetLeft(ColorProbe, left);
+        Canvas.SetTop(ColorProbe, top);
+    }
+
+    /// <summary>点一下：复制当前颜色、写回标注颜色，然后退出取色。</summary>
+    private void CommitColorSample()
+    {
+        if (SampleColorAt(_lastPointerPoint) is { } color)
+        {
+            CopyText?.Invoke(FormatColor(color, _colorFormat));
+            _noteColor = color;
+            UpdateStyleButtons();
+        }
+
+        ExitColorSampling();
+    }
+
+    /// <summary>
+    /// 从冻结帧里读一个像素。窗口是 DIP、冻结帧是物理像素，按比例换算。
+    /// 没有冻结帧（比如刚打开还没抓到）时返回 null。
+    /// </summary>
+    internal Color? SampleColorAt(Point point)
+    {
+        if (_frozenPixels is null || _frozenWidth <= 0 || _frozenHeight <= 0 ||
+            Width <= 0 || Height <= 0)
+            return null;
+
+        var x = (int)Math.Round(point.X * _frozenWidth / Width);
+        var y = (int)Math.Round(point.Y * _frozenHeight / Height);
+
+        if (x < 0 || y < 0 || x >= _frozenWidth || y >= _frozenHeight)
+            return null;
+
+        var offset = (y * _frozenWidth + x) * 4;
+        if (offset + 3 >= _frozenPixels.Length)
+            return null;
+
+        // 冻结帧是 BGRA
+        return Color.FromArgb(255, _frozenPixels[offset + 2], _frozenPixels[offset + 1],
+            _frozenPixels[offset]);
+    }
+
+    /// <summary>0 = HEX，1 = RGB，2 = HSL。</summary>
+    internal static string FormatColor(Color color, int format)
+    {
+        switch (format)
+        {
+            case 1:
+                return $"rgb({color.R}, {color.G}, {color.B})";
+            case 2:
+            {
+                var (h, s, l) = ToHsl(color);
+                return $"hsl({h:0}, {s:0}%, {l:0}%)";
+            }
+            default:
+                return $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+        }
+    }
+
+    private static (double h, double s, double l) ToHsl(Color color)
+    {
+        double r = color.R / 255.0, g = color.G / 255.0, b = color.B / 255.0;
+        var max = Math.Max(r, Math.Max(g, b));
+        var min = Math.Min(r, Math.Min(g, b));
+        var l = (max + min) / 2;
+        var d = max - min;
+
+        if (d < 1e-6)
+            return (0, 0, l * 100);
+
+        var s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+
+        double h;
+        if (max == r)
+            h = (g - b) / d + (g < b ? 6 : 0);
+        else if (max == g)
+            h = (b - r) / d + 2;
+        else
+            h = (r - g) / d + 4;
+
+        return (h * 60, s * 100, l * 100);
+    }
+
+    /// <summary>测试用：直接灌入一帧像素，避免依赖真实抓屏。</summary>
+    internal void SetFrozenPixelsForTest(byte[] pixels, int width, int height)
+    {
+        _frozenPixels = pixels;
+        _frozenWidth = width;
+        _frozenHeight = height;
+    }
+
     /// <summary>
     /// 选区读数：左上角物理坐标 + 物理像素尺寸，和最终截图一致。
     /// 默认放在选区上方；顶到屏幕边缘时放到下方。
     /// </summary>
     private void UpdateSizeBadge(Rect rect)
-    {
-        if (rect.Width < 1 || rect.Height < 1)
+    {        if (rect.Width < 1 || rect.Height < 1)
         {
             SizeBadge.IsVisible = false;
             return;
@@ -3614,25 +4274,28 @@ public partial class CaptureWindow : Window
 
         SizeBadge.IsVisible = true;
 
-        var width = (int)Math.Round(rect.Width * _scaling);
-        var height = (int)Math.Round(rect.Height * _scaling);
+        var unit = _sizeInPixels ? _scaling : 1.0;
 
         // 回填读数：拖动 / 拉伸选区时跟着刷新，但不触发提交
         _sizeEditGuard = true;
-        WidthBox.Text = _sizeInPixels ? width.ToString() : $"{rect.Width:0}";
-        HeightBox.Text = _sizeInPixels ? height.ToString() : $"{rect.Height:0}";
+        PosXBox.Text = ((int)Math.Round(rect.X * unit)).ToString();
+        PosYBox.Text = ((int)Math.Round(rect.Y * unit)).ToString();
+        WidthBox.Text = ((int)Math.Round(rect.Width * unit)).ToString();
+        HeightBox.Text = ((int)Math.Round(rect.Height * unit)).ToString();
+        RadiusBox.Text = ((int)Math.Round(_cornerRadius)).ToString();
         SizeUnitButton.Content = _sizeInPixels ? "px" : "DIP";
         _sizeEditGuard = false;
 
-        // 角标宽度随内容变化（单位文字 / 数字位数），放置前先量一次
+        // 工具条宽度随内容变化（单位文字 / 数字位数），放置前先量一次
         SizeBadge.Measure(Size.Infinity);
         var size = SizeBadge.DesiredSize;
         const double gap = 8;
 
+        // 贴在选区左上角上方；顶到屏幕边缘时放进选区内侧
         var left = Math.Max(4, Math.Min(rect.X, Width - size.Width - 4));
         var top = rect.Y - size.Height - gap;
         if (top < 4)
-            top = rect.Y + 4; // 顶到屏幕边缘时放进选区内侧，避免压住动作栏
+            top = rect.Y + 4;
         top = Math.Max(4, Math.Min(top, Height - size.Height - 4));
 
         Canvas.SetLeft(SizeBadge, left);

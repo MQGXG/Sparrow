@@ -251,7 +251,7 @@ public sealed class CaptureWindowTests
     }
 
     [AvaloniaFact]
-    public void 拖动把手_工具条改变位置且不再跟随选区()
+    public void 拖动把手_工具条改变位置_选区变动后恢复跟随()
     {
         var window = CreateWithSelection();
         var before = Canvas.GetLeft(window.ActionBar);
@@ -267,20 +267,31 @@ public sealed class CaptureWindowTests
         var moved = Canvas.GetLeft(window.ActionBar);
         moved.ShouldNotBe(before);
 
-        // 之后拖动选区，工具条保持手动位置
+        // 选区一动，工具条重新贴回选区中线（参考 resetPositionForSelection：
+        // 手动拖开只影响「内容变化」时的重排，不影响选区驱动的重新锚定）
         window.MouseDown(new Point(200, 200), MouseButton.Left);
         window.MouseMove(new Point(260, 240));
         window.MouseUp(new Point(260, 240), MouseButton.Left);
 
-        Canvas.GetLeft(window.ActionBar).ShouldBe(moved);
+        Canvas.GetLeft(window.ActionBar).ShouldNotBe(moved);
+
+        // 位置应等于「按当前选区重新锚定」的结果（窗口窄时会钳到左边缘，所以不能断言居中）
+        var selectionRect = new Rect(
+            Canvas.GetLeft(window.Selection), Canvas.GetTop(window.Selection),
+            window.Selection.Width, window.Selection.Height);
+        var expected = CaptureWindow.ComputeToolbarPosition(
+            selectionRect, window.ActionBar.Bounds.Size, new Size(window.Width, window.Height));
+        Canvas.GetLeft(window.ActionBar).ShouldBe(expected.X, 0.01);
+        Canvas.GetTop(window.ActionBar).ShouldBe(expected.Y, 0.01);
     }
 
     [AvaloniaFact]
     public void 窄窗口_低频动作收进更多菜单()
     {
-        // 阈值判断：图标工具条更窄，800 宽已经放得下
+        // 阈值判断：工具组折叠后工具条实测 678 宽，700 以下收起低频动作
         CaptureWindow.ShouldCompact(500).ShouldBeTrue();
-        CaptureWindow.ShouldCompact(800).ShouldBeFalse();
+        CaptureWindow.ShouldCompact(660).ShouldBeTrue();
+        CaptureWindow.ShouldCompact(700).ShouldBeFalse();
         CaptureWindow.ShouldCompact(1600).ShouldBeFalse();
 
         // 布局切换：收起四个低频动作，露出「更多」
@@ -338,6 +349,203 @@ public sealed class CaptureWindowTests
 
         window.Selection.Width.ShouldBe(200, 0.01);
         window.Selection.Height.ShouldBe(150, 0.01);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 选区工具条_比例预设把选区改成该比例并上锁()
+    {
+        var window = CreateWithSelection();   // 200×150
+        window.SizeInPixels = false;
+
+        window.ApplyRatioPreset(16.0 / 9.0, "16:9");
+
+        window.SizeLockButton.IsChecked.ShouldBe(true);
+        window.RatioButton.Content?.ToString().ShouldBe("16:9");
+        (window.Selection.Width / window.Selection.Height).ShouldBe(16.0 / 9.0, 0.01);
+        window.Selection.Bounds.X.ShouldBe(100, 0.01);   // 左上角不动
+
+        // 回到自由：不再约束比例
+        window.ApplyRatioPreset(0, "自由");
+        window.RatioButton.Content?.ToString().ShouldBe("自由");
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 选区工具条_X坐标把选区整体平移_尺寸不变()
+    {
+        var window = CreateWithSelection();   // 100,100 200×150
+        window.SizeInPixels = false;
+
+        window.PosXBox.Text = "300";
+        window.CommitSizeEdit(2);
+
+        Canvas.GetLeft(window.Selection).ShouldBe(300, 0.01);
+        Canvas.GetTop(window.Selection).ShouldBe(100, 0.01);
+        window.Selection.Width.ShouldBe(200, 0.01);
+        window.Selection.Height.ShouldBe(150, 0.01);
+
+        window.PosYBox.Text = "120";
+        window.CommitSizeEdit(3);
+
+        Canvas.GetTop(window.Selection).ShouldBe(120, 0.01);
+        window.Selection.Width.ShouldBe(200, 0.01);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 选区工具条_圆角输入写回导出圆角()
+    {
+        var window = CreateWithSelection();
+
+        window.RadiusBox.Text = "16";
+        window.CommitSizeEdit(4);
+
+        window.ExportCornerRadius.ShouldBe(16, 0.01);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 画着标注工具时_按边框先拉选区_松手恢复工具()
+    {
+        var window = CreateWithSelection();   // 100,100 200×150
+        window.RectToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.RectToolButton.Classes.Contains("selected").ShouldBeTrue();
+
+        // 按在左边框上往左拖：应该拉伸选区，而不是画矩形
+        window.MouseDown(new Point(100, 180), MouseButton.Left);
+        window.MouseMove(new Point(60, 180));
+        window.MouseUp(new Point(60, 180), MouseButton.Left);
+
+        window.Selection.Width.ShouldBe(240, 1);
+        window.Notes.Count.ShouldBe(0);                              // 没有误画
+        window.RectToolButton.Classes.Contains("selected").ShouldBeTrue();   // 工具恢复
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 比例锁住时_拖右边保持比例()
+    {
+        var window = CreateWithSelection();   // 200×150 = 4:3
+        window.SizeLockButton.IsChecked = true;
+        window.SizeLockButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        window.MouseDown(new Point(300, 175), MouseButton.Left);
+        window.MouseMove(new Point(400, 175));
+        window.MouseUp(new Point(400, 175), MouseButton.Left);
+
+        var rect = window.Selection.Bounds;
+        rect.Width.ShouldBeGreaterThan(200);
+        (rect.Width / rect.Height).ShouldBe(4.0 / 3.0, 0.02);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 工具组_点折叠按钮激活入口工具()
+    {
+        var window = CreateWithSelection();
+
+        window.ShapeGroupButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        window.RectToolButton.Classes.Contains("selected").ShouldBeTrue();    // 入口 = 矩形
+        window.ShapeGroupButton.Classes.Contains("selected").ShouldBeTrue();
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 工具组_悬停弹出选项条_点选项切换入口()
+    {
+        var window = CreateWithSelection();
+
+        var origin = window.ShapeGroupButton.TranslatePoint(new Point(0, 0), window)!.Value;
+        window.MouseMove(new Point(origin.X + 16, origin.Y + 16));
+
+        window.ToolGroupPopover.IsVisible.ShouldBeTrue();
+        window.ToolGroupOptions.Children.Count.ShouldBe(2);
+
+        // 反序排：第一个是入口（矩形），第二个是椭圆
+        var ellipseOption = (Button)window.ToolGroupOptions.Children[1];
+        ellipseOption.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        window.EllipseToolButton.Classes.Contains("selected").ShouldBeTrue();
+        window.RectToolButton.Classes.Contains("selected").ShouldBeFalse();
+        window.ToolGroupPopover.IsVisible.ShouldBeFalse();
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 工具组_键盘选中组内工具时折叠按钮跟着换图标()
+    {
+        var window = CreateWithSelection();
+
+        // 3 = 椭圆，属于形状组
+        window.KeyPress(Key.D3, RawInputModifiers.None, PhysicalKey.Digit3, null);
+        window.EllipseToolButton.Classes.Contains("selected").ShouldBeTrue();
+        window.ShapeGroupButton.Classes.Contains("selected").ShouldBeTrue();
+
+        // 折叠按钮的图标跟着换成椭圆
+        ReferenceEquals(window.ShapeGroupIcon.Data, window.FindResource("ToolEllipse"))
+            .ShouldBeTrue();
+
+        // 点折叠按钮 = 激活入口（椭圆），不是取消
+        window.ShapeGroupButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.EllipseToolButton.Classes.Contains("selected").ShouldBeTrue();
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 取色_从冻结帧读到像素颜色_并支持三种格式()
+    {
+        var window = new CaptureWindow();
+        window.Width = 4;
+        window.Height = 4;
+
+        var pixels = new byte[4 * 4 * 4];
+        void Set(int x, int y, byte r, byte g, byte b)
+        {
+            var i = (y * 4 + x) * 4;   // BGRA
+            pixels[i] = b;
+            pixels[i + 1] = g;
+            pixels[i + 2] = r;
+            pixels[i + 3] = 255;
+        }
+
+        Set(1, 1, 0xE5, 0xA4, 0x4C);
+        window.SetFrozenPixelsForTest(pixels, 4, 4);
+
+        var color = window.SampleColorAt(new Point(1, 1));
+        color.ShouldNotBeNull();
+        color!.Value.R.ShouldBe((byte)0xE5);
+        color.Value.G.ShouldBe((byte)0xA4);
+        color.Value.B.ShouldBe((byte)0x4C);
+
+        CaptureWindow.FormatColor(color.Value, 0).ShouldBe("#E5A44C");
+        CaptureWindow.FormatColor(color.Value, 1).ShouldBe("rgb(229, 164, 76)");
+        CaptureWindow.FormatColor(color.Value, 2).ShouldStartWith("hsl(");
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 取色_按I进入_Esc退出()
+    {
+        var window = CreateWithSelection();
+
+        window.ColorSampling.ShouldBeFalse();
+        window.KeyPress(Key.I, RawInputModifiers.None, PhysicalKey.I, null);
+        window.ColorSampling.ShouldBeTrue();
+
+        window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
+        window.ColorSampling.ShouldBeFalse();
 
         window.Close();
     }
