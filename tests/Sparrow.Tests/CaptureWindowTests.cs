@@ -335,6 +335,91 @@ public sealed class CaptureWindowTests
     }
 
     [AvaloniaFact]
+    public void 框选按住Shift得到正方形()
+    {
+        var window = new CaptureWindow();
+        window.Show();
+        window.Width = 800;
+        window.Height = 600;
+
+        window.MouseDown(new Point(100, 100), MouseButton.Left);
+        window.MouseMove(new Point(300, 220), RawInputModifiers.Shift);
+        window.MouseUp(new Point(300, 220), MouseButton.Left);
+
+        window.Selection.Bounds.Width.ShouldBe(window.Selection.Bounds.Height, 0.01);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void Esc_取消正在画的标注_不关窗口()
+    {
+        var window = CreateWithSelection();
+        window.RectToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        window.MouseDown(new Point(150, 150), MouseButton.Left);
+        window.MouseMove(new Point(250, 220));
+        window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
+        window.MouseUp(new Point(250, 220), MouseButton.Left);
+
+        window.IsVisible.ShouldBeTrue();
+        window.Notes.ShouldBeEmpty();
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 方向键微调选区_Shift按10像素()
+    {
+        var window = CreateWithSelection();
+        var origin = window.Selection.Bounds.X;
+
+        window.KeyPress(Key.Right, RawInputModifiers.None, PhysicalKey.ArrowRight, null);
+        window.Selection.Bounds.X.ShouldBe(origin + 1, 0.01);
+
+        window.KeyPress(Key.Left, RawInputModifiers.Shift, PhysicalKey.ArrowLeft, null);
+        window.Selection.Bounds.X.ShouldBe(origin - 9, 0.01);
+
+        window.KeyPress(Key.Z, RawInputModifiers.Control, PhysicalKey.Z, null);
+        window.Selection.Bounds.X.ShouldBe(origin + 1, 0.01);
+
+        window.KeyPress(Key.Z, RawInputModifiers.Control, PhysicalKey.Z, null);
+        window.Selection.Bounds.X.ShouldBe(origin, 0.01);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 导出圆角会同步到选区预览()
+    {
+        var window = CreateWithSelection();
+
+        window.CornerRadiusButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        window.ExportCornerRadius.ShouldBe(10);
+        window.Selection.RadiusX.ShouldBe(10, 0.01);
+        window.Selection.RadiusY.ShouldBe(10, 0.01);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 二级压缩会把翻译也收起来()
+    {
+        var window = new CaptureWindow();
+        window.ConfigureTranslateTargets([("中文", "中文")]);
+        window.TranslateButton.IsVisible.ShouldBeTrue();
+
+        window.SetToolbarDensity(2);
+        window.SaveButton.IsVisible.ShouldBeFalse();
+        window.MoreButton.IsVisible.ShouldBeTrue();
+        window.TranslateButton.IsVisible.ShouldBeFalse();
+
+        window.SetToolbarDensity(1);
+        window.TranslateButton.IsVisible.ShouldBeTrue();
+    }
+
+    [AvaloniaFact]
     public void 窄窗口_低频动作收进更多菜单()
     {        // 阈值判断：工具组折叠后工具条实测 678 宽，700 以下收起低频动作
         CaptureWindow.ShouldCompact(500).ShouldBeTrue();

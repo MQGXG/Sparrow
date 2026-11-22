@@ -114,6 +114,7 @@ public partial class CaptureWindow : Window
     private Rect _selectionOrigin;
     private Point _dragOrigin;
     private Point _createStart;
+    private bool _createConstrained;
     private DragMode _mode;
     private ResizeHandle _resizeHandle;
     private bool _hasSelection;
@@ -135,6 +136,7 @@ public partial class CaptureWindow : Window
     private int _draggingNote = -1;
     private Point _noteDragStart;
     private IAnnotation? _noteDragOriginal;
+    private bool _noteDragMoved;
 
     /// <summary>移动/拉伸选区前的标注快照；每帧从快照平移，避免累积误差。</summary>
     private List<IAnnotation>? _notesBeforeDrag;
@@ -245,7 +247,12 @@ public partial class CaptureWindow : Window
     public double ExportCornerRadius
     {
         get => _cornerRadius;
-        set => _cornerRadius = Math.Max(0, value);
+        set
+        {
+            _cornerRadius = Math.Max(0, value);
+            if (_hasSelection)
+                UpdateSelectionVisuals();
+        }
     }
 
     /// <summary>标注样式（颜色/粗细/马赛克模式），由宿主读写持久化。</summary>
@@ -377,8 +384,9 @@ public partial class CaptureWindow : Window
     {
         if (TranslateButton.Flyout is not MenuFlyout menu)
         {
+            _translateAvailable = false;
             TranslateButton.IsVisible = false;
-            _fullMainBarWidth = double.NaN;
+            InvalidateToolbarMetrics();
             return;
         }
 
@@ -391,8 +399,9 @@ public partial class CaptureWindow : Window
             menu.Items.Add(item);
         }
 
-        TranslateButton.IsVisible = menu.Items.Count > 0;
-        _fullMainBarWidth = double.NaN;
+        _translateAvailable = menu.Items.Count > 0;
+        TranslateButton.IsVisible = _translateAvailable && _toolbarDensity < 2;
+        InvalidateToolbarMetrics();
     }
 
     /// <summary>宿主注入的复制实现。窗口不直接碰剪贴板。</summary>
@@ -728,7 +737,7 @@ public partial class CaptureWindow : Window
                 _draggingNote = hit;
                 _noteDragOriginal = _notes.Items[hit];
                 _noteDragStart = new Point(point.X - _selection.X, point.Y - _selection.Y);
-                MarkNoteMutation();
+                _noteDragMoved = false;
                 _mode = DragMode.NoteEdit;
                 Cursor = MoveCursor;
                 e.Handled = true;
@@ -859,7 +868,10 @@ public partial class CaptureWindow : Window
         switch (_mode)
         {
             case DragMode.Create:
-                ApplyCreate(point);
+                if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+                    _createConstrained = true;
+
+                ApplyCreate(point, _createConstrained);
                 UpdateMagnifier(point);
                 e.Handled = true;
                 return;
@@ -929,6 +941,7 @@ public partial class CaptureWindow : Window
             _mode = DragMode.None;
             _draggingNote = -1;
             _noteDragOriginal = null;
+            _noteDragMoved = false;
             RebuildNotePreview();
             e.Handled = true;
             return;
@@ -948,7 +961,9 @@ public partial class CaptureWindow : Window
 
         if (mode == DragMode.Create)
         {
-            ApplyCreate(e.GetPosition(this));
+            ApplyCreate(
+                e.GetPosition(this),
+                _createConstrained || e.KeyModifiers.HasFlag(KeyModifiers.Shift));
 
             if (_selection.Width < MinSelectionSize || _selection.Height < MinSelectionSize)
             {
@@ -1001,6 +1016,7 @@ public partial class CaptureWindow : Window
         _hasSelection = false;
         _mode = DragMode.Create;
         _createStart = point;
+        _createConstrained = false;
         _selection = new Rect(point, new Size());
         _selectionOrigin = _selection;
         ClearGuides();
@@ -1014,6 +1030,8 @@ public partial class CaptureWindow : Window
         HandleLayer.IsVisible = false;
         OcrStatus.IsVisible = false;
         CopyAllButton.IsVisible = false;
+        OcrBoxButton.IsVisible = false;
+        _ocrActionsAvailable = false;
         HintBar.IsVisible = false;
         HideResultCard();
         _notes.Clear();
@@ -1040,7 +1058,7 @@ public partial class CaptureWindow : Window
         Cursor = CrossCursor;
     }
 
-    private void ApplyCreate(Point current)
+    private void ApplyCreate(Point current, bool constrain = false)
     {
         _toolbarManual = false;
 
@@ -1049,11 +1067,15 @@ public partial class CaptureWindow : Window
         var width = Math.Abs(current.X - _createStart.X);
         var height = Math.Abs(current.Y - _createStart.Y);
 
-        // 比例锁：以按下点为固定角，按宽度驱动高度
-        var aspect = EffectiveAspect();
-        if (_aspectLocked && aspect > 0)
+        // Shift = 正方形（已锁比例时沿用比例）；否则只有锁定比例才约束
+        var aspect = constrain
+            ? (_aspectLocked && EffectiveAspect() > 0 ? EffectiveAspect() : 1)
+            : (_aspectLocked ? EffectiveAspect() : 0);
+
+        if (aspect > 0)
         {
-            width = Math.Max(width, MinSelectionSize);
+            var size = constrain ? Math.Max(width, height) : width;
+            width = Math.Max(size, MinSelectionSize);
             height = width / aspect;
 
             var growsLeft = current.X < _createStart.X;
@@ -1076,6 +1098,19 @@ public partial class CaptureWindow : Window
                 y = 0;
                 width = height * aspect;
                 if (growsLeft) x = _createStart.X - width;
+            }
+
+            if (x + width > Width)
+            {
+                width = Math.Max(MinSelectionSize, Width - x);
+                height = width / aspect;
+            }
+
+            if (y + height > Height)
+            {
+                height = Math.Max(MinSelectionSize, Height - y);
+                width = height * aspect;
+                if (growsLeft) x = Math.Max(0, _createStart.X - width);
             }
         }
 
@@ -1353,6 +1388,44 @@ public partial class CaptureWindow : Window
         }
     }
 
+    /// <summary>方向键微调：选区和标注一起反向平移，保持屏幕位置，并进撤销栈。</summary>
+    private void NudgeSelection(double dx, double dy)
+    {
+        if (!_hasSelection)
+            return;
+
+        var left = Math.Clamp(_selection.X + dx, 0, Math.Max(0, Width - _selection.Width));
+        var top = Math.Clamp(_selection.Y + dy, 0, Math.Max(0, Height - _selection.Height));
+        var moveX = left - _selection.X;
+        var moveY = top - _selection.Y;
+
+        if (Math.Abs(moveX) < 0.01 && Math.Abs(moveY) < 0.01)
+            return;
+
+        _selectionUndo.Push(new SelectionSnapshot(_selection, _notes.Items.ToList()));
+        _selectionRedo.Clear();
+
+        _selection = new Rect(left, top, _selection.Width, _selection.Height);
+        _selectionOrigin = _selection;
+        TranslateNotesCurrent(-moveX, -moveY);
+
+        UpdateSelectionVisuals();
+        UpdateHandles();
+        UpdateSizeBadge(_selection);
+        PositionActionBar(_selection);
+        UpdateToolButtons();
+    }
+
+    /// <summary>直接平移当前标注（方向键微调用，不需要拖动快照）。</summary>
+    private void TranslateNotesCurrent(double dx, double dy)
+    {
+        if (Math.Abs(dx) < 0.01 && Math.Abs(dy) < 0.01)
+            return;
+
+        _notes.SetItems(_notes.Items.Select(note => TranslateNote(note, dx, dy)).ToList());
+        RebuildNotePreview();
+    }
+
     private void ApplyMove(Point current)
     {
         // 选区一动就恢复「工具条跟随」，对齐参考的 resetPositionForSelection 语义
@@ -1475,9 +1548,14 @@ public partial class CaptureWindow : Window
     private void UpdateSelectionVisuals()
     {
         var visible = _selection.Width > 0 && _selection.Height > 0;
+        var radius = SelectionRadius();
 
         Selection.IsVisible = visible;
         SelectionHalo.IsVisible = visible;
+        Selection.RadiusX = radius;
+        Selection.RadiusY = radius;
+        SelectionHalo.RadiusX = radius > 0 ? radius + 1 : 0;
+        SelectionHalo.RadiusY = radius > 0 ? radius + 1 : 0;
 
         Canvas.SetLeft(Selection, _selection.X);
         Canvas.SetTop(Selection, _selection.Y);
@@ -1524,8 +1602,18 @@ public partial class CaptureWindow : Window
         DimLayer.Data = new CombinedGeometry(
             GeometryCombineMode.Exclude,
             new RectangleGeometry(bounds),
-            new RectangleGeometry(hole.Value));
+            new RectangleGeometry(hole.Value)
+            {
+                RadiusX = hole is { } h && h == _selection ? SelectionRadius() : 0,
+                RadiusY = hole is { } r && r == _selection ? SelectionRadius() : 0
+            });
     }
+
+    /// <summary>选区预览半径：不超过短边的一半。</summary>
+    private double SelectionRadius() =>
+        _cornerRadius <= 0
+            ? 0
+            : Math.Min(_cornerRadius, Math.Min(_selection.Width, _selection.Height) / 2);
 
     /// <summary>光标十字线：还没框选时帮助对齐（参考 snow-shot 的实时参考线）。</summary>
     private void UpdateCrosshair(Point point)
@@ -1768,6 +1856,69 @@ public partial class CaptureWindow : Window
     }
 
     /// <summary>
+    /// Esc / 右键用于取消“进行中的操作”：拖选区、拖标注、画一半、橡皮擦、拖工具条。
+    /// 返回 true 表示这次按键/右键已经被取消动作消费。
+    /// </summary>
+    private bool CancelActiveDrag()
+    {
+        var active = _pendingAnnotation is not null
+                     || _mode != DragMode.None
+                     || _erasing
+                     || _draggingToolbar;
+
+        if (!active)
+            return false;
+
+        _draggingToolbar = false;
+        _erasing = false;
+
+        if (_mode == DragMode.Create)
+        {
+            _mode = DragMode.None;
+            _pendingAnnotation = null;
+            _penPoints = null;
+            ResetSelection();
+            return true;
+        }
+
+        if (_mode is DragMode.Move or DragMode.Resize)
+        {
+            _selection = _selectionOrigin;
+            if (_notesBeforeDrag is { } notes)
+                _notes.SetItems(notes);
+        }
+        else if (_mode == DragMode.NoteEdit
+                 && _draggingNote >= 0
+                 && _noteDragOriginal is not null)
+        {
+            _notes.Replace(_draggingNote, _noteDragOriginal);
+        }
+
+        _mode = DragMode.None;
+        _draggingNote = -1;
+        _noteDragOriginal = null;
+        _notesBeforeDrag = null;
+        _pendingAnnotation = null;
+        _penPoints = null;
+        _noteDragMoved = false;
+        HideTextEditor();
+        Magnifier.IsVisible = false;
+        ClearGuides();
+
+        if (_hasSelection)
+        {
+            UpdateSelectionVisuals();
+            UpdateHandles();
+            UpdateSizeBadge(_selection);
+            PositionActionBar(_selection);
+        }
+
+        RebuildNotePreview();
+        UpdateToolButtons();
+        return true;
+    }
+
+    /// <summary>
     /// 右键逐级后退，和参考工具的肌肉记忆一致：
     /// 拾色器 / 标注工具 → 指针；有选区 → 清空重选；什么都没有 → 取消截图。
     /// </summary>
@@ -1792,6 +1943,10 @@ public partial class CaptureWindow : Window
             CustomColorPanel.IsVisible = false;
             return;
         }
+
+        // 正在拖选区/拖标注/画一半：右键先取消这次操作
+        if (CancelActiveDrag())
+            return;
 
         if (_tool != AnnotationTool.None)
         {
@@ -2230,6 +2385,9 @@ public partial class CaptureWindow : Window
     {
         _cornerRadius = _cornerRadius > 0 ? 0 : 10;
         UpdateStyleButtons();
+
+        if (_hasSelection)
+            UpdateSelectionVisuals();
     }
 
     private void UpdateStyleButtons()
@@ -2392,6 +2550,12 @@ public partial class CaptureWindow : Window
         // 鼠标点换算成选区相对坐标，位移直接加在原始图元上
         var dx = point.X - _selection.X - _noteDragStart.X;
         var dy = point.Y - _selection.Y - _noteDragStart.Y;
+
+        if (!_noteDragMoved && (Math.Abs(dx) > 0.01 || Math.Abs(dy) > 0.01))
+        {
+            _noteDragMoved = true;
+            MarkNoteMutation();
+        }
 
         _notes.Replace(_draggingNote, TranslateNote(_noteDragOriginal, dx, dy));
         RebuildNotePreview();
@@ -3154,7 +3318,7 @@ public partial class CaptureWindow : Window
 
     private void UpdateToolButtons()
     {
-        _fullMainBarWidth = double.NaN;
+        InvalidateToolbarMetrics();
         SetSelected(SelectToolButton, _tool == AnnotationTool.None);
         SetSelected(RectToolButton, _tool == AnnotationTool.Rectangle);
         SetSelected(EllipseToolButton, _tool == AnnotationTool.Ellipse);
@@ -4424,6 +4588,8 @@ public partial class CaptureWindow : Window
             if (int.TryParse(RadiusBox.Text?.Trim(), out var radius) && radius >= 0)
             {
                 _cornerRadius = Math.Min(radius, 128);
+                if (_hasSelection)
+                    UpdateSelectionVisuals();
                 SetSelected(CornerRadiusButton, _cornerRadius > 0);
             }
             UpdateSizeBadge(_selection);
@@ -4593,6 +4759,9 @@ public partial class CaptureWindow : Window
         _mosaicBlur = preset.MosaicBlur;
         _cornerRadius = preset.CornerRadius;
         UpdateStyleButtons();
+
+        if (_hasSelection)
+            UpdateSelectionVisuals();
     }
 
     internal void ClearPreset(int index)
@@ -4750,8 +4919,18 @@ public partial class CaptureWindow : Window
     /// </summary>
     private bool _compactToolbar;
 
+    /// <summary>0 = 完整，1 = 低频动作进更多，2 = 连 OCR/翻译动作也收起。</summary>
+    private int _toolbarDensity;
+
+    private bool _densityApplied;
+    private bool _ocrActionsAvailable;
+    private bool _translateAvailable;
+
     /// <summary>完整动作状态下的主条宽度；按钮可见性变化时置 NaN 重测。</summary>
     private double _fullMainBarWidth = double.NaN;
+
+    /// <summary>一级压缩后的主条宽度（OCR/翻译仍在条上）。</summary>
+    private double _compactMainBarWidth = double.NaN;
 
     /// <summary>
     /// 窗口窄于这个宽度（DIP）就把低频动作收起来。
@@ -4767,31 +4946,66 @@ public partial class CaptureWindow : Window
     {
         var available = ToolbarAvailableWidth;
 
-        // 完整动作宽度只在按钮可见性变化时重测，避免拖动选区时每帧切换可见性
+        // 完整/一级压缩宽度只在按钮可见性变化时重测，避免拖动选区时每帧切换可见性
         if (double.IsNaN(_fullMainBarWidth))
         {
-            SetToolbarCompaction(false);
+            SetToolbarDensity(0);
             MainBar.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             _fullMainBarWidth = MainBar.DesiredSize.Width;
+
+            SetToolbarDensity(1);
+            MainBar.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            _compactMainBarWidth = MainBar.DesiredSize.Width;
         }
 
-        var wasCompact = _compactToolbar;
-        SetToolbarCompaction(
-            _fullMainBarWidth > available || (wasCompact && _fullMainBarWidth > available - 24));
+        var level = _fullMainBarWidth <= available
+            ? 0
+            : _compactMainBarWidth <= available
+                ? 1
+                : 2;
+
+        SetToolbarDensity(level);
     }
 
-    internal void SetToolbarCompaction(bool compact)
+    internal void SetToolbarCompaction(bool compact) => SetToolbarDensity(compact ? 1 : 0);
+
+    internal void SetToolbarDensity(int level)
     {
-        if (compact == _compactToolbar)
+        level = Math.Clamp(level, 0, 2);
+
+        if (level == _toolbarDensity && _densityApplied)
             return;
 
-        _compactToolbar = compact;
+        _toolbarDensity = level;
+        _compactToolbar = level > 0;
+        _densityApplied = true;
+        ApplyDensityVisibility();
+    }
+
+    private void ApplyDensityVisibility()
+    {
+        var compact = _toolbarDensity > 0;
 
         // ✓ 是主操作，任何宽度都保留；低频动作收进「更多」
-        SaveButton.IsVisible = !compact;        PinButton.IsVisible = !compact;
+        SaveButton.IsVisible = !compact;
+        PinButton.IsVisible = !compact;
         ScrollButton.IsVisible = !compact;
         CornerRadiusButton.IsVisible = !compact;
         MoreButton.IsVisible = compact;
+
+        // 二级压缩：OCR / 翻译相关动作和状态文字也让位，避免窄窗口继续溢出
+        TranslateButton.IsVisible = _translateAvailable && _toolbarDensity < 2;
+        CopyAllButton.IsVisible = _ocrActionsAvailable && _toolbarDensity < 2;
+        OcrBoxButton.IsVisible = _ocrActionsAvailable && _toolbarDensity < 2;
+
+        if (_toolbarDensity >= 2)
+            OcrStatus.IsVisible = false;
+    }
+
+    private void InvalidateToolbarMetrics()
+    {
+        _fullMainBarWidth = double.NaN;
+        _compactMainBarWidth = double.NaN;
     }
 
     private void PositionActionBar(Rect selection)
@@ -5271,10 +5485,10 @@ public partial class CaptureWindow : Window
         }
 
         ToolTip.SetTip(RecognizeButton, "重新识别选区文字（Enter / R）");
-        CopyAllButton.IsVisible = true;
-        OcrBoxButton.IsVisible = true;
+        _ocrActionsAvailable = true;
         OcrStatus.IsVisible = true;
-        _fullMainBarWidth = double.NaN;
+        InvalidateToolbarMetrics();
+        ApplyDensityVisibility();
         ApplyOcrBoxMode();
     }
 
@@ -5290,10 +5504,11 @@ public partial class CaptureWindow : Window
         _ocrBoxes.Clear();
         _hoveredOcrBox = null;
         OcrLayer.IsVisible = false;
+        _ocrActionsAvailable = false;
         CopyAllButton.IsVisible = false;
         OcrBoxButton.IsVisible = false;
         OcrStatus.IsVisible = false;
-        _fullMainBarWidth = double.NaN;
+        InvalidateToolbarMetrics();
         ToolTip.SetTip(RecognizeButton, "识别选区文字（Enter / R）");
         HideResultCard();        _ocrText = null;
         UpdateHandles();
@@ -5313,7 +5528,9 @@ public partial class CaptureWindow : Window
     {
         // 图标按钮：状态只体现在 tooltip 和行框可见性上
         ToolTip.SetTip(OcrBoxButton, $"识别框：{OcrBoxModes.Label(_ocrBoxMode)}（B）");
-        OcrBoxButton.IsVisible = OcrLayer.IsVisible;
+        OcrBoxButton.IsVisible = _ocrActionsAvailable
+            && _toolbarDensity < 2
+            && OcrLayer.IsVisible;
         OcrLayer.IsHitTestVisible = _ocrBoxMode != OcrBoxMode.Off;
         _hoveredOcrBox = null;
 
@@ -5464,6 +5681,30 @@ public partial class CaptureWindow : Window
             return;
         }
 
+        // 方向键微调选区：1px；Shift + 方向键 10px
+        if (_hasSelection
+            && e.KeyModifiers is KeyModifiers.None or KeyModifiers.Shift
+            && key is Key.Left or Key.Right or Key.Up or Key.Down)
+        {
+            var step = e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? 10 : 1;
+            var dx = key switch
+            {
+                Key.Left => -step,
+                Key.Right => step,
+                _ => 0
+            };
+            var dy = key switch
+            {
+                Key.Up => -step,
+                Key.Down => step,
+                _ => 0
+            };
+
+            NudgeSelection(dx, dy);
+            e.Handled = true;
+            return;
+        }
+
         // I：取色；取色中 Shift+I：切换格式（HEX / RGB / HSL）
         if (key == Key.I && _colorSampling && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {
@@ -5592,6 +5833,13 @@ public partial class CaptureWindow : Window
             if (_angleDraft.IsActive || _anglePhase != AnglePhase.None)
             {
                 CancelAngleDraft();
+                e.Handled = true;
+                return;
+            }
+
+            // 正在拖选区/拖标注/画一半：先取消这次操作，不关窗口
+            if (CancelActiveDrag())
+            {
                 e.Handled = true;
                 return;
             }

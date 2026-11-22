@@ -423,6 +423,28 @@ public sealed class AnnotationTests
     }
 
     [AvaloniaFact]
+    public void 点选标注不清掉选区移动的撤销()
+    {
+        var window = CreateWithRectangle();
+
+        window.MouseDown(new Point(180, 180), MouseButton.Left);
+        window.MouseMove(new Point(230, 210));
+        window.MouseUp(new Point(230, 210), MouseButton.Left);
+        window.Selection.Bounds.X.ShouldBe(150, 0.01);
+
+        // 只是点一下标注（不拖动），不应该清掉选区移动的撤销
+        window.MouseDown(new Point(150, 185), MouseButton.Left);
+        window.MouseUp(new Point(150, 185), MouseButton.Left);
+
+        window.KeyPress(Key.Z, RawInputModifiers.Control, PhysicalKey.Z, null);
+
+        window.Selection.Bounds.X.ShouldBe(100, 0.01);
+        window.Notes.Count.ShouldBe(1);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void 移动选区_可以撤销和重做()
     {
         var window = CreateWithRectangle();
