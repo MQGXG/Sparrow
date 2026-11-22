@@ -11,6 +11,7 @@ public enum AnnotationTool
     Arrow,
     Line,
     Eraser,
+    Spotlight,
     Pen,
     Highlighter,
     Mosaic,
@@ -66,6 +67,13 @@ public sealed record LineAnnotation(
     double Width,
     double Opacity = 1,
     LineDash Dash = LineDash.Solid) : IAnnotation;
+
+/// <summary>聚光灯：整幅压暗，只在 Rect 处挖洞。Opacity 是“暗度”。</summary>
+public sealed record SpotlightAnnotation(
+    Rect Rect,
+    uint Color,
+    double Opacity = 0.55,
+    bool Ellipse = true) : IAnnotation;
 
 public sealed record PenAnnotation(
     IReadOnlyList<Point> Points,

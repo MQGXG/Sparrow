@@ -16,6 +16,7 @@
     <StreamGeometry x:Key="ToolArrow">M5 19 19 5 M11.5 5H19v7.5</StreamGeometry>
     <StreamGeometry x:Key="ToolLine">M5 19 19 5</StreamGeometry>
     <StreamGeometry x:Key="ToolEraser">M6 17.5 12.5 11 18.5 17 12 23.5z M6 17.5h12.5 M12.5 11 15 8.5a1.6 1.6 0 0 1 2.3 0l1.2 1.2a1.6 1.6 0 0 1 0 2.3L18.5 17</StreamGeometry>
+    <StreamGeometry x:Key="ToolSpotlight">M12 8a4 4 0 1 0 .01 0 M12 1v2 M12 21v2 M1 12h2 M21 12h2 M4.2 4.2l1.4 1.4 M18.4 18.4l1.4 1.4 M19.8 4.2l-1.4 1.4 M5.6 18.4l-1.4 1.4</StreamGeometry>
     <StreamGeometry x:Key="ToolPen">M4 20l4.5-1L19 8.5 15.5 5 5 15.5z M13 7.5l3.5 3.5</StreamGeometry>
     <StreamGeometry x:Key="ToolHighlighter">M4 20h6 M14.5 4.5l5 5-8.5 8.5-4-4z</StreamGeometry>
     <StreamGeometry x:Key="ToolMosaic">M4 4h16v16H4z M4 9.3h16 M4 14.7h16 M9.3 4v16 M14.7 4v16</StreamGeometry>
@@ -735,6 +736,10 @@
           <Button Focusable="False" x:Name="EraserToolButton" Classes="tool"
                   ToolTip.Tip="橡皮擦（E）" Click="OnEraserToolClick">
             <Path Data="{StaticResource ToolEraser}" StrokeThickness="1.125" />
+          </Button>
+          <Button Focusable="False" x:Name="SpotlightToolButton" Classes="tool"
+                  ToolTip.Tip="聚光灯（K）" Click="OnSpotlightToolClick">
+            <Path Data="{StaticResource ToolSpotlight}" StrokeThickness="1.65" />
           </Button>
 
           <Button Focusable="False" x:Name="TextGroupButton" Classes="tool group-trigger"

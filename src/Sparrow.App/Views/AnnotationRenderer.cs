@@ -59,6 +59,10 @@ internal static class AnnotationRenderer
                 DrawStraightLine(canvas, line, paint);
                 break;
 
+            case SpotlightAnnotation spotlight:
+                DrawSpotlight(canvas, spotlight);
+                break;
+
             case PenAnnotation pen:
                 if (pen.Points.Count < 2)
                     break;
@@ -153,6 +157,35 @@ internal static class AnnotationRenderer
             canvas.DrawRect(rect, paint);
 
         paint.PathEffect = null;
+    }
+
+    /// <summary>聚光灯：用一个巨大的外框 + 内洞组成 EvenOdd 路径，一次填充完成压暗。</summary>
+    private static void DrawSpotlight(SKCanvas canvas, SpotlightAnnotation spotlight)
+    {
+        var rect = new SKRect(
+            (float)spotlight.Rect.X,
+            (float)spotlight.Rect.Y,
+            (float)spotlight.Rect.Right,
+            (float)spotlight.Rect.Bottom);
+
+        if (rect.Width <= 0 || rect.Height <= 0)
+            return;
+
+        using var path = new SKPath { FillType = SKPathFillType.EvenOdd };
+        path.AddRect(new SKRect(-10000, -10000, 10000, 10000));
+        if (spotlight.Ellipse)
+            path.AddOval(rect);
+        else
+            path.AddRect(rect);
+
+        using var paint = new SKPaint
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill,
+            Color = WithOpacity(spotlight.Color, spotlight.Opacity)
+        };
+
+        canvas.DrawPath(path, paint);
     }
 
     private static void DrawStraightLine(SKCanvas canvas, LineAnnotation line, SKPaint paint)

@@ -64,6 +64,23 @@ public sealed class AnnotationTests
     }
 
     [Fact]
+    public void 合成_聚光灯只压暗区域外()
+    {
+        var png = CreateWhitePng(100, 100);
+        var spotlight = new SpotlightAnnotation(
+            new Rect(30, 30, 40, 40), 0xFF000000, 1, Ellipse: true);
+
+        var composed = AnnotationRenderer.Compose(png, [spotlight], scale: 1);
+
+        using var decoded = SKBitmap.Decode(composed);
+
+        // 洞外被压暗
+        ((int)decoded.GetPixel(5, 5).Red).ShouldBeLessThan(50);
+        // 洞里保持原样
+        ((int)decoded.GetPixel(50, 50).Red).ShouldBeGreaterThan(200);
+    }
+
+    [Fact]
     public void 合成_直线只画线身_没有箭头()
     {
         var png = CreateWhitePng(100, 100);

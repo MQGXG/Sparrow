@@ -191,6 +191,9 @@ public partial class CaptureWindow : Window
     /// <summary>橡皮擦正在拖动擦除。</summary>
     private bool _erasing;
 
+    /// <summary>聚光灯的暗度（0..1），和标注透明度分开存。</summary>
+    private double _spotlightOpacity = 0.55;
+
     public double ExportCornerRadius
     {
         get => _cornerRadius;
@@ -1663,6 +1666,8 @@ public partial class CaptureWindow : Window
 
     private void OnEraserToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Eraser);
 
+    private void OnSpotlightToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Spotlight);
+
     private void OnTextToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Text);
 
     private void OnNumberToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Number);
@@ -1909,7 +1914,13 @@ public partial class CaptureWindow : Window
 
     private void OnOpacityChanged(object? sender, RangeBaseValueChangedEventArgs e)
     {
-        _noteOpacity = Math.Clamp(e.NewValue / 100, 0.2, 1);
+        var value = Math.Clamp(e.NewValue / 100, 0.2, 1);
+
+        if (_tool == AnnotationTool.Spotlight)
+            _spotlightOpacity = value;
+        else
+            _noteOpacity = value;
+
         OpacityValue.Text = $"{e.NewValue:0}%";
     }
 
@@ -1990,8 +2001,11 @@ public partial class CaptureWindow : Window
         SetSelected(FillSoftButton, _noteFill == ShapeFill.Soft);
         SetSelected(FillSolidButton, _noteFill == ShapeFill.Solid);
 
-        OpacitySlider.Value = Math.Round(_noteOpacity * 100);
-        OpacityValue.Text = $"{_noteOpacity * 100:0}%";
+        OpacitySlider.Value = Math.Round(
+            (_tool == AnnotationTool.Spotlight ? _spotlightOpacity : _noteOpacity) * 100);
+        OpacityValue.Text = _tool == AnnotationTool.Spotlight
+            ? $"{_spotlightOpacity * 100:0}%"
+            : $"{_noteOpacity * 100:0}%";
         RadiusSlider.Value = _noteRadius;
         RadiusValue.Text = $"{_noteRadius:0} px";
 
@@ -2124,6 +2138,12 @@ public partial class CaptureWindow : Window
         {
             Rect = new Rect(mosaic.Rect.X + dx, mosaic.Rect.Y + dy, mosaic.Rect.Width, mosaic.Rect.Height)
         },
+        SpotlightAnnotation spotlight => spotlight with
+        {
+            Rect = new Rect(
+                spotlight.Rect.X + dx, spotlight.Rect.Y + dy,
+                spotlight.Rect.Width, spotlight.Rect.Height)
+        },
         TextAnnotation text => text with
         {
             Origin = new Point(text.Origin.X + dx, text.Origin.Y + dy)
@@ -2172,6 +2192,9 @@ public partial class CaptureWindow : Window
             case MosaicAnnotation mosaic:
                 return mosaic.Rect.Contains(point);
 
+            case SpotlightAnnotation spotlight:
+                return spotlight.Rect.Contains(point);
+
             case TextAnnotation text:
                 return NoteBounds(text).Contains(point);
 
@@ -2202,6 +2225,9 @@ public partial class CaptureWindow : Window
 
             case MosaicAnnotation mosaic:
                 return mosaic.Rect;
+
+            case SpotlightAnnotation spotlight:
+                return spotlight.Rect;
 
             case TextAnnotation text:
                 // 没有排版信息，按字宽粗估：中日韩一个字号宽，西文约 0.6
@@ -2293,6 +2319,7 @@ public partial class CaptureWindow : Window
             Key.D9 or Key.NumPad9 => AnnotationTool.Number,
             Key.L => AnnotationTool.Line,
             Key.E => AnnotationTool.Eraser,
+            Key.K => AnnotationTool.Spotlight,
             _ => AnnotationTool.None
         };
 
@@ -2505,6 +2532,7 @@ public partial class CaptureWindow : Window
         AnnotationTool.Arrow => "箭头",
         AnnotationTool.Line => "直线",
         AnnotationTool.Eraser => "橡皮擦",
+        AnnotationTool.Spotlight => "聚光灯",
         _ => string.Empty
     };
 
@@ -2516,6 +2544,7 @@ public partial class CaptureWindow : Window
         SetSelected(ArrowToolButton, _tool == AnnotationTool.Arrow);
         SetSelected(LineToolButton, _tool == AnnotationTool.Line);
         SetSelected(EraserToolButton, _tool == AnnotationTool.Eraser);
+        SetSelected(SpotlightToolButton, _tool == AnnotationTool.Spotlight);
         SetSelected(PenToolButton, _tool == AnnotationTool.Pen);
         SetSelected(HighlighterToolButton, _tool == AnnotationTool.Highlighter);
         SetSelected(MosaicToolButton, _tool == AnnotationTool.Mosaic);
@@ -2543,20 +2572,29 @@ public partial class CaptureWindow : Window
             or AnnotationTool.Arrow or AnnotationTool.Line or AnnotationTool.Pen
             or AnnotationTool.Highlighter;
 
-        ColorGroup.IsVisible = _tool is not (AnnotationTool.None or AnnotationTool.Mosaic);
+        ColorGroup.IsVisible = _tool is not (
+            AnnotationTool.None or AnnotationTool.Mosaic or AnnotationTool.Spotlight
+            or AnnotationTool.Eraser);
         WidthGroup.IsVisible = drawing;
         DashGroup.IsVisible = _tool is AnnotationTool.Rectangle or AnnotationTool.Arrow
             or AnnotationTool.Line or AnnotationTool.Pen or AnnotationTool.Highlighter;
         FillGroup.IsVisible = _tool is AnnotationTool.Rectangle or AnnotationTool.Ellipse;
-        OpacityGroup.IsVisible = drawing;
+        OpacityGroup.IsVisible = drawing || _tool == AnnotationTool.Spotlight;
+
+        // 聚光灯和普通标注共用同一个滑块，但存的是两个字段
+        if (OpacityGroup.IsVisible)
+        {
+            var opacity = _tool == AnnotationTool.Spotlight ? _spotlightOpacity : _noteOpacity;
+            OpacitySlider.Value = Math.Round(opacity * 100);
+            OpacityValue.Text = $"{opacity * 100:0}%";
+        }
         RadiusGroup.IsVisible = _tool == AnnotationTool.Rectangle;
         FontGroup.IsVisible = _tool == AnnotationTool.Text;
         NumberGroup.IsVisible = _tool == AnnotationTool.Number;
         MosaicGroup.IsVisible = _tool == AnnotationTool.Mosaic;
 
         // 属性行显隐会改变工具条宽度：先让它重新测量，再重新居中（用户拖过就不再跟随）
-        ActionBar.InvalidateMeasure();
-        ActionBar.Measure(Size.Infinity);
+        ActionBar.InvalidateMeasure();        ActionBar.Measure(Size.Infinity);
 
         if (ActionBar.IsVisible && !_toolbarManual)
             PositionActionBar(_selection);
@@ -2643,6 +2681,14 @@ public partial class CaptureWindow : Window
                     new Rect(_annotationStart, new Size()), _mosaicCell, _mosaicBlur);
                 break;
 
+            case AnnotationTool.Spotlight:
+                // 聚光灯固定用黑色压暗：用当前标注色会得到“琥珀高亮”，不是压暗
+                _pendingAnnotation = new SpotlightAnnotation(
+                    new Rect(_annotationStart, new Size()),
+                    0xFF000000,
+                    _spotlightOpacity);
+                break;
+
             case AnnotationTool.Text:
                 ShowTextEditor(_annotationStart);
                 return true;
@@ -2682,6 +2728,10 @@ public partial class CaptureWindow : Window
             ArrowAnnotation arrow => arrow with { To = current },
             LineAnnotation line => line with { To = current },
             MosaicAnnotation mosaic => mosaic with { Rect = NormalizeRect(_annotationStart, current) },
+            SpotlightAnnotation spotlight => spotlight with
+            {
+                Rect = NormalizeRect(_annotationStart, current)
+            },
             PenAnnotation pen when _penPoints is not null => AddPenPoint(pen, current),
             _ => _pendingAnnotation
         };
@@ -2716,6 +2766,7 @@ public partial class CaptureWindow : Window
             LineAnnotation line => Distance(line.From, line.To) >= 6,
             PenAnnotation pen => pen.Points.Count >= 2,
             MosaicAnnotation mosaic => mosaic.Rect.Width >= 4 && mosaic.Rect.Height >= 4,
+            SpotlightAnnotation spotlight => spotlight.Rect.Width >= 8 && spotlight.Rect.Height >= 8,
             _ => false
         };
 
@@ -2836,6 +2887,24 @@ public partial class CaptureWindow : Window
                     new SolidColorBrush(Color.FromUInt32(line.Color), line.Opacity),
                     line.From, line.To, line.Width, line.Dash);
                 break;
+
+            case SpotlightAnnotation spotlight:
+            {
+                // 整层压暗，只在区域处挖洞（和 DimLayer 同一个写法）
+                var outer = new RectangleGeometry(
+                    new Rect(0, 0, Math.Max(_selection.Width, 1), Math.Max(_selection.Height, 1)));
+                Geometry hole = spotlight.Ellipse
+                    ? new EllipseGeometry(spotlight.Rect)
+                    : new RectangleGeometry(spotlight.Rect);
+
+                NoteLayer.Children.Add(new Avalonia.Controls.Shapes.Path
+                {
+                    Data = new CombinedGeometry(GeometryCombineMode.Exclude, outer, hole),
+                    Fill = new SolidColorBrush(Color.FromUInt32(spotlight.Color), spotlight.Opacity),
+                    IsHitTestVisible = false
+                });
+                break;
+            }
 
             case PenAnnotation { Points.Count: >= 2 } pen:
                 var polyline = new Polyline
