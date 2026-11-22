@@ -14,6 +14,8 @@
     <StreamGeometry x:Key="ToolRect">M4 6.5h16v11H4z</StreamGeometry>
     <StreamGeometry x:Key="ToolEllipse">M12 5.5c4.4 0 8 2.9 8 6.5s-3.6 6.5-8 6.5-8-2.9-8-6.5 3.6-6.5 8-6.5z</StreamGeometry>
     <StreamGeometry x:Key="ToolArrow">M5 19 19 5 M11.5 5H19v7.5</StreamGeometry>
+    <StreamGeometry x:Key="ToolLine">M5 19 19 5</StreamGeometry>
+    <StreamGeometry x:Key="ToolEraser">M6 17.5 12.5 11 18.5 17 12 23.5z M6 17.5h12.5 M12.5 11 15 8.5a1.6 1.6 0 0 1 2.3 0l1.2 1.2a1.6 1.6 0 0 1 0 2.3L18.5 17</StreamGeometry>
     <StreamGeometry x:Key="ToolPen">M4 20l4.5-1L19 8.5 15.5 5 5 15.5z M13 7.5l3.5 3.5</StreamGeometry>
     <StreamGeometry x:Key="ToolHighlighter">M4 20h6 M14.5 4.5l5 5-8.5 8.5-4-4z</StreamGeometry>
     <StreamGeometry x:Key="ToolMosaic">M4 4h16v16H4z M4 9.3h16 M4 14.7h16 M9.3 4v16 M14.7 4v16</StreamGeometry>
@@ -694,9 +696,20 @@
             <Path Data="{StaticResource ToolEllipse}" />
           </Button>
 
-          <Button Focusable="False" x:Name="ArrowToolButton" Classes="tool"
+          <Button Focusable="False" x:Name="ArrowGroupButton" Classes="tool group-trigger"
+                  ToolTip.Tip="箭头 / 直线">
+            <Panel>
+              <Path x:Name="ArrowGroupIcon" Data="{StaticResource ToolArrow}" StrokeThickness="1.053" />
+              <Path Classes="group-caret" Data="M 0 0 L 5 0 L 2.5 3.5 Z" />
+            </Panel>
+          </Button>
+          <Button Focusable="False" x:Name="ArrowToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="箭头（4）" Click="OnArrowToolClick">
             <Path Data="{StaticResource ToolArrow}" StrokeThickness="1.053" />
+          </Button>
+          <Button Focusable="False" x:Name="LineToolButton" Classes="tool" IsVisible="False"
+                  ToolTip.Tip="直线（L）" Click="OnLineToolClick">
+            <Path Data="{StaticResource ToolLine}" StrokeThickness="1.05" />
           </Button>
 
           <Button Focusable="False" x:Name="PenGroupButton" Classes="tool group-trigger"
@@ -718,6 +731,10 @@
           <Button Focusable="False" x:Name="MosaicToolButton" Classes="tool"
                   ToolTip.Tip="马赛克（7）" Click="OnMosaicToolClick">
             <Path Data="{StaticResource ToolMosaic}" />
+          </Button>
+          <Button Focusable="False" x:Name="EraserToolButton" Classes="tool"
+                  ToolTip.Tip="橡皮擦（E）" Click="OnEraserToolClick">
+            <Path Data="{StaticResource ToolEraser}" StrokeThickness="1.125" />
           </Button>
 
           <Button Focusable="False" x:Name="TextGroupButton" Classes="tool group-trigger"

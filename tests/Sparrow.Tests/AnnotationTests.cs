@@ -64,6 +64,83 @@ public sealed class AnnotationTests
     }
 
     [Fact]
+    public void 合成_直线只画线身_没有箭头()
+    {
+        var png = CreateWhitePng(100, 100);
+        var line = new LineAnnotation(
+            new Point(10, 50), new Point(90, 50), 0xFF0000FF, 2, 1, LineDash.Solid);
+
+        var composed = AnnotationRenderer.Compose(png, [line], scale: 1);
+
+        using var decoded = SKBitmap.Decode(composed);
+
+        // 线身中点是蓝色
+        var middle = decoded.GetPixel(50, 50);
+        ((int)middle.Blue).ShouldBeGreaterThan(180);
+        ((int)middle.Red).ShouldBeLessThan(120);
+
+        // 终点附近不该有箭头那样的“翼”：端点右侧一点仍是白底
+        var beyond = decoded.GetPixel(95, 50);
+        ((int)beyond.Red).ShouldBeGreaterThan(200);
+    }
+
+    [AvaloniaFact]
+    public void 橡皮擦_点中标注就删掉()
+    {
+        var window = new CaptureWindow();
+        window.Show();
+        window.Width = 800;
+        window.Height = 600;
+
+        window.MouseDown(new Point(100, 100), MouseButton.Left);
+        window.MouseMove(new Point(400, 300));
+        window.MouseUp(new Point(400, 300), MouseButton.Left);
+
+        // 画一个矩形
+        window.KeyPress(Key.D2, RawInputModifiers.None, PhysicalKey.Digit2, null);
+        window.MouseDown(new Point(150, 150), MouseButton.Left);
+        window.MouseMove(new Point(250, 220));
+        window.MouseUp(new Point(250, 220), MouseButton.Left);
+        window.Notes.Count.ShouldBe(1);
+
+        // 橡皮擦点它的边框
+        window.KeyPress(Key.E, RawInputModifiers.None, PhysicalKey.E, null);
+        window.MouseDown(new Point(150, 185), MouseButton.Left);
+        window.MouseUp(new Point(150, 185), MouseButton.Left);
+
+        window.Notes.Count.ShouldBe(0);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 截图窗口_直线工具拖出LineAnnotation_且可命中()
+    {
+        var window = new CaptureWindow();
+        window.Show();
+        window.Width = 800;
+        window.Height = 600;
+
+        // 先框一个选区
+        window.MouseDown(new Point(100, 100), MouseButton.Left);
+        window.MouseMove(new Point(400, 300));
+        window.MouseUp(new Point(400, 300), MouseButton.Left);
+
+        window.KeyPress(Key.L, RawInputModifiers.None, PhysicalKey.L, null);
+        window.LineToolButton.Classes.Contains("selected").ShouldBeTrue();
+
+        // 在选区内拖一条直线
+        window.MouseDown(new Point(150, 150), MouseButton.Left);
+        window.MouseMove(new Point(300, 250));
+        window.MouseUp(new Point(300, 250), MouseButton.Left);
+
+        window.Notes.Count.ShouldBe(1);
+        window.Notes[0].ShouldBeOfType<LineAnnotation>();
+
+        window.Close();
+    }
+
+    [Fact]
     public void 合成_把标注画进图片并保持尺寸()
     {
         var png = CreateWhitePng(100, 100);

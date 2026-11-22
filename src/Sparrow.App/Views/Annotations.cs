@@ -9,6 +9,8 @@ public enum AnnotationTool
     Rectangle,
     Ellipse,
     Arrow,
+    Line,
+    Eraser,
     Pen,
     Highlighter,
     Mosaic,
@@ -49,6 +51,15 @@ public sealed record ShapeAnnotation(
     LineDash Dash = LineDash.Solid) : IAnnotation;
 
 public sealed record ArrowAnnotation(
+    Point From,
+    Point To,
+    uint Color,
+    double Width,
+    double Opacity = 1,
+    LineDash Dash = LineDash.Solid) : IAnnotation;
+
+/// <summary>直线：只有线身，没有箭头。</summary>
+public sealed record LineAnnotation(
     Point From,
     Point To,
     uint Color,

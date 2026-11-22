@@ -188,6 +188,9 @@ public partial class CaptureWindow : Window
     /// <summary>取色格式：0 = HEX，1 = RGB，2 = HSL（Shift+I 循环）。</summary>
     private int _colorFormat;
 
+    /// <summary>橡皮擦正在拖动擦除。</summary>
+    private bool _erasing;
+
     public double ExportCornerRadius
     {
         get => _cornerRadius;
@@ -601,6 +604,19 @@ public partial class CaptureWindow : Window
             return;
         }
 
+        // 橡皮擦：按下擦掉指针下最上面的一条，拖动连续擦
+        if (_tool == AnnotationTool.Eraser)
+        {
+            if (_hasSelection && _selection.Contains(point))
+            {
+                _erasing = true;
+                EraseAt(point);
+            }
+
+            e.Handled = true;
+            return;
+        }
+
         // 指针工具：先看点没点中已有标注（点中就拖动它），否则继续移动选区
         if (_tool == AnnotationTool.None && _hasSelection && _selection.Contains(point))
         {
@@ -681,6 +697,14 @@ public partial class CaptureWindow : Window
             return;
         }
 
+        // 橡皮擦拖动：连续擦掉指针下的标注
+        if (_erasing)
+        {
+            EraseAt(point);
+            e.Handled = true;
+            return;
+        }
+
         // 拖动工具条：优先于选区/标注
         if (_draggingToolbar)
         {
@@ -747,6 +771,13 @@ public partial class CaptureWindow : Window
         if (_draggingToolbar)
         {
             _draggingToolbar = false;
+            e.Handled = true;
+            return;
+        }
+
+        if (_erasing)
+        {
+            _erasing = false;
             e.Handled = true;
             return;
         }
@@ -1622,11 +1653,15 @@ public partial class CaptureWindow : Window
 
     private void OnArrowToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Arrow);
 
+    private void OnLineToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Line);
+
     private void OnPenToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Pen);
 
     private void OnHighlighterToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Highlighter);
 
     private void OnMosaicToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Mosaic);
+
+    private void OnEraserToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Eraser);
 
     private void OnTextToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Text);
 
@@ -2023,8 +2058,25 @@ public partial class CaptureWindow : Window
         return -1;
     }
 
-    private void ApplyNoteDrag(Point point)
+    /// <summary>橡皮擦：擦掉指针下最上面的一条标注。</summary>
+    private void EraseAt(Point point)
     {
+        var hit = HitNote(point);
+        if (hit < 0)
+            return;
+
+        _notes.RemoveAt(hit);
+
+        if (_selectedNote == hit)
+            _selectedNote = -1;
+        else if (_selectedNote > hit)
+            _selectedNote--;
+
+        RebuildNotePreview();
+        UpdateToolButtons();
+    }
+
+    private void ApplyNoteDrag(Point point)    {
         if (_draggingNote < 0 || _noteDragOriginal is null || _draggingNote >= _notes.Items.Count)
             return;
 
@@ -2058,6 +2110,11 @@ public partial class CaptureWindow : Window
         {
             From = new Point(arrow.From.X + dx, arrow.From.Y + dy),
             To = new Point(arrow.To.X + dx, arrow.To.Y + dy)
+        },
+        LineAnnotation line => line with
+        {
+            From = new Point(line.From.X + dx, line.From.Y + dy),
+            To = new Point(line.To.X + dx, line.To.Y + dy)
         },
         PenAnnotation pen => pen with
         {
@@ -2099,6 +2156,9 @@ public partial class CaptureWindow : Window
             case ArrowAnnotation arrow:
                 return DistanceToSegment(point, arrow.From, arrow.To) <= arrow.Width / 2 + slop;
 
+            case LineAnnotation line:
+                return DistanceToSegment(point, line.From, line.To) <= line.Width / 2 + slop;
+
             case PenAnnotation pen:
                 for (var index = 1; index < pen.Points.Count; index++)
                 {
@@ -2133,6 +2193,9 @@ public partial class CaptureWindow : Window
 
             case ArrowAnnotation arrow:
                 return FromPoints(arrow.From, arrow.To);
+
+            case LineAnnotation line:
+                return FromPoints(line.From, line.To);
 
             case PenAnnotation { Points.Count: > 0 } pen:
                 return FromPoints(pen.Points);
@@ -2215,7 +2278,7 @@ public partial class CaptureWindow : Window
         return Distance(point, new Point(from.X + dx * t, from.Y + dy * t));
     }
 
-    /// <summary>数字键 → 工具；和按钮 ToolTip 里的数字保持一致。</summary>
+    /// <summary>数字键 → 工具；和按钮 ToolTip 里的数字保持一致。L 给直线。</summary>
     private static bool TryMapToolKey(Key key, out AnnotationTool tool)
     {
         tool = key switch
@@ -2228,6 +2291,8 @@ public partial class CaptureWindow : Window
             Key.D7 or Key.NumPad7 => AnnotationTool.Mosaic,
             Key.D8 or Key.NumPad8 => AnnotationTool.Text,
             Key.D9 or Key.NumPad9 => AnnotationTool.Number,
+            Key.L => AnnotationTool.Line,
+            Key.E => AnnotationTool.Eraser,
             _ => AnnotationTool.None
         };
 
@@ -2296,6 +2361,7 @@ public partial class CaptureWindow : Window
             [AnnotationTool.Rectangle] = ("ToolRect", 1.2),
             [AnnotationTool.Ellipse] = ("ToolEllipse", 1.2),
             [AnnotationTool.Arrow] = ("ToolArrow", 1.053),
+            [AnnotationTool.Line] = ("ToolLine", 1.05),
             [AnnotationTool.Pen] = ("ToolPen", 1.125),
             [AnnotationTool.Highlighter] = ("ToolHighlighter", 1.161),
             [AnnotationTool.Mosaic] = ("ToolMosaic", 1.2),
@@ -2310,6 +2376,13 @@ public partial class CaptureWindow : Window
             Trigger = ShapeGroupButton,
             Icon = ShapeGroupIcon,
             Members = [AnnotationTool.Ellipse, AnnotationTool.Rectangle],
+            EntryIndex = 1
+        });
+        _toolGroups.Add(new ToolGroup
+        {
+            Trigger = ArrowGroupButton,
+            Icon = ArrowGroupIcon,
+            Members = [AnnotationTool.Line, AnnotationTool.Arrow],
             EntryIndex = 1
         });
         _toolGroups.Add(new ToolGroup
@@ -2429,6 +2502,9 @@ public partial class CaptureWindow : Window
         AnnotationTool.Highlighter => "高亮",
         AnnotationTool.Text => "文字",
         AnnotationTool.Number => "序号",
+        AnnotationTool.Arrow => "箭头",
+        AnnotationTool.Line => "直线",
+        AnnotationTool.Eraser => "橡皮擦",
         _ => string.Empty
     };
 
@@ -2438,6 +2514,8 @@ public partial class CaptureWindow : Window
         SetSelected(RectToolButton, _tool == AnnotationTool.Rectangle);
         SetSelected(EllipseToolButton, _tool == AnnotationTool.Ellipse);
         SetSelected(ArrowToolButton, _tool == AnnotationTool.Arrow);
+        SetSelected(LineToolButton, _tool == AnnotationTool.Line);
+        SetSelected(EraserToolButton, _tool == AnnotationTool.Eraser);
         SetSelected(PenToolButton, _tool == AnnotationTool.Pen);
         SetSelected(HighlighterToolButton, _tool == AnnotationTool.Highlighter);
         SetSelected(MosaicToolButton, _tool == AnnotationTool.Mosaic);
@@ -2457,17 +2535,18 @@ public partial class CaptureWindow : Window
             SetSelected(group.Trigger, active >= 0);
         }
 
-        // 属性行只在选中标注工具时出现：没选工具时整条让出去，别挡截图
-        StyleRow.IsVisible = _tool != AnnotationTool.None;
+        // 属性行只在选中标注工具时出现；橡皮擦没有可调属性，整条让出去
+        StyleRow.IsVisible = _tool is not (AnnotationTool.None or AnnotationTool.Eraser);
 
         // 每组属性只在当前工具用得上时出现（LumaShot 的属性卡思路）
         var drawing = _tool is AnnotationTool.Rectangle or AnnotationTool.Ellipse
-            or AnnotationTool.Arrow or AnnotationTool.Pen or AnnotationTool.Highlighter;
+            or AnnotationTool.Arrow or AnnotationTool.Line or AnnotationTool.Pen
+            or AnnotationTool.Highlighter;
 
         ColorGroup.IsVisible = _tool is not (AnnotationTool.None or AnnotationTool.Mosaic);
         WidthGroup.IsVisible = drawing;
         DashGroup.IsVisible = _tool is AnnotationTool.Rectangle or AnnotationTool.Arrow
-            or AnnotationTool.Pen or AnnotationTool.Highlighter;
+            or AnnotationTool.Line or AnnotationTool.Pen or AnnotationTool.Highlighter;
         FillGroup.IsVisible = _tool is AnnotationTool.Rectangle or AnnotationTool.Ellipse;
         OpacityGroup.IsVisible = drawing;
         RadiusGroup.IsVisible = _tool == AnnotationTool.Rectangle;
@@ -2522,6 +2601,16 @@ public partial class CaptureWindow : Window
 
             case AnnotationTool.Arrow:
                 _pendingAnnotation = new ArrowAnnotation(
+                    _annotationStart,
+                    _annotationStart,
+                    _noteColor.ToUInt32(),
+                    _noteWidth,
+                    _noteOpacity,
+                    _noteDash);
+                break;
+
+            case AnnotationTool.Line:
+                _pendingAnnotation = new LineAnnotation(
                     _annotationStart,
                     _annotationStart,
                     _noteColor.ToUInt32(),
@@ -2591,6 +2680,7 @@ public partial class CaptureWindow : Window
         {
             ShapeAnnotation shape => shape with { Rect = NormalizeRect(_annotationStart, current) },
             ArrowAnnotation arrow => arrow with { To = current },
+            LineAnnotation line => line with { To = current },
             MosaicAnnotation mosaic => mosaic with { Rect = NormalizeRect(_annotationStart, current) },
             PenAnnotation pen when _penPoints is not null => AddPenPoint(pen, current),
             _ => _pendingAnnotation
@@ -2623,6 +2713,7 @@ public partial class CaptureWindow : Window
         {
             ShapeAnnotation shape => shape.Rect.Width >= 2 && shape.Rect.Height >= 2,
             ArrowAnnotation arrow => Distance(arrow.From, arrow.To) >= 6,
+            LineAnnotation line => Distance(line.From, line.To) >= 6,
             PenAnnotation pen => pen.Points.Count >= 2,
             MosaicAnnotation mosaic => mosaic.Rect.Width >= 4 && mosaic.Rect.Height >= 4,
             _ => false
@@ -2738,6 +2829,12 @@ public partial class CaptureWindow : Window
                     arrow.From, arrow.To, Math.Max(8, arrow.Width * 3.5));
                 AddPreviewLine(arrowBrush, arrow.To, left, arrow.Width);
                 AddPreviewLine(arrowBrush, arrow.To, right, arrow.Width);
+                break;
+
+            case LineAnnotation line:
+                AddPreviewLine(
+                    new SolidColorBrush(Color.FromUInt32(line.Color), line.Opacity),
+                    line.From, line.To, line.Width, line.Dash);
                 break;
 
             case PenAnnotation { Points.Count: >= 2 } pen:

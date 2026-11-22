@@ -55,6 +55,10 @@ internal static class AnnotationRenderer
                 DrawArrow(canvas, arrow, paint);
                 break;
 
+            case LineAnnotation line:
+                DrawStraightLine(canvas, line, paint);
+                break;
+
             case PenAnnotation pen:
                 if (pen.Points.Count < 2)
                     break;
@@ -151,8 +155,23 @@ internal static class AnnotationRenderer
         paint.PathEffect = null;
     }
 
-    private static void DrawArrow(SKCanvas canvas, ArrowAnnotation arrow, SKPaint paint)
+    private static void DrawStraightLine(SKCanvas canvas, LineAnnotation line, SKPaint paint)
     {
+        using var effect = DashEffect(line.Dash, line.Width);
+        paint.PathEffect = effect;
+        paint.Color = WithOpacity(line.Color, line.Opacity);
+        paint.StrokeWidth = (float)line.Width;
+        paint.Style = SKPaintStyle.Stroke;
+        canvas.DrawLine(
+            (float)line.From.X,
+            (float)line.From.Y,
+            (float)line.To.X,
+            (float)line.To.Y,
+            paint);
+        paint.PathEffect = null;
+    }
+
+    private static void DrawArrow(SKCanvas canvas, ArrowAnnotation arrow, SKPaint paint)    {
         using (var effect = DashEffect(arrow.Dash, arrow.Width))
         {
             paint.PathEffect = effect;
