@@ -413,7 +413,7 @@ public sealed class CaptureWindowTests
         window.SetToolbarDensity(2);
         window.SaveButton.IsVisible.ShouldBeFalse();
         window.MoreButton.IsVisible.ShouldBeTrue();
-        window.TranslateButton.IsVisible.ShouldBeFalse();
+        window.TranslateButton.IsVisible.ShouldBeTrue();   // 翻译是主功能，二级也不藏
 
         window.SetToolbarDensity(1);
         window.TranslateButton.IsVisible.ShouldBeTrue();

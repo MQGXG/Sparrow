@@ -5123,8 +5123,8 @@ public partial class CaptureWindow : Window
         CornerRadiusButton.IsVisible = !compact;
         MoreButton.IsVisible = compact;
 
-        // 二级压缩：OCR / 翻译相关动作和状态文字也让位，避免窄窗口继续溢出
-        TranslateButton.IsVisible = _translateAvailable && _toolbarDensity < 2;
+        // 二级压缩：收起 OCR 辅助动作和状态文字；翻译是主功能，保留
+        TranslateButton.IsVisible = _translateAvailable;
         CopyAllButton.IsVisible = _ocrActionsAvailable && _toolbarDensity < 2;
         OcrBoxButton.IsVisible = _ocrActionsAvailable && _toolbarDensity < 2;
 
