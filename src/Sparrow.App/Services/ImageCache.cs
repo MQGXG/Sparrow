@@ -90,7 +90,25 @@ public sealed class ImageCache
         Get(png, PreviewWidth, PreviewLimit, _preview, _previewOrder, ref _previewBytes, toHeight: false);
 
     /// <summary>按文件路径解码缩略图：不读入完整 PNG 字节，只保留 240px 的位图。</summary>
-    public Bitmap? GetThumbnailFromFile(string path)
+    public Bitmap? GetThumbnailFromFile(string path) =>
+        GetFromFile(
+            path, ThumbnailHeight, ThumbnailLimit, _thumbnail, _thumbnailOrder,
+            ref _thumbnailBytes, toHeight: true);
+
+    /// <summary>按文件路径解码详情图：800px 宽，详情面板够用，不保留原 PNG。</summary>
+    public Bitmap? GetDetailFromFile(string path) =>
+        GetFromFile(
+            path, DetailWidth, DetailLimit, _detail, _detailOrder,
+            ref _detailBytes, toHeight: false);
+
+    private Bitmap? GetFromFile(
+        string path,
+        int size,
+        long limit,
+        Dictionary<ulong, LinkedListNode<Entry>> map,
+        LinkedList<Entry> order,
+        ref long bytes,
+        bool toHeight)
     {
         if (string.IsNullOrWhiteSpace(path))
             return null;
@@ -111,15 +129,16 @@ public sealed class ImageCache
 
         return GetCore(
             key,
-            ThumbnailLimit,
-            _thumbnail,
-            _thumbnailOrder,
-            ref _thumbnailBytes,
+            limit,
+            map,
+            order,
+            ref bytes,
             () =>
             {
                 using var stream = File.OpenRead(path);
-                return Bitmap.DecodeToHeight(
-                    stream, ThumbnailHeight, BitmapInterpolationMode.HighQuality);
+                return toHeight
+                    ? Bitmap.DecodeToHeight(stream, size, BitmapInterpolationMode.HighQuality)
+                    : Bitmap.DecodeToWidth(stream, size, BitmapInterpolationMode.HighQuality);
             });
     }
 

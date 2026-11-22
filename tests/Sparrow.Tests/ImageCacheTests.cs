@@ -41,6 +41,33 @@ public sealed class ImageCacheTests
     }
 
     [AvaloniaFact]
+    public void 按文件解码详情图并命中缓存()
+    {
+        var directory = Path.Combine(
+            Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var path = Path.Combine(directory, "image.png");
+            File.WriteAllBytes(path, CreatePng(3000, 2000));
+
+            var cache = new ImageCache();
+            var first = cache.GetDetailFromFile(path);
+            var second = cache.GetDetailFromFile(path);
+
+            first.ShouldNotBeNull();
+            second.ShouldNotBeNull();
+            first!.PixelSize.Width.ShouldBeLessThanOrEqualTo(800);
+            ReferenceEquals(first, second).ShouldBeTrue("同一文件应命中缓存");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
     public void 预览按1600宽降采样()
     {
         var cache = new ImageCache();

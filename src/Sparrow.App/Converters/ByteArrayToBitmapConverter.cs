@@ -25,9 +25,16 @@ public sealed class ByteArrayToBitmapConverter : IValueConverter
     {
         var mode = parameter as string;
 
-        // 剪贴板缩略图现在给的是文件路径：流式解码到 240px，不读入完整 PNG
-        if (value is string path && mode == "thumb")
-            return ImageCache.Instance.GetThumbnailFromFile(path);
+        // 剪贴板条目现在给的是文件路径：按用途流式解码，不读入完整 PNG
+        if (value is string path)
+        {
+            return mode switch
+            {
+                "thumb" => ImageCache.Instance.GetThumbnailFromFile(path),
+                "detail" => ImageCache.Instance.GetDetailFromFile(path),
+                _ => null
+            };
+        }
 
         if (value is not byte[] { Length: > 0 } bytes)
             return null;

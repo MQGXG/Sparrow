@@ -88,6 +88,23 @@ public sealed class ClipboardHistoryViewModelTests : IDisposable
     }
 
     [Fact]
+    public void 选中图片_详情只保留路径_放大时才读完整字节()
+    {
+        _store.AddImage([1, 2, 3], "test");
+        _viewModel.Refresh();
+
+        var item = _viewModel.SelectedItem;
+        item.ShouldNotBeNull();
+
+        _viewModel.DetailImagePath.ShouldNotBeNull();
+        File.Exists(_viewModel.DetailImagePath).ShouldBeTrue();
+        _viewModel.DetailImagePng.ShouldBeNull("详情不应常驻整张原图");
+        _viewModel.HasDetailImage.ShouldBeTrue();
+
+        _viewModel.LoadSelectedImagePng().ShouldBe([1, 2, 3]);
+    }
+
+    [Fact]
     public void 延迟刷新_构造时不加载()
     {
         _store.AddText("延迟加载");

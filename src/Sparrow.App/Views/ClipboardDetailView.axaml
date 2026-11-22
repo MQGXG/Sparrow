@@ -125,7 +125,7 @@
                   CornerRadius="8"
                   Padding="8"
                   IsVisible="{Binding HasDetailImage}">
-            <Image Source="{Binding DetailImagePng, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}, ConverterParameter=detail}"
+            <Image Source="{Binding DetailImagePath, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}, ConverterParameter=detail}"
                    Stretch="Uniform"
                    MaxHeight="520"
                    Cursor="Hand"

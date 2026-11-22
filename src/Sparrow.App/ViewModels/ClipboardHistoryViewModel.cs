@@ -226,6 +226,10 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     [ObservableProperty]
     private byte[]? _detailImagePng;
 
+    /// <summary>详情图文件路径：解码交给 ImageCache，按下才读完整 PNG 用于放大。</summary>
+    [ObservableProperty]
+    private string? _detailImagePath;
+
     [ObservableProperty]
     private string? _detailPaths;
 
@@ -239,7 +243,7 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
 
     public bool HasDetailText => !string.IsNullOrEmpty(DetailText);
 
-    public bool HasDetailImage => DetailImagePng is { Length: > 0 };
+    public bool HasDetailImage => !string.IsNullOrEmpty(DetailImagePath);
 
     public bool HasDetailPaths => !string.IsNullOrEmpty(DetailPaths);
 
@@ -264,6 +268,8 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     partial void OnDetailTextChanged(string? value) => OnPropertyChanged(nameof(HasDetailText));
 
     partial void OnDetailImagePngChanged(byte[]? value) => OnPropertyChanged(nameof(HasDetailImage));
+
+    partial void OnDetailImagePathChanged(string? value) => OnPropertyChanged(nameof(HasDetailImage));
 
     partial void OnDetailPathsChanged(string? value) => OnPropertyChanged(nameof(HasDetailPaths));
 
@@ -828,6 +834,7 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     {
         DetailText = null;
         DetailImagePng = null;
+        DetailImagePath = null;
         DetailPaths = null;
 
         var entry = SelectedItem?.Entry;
@@ -841,7 +848,8 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
                 break;
 
             case ClipboardEntryKind.Image:
-                DetailImagePng = _store.LoadImage(entry);
+                // 只保留路径：详情按 800px 从文件解码，不再把整张 PNG 常驻在 VM 里
+                DetailImagePath = SelectedItem?.ThumbnailPath;
                 break;
 
             case ClipboardEntryKind.Files:
@@ -849,6 +857,15 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
                 break;
         }
     }
+
+    /// <summary>
+    /// 用户点开详情大图/放大时才读完整 PNG。平时详情只用路径 + 800px 解码，
+    /// 避免选中一张截图就常驻一份原图字节。
+    /// </summary>
+    public byte[]? LoadSelectedImagePng() =>
+        SelectedItem?.Entry is { Kind: ClipboardEntryKind.Image } entry
+            ? _store.LoadImage(entry)
+            : null;
 
     /// <summary>
     /// 工作台/面板隐藏一段时间后释放“可再生”的数据：条目 VM、分组、行、详情图。
@@ -865,6 +882,7 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
         SelectedItem = null;
         DetailText = null;
         DetailImagePng = null;
+        DetailImagePath = null;
         DetailPaths = null;
 
         Items.Clear();

@@ -82,7 +82,7 @@ public partial class ClipboardDetailView : UserControl
 
     private void OnDetailImageTapped(object? sender, TappedEventArgs e)
     {
-        if (History is { DetailImagePng: { Length: > 0 } png } &&
+        if (History?.LoadSelectedImagePng() is { Length: > 0 } png &&
             TopLevel.GetTopLevel(this) is Window owner)
         {
             var zoom = new ClipboardImageZoomWindow(png, owner);
