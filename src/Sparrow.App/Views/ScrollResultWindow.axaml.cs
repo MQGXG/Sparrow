@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
+using Sparrow.App.Services;
 
 namespace Sparrow.App.Views;
 
@@ -19,11 +20,37 @@ public partial class ScrollResultWindow : Window
 
     public ScrollResultWindow(byte[] png) : this()
     {
+        var (width, height) = ImageSizeReader.Read(png);
+
         using var stream = new MemoryStream(png);
-        _bitmap = new Bitmap(stream);
+        var targetWidth = PreviewWidth(width, height);
+
+        // 长图预览不按原尺寸解码：几万行的位图会直接吃掉几百 MB。
+        // 导出的 PNG 仍是原尺寸，预览只是按总像素预算缩放。
+        _bitmap = targetWidth > 0 && targetWidth < width
+            ? Bitmap.DecodeToWidth(stream, targetWidth, BitmapInterpolationMode.HighQuality)
+            : new Bitmap(stream);
 
         Preview.Source = _bitmap;
-        SizeText.Text = $"{_bitmap.PixelSize.Width} × {_bitmap.PixelSize.Height} px  ·  Esc 关闭";
+
+        width = width > 0 ? width : _bitmap.PixelSize.Width;
+        height = height > 0 ? height : _bitmap.PixelSize.Height;
+        SizeText.Text = $"{width} × {height} px  ·  Esc 关闭";
+    }
+
+    /// <summary>预览最多约 16 MP；长图按比例缩到预算内，避免整张原图进内存。</summary>
+    private static int PreviewWidth(int width, int height)
+    {
+        const long budget = 16L * 1024 * 1024;
+
+        if (width <= 0 || height <= 0)
+            return 0;
+
+        var pixels = (long)width * height;
+        if (pixels <= budget)
+            return width;
+
+        return Math.Max(1, (int)Math.Round(width * Math.Sqrt((double)budget / pixels)));
     }
 
     /// <summary>用户选择的动作；关闭时为 <see cref="CaptureAction.None"/>。</summary>

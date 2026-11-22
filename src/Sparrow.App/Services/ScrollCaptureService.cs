@@ -18,7 +18,7 @@ internal static class ScrollCaptureService
         Action<int>? onProgress,
         CancellationToken cancellationToken)
     {
-        var stitcher = new ScrollStitcher(width, height);
+        using var stitcher = new ScrollStitcher(width, height);
 
         while (!cancellationToken.IsCancellationRequested)
         {

@@ -125,4 +125,67 @@ public sealed class ScrollStitcherTests
         bitmap.Width.ShouldBe(Width);
         bitmap.Height.ShouldBe(FrameHeight + 40);
     }
+
+    [Fact]
+    public void 流式编码的像素与原图一致()
+    {
+        var canvas = Canvas(400);
+        var stitcher = new ScrollStitcher(Width, FrameHeight);
+
+        stitcher.Append(Frame(canvas, 0), out _);
+        stitcher.Append(Frame(canvas, 40), out _);
+
+        var png = stitcher.BuildPng();
+        png.ShouldNotBeNull();
+        using var bitmap = SKBitmap.Decode(png);
+
+        var y = FrameHeight + 39;
+        var offset = y * Width * 4 + 7 * 4;
+        var color = bitmap.GetPixel(7, y);
+
+        color.Blue.ShouldBe(canvas[offset]);
+        color.Green.ShouldBe(canvas[offset + 1]);
+        color.Red.ShouldBe(canvas[offset + 2]);
+        color.Alpha.ShouldBe((byte)255);
+    }
+
+    [Fact]
+    public void 超出内存预算后转存磁盘_结果仍然正确()
+    {
+        var canvas = Canvas(400);
+        var directory = Path.Combine(
+            Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            using (var stitcher = new ScrollStitcher(Width, FrameHeight, memoryBudget: 1000, directory))
+            {
+                stitcher.Append(Frame(canvas, 0), out _);
+
+                stitcher.UsesDisk.ShouldBeTrue("超出预算后应落盘，而不是继续占内存");
+
+                stitcher.Append(Frame(canvas, 40), out _);
+
+                var png = stitcher.BuildPng();
+                png.ShouldNotBeNull();
+                using var bitmap = SKBitmap.Decode(png);
+
+                bitmap.Width.ShouldBe(Width);
+                bitmap.Height.ShouldBe(FrameHeight + 40);
+
+                var y = FrameHeight + 39;
+                var offset = y * Width * 4 + 7 * 4;
+                var color = bitmap.GetPixel(7, y);
+
+                color.Blue.ShouldBe(canvas[offset]);
+                color.Green.ShouldBe(canvas[offset + 1]);
+                color.Red.ShouldBe(canvas[offset + 2]);
+            }
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
 }
