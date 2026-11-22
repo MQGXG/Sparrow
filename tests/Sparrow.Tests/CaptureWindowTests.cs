@@ -419,6 +419,72 @@ public sealed class CaptureWindowTests
         window.TranslateButton.IsVisible.ShouldBeTrue();
     }
 
+    [Fact]
+    public void 工具条位置比例_可往返()
+    {
+        var screen = new Rect(100, 50, 800, 600);
+        var toolbar = new Size(400, 46);
+        var position = new Point(300, 200);
+
+        var fraction = CaptureWindow.RememberToolbarFraction(screen, toolbar, position);
+        var restored = CaptureWindow.RestoreToolbarPosition(screen, toolbar, fraction);
+
+        restored.X.ShouldBe(position.X, 0.01);
+        restored.Y.ShouldBe(position.Y, 0.01);
+        fraction.X.ShouldBeInRange(0, 1);
+        fraction.Y.ShouldBeInRange(0, 1);
+    }
+
+    [AvaloniaFact]
+    public void 拖动工具条会记住比例位置()
+    {
+        var window = CreateWithSelection();
+        var origin = window.ToolbarDragHandle.TranslatePoint(new Point(6, 14), window)!.Value;
+
+        window.MouseDown(origin, MouseButton.Left);
+        window.MouseMove(new Point(origin.X + 80, origin.Y + 40));
+        window.MouseUp(new Point(origin.X + 80, origin.Y + 40), MouseButton.Left);
+
+        window.CaptureToolbarPlacement.Count.ShouldBe(2);
+        window.CaptureToolbarPlacement[0].ShouldBeInRange(0, 1);
+        window.CaptureToolbarPlacement[1].ShouldBeInRange(0, 1);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 保存的工具条位置下次生效()
+    {
+        var window = new CaptureWindow { CaptureToolbarPlacement = [0.25, 0.75] };
+        window.Show();
+        window.Width = 800;
+        window.Height = 600;
+
+        window.MouseDown(new Point(100, 100), MouseButton.Left);
+        window.MouseMove(new Point(400, 300));
+        window.MouseUp(new Point(400, 300), MouseButton.Left);
+
+        Canvas.GetLeft(window.ActionBar).ShouldBeGreaterThan(0);
+        Canvas.GetTop(window.ActionBar).ShouldBeGreaterThan(0);
+        window.CaptureToolbarPlacement[0].ShouldBe(0.25);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 工具组悬停有显示延迟()
+    {
+        var window = CreateWithSelection();
+        window.ToolGroupShowDelayMs = 500;
+
+        var origin = window.ShapeGroupButton.TranslatePoint(new Point(0, 0), window)!.Value;
+        window.MouseMove(new Point(origin.X + 16, origin.Y + 16));
+
+        window.ToolGroupPopover.IsVisible.ShouldBeFalse();
+
+        window.Close();
+    }
+
     [AvaloniaFact]
     public void 窄窗口_低频动作收进更多菜单()
     {        // 阈值判断：工具组折叠后工具条实测 678 宽，700 以下收起低频动作
@@ -596,6 +662,7 @@ public sealed class CaptureWindowTests
     public void 工具组_悬停弹出选项条_点选项切换入口()
     {
         var window = CreateWithSelection();
+        window.ToolGroupShowDelayMs = 0;
 
         var origin = window.ShapeGroupButton.TranslatePoint(new Point(0, 0), window)!.Value;
         window.MouseMove(new Point(origin.X + 16, origin.Y + 16));

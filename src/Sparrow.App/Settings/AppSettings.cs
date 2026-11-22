@@ -112,6 +112,9 @@ public sealed record AppSettings
     /// <summary>被隐藏的截图工具 id（枚举名）。</summary>
     public List<string> CaptureToolHidden { get; init; } = [];
 
+    /// <summary>截图工具条手动位置（相对显示器的 0–1 比例 [x, y]）；空 = 跟随选区。</summary>
+    public List<double> CaptureToolbarPlacement { get; init; } = [];
+
     /// <summary>Velopack 更新源地址（HTTPS 静态目录或本地路径）。</summary>
     public string UpdateFeedUrl { get; init; } = string.Empty;
 }

@@ -531,7 +531,8 @@ public partial class App : Application
             SizeInPixels = _appSettings.CaptureSizeUnit != "dip",
             ExportCornerRadius = _appSettings.CaptureCornerRadius,
             CaptureToolPositions = _appSettings.CaptureToolPositions,
-            CaptureToolHidden = _appSettings.CaptureToolHidden
+            CaptureToolHidden = _appSettings.CaptureToolHidden,
+            CaptureToolbarPlacement = _appSettings.CaptureToolbarPlacement
         };
 
         // 三槽样式模板：灌进去，关闭时读回
@@ -583,6 +584,7 @@ public partial class App : Application
         var presets = capture.Presets.Where(preset => preset is not null).Cast<AnnotationPreset>().ToList();
         var toolPositions = capture.CaptureToolPositions.ToList();
         var toolHidden = capture.CaptureToolHidden.ToList();
+        var toolbarPlacement = capture.CaptureToolbarPlacement.ToList();
 
         if (color == _appSettings.AnnotationColor
             && Math.Abs(capture.NoteStrokeWidth - _appSettings.AnnotationWidth) < 0.01
@@ -591,7 +593,8 @@ public partial class App : Application
             && Math.Abs(capture.ExportCornerRadius - _appSettings.CaptureCornerRadius) < 0.01
             && presets.SequenceEqual(_appSettings.AnnotationPresets)
             && toolPositions.SequenceEqual(_appSettings.CaptureToolPositions)
-            && toolHidden.SequenceEqual(_appSettings.CaptureToolHidden))
+            && toolHidden.SequenceEqual(_appSettings.CaptureToolHidden)
+            && toolbarPlacement.SequenceEqual(_appSettings.CaptureToolbarPlacement))
         {
             return;
         }
@@ -605,7 +608,8 @@ public partial class App : Application
             CaptureCornerRadius = capture.ExportCornerRadius,
             AnnotationPresets = presets,
             CaptureToolPositions = toolPositions,
-            CaptureToolHidden = toolHidden
+            CaptureToolHidden = toolHidden,
+            CaptureToolbarPlacement = toolbarPlacement
         };
 
         try

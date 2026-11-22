@@ -191,6 +191,8 @@ public partial class CaptureWindow : Window
     // 工具条拖动：手动位置之后不再跟随选区
     private bool _draggingToolbar;
     private bool _toolbarManual;
+    private bool _toolbarPlacementApplied;
+    private Point? _toolbarFraction;
     private Point _toolbarDragStart;
     private Point _toolbarStartPosition;
 
@@ -328,6 +330,34 @@ public partial class CaptureWindow : Window
     }
 
     public Action<OcrBoxMode>? OcrBoxModeChanged { get; set; }
+
+    /// <summary>
+    /// 工具条手动位置：相对当前显示器的 0–1 比例 [x, y]；空 = 跟随选区。
+    /// 下次截图恢复到这个位置；选区移动后仍恢复为跟随。
+    /// </summary>
+    public IReadOnlyList<double> CaptureToolbarPlacement
+    {
+        get => _toolbarFraction is { } fraction
+            ? [Math.Round(fraction.X, 4), Math.Round(fraction.Y, 4)]
+            : [];
+
+        set
+        {
+            if (value is { Count: >= 2 }
+                && value[0] is >= 0 and <= 1
+                && value[1] is >= 0 and <= 1)
+            {
+                _toolbarFraction = new Point(value[0], value[1]);
+                _toolbarManual = true;
+                _toolbarPlacementApplied = false;
+                return;
+            }
+
+            _toolbarFraction = null;
+            _toolbarManual = false;
+            _toolbarPlacementApplied = false;
+        }
+    }
 
     /// <summary>工具条布局；宿主读写持久化。空列表回落默认。</summary>
     public IReadOnlyList<string> CaptureToolPositions
@@ -471,6 +501,8 @@ public partial class CaptureWindow : Window
         _ocrCancellation?.Cancel();
         _ocrCancellation?.Dispose();
         _ocrCancellation = null;
+        _groupShowTimer?.Stop();
+        _groupHideTimer?.Stop();
 
         _frozenBitmap?.Dispose();
         _frozenBitmap = null;
@@ -901,6 +933,9 @@ public partial class CaptureWindow : Window
         if (_draggingToolbar)
         {
             _draggingToolbar = false;
+            if (_hasSelection)
+                RememberToolbarPlacement();
+
             e.Handled = true;
             return;
         }
@@ -2954,7 +2989,17 @@ public partial class CaptureWindow : Window
 
     private readonly List<ToolGroup> _toolGroups = new();
     private DispatcherTimer? _groupHideTimer;
+    private DispatcherTimer? _groupShowTimer;
+    private ToolGroup? _pendingGroup;
+    private int _groupShowDelayMs = 120;
     private ToolbarLayout _layout = ToolbarLayout.Default();
+
+    /// <summary>测试可调；0 = 立即显示。</summary>
+    internal int ToolGroupShowDelayMs
+    {
+        get => _groupShowDelayMs;
+        set => _groupShowDelayMs = Math.Max(0, value);
+    }
 
     /// <summary>工具 → (几何资源键, 线宽补偿)；补偿值必须和 XAML 里那个按钮写的一致。</summary>
     private static readonly Dictionary<AnnotationTool, (string Key, double Thickness)> ToolIcons =
@@ -3016,12 +3061,53 @@ public partial class CaptureWindow : Window
                 HideToolGroupPopover();
                 ForceTool(group.Members[group.EntryIndex]);
             };
-            group.Trigger.PointerEntered += (_, _) => ShowToolGroupPopover(group);
-            group.Trigger.PointerExited += (_, _) => ScheduleHideToolGroupPopover();
+            group.Trigger.PointerEntered += (_, _) => ScheduleShowToolGroupPopover(group);
+            group.Trigger.PointerExited += (_, _) =>
+            {
+                CancelPendingToolGroupPopover();
+                ScheduleHideToolGroupPopover();
+            };
         }
 
-        ToolGroupPopover.PointerEntered += (_, _) => _groupHideTimer?.Stop();
+        ToolGroupPopover.PointerEntered += (_, _) =>
+        {
+            _groupHideTimer?.Stop();
+            CancelPendingToolGroupPopover();
+        };
         ToolGroupPopover.PointerExited += (_, _) => ScheduleHideToolGroupPopover();
+    }
+
+    private void ScheduleShowToolGroupPopover(ToolGroup group)
+    {
+        _groupHideTimer?.Stop();
+        _groupShowTimer?.Stop();
+        _pendingGroup = group;
+
+        if (_groupShowDelayMs <= 0)
+        {
+            ShowToolGroupPopover(group);
+            return;
+        }
+
+        _groupShowTimer ??= new DispatcherTimer();
+        _groupShowTimer.Interval = TimeSpan.FromMilliseconds(_groupShowDelayMs);
+        _groupShowTimer.Tick -= OnGroupShowTimerTick;
+        _groupShowTimer.Tick += OnGroupShowTimerTick;
+        _groupShowTimer.Start();
+    }
+
+    private void OnGroupShowTimerTick(object? sender, EventArgs e)
+    {
+        _groupShowTimer?.Stop();
+
+        if (_pendingGroup is { } group)
+            ShowToolGroupPopover(group);
+    }
+
+    private void CancelPendingToolGroupPopover()
+    {
+        _groupShowTimer?.Stop();
+        _pendingGroup = null;
     }
 
     /// <summary>按当前布局重建工具区：单成员显示普通按钮，多成员显示折叠组。</summary>
@@ -3228,6 +3314,8 @@ public partial class CaptureWindow : Window
     private void ShowToolGroupPopover(ToolGroup group)
     {
         _groupHideTimer?.Stop();
+        _groupShowTimer?.Stop();
+        _pendingGroup = null;
         ToolGroupOptions.Children.Clear();
 
         // 反序：入口在最左（参考 stackPresentation 把 popoverItemIds 反了过来）
@@ -3287,6 +3375,8 @@ public partial class CaptureWindow : Window
     private void HideToolGroupPopover()
     {
         _groupHideTimer?.Stop();
+        _groupShowTimer?.Stop();
+        _pendingGroup = null;
         ToolGroupPopover.IsVisible = false;
         ToolGroupOptions.Children.Clear();
     }
@@ -5026,7 +5116,12 @@ public partial class CaptureWindow : Window
         // 手动拖开后，本次「选区不变」期间保持手动位置；
         // 一旦选区变动（ApplyCreate/Move/Resize）就复位，重新贴回选区
         if (_toolbarManual)
+        {
+            if (!_toolbarPlacementApplied)
+                ApplyToolbarFraction(selection);
+
             return;
+        }
 
         MeasureActionBar();
         var size = ActionBar.DesiredSize;
@@ -5041,6 +5136,66 @@ public partial class CaptureWindow : Window
 
         Canvas.SetLeft(ActionBar, position.X);
         Canvas.SetTop(ActionBar, position.Y);
+        _toolbarPlacementApplied = true;
+    }
+
+    /// <summary>用户拖过工具条后，把位置记成当前显示器的 0–1 比例。</summary>
+    private void RememberToolbarPlacement()
+    {
+        var size = ActionBar.Bounds.Width > 0 ? ActionBar.Bounds.Size : ActionBar.DesiredSize;
+        if (size.Width <= 0 || size.Height <= 0)
+            return;
+
+        var left = Canvas.GetLeft(ActionBar);
+        var top = Canvas.GetTop(ActionBar);
+        if (double.IsNaN(left)) left = 0;
+        if (double.IsNaN(top)) top = 0;
+
+        var screen = ScreenDipFor(_selection) ?? new Rect(0, 0, Width, Height);
+        _toolbarFraction = RememberToolbarFraction(
+            screen, size, new Point(left, top));
+        _toolbarPlacementApplied = true;
+    }
+
+    private void ApplyToolbarFraction(Rect selection)
+    {
+        _toolbarPlacementApplied = true;
+
+        if (_toolbarFraction is not { } fraction)
+            return;
+
+        MeasureActionBar();
+        var size = ActionBar.DesiredSize;
+        if (size.Width <= 0 || size.Height <= 0)
+        {
+            _toolbarPlacementApplied = false;
+            return;
+        }
+
+        var screen = ScreenDipFor(selection) ?? new Rect(0, 0, Width, Height);
+        var position = RestoreToolbarPosition(screen, size, fraction);
+        Canvas.SetLeft(ActionBar, position.X);
+        Canvas.SetTop(ActionBar, position.Y);
+    }
+
+    internal static Point RememberToolbarFraction(Rect screen, Size toolbar, Point position)
+    {
+        var rangeX = Math.Max(1, screen.Width - toolbar.Width);
+        var rangeY = Math.Max(1, screen.Height - toolbar.Height);
+
+        return new Point(
+            Math.Clamp((position.X - screen.X) / rangeX, 0, 1),
+            Math.Clamp((position.Y - screen.Y) / rangeY, 0, 1));
+    }
+
+    internal static Point RestoreToolbarPosition(Rect screen, Size toolbar, Point fraction)
+    {
+        var rangeX = Math.Max(0, screen.Width - toolbar.Width);
+        var rangeY = Math.Max(0, screen.Height - toolbar.Height);
+
+        return new Point(
+            screen.X + Math.Clamp(fraction.X, 0, 1) * rangeX,
+            screen.Y + Math.Clamp(fraction.Y, 0, 1) * rangeY);
     }
 
     /// <summary>工具条可用宽度：留 8px 边距，属性栏按这个宽度折行。</summary>
