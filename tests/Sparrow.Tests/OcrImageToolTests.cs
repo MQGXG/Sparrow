@@ -233,6 +233,58 @@ public sealed class OcrImageToolTests
         descriptor.Requires.ShouldBe(PlatformCapability.Ocr);
         descriptor.Parameters.ShouldContain(p => p.Key == "language");
         descriptor.Parameters.ShouldContain(p => p.Key == "layout");
+        descriptor.Parameters.ShouldContain(p => p.Key == "reuse");
+    }
+
+    [Fact]
+    public async Task 默认复用worker_连续识别只起一次会话()
+    {
+        var runner = new FakeRunner([Result("第一次"), Result("第二次")]);
+        var tool = new OcrImageTool(runner, TimeSpan.FromMinutes(5));
+        var host = CreateHost(CreateWorkerDirectory());
+
+        for (var i = 0; i < 2; i++)
+        {
+            var result = await tool.ExecuteAsync(
+                new ToolContext
+                {
+                    Input = new ImageSetInput([Image("a.png")]),
+                    Host = host
+                },
+                CancellationToken.None);
+
+            result.Success.ShouldBeTrue();
+        }
+
+        runner.Sessions.ShouldBe(1);
+        runner.Session.Calls.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task 关闭复用后_每次识别都起新会话()
+    {
+        var runner = new FakeRunner([Result("第一次"), Result("第二次")]);
+        var tool = new OcrImageTool(runner, TimeSpan.FromMinutes(5));
+        var host = CreateHost(CreateWorkerDirectory());
+
+        for (var i = 0; i < 2; i++)
+        {
+            var result = await tool.ExecuteAsync(
+                new ToolContext
+                {
+                    Input = new ImageSetInput([Image("a.png")]),
+                    Host = host,
+                    Parameters = new Dictionary<string, string>
+                    {
+                        [OcrParameters.ReuseKey] = OcrParameters.ReuseOff
+                    }
+                },
+                CancellationToken.None);
+
+            result.Success.ShouldBeTrue();
+        }
+
+        runner.Sessions.ShouldBe(2);
     }
 
     [Fact]

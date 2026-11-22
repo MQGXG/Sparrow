@@ -71,8 +71,10 @@ public sealed class ProcessOcrWorkerRunner : IOcrWorkerRunner
         if (!process.Start())
             throw new InvalidOperationException("无法启动 OCR worker");
 
-        // stderr 必须持续读走，否则管道写满会让 worker 卡死
-        var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        // stderr 必须持续读走，否则管道写满会让 worker 卡死。
+        // 不挂调用方的取消令牌：会话可能被热池保留到下一次识别，
+        // 提前取消会让 stderr 管道失去读者。
+        var errorTask = process.StandardError.ReadToEndAsync();
 
         return Task.FromResult<IOcrWorkerSession>(new ProcessOcrWorkerSession(process, errorTask));
     }
@@ -90,6 +92,22 @@ internal sealed class ProcessOcrWorkerSession : IOcrWorkerSession
     {
         _process = process;
         _errorTask = errorTask;
+    }
+
+    /// <summary>worker 进程还活着；热池复用时先看这个，死了就不必再发一帧。</summary>
+    public bool IsAlive
+    {
+        get
+        {
+            try
+            {
+                return !_process.HasExited;
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
+        }
     }
 
     public async Task<string> RecognizeAsync(

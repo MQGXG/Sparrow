@@ -519,6 +519,7 @@ public partial class App : Application
 
         _workspace.Show();
         _workspace.Activate();
+        Log.Info($"工作台打开：{MemoryText()}");
 
         // 上次停留在剪贴板页时，隐藏期间可能释放过列表，重新读一遍
         if (_workspaceViewModel.IsClipboardOpen)
@@ -552,10 +553,13 @@ public partial class App : Application
             return;
 
         _workspaceViewModel?.ReleaseTransientState();
-        Log.Info(
-            $"工作台空闲释放：WorkingSet={Environment.WorkingSet / 1048576}MB, "
-            + $"Managed={GC.GetTotalMemory(false) / 1048576}MB");
+        Log.Info($"工作台空闲释放：{MemoryText()}");
     }
+
+    /// <summary>状态切换日志统一格式，方便复测时直接对着日志看六个时点。</summary>
+    private static string MemoryText() =>
+        $"WorkingSet={Environment.WorkingSet / 1048576}MB, "
+        + $"Managed={GC.GetTotalMemory(false) / 1048576}MB";
 
     private void CancelWorkspaceRelease()
     {
@@ -603,9 +607,10 @@ public partial class App : Application
 
         // 窗口先出来再读语言列表：首次会顺手加载插件，别让它卡在显示之前
         capture.ConfigureTranslateTargets(TranslateTargets());
-        Log.Info($"截图窗口已显示：visible={capture.IsVisible}，title={capture.Title}");
+        Log.Info($"截图窗口已显示：visible={capture.IsVisible}，title={capture.Title}，{MemoryText()}");
 
         await WaitForClosedAsync(capture);
+        Log.Info($"截图窗口已关闭：{MemoryText()}");
 
         // 记住这次的标注样式和尺寸单位，下次截图直接沿用
         SaveCapturePreferences(capture);

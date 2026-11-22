@@ -128,6 +128,19 @@ public sealed class ImageCacheTests
     }
 
     [AvaloniaFact]
+    public void 预览缓存不超过16MB上限()
+    {
+        var cache = new ImageCache();
+
+        for (var i = 0; i < 8; i++)
+            cache.GetPreview(CreatePng(3840, 2160, seed: i));
+
+        var stats = cache.Stats();
+        stats.PreviewBytes.ShouldBeLessThanOrEqualTo(16L * 1024 * 1024, "预览缓存超预算");
+        stats.PreviewEntries.ShouldBeLessThan(8, "应按字节淘汰而不是全留在内存里");
+    }
+
+    [AvaloniaFact]
     public void 坏图只试一次就记入失败集()
     {
         var cache = new ImageCache();

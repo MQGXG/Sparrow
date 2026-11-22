@@ -11,6 +11,13 @@ internal static class OcrParameters
     public const string LanguageKey = "language";
     public const string LayoutKey = "layout";
     public const string TranslateKey = "translate";
+    public const string ReuseKey = "reuse";
+
+    /// <summary>识别结束把 worker 留 60 秒（默认）：连续识别快，空闲自动退出。</summary>
+    public const string ReuseAuto = "auto";
+
+    /// <summary>每次识别结束立即退出 worker：最省内存，代价是每次 1–3 秒模型初始化。</summary>
+    public const string ReuseOff = "off";
 
     /// <summary>不翻译：默认值，避免每张图都白跑一次模型。</summary>
     public const string TranslateNone = "none";
@@ -108,6 +115,22 @@ internal static class OcrParameters
         },
         Default = TranslateNone,
         Hint = "识别后翻译，结果按「原文 / 译文」对照输出；在线模型或已下载的离线模型均可"
+    };
+
+    /// <summary>识别结束后是否复用 worker：默认复用 60 秒，连续识别更快。</summary>
+    public static ToolParameter Reuse { get; } = new()
+    {
+        Key = ReuseKey,
+        Label = "复用 worker",
+        Kind = ParameterKind.Choice,
+        Choices = [ReuseAuto, ReuseOff],
+        ChoiceLabels = new Dictionary<string, string>
+        {
+            [ReuseAuto] = "自动（快）",
+            [ReuseOff] = "关闭（省内存）"
+        },
+        Default = ReuseAuto,
+        Hint = "自动：识别后保留 worker 60 秒，连续识别省下模型初始化；关闭：每次用完立即退出"
     };
 
     /// <summary>整理模式参数 → 枚举；未知值回退默认「按行」。</summary>

@@ -19,13 +19,18 @@ namespace Sparrow.Plugin.Ocr;
 /// </summary>
 public sealed class OcrImageTool : ITool
 {
-    private readonly IOcrWorkerRunner _runner;
+    private readonly WarmWorkerPool _pool;
 
     public OcrImageTool() : this(new ProcessOcrWorkerRunner())
     {
     }
 
-    public OcrImageTool(IOcrWorkerRunner runner) => _runner = runner;
+    public OcrImageTool(IOcrWorkerRunner runner) : this(runner, WarmWorkerPool.DefaultIdleTimeout)
+    {
+    }
+
+    internal OcrImageTool(IOcrWorkerRunner runner, TimeSpan? idleTimeout) =>
+        _pool = new WarmWorkerPool(runner, idleTimeout);
 
     public ToolDescriptor Descriptor { get; } = new()
     {
@@ -43,7 +48,8 @@ public sealed class OcrImageTool : ITool
             OcrParameters.Language,
             OcrParameters.Layout,
             OcrParameters.Translate,
-            OcrParameters.Output
+            OcrParameters.Output,
+            OcrParameters.Reuse
         ]
     };
 
@@ -62,6 +68,9 @@ public sealed class OcrImageTool : ITool
         var layout = OcrParameters.ResolveLayout(context);
         var translateTo = context.GetParameter(OcrParameters.TranslateKey, OcrParameters.TranslateNone);
         var output = context.GetParameter(OcrParameters.OutputKey, OcrParameters.OutputText);
+        var keepWarm =
+            context.GetParameter(OcrParameters.ReuseKey, OcrParameters.ReuseAuto)
+            != OcrParameters.ReuseOff;
 
         // 表格：在线视觉模型出 HTML；失败或未配置时回落本地 SLANet
         if (output is OcrParameters.OutputTableHtml or OcrParameters.OutputTableMarkdown)
@@ -71,6 +80,7 @@ public sealed class OcrImageTool : ITool
                 set,
                 language,
                 markdown: output == OcrParameters.OutputTableMarkdown,
+                keepWarm,
                 cancellationToken);
         }
 
@@ -85,7 +95,8 @@ public sealed class OcrImageTool : ITool
 
         try
         {
-            await using var session = await _runner.StartAsync(workerPath, language, "text", cancellationToken);
+            await using var session = await _pool.AcquireAsync(
+                workerPath, language, "text", keepWarm, cancellationToken);
 
             for (var index = 0; index < set.Images.Count; index++)
             {
@@ -329,6 +340,7 @@ public sealed class OcrImageTool : ITool
         ImageSetInput set,
         string language,
         bool markdown,
+        bool keepWarm,
         CancellationToken cancellationToken)
     {
         // 在线优先；在线失败（超时、网络、额度）再回落本地表格模型
@@ -344,7 +356,7 @@ public sealed class OcrImageTool : ITool
             host.Logger.LogWarning("表格识别：在线模型失败，改用本地表格模型（{Error}）", online.Error?.Message);
         }
 
-        return await RecognizeTableLocallyAsync(host, set, language, markdown, cancellationToken);
+        return await RecognizeTableLocallyAsync(host, set, language, markdown, keepWarm, cancellationToken);
     }
 
     private static async Task<ToolResult> RecognizeTableWithAiAsync(
@@ -412,6 +424,7 @@ public sealed class OcrImageTool : ITool
         ImageSetInput set,
         string language,
         bool markdown,
+        bool keepWarm,
         CancellationToken cancellationToken)
     {
         var workerPath = OcrParameters.WorkerPath(host);
@@ -422,8 +435,8 @@ public sealed class OcrImageTool : ITool
         try
         {
             // 结构模型不分语言；语言只影响回填单元格文字用的文字模型
-            await using var session = await _runner.StartAsync(
-                workerPath, language, "table", cancellationToken);
+            await using var session = await _pool.AcquireAsync(
+                workerPath, language, "table", keepWarm, cancellationToken);
 
             var parts = new List<string>(set.Images.Count);
 
