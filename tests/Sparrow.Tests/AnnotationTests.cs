@@ -369,6 +369,33 @@ public sealed class AnnotationTests
     }
 
     [AvaloniaFact]
+    public void 重新框选后序号从1开始()
+    {
+        var window = CreateWindowWithSelection();
+        window.NumberToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        window.MouseDown(new Point(180, 180), MouseButton.Left);
+        window.MouseUp(new Point(180, 180), MouseButton.Left);
+        window.MouseDown(new Point(220, 220), MouseButton.Left);
+        window.MouseUp(new Point(220, 220), MouseButton.Left);
+        window.Notes.Count.ShouldBe(2);
+
+        // 在选区外重新拉框
+        window.MouseDown(new Point(600, 450), MouseButton.Left);
+        window.MouseMove(new Point(700, 550));
+        window.MouseUp(new Point(700, 550), MouseButton.Left);
+
+        // 新选区里再点序号：从 1 重新开始
+        window.MouseDown(new Point(650, 500), MouseButton.Left);
+        window.MouseUp(new Point(650, 500), MouseButton.Left);
+
+        window.Notes.Count.ShouldBe(1);
+        window.Notes[0].ShouldBeOfType<NumberAnnotation>().Number.ShouldBe(1);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void 移动选区后画新标注_撤销优先撤标注()
     {
         var window = CreateWithRectangle();

@@ -528,7 +528,7 @@
     <Border x:Name="SizeBadge"
             IsVisible="False"
             IsHitTestVisible="True"
-            ToolTip.Tip="可直接输入 X/Y/宽/高/圆角；点单位切换物理像素 / DIP；锁图标锁定比例"
+            ToolTip.Tip="可直接输入 X/Y/宽/高/导出圆角；点单位切换物理像素 / DIP；锁图标锁定比例"
             Background="#73000000"
             BorderBrush="#33FFFFFF"
             BorderThickness="1"
@@ -588,7 +588,7 @@
           </Button.Flyout>
         </Button>
         <Border Classes="sel-sep" />
-        <TextBlock Classes="sel-label" Text="圆角" />
+        <TextBlock Classes="sel-label" Text="导出" />
         <TextBox x:Name="RadiusBox"
                  Classes="sel-input"
                  Width="30"
@@ -657,7 +657,7 @@
                    Text="拖拽框选"
                    Foreground="{StaticResource TextPrimaryBrush}" />
         <TextBlock FontSize="11.5"
-                   Text=" · 单击选窗口 · Esc 取消"
+                   Text=" · 单击选窗口 · I 取色 · Esc 取消"
                    Foreground="{StaticResource TextSecondaryBrush}" />
       </StackPanel>
     </Border>

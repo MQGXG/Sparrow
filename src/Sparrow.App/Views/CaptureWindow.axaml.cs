@@ -1021,6 +1021,10 @@ public partial class CaptureWindow : Window
         _penPoints = null;
         _notePressOnExisting = false;
         _notesBeforeDrag = null;
+        _selectedNote = -1;
+        _draggingNote = -1;
+        _noteDragOriginal = null;
+        _nextNumber = 1;
         _selectionUndo.Clear();
         _selectionRedo.Clear();
         CancelAngleDraft();
