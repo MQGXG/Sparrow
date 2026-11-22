@@ -47,7 +47,10 @@ public partial class CaptureWindow : Window
         Resize,
 
         /// <summary>拖动编辑已有标注。</summary>
-        NoteEdit
+        NoteEdit,
+
+        /// <summary>拖动选中标注的缩放控制点。</summary>
+        NoteResize
     }
 
     private enum ResizeHandle
@@ -137,6 +140,13 @@ public partial class CaptureWindow : Window
     private Point _noteDragStart;
     private IAnnotation? _noteDragOriginal;
     private bool _noteDragMoved;
+
+    private const double MinNoteSize = 12;
+    private ResizeHandle _noteResizeHandle;
+    private IAnnotation? _noteResizeOriginal;
+    private Rect _noteResizeBounds;
+    private int _noteResizeIndex = -1;
+    private bool _noteResizeMoved;
 
     /// <summary>移动/拉伸选区前的标注快照；每帧从快照平移，避免累积误差。</summary>
     private List<IAnnotation>? _notesBeforeDrag;
@@ -762,6 +772,14 @@ public partial class CaptureWindow : Window
         // 指针工具：先看点没点中已有标注（点中就拖动它），否则继续移动选区
         if (_tool == AnnotationTool.None && _hasSelection && _selection.Contains(point))
         {
+            var noteHandle = HitNoteHandle(point);
+            if (noteHandle != ResizeHandle.None)
+            {
+                BeginNoteResize(point, noteHandle);
+                e.Handled = true;
+                return;
+            }
+
             var hit = HitNote(point);
             if (hit >= 0)
             {
@@ -922,6 +940,11 @@ public partial class CaptureWindow : Window
                 Magnifier.IsVisible = false;
                 e.Handled = true;
                 return;
+            case DragMode.NoteResize:
+                ApplyNoteResize(point);
+                Magnifier.IsVisible = false;
+                e.Handled = true;
+                return;
         }
 
         Magnifier.IsVisible = false;
@@ -985,6 +1008,25 @@ public partial class CaptureWindow : Window
             _draggingNote = -1;
             _noteDragOriginal = null;
             _noteDragMoved = false;
+            RebuildNotePreview();
+            e.Handled = true;
+            return;
+        }
+
+        if (_mode == DragMode.NoteResize)
+        {
+            if (_noteResizeMoved
+                && _noteResizeIndex >= 0
+                && _noteResizeOriginal is { } original
+                && _noteResizeIndex < _notes.Items.Count)
+            {
+                _notes.RecordReplace(_noteResizeIndex, original, _notes.Items[_noteResizeIndex]);
+            }
+
+            _mode = DragMode.None;
+            _noteResizeIndex = -1;
+            _noteResizeOriginal = null;
+            _noteResizeMoved = false;
             RebuildNotePreview();
             e.Handled = true;
             return;
@@ -1854,6 +1896,17 @@ public partial class CaptureWindow : Window
             return;
         }
 
+        // 选中标注的缩放点优先于选区移动
+        if (_tool == AnnotationTool.None)
+        {
+            var noteHandle = HitNoteHandle(point);
+            if (noteHandle != ResizeHandle.None)
+            {
+                Cursor = ResizeCursorFor(noteHandle);
+                return;
+            }
+        }
+
         // 边框优先：即使正在用绘图工具，按在控制点上也是拉伸
         var handle = HitHandle(point);
         if (handle != ResizeHandle.None)
@@ -1936,6 +1989,12 @@ public partial class CaptureWindow : Window
         {
             _notes.Replace(_draggingNote, _noteDragOriginal);
         }
+        else if (_mode == DragMode.NoteResize
+                 && _noteResizeIndex >= 0
+                 && _noteResizeOriginal is { } resizeOriginal)
+        {
+            _notes.Replace(_noteResizeIndex, resizeOriginal);
+        }
 
         _mode = DragMode.None;
         _draggingNote = -1;
@@ -1944,6 +2003,9 @@ public partial class CaptureWindow : Window
         _pendingAnnotation = null;
         _penPoints = null;
         _noteDragMoved = false;
+        _noteResizeIndex = -1;
+        _noteResizeOriginal = null;
+        _noteResizeMoved = false;
         HideTextEditor();
         Magnifier.IsVisible = false;
         ClearGuides();
@@ -2586,8 +2648,66 @@ public partial class CaptureWindow : Window
         UpdateToolButtons();
     }
 
-    private void ApplyNoteDrag(Point point)    {
-        if (_draggingNote < 0 || _noteDragOriginal is null || _draggingNote >= _notes.Items.Count)
+    /// <summary>开始拖动选中标注的缩放控制点。</summary>
+    private void BeginNoteResize(Point point, ResizeHandle handle)
+    {
+        _mode = DragMode.NoteResize;
+        _noteResizeHandle = handle;
+        _noteResizeIndex = _selectedNote;
+        _noteResizeOriginal = _notes.Items[_selectedNote];
+        _noteResizeBounds = NoteBounds(_noteResizeOriginal);
+        _noteResizeMoved = false;
+        HideTextEditor();
+    }
+
+    /// <summary>按控制点缩放标注；文字不显示控制点，其余类型按包围盒等比映射。</summary>
+    private void ApplyNoteResize(Point point)
+    {
+        if (_noteResizeOriginal is null
+            || _noteResizeIndex < 0
+            || _noteResizeIndex >= _notes.Items.Count)
+            return;
+
+        var current = new Point(point.X - _selection.X, point.Y - _selection.Y);
+        var rect = _noteResizeBounds;
+        var left = rect.Left;
+        var top = rect.Top;
+        var right = rect.Right;
+        var bottom = rect.Bottom;
+
+        if (_noteResizeHandle is ResizeHandle.NW or ResizeHandle.W or ResizeHandle.SW)
+            left = Math.Min(current.X, right - MinNoteSize);
+        if (_noteResizeHandle is ResizeHandle.NE or ResizeHandle.E or ResizeHandle.SE)
+            right = Math.Max(current.X, left + MinNoteSize);
+        if (_noteResizeHandle is ResizeHandle.NW or ResizeHandle.N or ResizeHandle.NE)
+            top = Math.Min(current.Y, bottom - MinNoteSize);
+        if (_noteResizeHandle is ResizeHandle.SW or ResizeHandle.S or ResizeHandle.SE)
+            bottom = Math.Max(current.Y, top + MinNoteSize);
+
+        left = Math.Clamp(left, 0, Math.Max(0, _selection.Width - MinNoteSize));
+        top = Math.Clamp(top, 0, Math.Max(0, _selection.Height - MinNoteSize));
+        right = Math.Clamp(right, left + MinNoteSize, Math.Max(MinNoteSize, _selection.Width));
+        bottom = Math.Clamp(bottom, top + MinNoteSize, Math.Max(MinNoteSize, _selection.Height));
+
+        var target = new Rect(left, top, right - left, bottom - top);
+        if (target.Width < MinNoteSize || target.Height < MinNoteSize)
+            return;
+
+        if (!_noteResizeMoved)
+        {
+            _noteResizeMoved = true;
+            MarkNoteMutation();
+        }
+
+        var scaled = AnnotationGeometry.Scale(_noteResizeOriginal, _noteResizeBounds, target);
+        if (scaled is DistanceAnnotation distance)
+            scaled = distance with { Label = FormatDistance(distance.From, distance.To) };
+
+        _notes.Replace(_noteResizeIndex, scaled);
+        RebuildNotePreview();
+    }
+
+    private void ApplyNoteDrag(Point point)    {        if (_draggingNote < 0 || _noteDragOriginal is null || _draggingNote >= _notes.Items.Count)
             return;
 
         // 鼠标点换算成选区相对坐标，位移直接加在原始图元上
@@ -2780,10 +2900,94 @@ public partial class CaptureWindow : Window
         }
     }
 
+    private static readonly ResizeHandle[] NoteResizeHandles =
+    [
+        ResizeHandle.NW, ResizeHandle.N, ResizeHandle.NE, ResizeHandle.E,
+        ResizeHandle.SE, ResizeHandle.S, ResizeHandle.SW, ResizeHandle.W
+    ];
+
+    private static Point NoteHandlePoint(Rect bounds, ResizeHandle handle) => handle switch
+    {
+        ResizeHandle.NW => new Point(bounds.Left, bounds.Top),
+        ResizeHandle.N => new Point(bounds.Center.X, bounds.Top),
+        ResizeHandle.NE => new Point(bounds.Right, bounds.Top),
+        ResizeHandle.E => new Point(bounds.Right, bounds.Center.Y),
+        ResizeHandle.SE => new Point(bounds.Right, bounds.Bottom),
+        ResizeHandle.S => new Point(bounds.Center.X, bounds.Bottom),
+        ResizeHandle.SW => new Point(bounds.Left, bounds.Bottom),
+        ResizeHandle.W => new Point(bounds.Left, bounds.Center.Y),
+        _ => new Point(bounds.Center.X, bounds.Center.Y)
+    };
+
+    /// <summary>命中选中标注的缩放控制点（局部坐标）。</summary>
+    private ResizeHandle HitNoteHandle(Point point)
+    {
+        if (_tool != AnnotationTool.None
+            || _selectedNote < 0
+            || _selectedNote >= _notes.Items.Count)
+            return ResizeHandle.None;
+
+        var note = _notes.Items[_selectedNote];
+        if (!AnnotationGeometry.IsScalable(note))
+            return ResizeHandle.None;
+
+        var local = new Point(point.X - _selection.X, point.Y - _selection.Y);
+        var bounds = NoteBounds(note);
+
+        foreach (var handle in NoteResizeHandles)
+        {
+            if (Distance(local, NoteHandlePoint(bounds, handle)) <= 7)
+                return handle;
+        }
+
+        return ResizeHandle.None;
+    }
+
+    /// <summary>选中标注的 8 个缩放点；文字不显示。</summary>
+    private void UpdateNoteHandles()
+    {
+        NoteHandleLayer.Children.Clear();
+        NoteHandleLayer.IsVisible = false;
+
+        if (_selectedNote < 0 || _selectedNote >= _notes.Items.Count)
+            return;
+
+        var note = _notes.Items[_selectedNote];
+        if (!AnnotationGeometry.IsScalable(note))
+            return;
+
+        NoteHandleLayer.Width = _selection.Width;
+        NoteHandleLayer.Height = _selection.Height;
+        Canvas.SetLeft(NoteHandleLayer, _selection.X);
+        Canvas.SetTop(NoteHandleLayer, _selection.Y);
+
+        var bounds = NoteBounds(note);
+        foreach (var handle in NoteResizeHandles)
+        {
+            var point = NoteHandlePoint(bounds, handle);
+            var dot = new Rectangle
+            {
+                Width = 7,
+                Height = 7,
+                RadiusX = 1.5,
+                RadiusY = 1.5,
+                Fill = Brushes.White,
+                Stroke = new SolidColorBrush(Color.Parse("#FFE5A44C")),
+                StrokeThickness = 1,
+                IsHitTestVisible = false
+            };
+
+            Canvas.SetLeft(dot, point.X - 3.5);
+            Canvas.SetTop(dot, point.Y - 3.5);
+            NoteHandleLayer.Children.Add(dot);
+        }
+
+        NoteHandleLayer.IsVisible = true;
+    }
+
     /// <summary>标注在选区坐标系里的包围盒；选中框和命中测试共用。</summary>
     private static Rect NoteBounds(IAnnotation item)
-    {
-        switch (item)
+    {        switch (item)
         {
             case ShapeAnnotation shape:
                 return shape.Rect;
@@ -3959,6 +4163,8 @@ public partial class CaptureWindow : Window
     private void RebuildNotePreview()
     {
         NoteLayer.Children.Clear();
+        NoteHandleLayer.Children.Clear();
+        NoteHandleLayer.IsVisible = false;
 
         // 撤销 / 删除之后索引可能越界
         if (_selectedNote >= _notes.Items.Count)
@@ -3985,6 +4191,8 @@ public partial class CaptureWindow : Window
         // 选中态：虚线外框，告诉用户现在拖的是哪一条
         if (_selectedNote >= 0 && _selectedNote < _notes.Items.Count)
             AddNoteSelectionOutline(NoteBounds(_notes.Items[_selectedNote]));
+
+        UpdateNoteHandles();
     }
 
     private void AddNoteSelectionOutline(Rect bounds)

@@ -476,6 +476,12 @@
             IsHitTestVisible="False"
             ClipToBounds="True" />
 
+    <!-- 选中标注的缩放控制点：只在指针工具下显示，点击命中在代码里做 -->
+    <Canvas x:Name="NoteHandleLayer"
+            IsVisible="False"
+            IsHitTestVisible="False"
+            ClipToBounds="True" />
+
     <!-- 吸附参考线：拖动/拉伸时贴在屏幕边或中线 -->
     <Canvas x:Name="GuideLayer"
             IsVisible="False"

@@ -64,6 +64,65 @@ internal static class AnnotationGeometry
     }
 
     /// <summary>
+    /// 把标注从 from 包围盒映射到 to 包围盒：矩形/区域按比例缩放，点按同一比例映射。
+    /// 文字只移动原点（字号不跟随），所以文字不显示缩放控制点。
+    /// </summary>
+    public static IAnnotation Scale(IAnnotation note, Rect from, Rect to)
+    {
+        var scaleX = to.Width / Math.Max(1, from.Width);
+        var scaleY = to.Height / Math.Max(1, from.Height);
+
+        Point Map(Point point) => new(
+            to.X + (point.X - from.X) * scaleX,
+            to.Y + (point.Y - from.Y) * scaleY);
+
+        Rect MapRect(Rect rect) => new(
+            to.X + (rect.X - from.X) * scaleX,
+            to.Y + (rect.Y - from.Y) * scaleY,
+            rect.Width * scaleX,
+            rect.Height * scaleY);
+
+        return note switch
+        {
+            ShapeAnnotation shape => shape with { Rect = MapRect(shape.Rect) },
+            ArrowAnnotation arrow => arrow with { From = Map(arrow.From), To = Map(arrow.To) },
+            LineAnnotation line => line with { From = Map(line.From), To = Map(line.To) },
+            DistanceAnnotation distance => distance with
+            {
+                From = Map(distance.From),
+                To = Map(distance.To)
+            },
+            AngleAnnotation angle => angle with
+            {
+                Vertex = Map(angle.Vertex),
+                A = Map(angle.A),
+                B = Map(angle.B)
+            },
+            PenAnnotation pen => pen with { Points = pen.Points.Select(Map).ToList() },
+            MosaicAnnotation mosaic => mosaic with { Rect = MapRect(mosaic.Rect) },
+            SpotlightAnnotation spotlight => spotlight with { Rect = MapRect(spotlight.Rect) },
+            MagnifierAnnotation magnifier => magnifier with { Rect = MapRect(magnifier.Rect) },
+            WatermarkAnnotation watermark => watermark with { Area = MapRect(watermark.Area) },
+            BracketAnnotation bracket => bracket with { Rect = MapRect(bracket.Rect) },
+            SpeechBubbleAnnotation bubble => bubble with
+            {
+                Rect = MapRect(bubble.Rect),
+                Tail = Map(bubble.Tail)
+            },
+            NumberAnnotation number => number with
+            {
+                Center = Map(number.Center),
+                Size = Math.Clamp(number.Size * Math.Min(scaleX, scaleY), 8, 200)
+            },
+            TextAnnotation text => text with { Origin = Map(text.Origin) },
+            _ => note
+        };
+    }
+
+    /// <summary>文字不显示缩放控制点；其余类型都支持按包围盒缩放。</summary>
+    public static bool IsScalable(IAnnotation note) => note is not TextAnnotation;
+
+    /// <summary>
     /// 气泡尾尖：拖拽起点一般落在矩形角上，直接画会没有尾巴；
     /// 落在矩形内时沿“中心 → 起点”方向推出 minLength。
     /// </summary>

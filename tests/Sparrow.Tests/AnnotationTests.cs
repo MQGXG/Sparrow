@@ -43,6 +43,55 @@ public sealed class AnnotationTests
     }
 
     [Fact]
+    public void 缩放标注_矩形和点按包围盒映射()
+    {
+        var from = new Rect(10, 10, 100, 50);
+        var to = new Rect(20, 20, 200, 100);
+
+        var shape = new ShapeAnnotation(from, 0xFFFF0000, 2, false);
+        var scaledShape = AnnotationGeometry.Scale(shape, from, to)
+            .ShouldBeOfType<ShapeAnnotation>();
+        scaledShape.Rect.ShouldBe(to);
+
+        var arrow = new ArrowAnnotation(new Point(10, 10), new Point(110, 60), 0xFFFF0000, 2);
+        var scaledArrow = AnnotationGeometry.Scale(arrow, from, to)
+            .ShouldBeOfType<ArrowAnnotation>();
+        scaledArrow.From.ShouldBe(new Point(20, 20));
+        scaledArrow.To.ShouldBe(new Point(220, 120));
+
+        AnnotationGeometry.IsScalable(new TextAnnotation(
+            new Point(0, 0), "x", 0xFFFF0000, 16)).ShouldBeFalse();
+    }
+
+    [AvaloniaFact]
+    public void 选中标注显示缩放点_拖右下角放大并可撤销()
+    {
+        var window = CreateWithRectangle();
+
+        // 点中矩形边框：出现 8 个缩放点
+        window.MouseDown(new Point(150, 185), MouseButton.Left);
+        window.MouseUp(new Point(150, 185), MouseButton.Left);
+
+        window.NoteHandleLayer.IsVisible.ShouldBeTrue();
+        window.NoteHandleLayer.Children.Count.ShouldBe(8);
+
+        // 右下角控制点在 (250,220)，拖到 (300,250)
+        window.MouseDown(new Point(250, 220), MouseButton.Left);
+        window.MouseMove(new Point(300, 250));
+        window.MouseUp(new Point(300, 250), MouseButton.Left);
+
+        var rect = window.Notes[0].ShouldBeOfType<ShapeAnnotation>().Rect;
+        rect.Width.ShouldBe(150, 0.01);
+        rect.Height.ShouldBe(100, 0.01);
+
+        window.KeyPress(Key.Z, RawInputModifiers.Control, PhysicalKey.Z, null);
+        window.Notes[0].ShouldBeOfType<ShapeAnnotation>()
+            .Rect.ShouldBe(new Rect(50, 50, 100, 70));
+
+        window.Close();
+    }
+
+    [Fact]
     public void 撤销_删除记录原索引并可重做()
     {
         var document = new AnnotationDocument();
