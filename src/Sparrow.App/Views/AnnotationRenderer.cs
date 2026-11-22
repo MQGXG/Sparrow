@@ -67,6 +67,10 @@ internal static class AnnotationRenderer
                 DrawMagnifier(canvas, magnifier, paint, source);
                 break;
 
+            case WatermarkAnnotation watermark:
+                DrawWatermark(canvas, watermark);
+                break;
+
             case PenAnnotation pen:
                 if (pen.Points.Count < 2)
                     break;
@@ -96,9 +100,7 @@ internal static class AnnotationRenderer
                 if (string.IsNullOrEmpty(text.Text))
                     break;
 
-                var fontStyle = text.Bold ? SKFontStyle.Bold : SKFontStyle.Normal;
-                using (var typeface = SKTypeface.FromFamilyName("Microsoft YaHei UI", fontStyle) ?? SKTypeface.Default)
-                using (var font = new SKFont(typeface, (float)text.FontSize))
+                using (var font = AnnotationText.CreateFont(text.FontSize, text.Bold))
                 {
                     paint.Color = new SKColor(text.Color);
                     paint.Style = SKPaintStyle.Fill;
@@ -383,6 +385,56 @@ internal static class AnnotationRenderer
         canvas.Restore();
     }
 
+    /// <summary>
+    /// 水印：裁剪到区域，绕区域中心旋转后按网格平铺文字。
+    /// 平铺范围取对角线正方形，任意角度都能盖满；数量上限由 WatermarkLayout 控制。
+    /// </summary>
+    private static void DrawWatermark(SKCanvas canvas, WatermarkAnnotation watermark)
+    {
+        if (string.IsNullOrWhiteSpace(watermark.Text) ||
+            watermark.Area.Width < 4 || watermark.Area.Height < 4)
+            return;
+
+        var area = new SKRect(
+            (float)watermark.Area.X,
+            (float)watermark.Area.Y,
+            (float)watermark.Area.Right,
+            (float)watermark.Area.Bottom);
+
+        var spacing = WatermarkLayout.FitSpacing(watermark.Area, watermark.Spacing);
+
+        using var font = AnnotationText.CreateFont(watermark.FontSize, bold: true);
+        using var paint = new SKPaint
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill,
+            Color = WithOpacity(watermark.Color, watermark.Opacity)
+        };
+
+        canvas.Save();
+        canvas.ClipRect(area);
+        canvas.RotateDegrees(
+            (float)watermark.Angle,
+            (area.Left + area.Right) / 2,
+            (area.Top + area.Bottom) / 2);
+
+        // 0.35em 的基线偏移约等于把文字垂直居中到格点
+        var baseline = (float)(watermark.FontSize * 0.35);
+        foreach (var point in WatermarkLayout.Tiles(
+                     watermark.Area, spacing, WatermarkLayout.TileCap))
+        {
+            canvas.DrawText(
+                watermark.Text,
+                (float)point.X,
+                (float)point.Y + baseline,
+                SKTextAlign.Center,
+                font,
+                paint);
+        }
+
+        canvas.Restore();
+    }
+
     private static void DrawNumber(SKCanvas canvas, NumberAnnotation number, SKPaint paint)
     {
         var radius = (float)(number.Size / 2);
@@ -392,8 +444,7 @@ internal static class AnnotationRenderer
         paint.Color = new SKColor(number.Color);
         canvas.DrawCircle(center, radius, paint);
 
-        using var typeface = SKTypeface.FromFamilyName("Microsoft YaHei UI") ?? SKTypeface.Default;
-        using var font = new SKFont(typeface, (float)(number.Size * 0.55));
+        using var font = AnnotationText.CreateFont(number.Size * 0.55);
         paint.Color = SKColors.White;
 
         var text = number.Number.ToString();

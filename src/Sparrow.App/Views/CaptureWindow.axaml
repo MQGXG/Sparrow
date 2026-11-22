@@ -23,6 +23,7 @@
     <StreamGeometry x:Key="ToolMosaic">M4 4h16v16H4z M4 9.3h16 M4 14.7h16 M9.3 4v16 M14.7 4v16</StreamGeometry>
     <StreamGeometry x:Key="ToolText">M6 6h12 M12 6v13 M9.5 19h5</StreamGeometry>
     <StreamGeometry x:Key="ToolNumber">M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z M10 10l1.5-1.2V16</StreamGeometry>
+    <StreamGeometry x:Key="ToolWatermark">M4 5h16v14H4z M9.5 16 12 8.8 14.5 16 M10.3 13.4h3.4</StreamGeometry>
     <!-- 选择/退出标注：指针箭头 -->
     <StreamGeometry x:Key="ToolCursor">M6.5 4.5 11.9 18.2 13.6 12.9 18.9 11.2z</StreamGeometry>
 
@@ -748,7 +749,7 @@
           </Button>
 
           <Button Focusable="False" x:Name="TextGroupButton" Classes="tool group-trigger"
-                  ToolTip.Tip="文字 / 序号">
+                  ToolTip.Tip="文字 / 序号 / 水印">
             <Panel>
               <Path x:Name="TextGroupIcon" Data="{StaticResource ToolText}" StrokeThickness="0.972" />
               <Path Classes="group-caret" Data="M 0 0 L 5 0 L 2.5 3.5 Z" />
@@ -761,6 +762,10 @@
           <Button Focusable="False" x:Name="NumberToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="序号（9）" Click="OnNumberToolClick">
             <Path Data="{StaticResource ToolNumber}" />
+          </Button>
+          <Button Focusable="False" x:Name="WatermarkToolButton" Classes="tool" IsVisible="False"
+                  ToolTip.Tip="水印（W）" Click="OnWatermarkToolClick">
+            <Path Data="{StaticResource ToolWatermark}" />
           </Button>
 
           <Border Classes="tool-separator" />

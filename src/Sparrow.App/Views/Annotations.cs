@@ -13,6 +13,7 @@ public enum AnnotationTool
     Eraser,
     Spotlight,
     Magnifier,
+    Watermark,
     Pen,
     Highlighter,
     Mosaic,
@@ -82,6 +83,16 @@ public sealed record MagnifierAnnotation(
     double Zoom = 2.5,
     bool Circle = false,
     uint BorderColor = 0xFFE5A44C) : IAnnotation;
+
+/// <summary>水印：在 Area 内按 Spacing 平铺 Text，整体绕区域中心旋转 Angle 度。</summary>
+public sealed record WatermarkAnnotation(
+    Rect Area,
+    string Text,
+    uint Color,
+    double FontSize,
+    double Opacity = 0.35,
+    double Angle = 30,
+    double Spacing = 160) : IAnnotation;
 
 public sealed record PenAnnotation(
     IReadOnlyList<Point> Points,

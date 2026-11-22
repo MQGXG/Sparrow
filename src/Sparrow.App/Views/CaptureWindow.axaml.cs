@@ -152,6 +152,23 @@ public partial class CaptureWindow : Window
     private int _nextNumber = 1;
     private Point _textOrigin;
 
+    // 文本编辑目标：新建文字，或改写已有水印/气泡（后续工具）
+    private enum TextEditTarget
+    {
+        NewText,
+        Note
+    }
+
+    private TextEditTarget _textEditTarget = TextEditTarget.NewText;
+    private int _textEditNoteIndex = -1;
+
+    // 水印默认样式（属性栏只暴露颜色 / 字号 / 透明度）
+    private string _watermarkText = "Sparrow";
+    private double _watermarkFontSize = 32;
+    private double _watermarkOpacity = 0.35;
+    private const double WatermarkAngle = 30;
+    private const double WatermarkSpacing = 160;
+
     // 工具条拖动：手动位置之后不再跟随选区
     private bool _draggingToolbar;
     private bool _toolbarManual;
@@ -188,8 +205,11 @@ public partial class CaptureWindow : Window
     /// <summary>取色格式：0 = HEX，1 = RGB，2 = HSL（Shift+I 循环）。</summary>
     private int _colorFormat;
 
-    /// <summary>橡皮擦正在拖动擦除。</summary>
+    // 橡皮擦正在拖动擦除。
     private bool _erasing;
+
+    /// <summary>水印工具按在已有水印上：松手不新建，避免双击时先叠一层。</summary>
+    private bool _watermarkPressOnExisting;
 
     /// <summary>聚光灯的暗度（0..1），和标注透明度分开存。</summary>
     private double _spotlightOpacity = 0.55;
@@ -600,6 +620,24 @@ public partial class CaptureWindow : Window
             ForceTool(AnnotationTool.None);
         }
 
+        // 水印：按在已有水印上先不新建（双击用来改文字，单击只选中）
+        _watermarkPressOnExisting = false;
+        if (_tool == AnnotationTool.Watermark && _hasSelection)
+        {
+            var watermarkHit = HitNote(point);
+            if (watermarkHit >= 0 && _notes.Items[watermarkHit] is WatermarkAnnotation)
+            {
+                if (e.ClickCount == 2)
+                    EditNoteText(watermarkHit);
+                else
+                    SelectNote(watermarkHit);
+
+                _watermarkPressOnExisting = e.ClickCount != 2;
+                e.Handled = true;
+                return;
+            }
+        }
+
         // 选了标注工具：在选区内按下就是开始画，不移动选区
         if (BeginAnnotation(point))
         {
@@ -781,6 +819,14 @@ public partial class CaptureWindow : Window
         if (_erasing)
         {
             _erasing = false;
+            e.Handled = true;
+            return;
+        }
+
+        // 按在已有水印上松手：本次不新建
+        if (_watermarkPressOnExisting)
+        {
+            _watermarkPressOnExisting = false;
             e.Handled = true;
             return;
         }
@@ -1670,6 +1716,8 @@ public partial class CaptureWindow : Window
 
     private void OnMagnifierToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Magnifier);
 
+    private void OnWatermarkToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Watermark);
+
     private void OnTextToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Text);
 
     private void OnNumberToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Number);
@@ -1914,14 +1962,25 @@ public partial class CaptureWindow : Window
         UpdateStyleButtons();
     }
 
+    private double ActiveFontSize =>
+        _tool == AnnotationTool.Watermark ? _watermarkFontSize : _noteFontSize;
+
     private void OnOpacityChanged(object? sender, RangeBaseValueChangedEventArgs e)
     {
         var value = Math.Clamp(e.NewValue / 100, 0.2, 1);
 
-        if (_tool == AnnotationTool.Spotlight)
-            _spotlightOpacity = value;
-        else
-            _noteOpacity = value;
+        switch (_tool)
+        {
+            case AnnotationTool.Spotlight:
+                _spotlightOpacity = value;
+                break;
+            case AnnotationTool.Watermark:
+                _watermarkOpacity = value;
+                break;
+            default:
+                _noteOpacity = value;
+                break;
+        }
 
         OpacityValue.Text = $"{e.NewValue:0}%";
     }
@@ -1940,7 +1999,11 @@ public partial class CaptureWindow : Window
 
     private void SetFontSize(double size)
     {
-        _noteFontSize = size;
+        if (_tool == AnnotationTool.Watermark)
+            _watermarkFontSize = size;
+        else
+            _noteFontSize = size;
+
         UpdateStyleButtons();
     }
 
@@ -2003,19 +2066,23 @@ public partial class CaptureWindow : Window
         SetSelected(FillSoftButton, _noteFill == ShapeFill.Soft);
         SetSelected(FillSolidButton, _noteFill == ShapeFill.Solid);
 
-        OpacitySlider.Value = Math.Round(
-            (_tool == AnnotationTool.Spotlight ? _spotlightOpacity : _noteOpacity) * 100);
-        OpacityValue.Text = _tool == AnnotationTool.Spotlight
-            ? $"{_spotlightOpacity * 100:0}%"
-            : $"{_noteOpacity * 100:0}%";
+        var opacity = _tool switch
+        {
+            AnnotationTool.Spotlight => _spotlightOpacity,
+            AnnotationTool.Watermark => _watermarkOpacity,
+            _ => _noteOpacity
+        };
+        OpacitySlider.Value = Math.Round(opacity * 100);
+        OpacityValue.Text = $"{opacity * 100:0}%";
         RadiusSlider.Value = _noteRadius;
         RadiusValue.Text = $"{_noteRadius:0} px";
 
         // 字号用 S/M/L/XL 档位；不落在档位上时四个都不亮
-        SetSelected(FontSButton, Math.Abs(_noteFontSize - 14) < 0.1);
-        SetSelected(FontMButton, Math.Abs(_noteFontSize - 16) < 0.1);
-        SetSelected(FontLButton, Math.Abs(_noteFontSize - 20) < 0.1);
-        SetSelected(FontXlButton, Math.Abs(_noteFontSize - 32) < 0.1);
+        var fontSize = ActiveFontSize;
+        SetSelected(FontSButton, Math.Abs(fontSize - 14) < 0.1);
+        SetSelected(FontMButton, Math.Abs(fontSize - 16) < 0.1);
+        SetSelected(FontLButton, Math.Abs(fontSize - 20) < 0.1);
+        SetSelected(FontXlButton, Math.Abs(fontSize - 32) < 0.1);
         SetSelected(BoldButton, _noteBold);
         NumberSizeMenuButton.Content = $"{_numberSize:0} px";
 
@@ -2152,6 +2219,12 @@ public partial class CaptureWindow : Window
                 magnifier.Rect.X + dx, magnifier.Rect.Y + dy,
                 magnifier.Rect.Width, magnifier.Rect.Height)
         },
+        WatermarkAnnotation watermark => watermark with
+        {
+            Area = new Rect(
+                watermark.Area.X + dx, watermark.Area.Y + dy,
+                watermark.Area.Width, watermark.Area.Height)
+        },
         TextAnnotation text => text with
         {
             Origin = new Point(text.Origin.X + dx, text.Origin.Y + dy)
@@ -2206,6 +2279,9 @@ public partial class CaptureWindow : Window
             case MagnifierAnnotation magnifier:
                 return NoteBounds(magnifier).Contains(point);
 
+            case WatermarkAnnotation watermark:
+                return WatermarkLayout.Hit(watermark, point);
+
             case TextAnnotation text:
                 return NoteBounds(text).Contains(point);
 
@@ -2242,6 +2318,9 @@ public partial class CaptureWindow : Window
 
             case MagnifierAnnotation magnifier:
                 return magnifier.Rect;
+
+            case WatermarkAnnotation watermark:
+                return watermark.Area;
 
             case TextAnnotation text:
                 // 没有排版信息，按字宽粗估：中日韩一个字号宽，西文约 0.6
@@ -2335,6 +2414,7 @@ public partial class CaptureWindow : Window
             Key.E => AnnotationTool.Eraser,
             Key.K => AnnotationTool.Spotlight,
             Key.Z => AnnotationTool.Magnifier,
+            Key.W => AnnotationTool.Watermark,
             _ => AnnotationTool.None
         };
 
@@ -2407,6 +2487,7 @@ public partial class CaptureWindow : Window
             [AnnotationTool.Pen] = ("ToolPen", 1.125),
             [AnnotationTool.Highlighter] = ("ToolHighlighter", 1.161),
             [AnnotationTool.Mosaic] = ("ToolMosaic", 1.2),
+            [AnnotationTool.Watermark] = ("ToolWatermark", 1.2),
             [AnnotationTool.Text] = ("ToolText", 0.972),
             [AnnotationTool.Number] = ("ToolNumber", 1.2)
         };
@@ -2438,7 +2519,7 @@ public partial class CaptureWindow : Window
         {
             Trigger = TextGroupButton,
             Icon = TextGroupIcon,
-            Members = [AnnotationTool.Number, AnnotationTool.Text],
+            Members = [AnnotationTool.Number, AnnotationTool.Text, AnnotationTool.Watermark],
             EntryIndex = 1
         });
 
@@ -2549,6 +2630,7 @@ public partial class CaptureWindow : Window
         AnnotationTool.Eraser => "橡皮擦",
         AnnotationTool.Spotlight => "聚光灯",
         AnnotationTool.Magnifier => "放大镜",
+        AnnotationTool.Watermark => "水印",
         _ => string.Empty
     };
 
@@ -2567,6 +2649,7 @@ public partial class CaptureWindow : Window
         SetSelected(MosaicToolButton, _tool == AnnotationTool.Mosaic);
         SetSelected(TextToolButton, _tool == AnnotationTool.Text);
         SetSelected(NumberToolButton, _tool == AnnotationTool.Number);
+        SetSelected(WatermarkToolButton, _tool == AnnotationTool.Watermark);
         UndoButton.IsEnabled = _notes.CanUndo;
         RedoButton.IsEnabled = _notes.CanRedo;
 
@@ -2597,17 +2680,33 @@ public partial class CaptureWindow : Window
         DashGroup.IsVisible = _tool is AnnotationTool.Rectangle or AnnotationTool.Arrow
             or AnnotationTool.Line or AnnotationTool.Pen or AnnotationTool.Highlighter;
         FillGroup.IsVisible = _tool is AnnotationTool.Rectangle or AnnotationTool.Ellipse;
-        OpacityGroup.IsVisible = drawing || _tool == AnnotationTool.Spotlight;
+        OpacityGroup.IsVisible = drawing || _tool is AnnotationTool.Spotlight or AnnotationTool.Watermark;
 
-        // 聚光灯和普通标注共用同一个滑块，但存的是两个字段
+        // 聚光灯、水印和普通标注共用同一个滑块，但各存各的字段
         if (OpacityGroup.IsVisible)
         {
-            var opacity = _tool == AnnotationTool.Spotlight ? _spotlightOpacity : _noteOpacity;
+            var opacity = _tool switch
+            {
+                AnnotationTool.Spotlight => _spotlightOpacity,
+                AnnotationTool.Watermark => _watermarkOpacity,
+                _ => _noteOpacity
+            };
             OpacitySlider.Value = Math.Round(opacity * 100);
             OpacityValue.Text = $"{opacity * 100:0}%";
         }
         RadiusGroup.IsVisible = _tool == AnnotationTool.Rectangle;
-        FontGroup.IsVisible = _tool == AnnotationTool.Text;
+
+        // 水印和文字共用字号档位；加粗只对文字有意义
+        FontGroup.IsVisible = _tool is AnnotationTool.Text or AnnotationTool.Watermark;
+        BoldButton.IsVisible = _tool == AnnotationTool.Text;
+        if (FontGroup.IsVisible)
+        {
+            var fontSize = ActiveFontSize;
+            SetSelected(FontSButton, Math.Abs(fontSize - 14) < 0.1);
+            SetSelected(FontMButton, Math.Abs(fontSize - 16) < 0.1);
+            SetSelected(FontLButton, Math.Abs(fontSize - 20) < 0.1);
+            SetSelected(FontXlButton, Math.Abs(fontSize - 32) < 0.1);
+        }
         NumberGroup.IsVisible = _tool == AnnotationTool.Number;
         MosaicGroup.IsVisible = _tool == AnnotationTool.Mosaic;
 
@@ -2712,6 +2811,17 @@ public partial class CaptureWindow : Window
                     new Rect(_annotationStart, new Size()));
                 break;
 
+            case AnnotationTool.Watermark:
+                _pendingAnnotation = new WatermarkAnnotation(
+                    new Rect(_annotationStart, new Size()),
+                    _watermarkText,
+                    _noteColor.ToUInt32(),
+                    _watermarkFontSize,
+                    _watermarkOpacity,
+                    WatermarkAngle,
+                    WatermarkSpacing);
+                break;
+
             case AnnotationTool.Text:
                 ShowTextEditor(_annotationStart);
                 return true;
@@ -2759,6 +2869,10 @@ public partial class CaptureWindow : Window
             {
                 Rect = NormalizeRect(_annotationStart, current)
             },
+            WatermarkAnnotation watermark => watermark with
+            {
+                Area = NormalizeRect(_annotationStart, current)
+            },
             PenAnnotation pen when _penPoints is not null => AddPenPoint(pen, current),
             _ => _pendingAnnotation
         };
@@ -2785,6 +2899,16 @@ public partial class CaptureWindow : Window
         if (annotation is null)
             return;
 
+        // 水印单击（没拖出区域）= 铺满整个选区
+        if (annotation is WatermarkAnnotation clicked &&
+            (clicked.Area.Width < 8 || clicked.Area.Height < 8))
+        {
+            annotation = clicked with
+            {
+                Area = new Rect(0, 0, _selection.Width, _selection.Height)
+            };
+        }
+
         // 点一下没拖动：当误触丢掉，不进撤销栈
         var keep = annotation switch
         {
@@ -2795,6 +2919,7 @@ public partial class CaptureWindow : Window
             MosaicAnnotation mosaic => mosaic.Rect.Width >= 4 && mosaic.Rect.Height >= 4,
             SpotlightAnnotation spotlight => spotlight.Rect.Width >= 8 && spotlight.Rect.Height >= 8,
             MagnifierAnnotation magnifier => magnifier.Rect.Width >= 8 && magnifier.Rect.Height >= 8,
+            WatermarkAnnotation watermark => watermark.Area.Width >= 8 && watermark.Area.Height >= 8,
             _ => false
         };
 
@@ -2970,6 +3095,10 @@ public partial class CaptureWindow : Window
                 break;
             }
 
+            case WatermarkAnnotation watermark:
+                AddWatermarkPreview(watermark);
+                break;
+
             case PenAnnotation { Points.Count: >= 2 } pen:
                 var polyline = new Polyline
                 {
@@ -3039,6 +3168,8 @@ public partial class CaptureWindow : Window
 
     private void ShowTextEditor(Point origin)
     {
+        _textEditTarget = TextEditTarget.NewText;
+        _textEditNoteIndex = -1;
         _textOrigin = origin;
         TextNoteBox.Text = string.Empty;
         TextNoteBox.FontSize = _noteFontSize;
@@ -3050,20 +3181,86 @@ public partial class CaptureWindow : Window
         TextNoteBox.Focus();
     }
 
+    /// <summary>改写已有标注里的文字（水印，后续气泡）；返回 false 表示索引或类型不支持。</summary>
+    internal bool EditNoteText(int index)
+    {
+        if (index < 0 || index >= _notes.Items.Count)
+            return false;
+
+        var (origin, text, fontSize, color) = _notes.Items[index] switch
+        {
+            WatermarkAnnotation watermark => (
+                new Point(
+                    Math.Clamp(watermark.Area.X + 8, 0, Math.Max(0, _selection.Width - 120)),
+                    Math.Clamp(watermark.Area.Y + 8, 0, Math.Max(0, _selection.Height - 40))),
+                watermark.Text,
+                watermark.FontSize,
+                Color.FromUInt32(watermark.Color)),
+            _ => (default(Point), string.Empty, 0d, default(Color))
+        };
+
+        if (fontSize <= 0)
+            return false;
+
+        _textEditTarget = TextEditTarget.Note;
+        _textEditNoteIndex = index;
+        _textOrigin = origin;
+        TextNoteBox.Text = text;
+        TextNoteBox.FontSize = fontSize;
+        TextNoteBox.FontWeight = FontWeight.Bold;
+        TextNoteBox.Foreground = new SolidColorBrush(color);
+        Canvas.SetLeft(TextNoteBox, _selection.X + origin.X);
+        Canvas.SetTop(TextNoteBox, _selection.Y + origin.Y);
+        TextNoteBox.IsVisible = true;
+        TextNoteBox.CaretIndex = text.Length;
+        TextNoteBox.Focus();
+        return true;
+    }
+
     private void HideTextEditor()
     {
         TextNoteBox.IsVisible = false;
         TextNoteBox.Text = string.Empty;
+        _textEditTarget = TextEditTarget.NewText;
+        _textEditNoteIndex = -1;
     }
 
-    private void CommitTextNote()
+    internal void CommitTextNote()
     {
         if (!TextNoteBox.IsVisible)
             return;
 
         var text = TextNoteBox.Text?.Trim() ?? string.Empty;
+        var target = _textEditTarget;
+        var index = _textEditNoteIndex;
         var origin = _textOrigin;
         HideTextEditor();
+
+        if (target == TextEditTarget.Note)
+        {
+            if (index >= 0 && index < _notes.Items.Count)
+            {
+                var updated = _notes.Items[index] switch
+                {
+                    WatermarkAnnotation watermark when text.Length > 0 => watermark with { Text = text },
+                    WatermarkAnnotation watermark => watermark,
+                    _ => null
+                };
+
+                if (updated is not null)
+                {
+                    _notes.Replace(index, updated);
+
+                    // 下次新建水印沿用刚改过的文字
+                    if (updated is WatermarkAnnotation watermark)
+                        _watermarkText = watermark.Text;
+                }
+            }
+
+            RebuildNotePreview();
+            UpdateToolButtons();
+            return;
+        }
 
         if (text.Length == 0)
             return;
@@ -3095,6 +3292,54 @@ public partial class CaptureWindow : Window
     }
 
     private void OnTextNoteLostFocus(object? sender, RoutedEventArgs e) => CommitTextNote();
+
+    /// <summary>水印预览：父层按区域裁剪，子层整体旋转，保证裁剪框始终是轴向矩形。</summary>
+    private void AddWatermarkPreview(WatermarkAnnotation watermark)
+    {
+        if (string.IsNullOrWhiteSpace(watermark.Text) ||
+            watermark.Area.Width < 4 || watermark.Area.Height < 4)
+            return;
+
+        var spacing = WatermarkLayout.FitSpacing(watermark.Area, watermark.Spacing);
+        var brush = new SolidColorBrush(Color.FromUInt32(watermark.Color), watermark.Opacity);
+
+        var clip = new Border
+        {
+            Width = watermark.Area.Width,
+            Height = watermark.Area.Height,
+            ClipToBounds = true,
+            IsHitTestVisible = false
+        };
+        Canvas.SetLeft(clip, watermark.Area.X);
+        Canvas.SetTop(clip, watermark.Area.Y);
+
+        var tiles = new Canvas
+        {
+            Width = watermark.Area.Width,
+            Height = watermark.Area.Height,
+            RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative),
+            RenderTransform = new RotateTransform(watermark.Angle)
+        };
+
+        foreach (var point in WatermarkLayout.Tiles(
+                     watermark.Area, spacing, WatermarkLayout.PreviewCap))
+        {
+            var text = new TextBlock
+            {
+                Text = watermark.Text,
+                FontSize = watermark.FontSize,
+                FontWeight = FontWeight.Bold,
+                Foreground = brush
+            };
+            text.Measure(Size.Infinity);
+            Canvas.SetLeft(text, point.X - watermark.Area.X - text.DesiredSize.Width / 2);
+            Canvas.SetTop(text, point.Y - watermark.Area.Y - text.DesiredSize.Height / 2);
+            tiles.Children.Add(text);
+        }
+
+        clip.Child = tiles;
+        NoteLayer.Children.Add(clip);
+    }
 
     private void AddPreviewLine(IBrush brush, Point from, Point to, double width, LineDash dash = LineDash.Solid)
     {
