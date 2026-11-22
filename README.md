@@ -118,6 +118,7 @@ plugins/
 | 加一个新工具 | [`docs/tool-development.md`](docs/tool-development.md) |
 | 搞清楚「上下文」怎么统一 | [`docs/context-model.md`](docs/context-model.md) |
 | 改界面 | [`docs/ui-spec.md`](docs/ui-spec.md) |
+| 排查内存、优化流畅度 | [`docs/performance.md`](docs/performance.md) |
 | 知道什么时候能发版 | [`docs/release-checklist.md`](docs/release-checklist.md) |
 
 ---

@@ -1,80 +1,403 @@
-# 内存实测记录
+# 内存与流畅度
 
-> 复核时间：2026-11-20　构建：Release（net10.0）　机器：Windows 10 19045 / 16 逻辑核
-> 数据源：真实剪贴板历史（75 张图片，磁盘共 7.4 MB），没有造数据
+> 复核时间：2026-11-23
+> 约束：**不削减功能、不降低解码尺寸、不牺牲交互质量**。
+> 目标不是“内存永远最低”，而是：**有上限、能回落、可预测，并且越用越顺**。
 
-## 一、场景
+---
 
-| 项 | 值 |
+## 一、结论
+
+三阶段实测：
+
+| 阶段 | Working Set | 增量 |
+|---|---:|---:|
+| 托盘空闲（未打开工作台） | **119 MB** | 基线 |
+| 打开工作台（56 条剪贴板记录） | **231 MB** | **+112 MB** |
+| 打开截图窗口 | **431 MB** | **+200 MB** |
+
+关键判断：
+
+1. **+112 MB 不是剪贴板图片。** 当时 56 条记录合计只有 1.1 MB，图片只有一张 0.1 KB。增量来自第一次加载 9 个插件、工作台视觉树，以及 Avalonia 的字体/图标/渲染表面。
+2. **+200 MB 是截图窗口的正常峰值。** 冻结帧、稳定检测的临时帧、全屏叠加层、UI Automation 树同时存在；4K 下仅冻结帧 + `WriteableBitmap` 就是约 66 MB。
+3. **真正的问题是“关闭后不回落”。** `WorkspaceWindow` 关闭只是 `Hide()`，`WorkspaceViewModel` 和插件程序集继续驻留；截图窗口关闭后 LOH 也不一定压缩。于是空闲内存停在用过的高位。
+4. **不能靠砍功能解决。** 正确方向是：保留“可复用的热状态”，释放“可再生的派生状态”，并用池化、零拷贝、预热和增量加载让下一次更快。
+
+---
+
+## 二、三次实测的归因
+
+### 2.1 119 MB：托盘空闲
+
+包含：
+
+- .NET 运行时 + Avalonia；
+- 托盘、热键线程、剪贴板监听线程（后两者都阻塞在消息循环，CPU 近 0）；
+- 已创建但未显示的工作台/面板窗口骨架；
+- 剪贴板历史元数据（默认上限 200 条）。
+
+这一层没有明显浪费；CPU 也基本为 0。问题不在“空闲线程”，在“用过之后不释放”。
+
+### 2.2 +112 MB：第一次打开工作台
+
+日志能对上：
+
+```
+00:02:42  发现插件 …（只读 manifest）
+00:03:11  已加载插件 …（9 个）
+```
+
+主要组成：
+
+| 项 | 说明 |
 |---|---|
-| 历史条目 | 75 张图片（磁盘 7.4 MB，单张最大 778 KB） |
-| 操作 | 冷启动 → 全局热键打开剪贴板面板 → Esc 收起 → 再打开 → 再收起 |
-| 测量 | `Process.WorkingSet64` / `PrivateMemorySize64`，另用 `dotnet-counters`、`dotnet-gcdump` 交叉验证 |
+| 插件程序集 | 9 个插件第一次进入 `AssemblyLoadContext`，默认上下文不会卸载 |
+| 工作台视觉树 | 工具墙、剪贴板页、详情页、筛选器、模板 |
+| 剪贴板 VM | `ClipboardHistoryViewModel.Refresh()` 最多建 1000 个条目 VM |
+| 渲染资源 | 字体、图标、卡片模板、Avalonia 渲染表面 |
 
-## 二、数据
+当时剪贴板只有 1.1 MB，**缩略图缓存不是这一跳的原因**。
 
-> 2026-11-21 回归复核（标注 / 吸附 / SDK 1.9 之后）：冷启动中位 **946 ms**（5 次），
-> 空载 **121.3 MB**、打开面板 **217.5 MB**、重开 **232.4 MB**（+15 MB），仍无回落。
-> 与下面虚拟化后的数字一致，标注层和吸附层没有带回量级增长。
+### 2.3 +200 MB：截图窗口
 
-| 时点 | 改造前 | 改造后（虚拟化） |
+`CaptureWindow` 打开后同时存在：
+
+- `_frozenPixels`：整屏 BGRA；
+- `_frozenBitmap`：同一画面的 native 位图；
+- `CaptureStableRaw` 稳定检测期间的 2 帧临时缓冲；
+- 覆盖整个虚拟桌面的全屏窗口/渲染表面；
+- `UiElementProbe` 的 UI Automation 树与 COM 对象。
+
+以 4K 估算：
+
+```
+冻结 BGRA                 33 MB
+WriteableBitmap           33 MB
+稳定检测临时帧            66 MB（短暂）
+全屏渲染表面              ~30 MB
+UIA + 其他                ~20–50 MB
+```
+
+**所以 431 MB 本身不算异常峰值。** 是否合理，要看关闭截图后能不能回到 200 MB 左右。
+
+### 2.4 关闭后不回落的原因
+
+| 原因 | 位置 |
+|---|---|
+| 工作台关闭仅 `Hide()`，数据/视觉树全留 | `WorkspaceWindow.Closing` |
+| 启动时就创建了 `WorkspaceWindow`，并立即 `ClipboardHistoryViewModel.Refresh()` | `App.axaml.cs`、`ClipboardHistoryViewModel` 构造函数 |
+| 缩略图 VM 用 `Lazy<byte[]>` 缓存**完整 PNG** | `ClipboardEntryViewModel.Thumbnail` |
+| `ImageCache` 是静态单例，没有关闭时清空入口 | `ImageCache.Instance` |
+| 冻结帧释放后只在 WorkingSet ≥ 600 MB 时才压缩 LOH | `TrimFreezeMemory` |
+| 工作区上次的输入图/结果图仍在 ViewModel 里 | `WorkspaceViewModel.InputImages / ResultSections / PreviewImagePng` |
+
+---
+
+## 三、原则：不砍功能，怎么优化
+
+把内存分成两类，处理方式不同：
+
+| 类型 | 例子 | 策略 |
+|---|---|---|
+| **热状态（保留）** | 插件程序集、工具注册表、字体/图标、最近记录元数据、当前视图缩略图 | 保留，但设字节/条数预算；跨会话预热 |
+| **派生状态（可释放）** | 解码后的 Bitmap、完整 PNG 字节、输入图副本、UIA 树、冻结帧、滚动拼接缓冲 | 隐藏/关闭/空闲后释放，下次按需重建 |
+
+三条原则：
+
+1. **不为了省内存反复解码。** 解码一次、按字节 LRU 复用，比每次重新解码更流畅。
+2. **释放“可再生”的东西，不释放“重新加载很贵”的东西。** 插件、模型、字体保留；原图字节和 Bitmap 可丢。
+3. **避免 GC 风暴。** 用池化缓冲减少 LOH 分配；只在释放了大块内存或真正空闲时压缩，而不是每次关窗都 `GC.Collect`。
+
+> “越用越流畅”不是“内存一直很小”，而是：
+> **第一次打开慢一点，之后复用热状态；空闲时只丢派生数据，下一次操作不用重新做最贵的部分。**
+
+---
+
+## 四、优化清单
+
+### A. 生命周期：懒创建 + 隐藏后释放派生状态
+
+**现状**
+
+- `App` 启动时创建 `WorkspaceWindow` / `PaletteWindow`；
+- `WorkspaceViewModel` 构造时立即 `ClipboardHistoryViewModel.Refresh()`，还会选中第一条并 `LoadDetail()`；
+- `WorkspaceWindow.Closing` 只 `Hide()`；
+- `ImageCache` 没有 `Clear()`。
+
+**做法**
+
+1. 工作台/面板改为**首次打开时创建**；托盘菜单只读 manifest，不需要窗口实例。
+2. `WorkspaceWindow` 打开时才 `Refresh()`；关闭时取消当前详情图。
+3. 隐藏后加 **60 秒空闲释放**：
+   - 清空 `Rows` / `Groups` / `Items` 中的图片 VM；
+   - `DetailImagePng = null`；
+   - `ImageCache.Instance.Clear()`（延迟一个 Dispatcher tick，先断开 `Image.Source`）；
+   - 保留插件、工具注册表、最近记录文本和布局。
+4. 再打开时按需重建，插件已热，第二次打开会比第一次快。
+
+**预期**：关闭工作台后从 231 MB 回落到 **150–180 MB**；第二次打开不再重新加载插件。
+**风险**：低；需要区分“面板和工作区共用同一个 Clipboard VM”的引用关系。
+
+---
+
+### B. 图片管线：零拷贝 + 按文件流式缩略图
+
+**现状**
+
+- `InputImageViewModel.PreviewBytes => Input.Data.ToArray()`：每次绑定复制整图；
+- `TextSectionViewModel.ImagePng = sourceImage?.PreviewBytes`：每个结果段再复制一份；
+- `ImageSizeReader.Read` 为了读宽高执行 `data.ToArray()`；
+- `ClipboardEntryViewModel.Thumbnail` 用 `Lazy<byte[]>` 保留完整 PNG；
+- `ByteArrayToBitmapConverter` 无参数分支每次 `DecodeOriginal`，不缓存也不 Dispose；
+- 工作台若干预览 `<Image>` 没有 `ConverterParameter`。
+
+**做法**
+
+1. `PreviewBytes` 不再 `.ToArray()`：
+   ```csharp
+   MemoryMarshal.TryGetArray(Input.Data, out var segment);
+   // 用 segment.Array + Offset + Count 构造只读 MemoryStream
+   ```
+   同一份字节只保留一份。
+2. `ImageSizeReader` 用 `fixed` + `SKMemoryStream(ptr, length, false)`，只读文件头，不复制整图。
+3. 剪贴板缩略图改为 `ImageCache.GetThumbnailFromFile(path)`：
+   - 直接 `File.OpenRead` + `Bitmap.DecodeToHeight(240)`；
+   - 缓存只保留 240px 的 Bitmap，不保留原 PNG；
+   - 详情/灯箱需要原图时再读文件。
+4. 固定尺寸预览统一用 `ConverterParameter=detail`（800px LRU），不要用无参数原尺寸分支。
+5. 需要原尺寸 Bitmap 的地方，在 `Source` 变化时 Dispose 旧 Bitmap；或改成自定义控件管理生命周期。
+
+**预期**：50 张输入图时减少 100–400 MB 的瞬时复制；滚动历史不再把原图字节越积越多。
+**风险**：中；需要逐个检查绑定和转换器调用点。
+
+---
+
+### C. 截图缓冲：池化 + 单份冻结帧
+
+**现状**
+
+- `_frozenPixels` 和 `_frozenBitmap` 同时存在；
+- `CaptureStableRaw` 每次新建/交换整屏数组；
+- 关窗只在大 WorkingSet 时压缩 LOH。
+
+**做法**
+
+1. 冻结帧使用 `ArrayPool<byte>.Shared.Rent`（或窗口私有的可复用缓冲），关窗归还；
+2. 颜色采样如果只需要少量像素，改为从 `WriteableBitmap` 按点读取，创建位图后即可释放 `_frozenPixels`，省一份整屏；
+3. 稳定检测的两帧也走池化，避免 LOH 反复分配；
+4. `OnClosed` 先 `FrozenFrame.Source = null`，再 Dispose 位图，最后归还缓冲；
+5. LOH 压缩条件改为“本次释放的冻结缓冲 > 16 MB”或“应用空闲 5 秒”，而不是固定 600 MB；
+6. 不在每次关窗都 `GC.Collect`，避免下一次截图变慢。
+
+**预期**：4K 截图峰值从约 430 MB 降到 **330–380 MB**；关闭后回落更快。
+**风险**：中；池化缓冲要注意生命周期，避免把已归还数组继续使用。
+
+---
+
+### D. UI Automation：按需建树、及时释放
+
+**现状**
+
+- 每次截图窗口创建 `UiElementProbe`，按窗口缓存最多 12000 个节点；
+- 当前实现会淘汰其他窗口的树，但整个截图会话内仍保留当前窗口的树。
+
+**做法**
+
+1. 首次鼠标移动才初始化 UIA（已经接近这样），不要一开窗就建树；
+2. 选区确定、开始标注或打开动作栏后，清空 UIA 树；
+3. 截图关闭时 `Dispose`（已有）；
+4. 对超大窗口继续用 12000 节点上限；命中失败直接退回窗口级。
+
+**预期**：截图峰值减少 20–50 MB；关闭后 COM 对象及时释放。
+**风险**：低。
+
+---
+
+### E. 剪贴板历史：分页 + 增量，而不是一次 1000 条
+
+**现状**
+
+- `MaxLoad = 1000`；
+- 每次 `Refresh()` 清空再重建；
+- 收起不释放；
+- 图片 VM 的 `Lazy` 保留完整 PNG。
+
+**做法**
+
+1. 首屏只加载 100 条，滚动到底再加载下一页；
+2. `Refresh()` 做 diff：保留相同 id 的 VM，只增删变化项，避免整列表重建；
+3. 缩略图只保留 240px Bitmap（见 B）；
+4. 隐藏 60 秒后释放 `Rows` 和图片 VM，保留文本元数据；
+5. `_deleted` 从 20 张完整 PNG 降到 5 张，或只存文件路径。
+
+**预期**：工作台打开/关闭的内存和时间都更平稳；滚动历史不再线性增长。
+**风险**：低–中；分页和 diff 要处理选中项/滚动位置。
+
+---
+
+### F. OCR / 翻译：热池 + 空闲超时
+
+**现状**
+
+- OCR 每次 `await using` 启动 worker，模型初始化 1–3 秒，结束杀进程；
+- 本地翻译每次加载 1.1 GB / 4 GB 模型，用完释放；
+- 好处是空闲不占内存，坏处是每次都很慢。
+
+**做法（不砍功能，提升“越用越流畅”）**
+
+1. OCR worker 改成**小池 + 空闲超时**（例如保留 1 个进程 90 秒）：
+   - 连续识别/翻译时复用模型，第二次开始明显更快；
+   - 超时或内存压力时退出，空闲仍能回落。
+2. 本地翻译同理：保留最近一次模型 60–120 秒；切换模型或超时才释放。
+3. 池大小、超时时间写入设置，默认“平衡”：空闲不常驻大模型，但短时间连续操作不重复加载。
+
+**预期**：首次 OCR/翻译仍然慢；第二次开始快很多；空闲内存有上限。
+**风险**：中；需要处理进程崩溃、模型切换、内存压力。
+
+---
+
+### G. 滚动截图：分段缓冲 + 上限
+
+**现状**
+
+- `ScrollStitcher._rows` 无限累积；
+- 长页面可能几百 MB，`BuildPng` 再分配整张位图。
+
+**做法**
+
+1. 设置总行数/总字节上限（例如 256 MB），到达后停止并返回已拼部分；
+2. 用分块缓冲（chunk）而不是每行一个 `byte[]`，减少小对象和 LOH 碎片；
+3. `BuildPng` 完成后 `finally { _rows.Clear(); }`，降低编码峰值；
+4. 进度条显示“已拼接行数 / 上限”，让用户知道为什么停止。
+
+**预期**：滚动截图峰值可控，不会因为长页面拖垮进程。
+**风险**：低。
+
+---
+
+### H. GC 与缓存预算
+
+- 解码 Bitmap 是 native 内存，GC 不知道；继续用**按字节 LRU**，不要按条数。
+- 淘汰不立即 Dispose（避免控件还在渲染），但要在窗口隐藏/空闲时统一 `Clear()`；先断开 `Source`，再 Dispose。
+- 给缓存定预算：
+  ```
+  缩略图 ≤ 16 MB
+  详情   ≤ 8 MB
+  图标   ≤ 4 MB
+  ```
+- 监控 `WorkingSet`、`GC.GetTotalMemory(false)`、`ImageCache.Stats()`，在状态切换时写日志。
+- 只在“释放了大块缓冲”或“应用空闲”时做 LOH 压缩，避免每次关窗都 GC 导致下一次操作卡顿。
+
+---
+
+## 五、“越用越流畅”的目标模型
+
+| 阶段 | 目标内存 | 目标体验 |
+|---|---:|---|
+| 冷启动 | ~120 MB | 托盘就绪 |
+| 第一次打开工作台 | 200–240 MB | 加载插件（一次性） |
+| 关闭工作台后 60 秒 | 140–180 MB | 保留插件/元数据，释放图片派生状态 |
+| 第二次打开工作台 | 160–200 MB | 插件已热，明显快于第一次 |
+| 第一次截图 | 330–430 MB（随分辨率） | 加载 UIA/全屏表面 |
+| 关闭截图后 10 秒 | 回到此前基线 +10% | 冻结帧/缓冲释放 |
+| 第二次截图 | 300–380 MB | UIA/Skia 已热，开窗更快 |
+| 连续 OCR | 进程池内 1 个 worker | 第二次识别不再等模型 |
+| 空闲 2 分钟 | 关闭 worker/大模型 | 内存回落 |
+
+判断标准不是“数字最小”，而是：
+
+1. **不随使用次数单调上涨**；
+2. **关闭窗口后能回落到可接受区间**；
+3. **重复操作越来越快**（插件、缩略图、UIA、OCR 模型复用）；
+4. **峰值由屏幕分辨率和当前任务决定，不由历史操作次数决定**。
+
+---
+
+## 六、实施顺序
+
+| 阶段 | 内容 | 预期 | 风险 |
+|---|---|---|---|
+| P0 | 工作台/面板懒创建；隐藏 60 秒释放派生状态；`ImageCache.Clear()` | 空闲回落 30–80 MB | 低 |
+| P0 | 截图关闭按缓冲大小触发 LOH 压缩；先断 Source 再 Dispose | 截图后回落更快 | 低 |
+| P1 | `PreviewBytes` / `ImageSizeReader` 零拷贝；缩略图按文件流式解码 | 输入图瞬时峰值大幅下降 | 中 |
+| P1 | 无参数 Bitmap 转换器改用 detail/有界缓存/自动 Dispose | 工作台切换图片不再泄漏 native | 中 |
+| P2 | 历史分页 + diff 刷新；`_deleted` 降上限 | 打开/滚动更平稳 | 中 |
+| P2 | UIA 建树时机与释放 | 截图峰值 -20–50 MB | 低 |
+| P3 | OCR/翻译热池 + 空闲超时（可配置） | 连续操作更快，空闲仍回落 | 中 |
+| P3 | `ArrayPool` 截图缓冲；滚动拼接上限 | LOH 更平稳 | 中 |
+| P4 | 状态切换日志与预算测试 | 防止回归 | 低 |
+
+原则：**先做“释放”和“零拷贝”，再做“池化/热池”**。先保证不涨，再追求更快。
+
+---
+
+## 七、复测方法
+
+### 7.1 六个时点
+
+1. 冷启动，等 10 秒；
+2. 打开工作台，等 10 秒；
+3. 关闭工作台，等 60 秒；
+4. 打开截图窗口，等 5 秒；
+5. Esc 关闭截图，等 10 秒；
+6. 再打开截图，鼠标在窗口上缓慢移动 10 秒。
+
+每一步记录：
+
+```powershell
+Get-Process Sparrow.App | Select-Object WorkingSet64, PrivateMemorySize64
+```
+
+日志补一行：
+
+```csharp
+App.Log.Info(
+    $"内存：WorkingSet={Environment.WorkingSet / 1048576}MB, " +
+    $"Managed={GC.GetTotalMemory(false) / 1048576}MB");
+```
+
+### 7.2 更细的工具
+
+```powershell
+dotnet-counters monitor -p <pid> System.Runtime
+dotnet-gcdump collect -p <pid>
+```
+
+对比“关闭工作台前 / 后”的 gcdump，重点看：
+
+- `ClipboardEntryViewModel`
+- `Avalonia.Media.Imaging.Bitmap`
+- `byte[]`
+- `Svg.Skia` / `SKBitmap`
+
+### 7.3 验收线
+
+- 关闭工作台后 60 秒：不高于空闲基线 +60 MB；
+- 关闭截图后 10 秒：不高于关闭前 +10%；
+- 连续两次打开同一工作台：第二次不高于第一次；
+- 连续 OCR 两次：第二次耗时明显低于第一次，且空闲 2 分钟后内存回落。
+
+---
+
+## 八、历史记录（2026-11-21）
+
+> 构建：Release（net10.0）　机器：Windows 10 19045 / 16 逻辑核
+> 数据：真实剪贴板历史（75 张图片，磁盘 7.4 MB）
+
+| 时点 | 改造前 | 虚拟化后 |
 |---|---:|---:|
 | 冷启动完成 | 120.2 MB | 119.9 MB |
 | 首次打开面板（75 张卡片） | 388.4 MB | **211.6 MB** |
 | Esc 收起 | 388.8 MB | 212.0 MB |
 | 再次打开 | 502.9 MB | **220.7 MB** |
 | 再次收起 | 498.1 MB | 220.7 MB |
-| 缩略图缓存 | 37 张 / 15 MB | 2 张 / 0 MB（只实现视口内的行） |
+| 缩略图缓存 | 37 张 / 15 MB | 2 张 / 0 MB（仅视口） |
 
-进程内计数（同一次运行）：
+当时结论：
 
-```
-缩略图缓存：37 张 / 15 MB   （按字节 LRU，上限 16 MB —— 工作正常）
-详情缓存：  0 张 / 0 MB
-托管堆：    gen2 209 MB + LOH 17 MB，committed 241 MB
-gcdump：    GC heap 135 MB（lossy，值偏小）
-```
+- 解码尺寸已经解决（`DecodeToHeight(240)`，平均 405 KB/张）；
+- 主要开销是列表未虚拟化，75 张卡片全部实例化；
+- 收起只是 `Hide()`，重开继续涨；
+- 改成 `Rows` + `VirtualizingStackPanel` 后，打开从 388 → 212 MB，重开从 +115 MB → +9 MB。
 
-## 三、结论
-
-**1. 解码尺寸的问题已经解决。** 缓存里 37 张缩略图共 15 MB，平均 405 KB/张，
-对应 427×240×4 —— 说明 `DecodeToHeight(240)` 真的在解码阶段缩了，
-不再是 3 张 4K 就占 95 MB 的老样子。
-
-**2. 主要开销来自「列表未虚拟化」。** 面板原来是
-`ScrollViewer > ItemsControl(Groups) > ItemsControl(Items) > 卡片`，
-75 张卡片全部实例化，每张的视觉树、位图纹理、文本布局都常驻。
-按 268 MB / 75 张 ≈ 3.5 MB/张算，单张缩略图（0.4 MB）解释不了这个量级。
-
-**3. 收起面板不释放，重开继续涨。** `HidePanel` 只是 `Hide()`，视觉树留着；
-每次呼出又 `Refresh()` 全量重建 75 个条目 —— 这就是「关掉不回落 + 每次 +115 MB」。
-
-**4. 改成扁平虚拟化后，两个问题一起消失。** `ClipboardHistoryViewModel.Rows`
-把「分组头 + 条目」拍平成一个集合，面板和工作区都用
-`ItemsControl + VirtualizingStackPanel` 绑定它：
-
-```
-打开：388 → 212 MB（-45%）
-重开：+115 MB → +9 MB
-缩略图：37 张 → 2 张（只解码可见行）
-```
-
-## 四、下一步（按性价比）
-
-1. ~~面板列表虚拟化~~ ✅ 已完成（面板 + 工作区剪贴板页）。
-2. **收起时清空**（可选）：现在收起后仍保留视口内那十几张卡片（≈ 10 MB）。
-   要继续压，可以在 `HidePanel` 里把 `Rows` 换空集合、下次呼出再建。
-   注意面板与工作区共用同一个 `ClipboardHistoryViewModel`，清空要能区分「给谁看」。
-3. **别再加解码参数**：240 / 800 这两个数字是对的，继续调没有收益。
-
-## 五、怎么复测
-
-```powershell
-# 1. 启动 Release 版
-Start-Process src\Sparrow.App\bin\Release\net10.0\Sparrow.App.exe
-# 2. 用 SendInput 注入 Ctrl+Alt+B（RegisterHotKey 全局生效，不需要焦点）
-# 3. 每次操作后读 WorkingSet64，并看日志里的「图片缓存：…」
-Get-Content "$env:LOCALAPPDATA\Sparrow\logs\sparrow-*.log" | Select-String '图片缓存' | Select-Object -Last 2
-```
-
-日志里的缓存统计由 `ClipboardPanelWindow.HidePanel` 写出，专门为这种复核留的。
+这次 2026-11-23 的 119 / 231 / 431 说明：**虚拟化仍然有效，但工作台生命周期、截图冻结帧和图片派生状态还没收口。**
