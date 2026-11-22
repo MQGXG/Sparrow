@@ -369,6 +369,67 @@ public sealed class AnnotationTests
     }
 
     [AvaloniaFact]
+    public void 移动选区后画新标注_撤销优先撤标注()
+    {
+        var window = CreateWithRectangle();
+
+        // 先移动选区
+        window.MouseDown(new Point(180, 180), MouseButton.Left);
+        window.MouseMove(new Point(230, 210));
+        window.MouseUp(new Point(230, 210), MouseButton.Left);
+        window.Selection.Bounds.X.ShouldBe(150, 0.01);
+
+        // 再画一个新的矩形
+        window.RectToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.MouseDown(new Point(200, 160), MouseButton.Left);
+        window.MouseMove(new Point(260, 200));
+        window.MouseUp(new Point(260, 200), MouseButton.Left);
+        window.Notes.Count.ShouldBe(2);
+
+        // Ctrl+Z 应该先撤掉刚画的标注，选区保持在移动后的位置
+        window.KeyPress(Key.Z, RawInputModifiers.Control, PhysicalKey.Z, null);
+
+        window.Notes.Count.ShouldBe(1);
+        window.Selection.Bounds.X.ShouldBe(150, 0.01);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 移动选区_可以撤销和重做()
+    {
+        var window = CreateWithRectangle();
+
+        window.MouseDown(new Point(180, 180), MouseButton.Left);
+        window.MouseMove(new Point(230, 210));
+        window.MouseUp(new Point(230, 210), MouseButton.Left);
+
+        window.Selection.Bounds.X.ShouldBe(150, 0.01);
+        window.Notes[0].ShouldBeOfType<ShapeAnnotation>()
+            .Rect.X.ShouldBe(0, 0.01);
+
+        // 撤销移动：选区和标注一起回到原位
+        window.KeyPress(Key.Z, RawInputModifiers.Control, PhysicalKey.Z, null);
+
+        window.Selection.Bounds.X.ShouldBe(100, 0.01);
+        window.Notes[0].ShouldBeOfType<ShapeAnnotation>()
+            .Rect.ShouldBe(new Rect(50, 50, 100, 70));
+
+        // 重做移动
+        window.KeyPress(
+            Key.Z,
+            RawInputModifiers.Control | RawInputModifiers.Shift,
+            PhysicalKey.Z,
+            null);
+
+        window.Selection.Bounds.X.ShouldBe(150, 0.01);
+        window.Notes[0].ShouldBeOfType<ShapeAnnotation>()
+            .Rect.X.ShouldBe(0, 0.01);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void 截图窗口_切换工具会取消选中()
     {
         var window = new CaptureWindow();

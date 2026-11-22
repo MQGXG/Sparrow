@@ -77,6 +77,11 @@ public partial class CaptureWindow : Window
     private static readonly Cursor CrossCursor = new(StandardCursorType.Cross);
     private static readonly Cursor ArrowCursor = new(StandardCursorType.Arrow);
     private static readonly Cursor MoveCursor = new(StandardCursorType.SizeAll);
+    private static readonly Cursor IbeamCursor = new(StandardCursorType.Ibeam);
+
+    internal static Cursor CrossCursorValue => CrossCursor;
+    internal static Cursor MoveCursorValue => MoveCursor;
+    internal static Cursor IbeamCursorValue => IbeamCursor;
     private static readonly Cursor NorthSouthCursor = new(StandardCursorType.SizeNorthSouth);
     private static readonly Cursor WestEastCursor = new(StandardCursorType.SizeWestEast);
     private static readonly Cursor NwseCursor = new(StandardCursorType.TopLeftCorner);
@@ -133,6 +138,11 @@ public partial class CaptureWindow : Window
 
     /// <summary>移动/拉伸选区前的标注快照；每帧从快照平移，避免累积误差。</summary>
     private List<IAnnotation>? _notesBeforeDrag;
+
+    private sealed record SelectionSnapshot(Rect Selection, IReadOnlyList<IAnnotation> Notes);
+
+    private readonly Stack<SelectionSnapshot> _selectionUndo = new();
+    private readonly Stack<SelectionSnapshot> _selectionRedo = new();
 
     private static readonly Color NoteColor = Color.Parse("#E5A44C");
     private const double NoteWidth = 3;
@@ -718,6 +728,7 @@ public partial class CaptureWindow : Window
                 _draggingNote = hit;
                 _noteDragOriginal = _notes.Items[hit];
                 _noteDragStart = new Point(point.X - _selection.X, point.Y - _selection.Y);
+                MarkNoteMutation();
                 _mode = DragMode.NoteEdit;
                 Cursor = MoveCursor;
                 e.Handled = true;
@@ -971,6 +982,14 @@ public partial class CaptureWindow : Window
                 _toolBeforeResize = null;
                 ForceTool(previous);
             }
+
+            // 几何真的变了才进撤销栈；快照是拖动开始前的选区 + 标注
+            if (_notesBeforeDrag is { } notesBefore && _selection != _selectionOrigin)
+            {
+                _selectionUndo.Push(new SelectionSnapshot(_selectionOrigin, notesBefore));
+                _selectionRedo.Clear();
+                UpdateToolButtons();
+            }
         }
 
         _notesBeforeDrag = null;
@@ -1002,6 +1021,8 @@ public partial class CaptureWindow : Window
         _penPoints = null;
         _notePressOnExisting = false;
         _notesBeforeDrag = null;
+        _selectionUndo.Clear();
+        _selectionRedo.Clear();
         CancelAngleDraft();
         RebuildNotePreview();
         UpdateToolButtons();
@@ -1681,8 +1702,12 @@ public partial class CaptureWindow : Window
 
     private void UpdateCursor(Point point)
     {
-        // 动作栏是普通控件，不该显示截图十字
-        if (IsPointInActionBar(point))
+        // 悬停在工具条 / 尺寸浮条 / 弹出层上：始终显示普通箭头
+        if (IsPointInActionBar(point)
+            || IsPointInControl(SizeBadge, point)
+            || IsPointInControl(CustomColorPanel, point)
+            || IsPointInControl(ToolGroupPopover, point)
+            || IsPointInControl(ResultCard, point))
         {
             Cursor = ArrowCursor;
             return;
@@ -1694,14 +1719,48 @@ public partial class CaptureWindow : Window
             return;
         }
 
-        Cursor = HitHandle(point) switch
+        // 边框优先：即使正在用绘图工具，按在控制点上也是拉伸
+        var handle = HitHandle(point);
+        if (handle != ResizeHandle.None)
         {
-            ResizeHandle.NW or ResizeHandle.SE => NwseCursor,
-            ResizeHandle.NE or ResizeHandle.SW => NeswCursor,
-            ResizeHandle.N or ResizeHandle.S => NorthSouthCursor,
-            ResizeHandle.E or ResizeHandle.W => WestEastCursor,
-            _ => _selection.Contains(point) ? MoveCursor : CrossCursor
-        };
+            Cursor = ResizeCursorFor(handle);
+            return;
+        }
+
+        // 绘图工具：选区内显示工具光标，不再伪装成「移动选区」
+        if (_tool != AnnotationTool.None)
+        {
+            if (!_selection.Contains(point))
+            {
+                Cursor = CrossCursor;
+                return;
+            }
+
+            Cursor = _tool == AnnotationTool.Text
+                ? IbeamCursor
+                : CrossCursor;
+            return;
+        }
+
+        Cursor = _selection.Contains(point) ? MoveCursor : CrossCursor;
+    }
+
+    private static Cursor ResizeCursorFor(ResizeHandle handle) => handle switch
+    {
+        ResizeHandle.NW or ResizeHandle.SE => NwseCursor,
+        ResizeHandle.NE or ResizeHandle.SW => NeswCursor,
+        ResizeHandle.N or ResizeHandle.S => NorthSouthCursor,
+        ResizeHandle.E or ResizeHandle.W => WestEastCursor,
+        _ => ArrowCursor
+    };
+
+    private bool IsPointInControl(Control control, Point point)
+    {
+        if (!control.IsVisible)
+            return false;
+
+        return control.TranslatePoint(new Point(0, 0), this) is { } origin
+               && new Rect(origin, control.Bounds.Size).Contains(point);
     }
 
     /// <summary>
@@ -1775,6 +1834,8 @@ public partial class CaptureWindow : Window
         _pendingAnnotation = null;
         _penPoints = null;
         _notesBeforeDrag = null;
+        _selectionUndo.Clear();
+        _selectionRedo.Clear();
         RebuildNotePreview();
         UpdateToolButtons();
         UpdateDim();
@@ -2213,10 +2274,25 @@ public partial class CaptureWindow : Window
 
     private bool IsColor(string hex) => _noteColor.ToUInt32() == Color.Parse(hex).ToUInt32();
 
+    /// <summary>新的标注动作会截断「选区移动」的撤销/重做链，保持严格 LIFO。</summary>
+    private void MarkNoteMutation()
+    {
+        _selectionUndo.Clear();
+        _selectionRedo.Clear();
+    }
+
     private void OnUndoClick(object? sender, RoutedEventArgs e) => UndoAnnotation();
 
     private void UndoAnnotation()
     {
+        if (_selectionUndo.Count > 0)
+        {
+            var snapshot = _selectionUndo.Pop();
+            _selectionRedo.Push(new SelectionSnapshot(_selection, _notes.Items.ToList()));
+            RestoreSelectionSnapshot(snapshot);
+            return;
+        }
+
         _notes.Undo();
         _selectedNote = -1;
         RebuildNotePreview();
@@ -2227,8 +2303,35 @@ public partial class CaptureWindow : Window
 
     private void RedoAnnotation()
     {
+        if (_selectionRedo.Count > 0)
+        {
+            var snapshot = _selectionRedo.Pop();
+            _selectionUndo.Push(new SelectionSnapshot(_selection, _notes.Items.ToList()));
+            RestoreSelectionSnapshot(snapshot);
+            return;
+        }
+
         _notes.Redo();
         _selectedNote = -1;
+        RebuildNotePreview();
+        UpdateToolButtons();
+    }
+
+    /// <summary>恢复一次选区移动/拉伸：选区几何和标注一起回退。</summary>
+    private void RestoreSelectionSnapshot(SelectionSnapshot snapshot)
+    {
+        HideTextEditor();
+
+        _selection = snapshot.Selection;
+        _selectionOrigin = _selection;
+        _hasSelection = true;
+        _selectedNote = -1;
+        _draggingNote = -1;
+        _notesBeforeDrag = null;
+        _notes.SetItems(snapshot.Notes);
+
+        UpdateSelectionVisuals();
+        UpdateHandles();
         RebuildNotePreview();
         UpdateToolButtons();
     }
@@ -2267,6 +2370,7 @@ public partial class CaptureWindow : Window
             return;
 
         _notes.RemoveAt(hit);
+        MarkNoteMutation();
 
         if (_selectedNote == hit)
             _selectedNote = -1;
@@ -2297,6 +2401,7 @@ public partial class CaptureWindow : Window
 
         _notes.RemoveAt(_selectedNote);
         _selectedNote = -1;
+        MarkNoteMutation();
         RebuildNotePreview();
         UpdateToolButtons();
     }
@@ -2612,6 +2717,7 @@ public partial class CaptureWindow : Window
     private void ClearAnnotations()
     {
         HideTextEditor();
+        MarkNoteMutation();
         CancelAngleDraft();
 
         if (_notes.Items.Count == 0 && _pendingAnnotation is null)
@@ -3063,8 +3169,8 @@ public partial class CaptureWindow : Window
         SetSelected(TextToolButton, _tool == AnnotationTool.Text);
         SetSelected(NumberToolButton, _tool == AnnotationTool.Number);
         SetSelected(WatermarkToolButton, _tool == AnnotationTool.Watermark);
-        UndoButton.IsEnabled = _notes.CanUndo;
-        RedoButton.IsEnabled = _notes.CanRedo;
+        UndoButton.IsEnabled = _notes.CanUndo || _selectionUndo.Count > 0;
+        RedoButton.IsEnabled = _notes.CanRedo || _selectionRedo.Count > 0;
 
         // 折叠组：入口跟着当前工具走，按钮图标显示组里正在用的那个
         foreach (var group in _toolGroups)
@@ -3285,6 +3391,7 @@ public partial class CaptureWindow : Window
                 return true;
 
             case AnnotationTool.Number:
+                MarkNoteMutation();
                 _notes.Add(new NumberAnnotation(
                     _annotationStart, _nextNumber++, _noteColor.ToUInt32(), _numberSize));
                 RebuildNotePreview();
@@ -3410,7 +3517,10 @@ public partial class CaptureWindow : Window
         };
 
         if (keep)
+        {
             _notes.Add(annotation);
+            MarkNoteMutation();
+        }
 
         RebuildNotePreview();
         UpdateToolButtons();
@@ -3505,6 +3615,7 @@ public partial class CaptureWindow : Window
                 {
                     Label = FormatAngle(pending.Vertex, pending.A, pending.B)
                 });
+                MarkNoteMutation();
                 _angleDraft.Clear();
                 HideAngleHint();
             }
@@ -3889,6 +4000,7 @@ public partial class CaptureWindow : Window
                 if (updated is not null)
                 {
                     _notes.Replace(index, updated);
+                    MarkNoteMutation();
 
                     // 下次新建水印沿用刚改过的文字
                     if (updated is WatermarkAnnotation watermark)
@@ -3911,6 +4023,7 @@ public partial class CaptureWindow : Window
             _noteColor.ToUInt32(),
             _noteFontSize,
             _noteBold));
+        MarkNoteMutation();
 
         RebuildNotePreview();
         UpdateToolButtons();
@@ -4219,11 +4332,14 @@ public partial class CaptureWindow : Window
         bounds.Height / _scaling);
 
     /// <summary>选区所在的显示器（DIP，相对截图窗口）；无头测试或取不到时返回 null。</summary>
-    private Rect? ActiveScreenDip()
+    private Rect? ActiveScreenDip() => ScreenDipFor(_selectionOrigin);
+
+    /// <summary>指定矩形中心的显示器（DIP，相对截图窗口）。</summary>
+    private Rect? ScreenDipFor(Rect rect)
     {
         var center = new PixelPoint(
-            _origin.X + (int)Math.Round((_selectionOrigin.X + _selectionOrigin.Width / 2) * _scaling),
-            _origin.Y + (int)Math.Round((_selectionOrigin.Y + _selectionOrigin.Height / 2) * _scaling));
+            _origin.X + (int)Math.Round((rect.X + rect.Width / 2) * _scaling),
+            _origin.Y + (int)Math.Round((rect.Y + rect.Height / 2) * _scaling));
 
         try
         {
@@ -4600,15 +4716,16 @@ public partial class CaptureWindow : Window
     private void MoveToolbar(Point point)
     {
         var size = ActionBar.Bounds.Width > 0 ? ActionBar.Bounds.Size : ActionBar.DesiredSize;
+        var screen = ScreenDipFor(_selection) ?? new Rect(0, 0, Width, Height);
 
         var left = Math.Clamp(
             _toolbarStartPosition.X + (point.X - _toolbarDragStart.X),
-            8,
-            Math.Max(8, Width - size.Width - 8));
+            screen.X + 8,
+            Math.Max(screen.X + 8, screen.Right - size.Width - 8));
         var top = Math.Clamp(
             _toolbarStartPosition.Y + (point.Y - _toolbarDragStart.Y),
-            8,
-            Math.Max(8, Height - size.Height - 8));
+            screen.Y + 8,
+            Math.Max(screen.Y + 8, screen.Bottom - size.Height - 8));
 
         Canvas.SetLeft(ActionBar, left);
         Canvas.SetTop(ActionBar, top);
@@ -4689,10 +4806,11 @@ public partial class CaptureWindow : Window
         var size = ActionBar.DesiredSize;
 
         var badge = ComputeSizeBadgePlacement(selection);
+        var bounds = ScreenDipFor(selection) ?? new Rect(0, 0, Width, Height);
         var position = ComputeToolbarPosition(
             selection,
             size,
-            new Size(Width, Height),
+            bounds,
             new Rect(badge.Position, badge.Size));
 
         Canvas.SetLeft(ActionBar, position.X);
@@ -4728,10 +4846,11 @@ public partial class CaptureWindow : Window
             return;
 
         var badge = ComputeSizeBadgePlacement(_selection);
+        var screen = ScreenDipFor(_selection) ?? new Rect(0, 0, Width, Height);
         var position = ComputeToolbarPosition(
             _selection,
             size,
-            new Size(Width, Height),
+            screen,
             new Rect(badge.Position, badge.Size));
         var currentLeft = Canvas.GetLeft(ActionBar);
         var currentTop = Canvas.GetTop(ActionBar);
@@ -4749,17 +4868,34 @@ public partial class CaptureWindow : Window
         Size bounds,
         Rect? avoid = null,
         double gap = 8,
+        double margin = 8) =>
+        ComputeToolbarPosition(
+            selection,
+            toolbar,
+            new Rect(0, 0, bounds.Width, bounds.Height),
+            avoid,
+            gap,
+            margin);
+
+    internal static Point ComputeToolbarPosition(
+        Rect selection,
+        Size toolbar,
+        Rect bounds,
+        Rect? avoid = null,
+        double gap = 8,
         double margin = 8)
     {
+        var minX = bounds.X + margin;
+        var maxX = Math.Max(minX, bounds.Right - toolbar.Width - margin);
+        var minY = bounds.Y + margin;
+        var maxY = Math.Max(minY, bounds.Bottom - toolbar.Height - margin);
+
         // 锚定在选区下方并水平居中
-        var left = selection.Center.X - toolbar.Width / 2;
-        var clampedX = Math.Clamp(left, margin, Math.Max(margin, bounds.Width - toolbar.Width - margin));
+        var clampedX = Math.Clamp(selection.Center.X - toolbar.Width / 2, minX, maxX);
 
         bool Fits(Point p)
         {
-            if (p.X < margin || p.Y < margin ||
-                p.X + toolbar.Width > bounds.Width - margin ||
-                p.Y + toolbar.Height > bounds.Height - margin)
+            if (p.X < minX || p.Y < minY || p.X > maxX || p.Y > maxY)
                 return false;
 
             if (avoid is { } rect)
@@ -4784,10 +4920,7 @@ public partial class CaptureWindow : Window
                 return aboveBadge;
 
             // 再试选区左右两侧
-            var sideY = Math.Clamp(
-                selection.Center.Y - toolbar.Height / 2,
-                margin,
-                Math.Max(margin, bounds.Height - toolbar.Height - margin));
+            var sideY = Math.Clamp(selection.Center.Y - toolbar.Height / 2, minY, maxY);
 
             var rightSide = new Point(selection.Right + gap, sideY);
             if (Fits(rightSide))
@@ -4799,9 +4932,7 @@ public partial class CaptureWindow : Window
         }
 
         // 上下都放不下：下方优先，整体钳制，保持确定性
-        return new Point(
-            clampedX,
-            Math.Clamp(below.Y, margin, Math.Max(margin, bounds.Height - toolbar.Height - margin)));
+        return new Point(clampedX, Math.Clamp(below.Y, minY, maxY));
     }
 
     /// <summary>结果卡片：优先选区右侧，其次左侧，最后钳制到窗口内。</summary>
@@ -4810,18 +4941,35 @@ public partial class CaptureWindow : Window
         Size card,
         Size bounds,
         double gap = 12,
+        double margin = 8) =>
+        ComputeCardPosition(
+            selection,
+            card,
+            new Rect(0, 0, bounds.Width, bounds.Height),
+            gap,
+            margin);
+
+    internal static Point ComputeCardPosition(
+        Rect selection,
+        Size card,
+        Rect bounds,
+        double gap = 12,
         double margin = 8)
     {
         var left = selection.Right + gap;
 
-        if (left + card.Width > bounds.Width - margin)
+        if (left + card.Width > bounds.Right - margin)
             left = selection.X - card.Width - gap;
 
-        left = Math.Clamp(left, margin, Math.Max(margin, bounds.Width - card.Width - margin));
+        left = Math.Clamp(
+            left,
+            bounds.X + margin,
+            Math.Max(bounds.X + margin, bounds.Right - card.Width - margin));
+
         var top = Math.Clamp(
             selection.Y,
-            margin,
-            Math.Max(margin, bounds.Height - card.Height - margin));
+            bounds.Y + margin,
+            Math.Max(bounds.Y + margin, bounds.Bottom - card.Height - margin));
 
         return new Point(left, top);
     }
@@ -5055,7 +5203,8 @@ public partial class CaptureWindow : Window
         ResultCard.Measure(Size.Infinity);
         var size = ResultCard.DesiredSize;
 
-        var position = ComputeCardPosition(_selection, size, new Size(Width, Height));
+        var screen = ScreenDipFor(_selection) ?? new Rect(0, 0, Width, Height);
+        var position = ComputeCardPosition(_selection, size, screen);
         Canvas.SetLeft(ResultCard, position.X);
         Canvas.SetTop(ResultCard, position.Y);
     }
@@ -5694,11 +5843,19 @@ public partial class CaptureWindow : Window
         var size = SizeBadge.DesiredSize;
         const double gap = 8;
 
-        var left = Math.Max(4, Math.Min(rect.X, Width - size.Width - 4));
+        var screen = ScreenDipFor(rect) ?? new Rect(0, 0, Width, Height);
+        var left = Math.Clamp(
+            rect.X,
+            screen.X + 4,
+            Math.Max(screen.X + 4, screen.Right - size.Width - 4));
+
         var top = rect.Y - size.Height - gap;
-        if (top < 4)
+        if (top < screen.Y + 4)
             top = rect.Y + 4;
-        top = Math.Max(4, Math.Min(top, Height - size.Height - 4));
+        top = Math.Clamp(
+            top,
+            screen.Y + 4,
+            Math.Max(screen.Y + 4, screen.Bottom - size.Height - 4));
 
         return (size, new Point(left, top));
     }

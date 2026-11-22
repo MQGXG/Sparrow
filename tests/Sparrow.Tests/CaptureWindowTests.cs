@@ -198,6 +198,18 @@ public sealed class CaptureWindowTests
     }
 
     [Fact]
+    public void 工具条_多屏边界按当前显示器钳制()
+    {
+        // 左屏 1000..1800，选区贴右边缘：不能跨到窗口的虚拟桌面边界
+        var position = CaptureWindow.ComputeToolbarPosition(
+            new Rect(1700, 100, 80, 50),
+            new Size(400, 40),
+            new Rect(1000, 0, 800, 600));
+
+        position.X.ShouldBe(1800 - 400 - 8);
+    }
+
+    [Fact]
     public void 工具条_下方放不下时翻到选区上方()
     {
         var selection = new Rect(100, 900, 300, 100);
@@ -300,9 +312,31 @@ public sealed class CaptureWindowTests
     }
 
     [AvaloniaFact]
-    public void 窄窗口_低频动作收进更多菜单()
+    public void 光标_按当前工具分流()
     {
-        // 阈值判断：工具组折叠后工具条实测 678 宽，700 以下收起低频动作
+        var window = CreateWithSelection();
+
+        window.MouseMove(new Point(200, 200));
+        ReferenceEquals(window.Cursor, CaptureWindow.MoveCursorValue).ShouldBeTrue();
+
+        window.RectToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.MouseMove(new Point(200, 200));
+        ReferenceEquals(window.Cursor, CaptureWindow.CrossCursorValue).ShouldBeTrue();
+
+        window.TextToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.MouseMove(new Point(200, 200));
+        ReferenceEquals(window.Cursor, CaptureWindow.IbeamCursorValue).ShouldBeTrue();
+
+        window.EraserToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.MouseMove(new Point(200, 200));
+        ReferenceEquals(window.Cursor, CaptureWindow.CrossCursorValue).ShouldBeTrue();
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 窄窗口_低频动作收进更多菜单()
+    {        // 阈值判断：工具组折叠后工具条实测 678 宽，700 以下收起低频动作
         CaptureWindow.ShouldCompact(500).ShouldBeTrue();
         CaptureWindow.ShouldCompact(660).ShouldBeTrue();
         CaptureWindow.ShouldCompact(700).ShouldBeFalse();
