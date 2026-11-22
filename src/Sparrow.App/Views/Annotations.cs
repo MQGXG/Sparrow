@@ -12,6 +12,7 @@ public enum AnnotationTool
     Line,
     Eraser,
     Spotlight,
+    Magnifier,
     Pen,
     Highlighter,
     Mosaic,
@@ -74,6 +75,13 @@ public sealed record SpotlightAnnotation(
     uint Color,
     double Opacity = 0.55,
     bool Ellipse = true) : IAnnotation;
+
+/// <summary>放大镜：把 Rect 处的画面按 Zoom 倍放大，原地铺开（尺寸也跟着变大）。</summary>
+public sealed record MagnifierAnnotation(
+    Rect Rect,
+    double Zoom = 2.5,
+    bool Circle = false,
+    uint BorderColor = 0xFFE5A44C) : IAnnotation;
 
 public sealed record PenAnnotation(
     IReadOnlyList<Point> Points,

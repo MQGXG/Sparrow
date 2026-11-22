@@ -1668,6 +1668,8 @@ public partial class CaptureWindow : Window
 
     private void OnSpotlightToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Spotlight);
 
+    private void OnMagnifierToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Magnifier);
+
     private void OnTextToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Text);
 
     private void OnNumberToolClick(object? sender, RoutedEventArgs e) => SetTool(AnnotationTool.Number);
@@ -2144,6 +2146,12 @@ public partial class CaptureWindow : Window
                 spotlight.Rect.X + dx, spotlight.Rect.Y + dy,
                 spotlight.Rect.Width, spotlight.Rect.Height)
         },
+        MagnifierAnnotation magnifier => magnifier with
+        {
+            Rect = new Rect(
+                magnifier.Rect.X + dx, magnifier.Rect.Y + dy,
+                magnifier.Rect.Width, magnifier.Rect.Height)
+        },
         TextAnnotation text => text with
         {
             Origin = new Point(text.Origin.X + dx, text.Origin.Y + dy)
@@ -2195,6 +2203,9 @@ public partial class CaptureWindow : Window
             case SpotlightAnnotation spotlight:
                 return spotlight.Rect.Contains(point);
 
+            case MagnifierAnnotation magnifier:
+                return NoteBounds(magnifier).Contains(point);
+
             case TextAnnotation text:
                 return NoteBounds(text).Contains(point);
 
@@ -2228,6 +2239,9 @@ public partial class CaptureWindow : Window
 
             case SpotlightAnnotation spotlight:
                 return spotlight.Rect;
+
+            case MagnifierAnnotation magnifier:
+                return magnifier.Rect;
 
             case TextAnnotation text:
                 // 没有排版信息，按字宽粗估：中日韩一个字号宽，西文约 0.6
@@ -2320,6 +2334,7 @@ public partial class CaptureWindow : Window
             Key.L => AnnotationTool.Line,
             Key.E => AnnotationTool.Eraser,
             Key.K => AnnotationTool.Spotlight,
+            Key.Z => AnnotationTool.Magnifier,
             _ => AnnotationTool.None
         };
 
@@ -2533,6 +2548,7 @@ public partial class CaptureWindow : Window
         AnnotationTool.Line => "直线",
         AnnotationTool.Eraser => "橡皮擦",
         AnnotationTool.Spotlight => "聚光灯",
+        AnnotationTool.Magnifier => "放大镜",
         _ => string.Empty
     };
 
@@ -2545,6 +2561,7 @@ public partial class CaptureWindow : Window
         SetSelected(LineToolButton, _tool == AnnotationTool.Line);
         SetSelected(EraserToolButton, _tool == AnnotationTool.Eraser);
         SetSelected(SpotlightToolButton, _tool == AnnotationTool.Spotlight);
+        SetSelected(MagnifierToolButton, _tool == AnnotationTool.Magnifier);
         SetSelected(PenToolButton, _tool == AnnotationTool.Pen);
         SetSelected(HighlighterToolButton, _tool == AnnotationTool.Highlighter);
         SetSelected(MosaicToolButton, _tool == AnnotationTool.Mosaic);
@@ -2564,8 +2581,9 @@ public partial class CaptureWindow : Window
             SetSelected(group.Trigger, active >= 0);
         }
 
-        // 属性行只在选中标注工具时出现；橡皮擦没有可调属性，整条让出去
-        StyleRow.IsVisible = _tool is not (AnnotationTool.None or AnnotationTool.Eraser);
+        // 属性行只在选中标注工具时出现；橡皮擦/放大镜没有可调属性，整条让出去
+        StyleRow.IsVisible = _tool is not (
+            AnnotationTool.None or AnnotationTool.Eraser or AnnotationTool.Magnifier);
 
         // 每组属性只在当前工具用得上时出现（LumaShot 的属性卡思路）
         var drawing = _tool is AnnotationTool.Rectangle or AnnotationTool.Ellipse
@@ -2689,6 +2707,11 @@ public partial class CaptureWindow : Window
                     _spotlightOpacity);
                 break;
 
+            case AnnotationTool.Magnifier:
+                _pendingAnnotation = new MagnifierAnnotation(
+                    new Rect(_annotationStart, new Size()));
+                break;
+
             case AnnotationTool.Text:
                 ShowTextEditor(_annotationStart);
                 return true;
@@ -2732,6 +2755,10 @@ public partial class CaptureWindow : Window
             {
                 Rect = NormalizeRect(_annotationStart, current)
             },
+            MagnifierAnnotation magnifier => magnifier with
+            {
+                Rect = NormalizeRect(_annotationStart, current)
+            },
             PenAnnotation pen when _penPoints is not null => AddPenPoint(pen, current),
             _ => _pendingAnnotation
         };
@@ -2767,6 +2794,7 @@ public partial class CaptureWindow : Window
             PenAnnotation pen => pen.Points.Count >= 2,
             MosaicAnnotation mosaic => mosaic.Rect.Width >= 4 && mosaic.Rect.Height >= 4,
             SpotlightAnnotation spotlight => spotlight.Rect.Width >= 8 && spotlight.Rect.Height >= 8,
+            MagnifierAnnotation magnifier => magnifier.Rect.Width >= 8 && magnifier.Rect.Height >= 8,
             _ => false
         };
 
@@ -2903,6 +2931,42 @@ public partial class CaptureWindow : Window
                     Fill = new SolidColorBrush(Color.FromUInt32(spotlight.Color), spotlight.Opacity),
                     IsHitTestVisible = false
                 });
+                break;
+            }
+
+            case MagnifierAnnotation magnifier:
+            {
+                var zoom = Math.Clamp(magnifier.Zoom, 1.2, 6);
+                var radius = magnifier.Circle ? magnifier.Rect.Width / 2 : 2;
+                var color = Color.FromUInt32(magnifier.BorderColor);
+
+                // 预览只画镜片边框 + 倍数：放大画面在导出时按 source 采样，
+                // 预览层拿不到「导出时的源图」，硬做容易和导出一致性出问题。
+                var lens = new Border
+                {
+                    Width = magnifier.Rect.Width,
+                    Height = magnifier.Rect.Height,
+                    CornerRadius = new CornerRadius(radius),
+                    BorderThickness = new Thickness(2),
+                    BorderBrush = new SolidColorBrush(color),
+                    IsHitTestVisible = false
+                };
+
+                Canvas.SetLeft(lens, magnifier.Rect.X);
+                Canvas.SetTop(lens, magnifier.Rect.Y);
+                NoteLayer.Children.Add(lens);
+
+                var zoomLabel = new TextBlock
+                {
+                    Text = $"{zoom:0.#}×",
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(color),
+                    IsHitTestVisible = false
+                };
+
+                Canvas.SetLeft(zoomLabel, magnifier.Rect.X + 5);
+                Canvas.SetTop(zoomLabel, magnifier.Rect.Y + 3);
+                NoteLayer.Children.Add(zoomLabel);
                 break;
             }
 

@@ -63,6 +63,10 @@ internal static class AnnotationRenderer
                 DrawSpotlight(canvas, spotlight);
                 break;
 
+            case MagnifierAnnotation magnifier:
+                DrawMagnifier(canvas, magnifier, paint, source);
+                break;
+
             case PenAnnotation pen:
                 if (pen.Points.Count < 2)
                     break;
@@ -157,6 +161,75 @@ internal static class AnnotationRenderer
             canvas.DrawRect(rect, paint);
 
         paint.PathEffect = null;
+    }
+
+    /// <summary>放大镜：在原矩形里显示「中心 1/Zoom 区域」的放大结果（镜片不动，画面放大）。</summary>
+    private static void DrawMagnifier(SKCanvas canvas, MagnifierAnnotation magnifier, SKPaint paint,
+        SKBitmap source)
+    {
+        var rect = magnifier.Rect;
+        if (rect.Width < 4 || rect.Height < 4)
+            return;
+
+        var zoom = Math.Clamp(magnifier.Zoom, 1.2, 6);
+        var dest = new SKRect(
+            (float)rect.X, (float)rect.Y, (float)rect.Right, (float)rect.Bottom);
+
+        // 源区域 = 目标区域按 1/zoom 从中心收缩
+        var sourceWidth = rect.Width / zoom;
+        var sourceHeight = rect.Height / zoom;
+        var sourceRect = new Rect(
+            rect.X + rect.Width / 2 - sourceWidth / 2,
+            rect.Y + rect.Height / 2 - sourceHeight / 2,
+            sourceWidth, sourceHeight);
+
+        var matrix = canvas.TotalMatrix;
+        var topLeft = matrix.MapPoint(new SKPoint((float)sourceRect.X, (float)sourceRect.Y));
+        var bottomRight = matrix.MapPoint(new SKPoint(
+            (float)sourceRect.Right, (float)sourceRect.Bottom));
+        var src = new SKRect(topLeft.X, topLeft.Y, bottomRight.X, bottomRight.Y);
+
+        src = new SKRect(
+            Math.Max(0, src.Left),
+            Math.Max(0, src.Top),
+            Math.Min(source.Width, src.Right),
+            Math.Min(source.Height, src.Bottom));
+
+        if (src.Width < 1 || src.Height < 1)
+            return;
+
+        canvas.Save();
+
+        if (magnifier.Circle)
+        {
+            using var clip = new SKPath();
+            clip.AddOval(dest);
+            canvas.ClipPath(clip, SKClipOperation.Intersect, antialias: true);
+        }
+        else
+        {
+            canvas.ClipRect(dest);
+        }
+
+        using (var image = SKImage.FromBitmap(source))
+        {
+            canvas.DrawImage(
+                image, src, dest,
+                new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
+        }
+
+        canvas.Restore();
+
+        // 边框：圆形描边椭圆，方形描边矩形
+        paint.Color = new SKColor(magnifier.BorderColor);
+        paint.Style = SKPaintStyle.Stroke;
+        paint.StrokeWidth = 2;
+        paint.PathEffect = null;
+
+        if (magnifier.Circle)
+            canvas.DrawOval(dest, paint);
+        else
+            canvas.DrawRect(dest, paint);
     }
 
     /// <summary>聚光灯：用一个巨大的外框 + 内洞组成 EvenOdd 路径，一次填充完成压暗。</summary>

@@ -64,6 +64,35 @@ public sealed class AnnotationTests
     }
 
     [Fact]
+    public void 合成_放大镜把中心区域按倍数放大()
+    {
+        const int width = 100, height = 100;
+        using var bitmap = new SKBitmap(width, height);
+        using (var canvas = new SKCanvas(bitmap))
+        {
+            canvas.Clear(SKColors.White);
+            using var dot = new SKPaint { Color = SKColors.Black };
+            canvas.DrawRect(14, 14, 1, 1, dot);
+        }
+
+        byte[] png;
+        using (var image = SKImage.FromBitmap(bitmap))
+        using (var data = image.Encode(SKEncodedImageFormat.Png, 100))
+            png = data.ToArray();
+
+        // 镜片 (8,8) 16×16，放大 4 倍：源区域是中心 4×4 = (14,14)-(18,18)
+        var magnifier = new MagnifierAnnotation(new Rect(8, 8, 16, 16), Zoom: 4);
+        var composed = AnnotationRenderer.Compose(png, [magnifier], scale: 1);
+
+        using var decoded = SKBitmap.Decode(composed);
+
+        // 源区域左上角那颗黑点被放大成 4×4，落在镜片左上角
+        ((int)decoded.GetPixel(9, 9).Red).ShouldBeLessThan(120);
+        // 镜片右下角对应源的右下角，仍是白底
+        ((int)decoded.GetPixel(20, 20).Red).ShouldBeGreaterThan(180);
+    }
+
+    [Fact]
     public void 合成_聚光灯只压暗区域外()
     {
         var png = CreateWhitePng(100, 100);
