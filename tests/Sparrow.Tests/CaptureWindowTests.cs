@@ -184,6 +184,20 @@ public sealed class CaptureWindowTests
     }
 
     [Fact]
+    public void 工具条_上方被尺寸浮条挡住时叠到浮条上方()
+    {
+        // 选区贴底：下方放不下，上方又被尺寸浮条占住
+        var selection = new Rect(100, 880, 300, 100);
+        var badge = new Rect(100, 850, 200, 22);
+
+        var position = CaptureWindow.ComputeToolbarPosition(
+            selection, new Size(400, 40), new Size(1280, 1000), badge);
+
+        position.Y.ShouldBe(850 - 40 - 8);
+        position.X.ShouldBe(50);
+    }
+
+    [Fact]
     public void 工具条_下方放不下时翻到选区上方()
     {
         var selection = new Rect(100, 900, 300, 100);

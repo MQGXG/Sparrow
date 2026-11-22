@@ -222,6 +222,14 @@ public sealed class AnnotationDocument
         _redo.Clear();
     }
 
+    /// <summary>整批替换（移动/拉伸选区时按快照平移，不改变撤销语义之外的东西）。</summary>
+    public void SetItems(IEnumerable<IAnnotation> items)
+    {
+        _items.Clear();
+        _items.AddRange(items);
+        _redo.Clear();
+    }
+
     public void Undo()
     {
         if (_items.Count == 0)

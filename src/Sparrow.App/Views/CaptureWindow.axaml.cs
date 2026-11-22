@@ -131,6 +131,9 @@ public partial class CaptureWindow : Window
     private Point _noteDragStart;
     private IAnnotation? _noteDragOriginal;
 
+    /// <summary>移动/拉伸选区前的标注快照；每帧从快照平移，避免累积误差。</summary>
+    private List<IAnnotation>? _notesBeforeDrag;
+
     private static readonly Color NoteColor = Color.Parse("#E5A44C");
     private const double NoteWidth = 3;
     private const double HighlighterWidth = 18;
@@ -365,6 +368,7 @@ public partial class CaptureWindow : Window
         if (TranslateButton.Flyout is not MenuFlyout menu)
         {
             TranslateButton.IsVisible = false;
+            _fullMainBarWidth = double.NaN;
             return;
         }
 
@@ -378,6 +382,7 @@ public partial class CaptureWindow : Window
         }
 
         TranslateButton.IsVisible = menu.Items.Count > 0;
+        _fullMainBarWidth = double.NaN;
     }
 
     /// <summary>宿主注入的复制实现。窗口不直接碰剪贴板。</summary>
@@ -742,6 +747,8 @@ public partial class CaptureWindow : Window
                 _dragOrigin = point;
                 _selectionOrigin = _selection;
                 _activeScreen = ActiveScreenDip();
+                _notesBeforeDrag = _notes.Items.ToList();
+                HideTextEditor();
                 e.Handled = true;
                 return;
             }
@@ -752,6 +759,8 @@ public partial class CaptureWindow : Window
                 _dragOrigin = point;
                 _selectionOrigin = _selection;
                 _activeScreen = ActiveScreenDip();
+                _notesBeforeDrag = _notes.Items.ToList();
+                HideTextEditor();
                 Cursor = MoveCursor;
                 e.Handled = true;
                 return;
@@ -952,9 +961,9 @@ public partial class CaptureWindow : Window
         else
         {
             // 移动/拉伸结束：动作栏跟着新位置走
+            UpdateSizeBadge(_selection);
             PositionActionBar(_selection);
             UpdateHandles();
-            UpdateSizeBadge(_selection);
 
             // 边框临时让位的绘图工具在这里恢复
             if (_toolBeforeResize is { } previous)
@@ -964,6 +973,7 @@ public partial class CaptureWindow : Window
             }
         }
 
+        _notesBeforeDrag = null;
         e.Handled = true;
     }
 
@@ -991,6 +1001,7 @@ public partial class CaptureWindow : Window
         _pendingAnnotation = null;
         _penPoints = null;
         _notePressOnExisting = false;
+        _notesBeforeDrag = null;
         CancelAngleDraft();
         RebuildNotePreview();
         UpdateToolButtons();
@@ -1322,9 +1333,6 @@ public partial class CaptureWindow : Window
         // 选区一动就恢复「工具条跟随」，对齐参考的 resetPositionForSelection 语义
         _toolbarManual = false;
 
-        // 框移动后截图内容变了，旧标注会错位，直接清掉
-        ClearAnnotations();
-
         var dx = current.X - _dragOrigin.X;
         var dy = current.Y - _dragOrigin.Y;
 
@@ -1354,14 +1362,12 @@ public partial class CaptureWindow : Window
 
         _selection = new Rect(left, top, _selectionOrigin.Width, _selectionOrigin.Height);
         UpdateSelectionVisuals();
+        TranslateNotesForSelectionChange(left - _selectionOrigin.X, top - _selectionOrigin.Y);
     }
 
     private void ApplyResize(Point current)
     {
         _toolbarManual = false;
-
-        // 框尺寸变化后截图内容变了，旧标注会错位，直接清掉
-        ClearAnnotations();
 
         var dx = current.X - _dragOrigin.X;
         var dy = current.Y - _dragOrigin.Y;
@@ -1423,6 +1429,22 @@ public partial class CaptureWindow : Window
 
         _selection = new Rect(left, top, right - left, bottom - top);
         UpdateSelectionVisuals();
+        TranslateNotesForSelectionChange(left - _selectionOrigin.X, top - _selectionOrigin.Y);
+    }
+
+    /// <summary>
+    /// 选区原点变化时，把标注反向平移，保持它们在屏幕上的位置不变。
+    /// 从拖动开始时的快照重算，避免逐帧累积误差。
+    /// </summary>
+    private void TranslateNotesForSelectionChange(double deltaX, double deltaY)
+    {
+        if (_notesBeforeDrag is null
+            || (Math.Abs(deltaX) < 0.01 && Math.Abs(deltaY) < 0.01))
+            return;
+
+        _notes.SetItems(_notesBeforeDrag.Select(
+            note => TranslateNote(note, -deltaX, -deltaY)));
+        RebuildNotePreview();
     }
 
     private void UpdateSelectionVisuals()
@@ -1752,6 +1774,7 @@ public partial class CaptureWindow : Window
         _nextNumber = 1;
         _pendingAnnotation = null;
         _penPoints = null;
+        _notesBeforeDrag = null;
         RebuildNotePreview();
         UpdateToolButtons();
         UpdateDim();
@@ -2601,6 +2624,7 @@ public partial class CaptureWindow : Window
         _pendingAnnotation = null;
         _penPoints = null;
         _nextNumber = 1;
+        _notesBeforeDrag = null;
         RebuildNotePreview();
         UpdateToolButtons();
     }
@@ -3020,6 +3044,7 @@ public partial class CaptureWindow : Window
 
     private void UpdateToolButtons()
     {
+        _fullMainBarWidth = double.NaN;
         SetSelected(SelectToolButton, _tool == AnnotationTool.None);
         SetSelected(RectToolButton, _tool == AnnotationTool.Rectangle);
         SetSelected(EllipseToolButton, _tool == AnnotationTool.Ellipse);
@@ -3111,7 +3136,8 @@ public partial class CaptureWindow : Window
         MosaicGroup.IsVisible = _tool == AnnotationTool.Mosaic;
 
         // 属性行显隐会改变工具条宽度：先让它重新测量，再重新居中（用户拖过就不再跟随）
-        ActionBar.InvalidateMeasure();        ActionBar.Measure(Size.Infinity);
+        ActionBar.InvalidateMeasure();
+        MeasureActionBar();
 
         if (ActionBar.IsVisible && !_toolbarManual)
             PositionActionBar(_selection);
@@ -4564,11 +4590,10 @@ public partial class CaptureWindow : Window
         _toolbarManual = true;
         _toolbarDragStart = e.GetPosition(this);
 
-        ActionBar.Measure(Size.Infinity);
+        MeasureActionBar();
         _toolbarStartPosition = new Point(
             Canvas.GetLeft(ActionBar),
             Canvas.GetTop(ActionBar));
-
         e.Handled = true;
     }
 
@@ -4604,6 +4629,9 @@ public partial class CaptureWindow : Window
     /// </summary>
     private bool _compactToolbar;
 
+    /// <summary>完整动作状态下的主条宽度；按钮可见性变化时置 NaN 重测。</summary>
+    private double _fullMainBarWidth = double.NaN;
+
     /// <summary>
     /// 窗口窄于这个宽度（DIP）就把低频动作收起来。
     /// 工具组折叠之后工具条实测 678 宽，加两侧各 8 的边距需要 694，阈值定在 700。
@@ -4614,7 +4642,22 @@ public partial class CaptureWindow : Window
     /// 窄窗口把低频动作收进「更多」。
     /// 学 snow-shot 的 layout compaction，只是规则更简单（按窗口宽度，而不是逐项量宽）。
     /// </summary>
-    private void ApplyToolbarCompaction() => SetToolbarCompaction(ShouldCompact(Width));
+    private void ApplyToolbarCompaction()
+    {
+        var available = ToolbarAvailableWidth;
+
+        // 完整动作宽度只在按钮可见性变化时重测，避免拖动选区时每帧切换可见性
+        if (double.IsNaN(_fullMainBarWidth))
+        {
+            SetToolbarCompaction(false);
+            MainBar.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            _fullMainBarWidth = MainBar.DesiredSize.Width;
+        }
+
+        var wasCompact = _compactToolbar;
+        SetToolbarCompaction(
+            _fullMainBarWidth > available || (wasCompact && _fullMainBarWidth > available - 24));
+    }
 
     internal void SetToolbarCompaction(bool compact)
     {
@@ -4642,12 +4685,36 @@ public partial class CaptureWindow : Window
         if (_toolbarManual)
             return;
 
-        ActionBar.Measure(Size.Infinity);
+        MeasureActionBar();
         var size = ActionBar.DesiredSize;
 
-        var position = ComputeToolbarPosition(selection, size, new Size(Width, Height));
+        var badge = ComputeSizeBadgePlacement(selection);
+        var position = ComputeToolbarPosition(
+            selection,
+            size,
+            new Size(Width, Height),
+            new Rect(badge.Position, badge.Size));
+
         Canvas.SetLeft(ActionBar, position.X);
         Canvas.SetTop(ActionBar, position.Y);
+    }
+
+    /// <summary>工具条可用宽度：留 8px 边距，属性栏按这个宽度折行。</summary>
+    private double ToolbarAvailableWidth
+    {
+        get
+        {
+            var width = Width > 0 ? Width : 800;
+            return Math.Max(240, width - 16);
+        }
+    }
+
+    /// <summary>约束宽度后再测量，属性栏才能按整组换行。</summary>
+    private void MeasureActionBar()
+    {
+        var available = ToolbarAvailableWidth;
+        ActionBar.MaxWidth = available;
+        ActionBar.Measure(new Size(available, double.PositiveInfinity));
     }
 
     /// <summary>布局完成后再按实际 Bounds 校正一次居中，避免用到上一帧的尺寸。</summary>
@@ -4660,7 +4727,12 @@ public partial class CaptureWindow : Window
         if (size.Width <= 0 || size.Height <= 0)
             return;
 
-        var position = ComputeToolbarPosition(_selection, size, new Size(Width, Height));
+        var badge = ComputeSizeBadgePlacement(_selection);
+        var position = ComputeToolbarPosition(
+            _selection,
+            size,
+            new Size(Width, Height),
+            new Rect(badge.Position, badge.Size));
         var currentLeft = Canvas.GetLeft(ActionBar);
         var currentTop = Canvas.GetTop(ActionBar);
 
@@ -4675,29 +4747,56 @@ public partial class CaptureWindow : Window
         Rect selection,
         Size toolbar,
         Size bounds,
+        Rect? avoid = null,
         double gap = 8,
         double margin = 8)
     {
         // 锚定在选区下方并水平居中
         var left = selection.Center.X - toolbar.Width / 2;
-        var below = new Point(left, selection.Bottom + gap);
-        var above = new Point(left, selection.Y - toolbar.Height - gap);
-
-        bool Fits(Point p) =>
-            p.X >= margin && p.Y >= margin &&
-            p.X + toolbar.Width <= bounds.Width - margin &&
-            p.Y + toolbar.Height <= bounds.Height - margin;
-
-        // 横向先钳制、纵向不钳制：否则「压住选区」的位置也会被判成放得下
         var clampedX = Math.Clamp(left, margin, Math.Max(margin, bounds.Width - toolbar.Width - margin));
 
-        var belowCandidate = new Point(clampedX, below.Y);
-        if (Fits(belowCandidate))
-            return belowCandidate;
+        bool Fits(Point p)
+        {
+            if (p.X < margin || p.Y < margin ||
+                p.X + toolbar.Width > bounds.Width - margin ||
+                p.Y + toolbar.Height > bounds.Height - margin)
+                return false;
 
-        var aboveCandidate = new Point(clampedX, above.Y);
-        if (Fits(aboveCandidate))
-            return aboveCandidate;
+            if (avoid is { } rect)
+                return !new Rect(p, toolbar).Intersects(rect);
+
+            return true;
+        }
+
+        var below = new Point(clampedX, selection.Bottom + gap);
+        if (Fits(below))
+            return below;
+
+        var above = new Point(clampedX, selection.Top - toolbar.Height - gap);
+        if (Fits(above))
+            return above;
+
+        if (avoid is { } badge && badge.Width > 0 && badge.Height > 0)
+        {
+            // 上方被尺寸浮条挡住：叠到浮条上方
+            var aboveBadge = new Point(clampedX, badge.Top - toolbar.Height - gap);
+            if (Fits(aboveBadge))
+                return aboveBadge;
+
+            // 再试选区左右两侧
+            var sideY = Math.Clamp(
+                selection.Center.Y - toolbar.Height / 2,
+                margin,
+                Math.Max(margin, bounds.Height - toolbar.Height - margin));
+
+            var rightSide = new Point(selection.Right + gap, sideY);
+            if (Fits(rightSide))
+                return rightSide;
+
+            var leftSide = new Point(selection.Left - toolbar.Width - gap, sideY);
+            if (Fits(leftSide))
+                return leftSide;
+        }
 
         // 上下都放不下：下方优先，整体钳制，保持确定性
         return new Point(
@@ -5022,6 +5121,7 @@ public partial class CaptureWindow : Window
         CopyAllButton.IsVisible = true;
         OcrBoxButton.IsVisible = true;
         OcrStatus.IsVisible = true;
+        _fullMainBarWidth = double.NaN;
         ApplyOcrBoxMode();
     }
 
@@ -5040,9 +5140,9 @@ public partial class CaptureWindow : Window
         CopyAllButton.IsVisible = false;
         OcrBoxButton.IsVisible = false;
         OcrStatus.IsVisible = false;
+        _fullMainBarWidth = double.NaN;
         ToolTip.SetTip(RecognizeButton, "识别选区文字（Enter / R）");
-        HideResultCard();
-        _ocrText = null;
+        HideResultCard();        _ocrText = null;
         UpdateHandles();
     }
 
@@ -5587,6 +5687,22 @@ public partial class CaptureWindow : Window
         _frozenHeight = height;
     }
 
+    /// <summary>尺寸浮条的落点：优先选区上方，顶到边缘时放进内侧；工具条避让也用它。</summary>
+    private (Size Size, Point Position) ComputeSizeBadgePlacement(Rect rect)
+    {
+        SizeBadge.Measure(Size.Infinity);
+        var size = SizeBadge.DesiredSize;
+        const double gap = 8;
+
+        var left = Math.Max(4, Math.Min(rect.X, Width - size.Width - 4));
+        var top = rect.Y - size.Height - gap;
+        if (top < 4)
+            top = rect.Y + 4;
+        top = Math.Max(4, Math.Min(top, Height - size.Height - 4));
+
+        return (size, new Point(left, top));
+    }
+
     /// <summary>
     /// 选区读数：左上角物理坐标 + 物理像素尺寸，和最终截图一致。
     /// 默认放在选区上方；顶到屏幕边缘时放到下方。
@@ -5612,19 +5728,8 @@ public partial class CaptureWindow : Window
         SizeUnitButton.Content = _sizeInPixels ? "px" : "DIP";
         _sizeEditGuard = false;
 
-        // 工具条宽度随内容变化（单位文字 / 数字位数），放置前先量一次
-        SizeBadge.Measure(Size.Infinity);
-        var size = SizeBadge.DesiredSize;
-        const double gap = 8;
-
-        // 贴在选区左上角上方；顶到屏幕边缘时放进选区内侧
-        var left = Math.Max(4, Math.Min(rect.X, Width - size.Width - 4));
-        var top = rect.Y - size.Height - gap;
-        if (top < 4)
-            top = rect.Y + 4;
-        top = Math.Max(4, Math.Min(top, Height - size.Height - 4));
-
-        Canvas.SetLeft(SizeBadge, left);
-        Canvas.SetTop(SizeBadge, top);
+        var (_, position) = ComputeSizeBadgePlacement(rect);
+        Canvas.SetLeft(SizeBadge, position.X);
+        Canvas.SetTop(SizeBadge, position.Y);
     }
 }

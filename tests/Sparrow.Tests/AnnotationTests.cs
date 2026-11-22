@@ -330,6 +330,45 @@ public sealed class AnnotationTests
     }
 
     [AvaloniaFact]
+    public void 移动选区_标注反向平移保持屏幕位置()
+    {
+        var window = CreateWithRectangle();
+        window.Notes[0].ShouldBeOfType<ShapeAnnotation>()
+            .Rect.ShouldBe(new Rect(50, 50, 100, 70));
+
+        // 在矩形空心处按下并拖动整个选区 +50/+30
+        window.MouseDown(new Point(180, 180), MouseButton.Left);
+        window.MouseMove(new Point(230, 210));
+        window.MouseUp(new Point(230, 210), MouseButton.Left);
+
+        window.Selection.Bounds.X.ShouldBe(150, 0.01);
+        window.Selection.Bounds.Y.ShouldBe(130, 0.01);
+
+        // 本地坐标反向平移，屏幕上仍在 (150,150)
+        window.Notes[0].ShouldBeOfType<ShapeAnnotation>()
+            .Rect.ShouldBe(new Rect(0, 20, 100, 70));
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 拉伸选区左边缘_标注保持屏幕位置()
+    {
+        var window = CreateWithRectangle();
+
+        // 选区左边缘中点：拖到 130，原点右移 30
+        window.MouseDown(new Point(100, 200), MouseButton.Left);
+        window.MouseMove(new Point(130, 200));
+        window.MouseUp(new Point(130, 200), MouseButton.Left);
+
+        window.Selection.Bounds.X.ShouldBe(130, 0.01);
+        window.Notes[0].ShouldBeOfType<ShapeAnnotation>()
+            .Rect.X.ShouldBe(20, 0.01);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void 截图窗口_切换工具会取消选中()
     {
         var window = new CaptureWindow();

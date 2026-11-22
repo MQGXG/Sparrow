@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="using:Sparrow.App.Views"
         x:Class="Sparrow.App.Views.CaptureWindow"
         Title="SparrowCapture"
         WindowDecorations="None"
@@ -680,7 +681,7 @@
     <!-- 两段式浮层：主工具条一行，属性栏按当前工具出现（参考 LumaShot） -->
     <StackPanel x:Name="ActionBar" IsVisible="False" Cursor="Arrow" Spacing="8">
 
-      <Border Classes="capture-bar" HorizontalAlignment="Center">
+      <Border x:Name="MainBar" Classes="capture-bar" HorizontalAlignment="Center">
         <StackPanel Orientation="Horizontal" Spacing="8">
           <Border x:Name="ToolbarDragHandle"
                   Width="12"
@@ -913,7 +914,7 @@
 
       <!-- 属性栏：只显示当前工具用得上的设置；宽度随内容，居中挂在主条下方 -->
       <Border x:Name="StyleRow" Classes="capture-bar" HorizontalAlignment="Center" IsVisible="False">
-        <StackPanel Orientation="Horizontal" Spacing="8">
+        <views:SpacingWrapPanel x:Name="StyleGroups" Spacing="8" LineSpacing="6">
 
           <StackPanel x:Name="ColorGroup" Orientation="Horizontal" Spacing="4">
             <TextBlock Classes="prop-label" Text="颜色" />
@@ -1076,7 +1077,7 @@
               <MenuFlyout Placement="TopEdgeAlignedRight" />
             </Button.Flyout>
           </Button>
-        </StackPanel>
+        </views:SpacingWrapPanel>
       </Border>
     </StackPanel>
 

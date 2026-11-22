@@ -107,4 +107,17 @@ public sealed class ToolbarLayoutWindowTests
 
         window.Close();
     }
+
+    [AvaloniaFact]
+    public void 属性栏_按整组换行并保留间距()
+    {
+        var panel = new SpacingWrapPanel { Spacing = 8, LineSpacing = 6 };
+        for (var index = 0; index < 3; index++)
+            panel.Children.Add(new Border { Width = 40, Height = 20 });
+
+        panel.Measure(new Size(100, double.PositiveInfinity));
+
+        panel.DesiredSize.Width.ShouldBe(88, 0.1);
+        panel.DesiredSize.Height.ShouldBe(46, 0.1);
+    }
 }
