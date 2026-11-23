@@ -1876,9 +1876,17 @@ public partial class CaptureWindow : Window
                     }
                 }
 
-                // 预算用完 / 树还没建全：停一下再来一次（Chromium 的懒启用经常这样）
-                if (!result.Completed && retries < 3)
+                // 预算用完 / 树还没建全：停一下再来一次（Chromium 的懒启用经常这样）。
+                // 文档 / 整块窗格也算「粗结果」：网页第一次查询往往只给到文档，
+                // 再等 350ms 树里才会出现链接/按钮。
+                var coarse = IsCoarseCandidate(result, window);
+
+                if ((!result.Completed || coarse) && retries < 3)
                 {
+                    // 先把粗结果画出来，不要一直停在整窗
+                    if (result.Candidate is not null && !CursorMovedSince(point))
+                        SetUiCandidate(result.Candidate);
+
                     retries++;
                     await Task.Delay(350);
                     if (!IsProbeCurrent(generation, window))
@@ -1948,6 +1956,28 @@ public partial class CaptureWindow : Window
     {
         var latest = WindowCandidates.GetCursorPosition();
         return Math.Abs(latest.X - point.X) > 2 || Math.Abs(latest.Y - point.Y) > 2;
+    }
+
+    /// <summary>
+    /// 结果是不是「还没走到底」：文档/窗格/整窗大小。
+    /// 网页第一次查询常只给到文档；这时候 Completed 可能已经是 true，
+    /// 但树里其实还会长出链接和按钮，值得再等几拍。
+    /// </summary>
+    private static bool IsCoarseCandidate(UiElementProbeResult result, WindowCandidate window)
+    {
+        if (result.Candidate is null)
+            return true;
+
+        if (result.Candidate.ControlType is "文档" or "窗格" or "窗口" or "应用")
+            return true;
+
+        var bounds = result.Candidate.Bounds;
+        var windowBounds = window.Bounds;
+
+        return windowBounds.Width > 0
+               && windowBounds.Height > 0
+               && bounds.Width >= windowBounds.Width * 95 / 100
+               && bounds.Height >= windowBounds.Height * 95 / 100;
     }
 
     private bool IsProbeCurrent(int generation, WindowCandidate window) =>
