@@ -69,6 +69,15 @@ public sealed record AppSettings
     /// <summary>截图取帧 API：auto / wgc / gdi。</summary>
     public string CaptureApi { get; init; } = "auto";
 
+    /// <summary>普通截图是否显示鼠标光标。</summary>
+    public bool CaptureShowCursor { get; init; }
+
+    /// <summary>滚动截图拼接结果里是否包含截图窗口及其工具栏。</summary>
+    public bool CaptureUiInScroll { get; init; } = true;
+
+    /// <summary>是否还原放大镜全屏颜色滤镜。</summary>
+    public bool CaptureRestoreColors { get; init; } = true;
+
     /// <summary>顺序粘贴热键：在目标应用里按下，写入队列下一条并模拟 Ctrl+V。</summary>
     public string QueuePasteHotkey { get; init; } = "Ctrl+Alt+V";
 

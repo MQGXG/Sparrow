@@ -74,6 +74,25 @@ public sealed class SettingsViewModelTests
     }
 
     [Fact]
+    public void 设置页_截图内容选项_默认值与保存()
+    {
+        var (viewModel, store, _) = Create();
+
+        viewModel.CaptureShowCursor.ShouldBeFalse();
+        viewModel.CaptureUiInScroll.ShouldBeTrue();
+        viewModel.CaptureRestoreColors.ShouldBeTrue();
+
+        viewModel.CaptureShowCursor = true;
+        viewModel.CaptureUiInScroll = false;
+        viewModel.CaptureRestoreColors = false;
+
+        var saved = store.Load();
+        saved.CaptureShowCursor.ShouldBeTrue();
+        saved.CaptureUiInScroll.ShouldBeFalse();
+        saved.CaptureRestoreColors.ShouldBeFalse();
+    }
+
+    [Fact]
     public void 设置页_冷启动不加载插件_切到热键分段才加载()
     {
         var (viewModel, _, catalog) = Create();

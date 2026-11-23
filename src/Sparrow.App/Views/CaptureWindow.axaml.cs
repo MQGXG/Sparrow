@@ -436,6 +436,12 @@ public partial class CaptureWindow : Window
     /// <summary>取帧 API：auto / wgc / gdi。</summary>
     public string CaptureFrameApi { get; set; } = "auto";
 
+    /// <summary>普通截图是否画鼠标光标。</summary>
+    public bool CaptureShowCursor { get; set; }
+
+    /// <summary>是否还原放大镜全屏颜色滤镜。</summary>
+    public bool CaptureRestoreColors { get; set; } = true;
+
     public Action<OcrBoxMode>? OcrBoxModeChanged { get; set; }
 
     /// <summary>
@@ -691,6 +697,8 @@ public partial class CaptureWindow : Window
             "wgc" => CaptureApi.Wgc,
             _ => CaptureApi.Auto
         };
+        ScreenCapture.ShowCursor = CaptureShowCursor;
+        ScreenCapture.RestoreColors = CaptureRestoreColors;
 
         ApplyVirtualScreenBounds();
 

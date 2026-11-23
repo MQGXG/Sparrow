@@ -22,7 +22,9 @@ internal static class ScrollCaptureService
 
         while (!cancellationToken.IsCancellationRequested)
         {
-            var frame = ScreenCapture.CaptureRaw(x, y, width, height);
+            // 滚动截图不画光标：每帧都画会在拼接结果里重复出现
+            var frame = ScreenCapture.CaptureRaw(
+                x, y, width, height, includeCursor: false);
             if (frame is null)
                 break;
 

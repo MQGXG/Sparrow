@@ -390,6 +390,69 @@
 
             <Grid ColumnDefinitions="*,Auto" Margin="20,14">
               <StackPanel Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="显示光标"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="在新的普通截图中画上鼠标光标；滚动截图始终不画，避免每帧重复"
+                           FontSize="11"
+                           MaxWidth="520"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <ToggleSwitch Grid.Column="1"
+                            OnContent="开"
+                            OffContent="关"
+                            IsChecked="{Binding CaptureShowCursor, Mode=TwoWay}"
+                            VerticalAlignment="Center" />
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <Grid ColumnDefinitions="*,Auto" Margin="20,14">
+              <StackPanel Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="滚动截图时捕获界面"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="在拼接结果中包含滚动截图窗口及其工具栏；关闭后这些窗口会从取帧中排除"
+                           FontSize="11"
+                           MaxWidth="520"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <ToggleSwitch Grid.Column="1"
+                            OnContent="开"
+                            OffContent="关"
+                            IsChecked="{Binding CaptureUiInScroll, Mode=TwoWay}"
+                            VerticalAlignment="Center" />
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <Grid ColumnDefinitions="*,Auto" Margin="20,14">
+              <StackPanel Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="还原屏幕原始颜色"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="还原 Windows 放大镜的全屏颜色滤镜（反色 / 灰度等）；WGC 取帧本来就是原始颜色"
+                           FontSize="11"
+                           MaxWidth="520"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <ToggleSwitch Grid.Column="1"
+                            OnContent="开"
+                            OffContent="关"
+                            IsChecked="{Binding CaptureRestoreColors, Mode=TwoWay}"
+                            VerticalAlignment="Center" />
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <Grid ColumnDefinitions="*,Auto" Margin="20,14">
+              <StackPanel Spacing="3" VerticalAlignment="Center">
                 <TextBlock Text="剪贴板面板"
                            FontSize="13"
                            FontWeight="SemiBold"

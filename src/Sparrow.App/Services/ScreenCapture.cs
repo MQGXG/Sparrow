@@ -30,6 +30,12 @@ public static class ScreenCapture
     /// <summary>取帧后端：自动 / WGC / GDI。</summary>
     public static CaptureApi Api { get; set; } = CaptureApi.Auto;
 
+    /// <summary>普通截图是否画上鼠标光标；滚动截图始终关掉，避免每帧重复。</summary>
+    public static bool ShowCursor { get; set; }
+
+    /// <summary>是否还原放大镜全屏颜色滤镜（仅 GDI 路径；WGC 本来就是原始像素）。</summary>
+    public static bool RestoreColors { get; set; } = true;
+
     /// <summary>截取屏幕物理像素区域，返回 PNG 字节。失败返回 null。</summary>
     public static byte[]? Capture(int x, int y, int width, int height)
     {
@@ -41,25 +47,38 @@ public static class ScreenCapture
     /// 截取原始 BGRA 像素（top-down，stride = width*4）。
     /// 自动 / WGC 模式先试 Windows Graphics Capture；跨屏或不支持时回退 GDI。
     /// </summary>
-    public static byte[]? CaptureRaw(int x, int y, int width, int height, byte[]? reuse = null)
+    public static byte[]? CaptureRaw(
+        int x,
+        int y,
+        int width,
+        int height,
+        byte[]? reuse = null,
+        bool? includeCursor = null)
     {
         if (width <= 0 || height <= 0)
             return null;
 
+        var withCursor = includeCursor ?? ShowCursor;
         var useWgc = Api == CaptureApi.Wgc
                      || (Api == CaptureApi.Auto && HdrDisplay.AnyEnabled);
 
         if (useWgc && WgcCapture.IsSupported)
         {
-            var captured = WgcCapture.CaptureRegion(x, y, width, height);
+            var captured = WgcCapture.CaptureRegion(x, y, width, height, withCursor);
             if (captured is not null)
                 return captured;
         }
 
-        return CaptureRawGdi(x, y, width, height, reuse);
+        return CaptureRawGdi(x, y, width, height, reuse, withCursor);
     }
 
-    private static byte[]? CaptureRawGdi(int x, int y, int width, int height, byte[]? reuse)
+    private static byte[]? CaptureRawGdi(
+        int x,
+        int y,
+        int width,
+        int height,
+        byte[]? reuse,
+        bool includeCursor)
     {
         if (width <= 0 || height <= 0)
             return null;
@@ -90,6 +109,24 @@ public static class ScreenCapture
             if (!BitBlt(memoryDc, 0, 0, width, height, screenDc, x, y, SrcCopy))
                 return null;
 
+            // 放大镜滤镜：先还原像素，再画光标（光标本身不受滤镜影响）
+            var transform = RestoreColors ? MagnifierColorEffect.Current : null;
+
+            if (transform is not null)
+            {
+                var filtered = ReadPixels(memoryDc, bitmap, width, height, reuse);
+                if (filtered is null)
+                    return null;
+
+                transform.Apply(filtered);
+
+                if (!WritePixels(memoryDc, bitmap, width, height, filtered))
+                    return null;
+            }
+
+            if (includeCursor)
+                DrawCursor(memoryDc, x, y);
+
             return ReadPixels(memoryDc, bitmap, width, height, reuse);
         }
         finally
@@ -101,10 +138,43 @@ public static class ScreenCapture
         }
     }
 
-    /// <summary>等画面稳定后截取 PNG；用于冻结失败/滚动截图的实时路径。</summary>
-    public static byte[]? CaptureStable(int x, int y, int width, int height)
+    /// <summary>把当前鼠标光标画到内存 DC 上（坐标换算到捕获区域）。</summary>
+    private static void DrawCursor(IntPtr hdc, int originX, int originY)
     {
-        var pixels = CaptureStableRaw(x, y, width, height);
+        var info = new CURSORINFO { cbSize = Marshal.SizeOf<CURSORINFO>() };
+
+        if (!GetCursorInfo(ref info) || (info.flags & CursorShowing) == 0)
+            return;
+
+        if (!GetIconInfo(info.hCursor, out var icon))
+            return;
+
+        try
+        {
+            var x = info.ptScreenPos.X - originX - icon.xHotspot;
+            var y = info.ptScreenPos.Y - originY - icon.yHotspot;
+
+            DrawIconEx(hdc, x, y, info.hCursor, 0, 0, 0, IntPtr.Zero, DiNormal);
+        }
+        finally
+        {
+            if (icon.hbmColor != IntPtr.Zero)
+                DeleteObject(icon.hbmColor);
+
+            if (icon.hbmMask != IntPtr.Zero)
+                DeleteObject(icon.hbmMask);
+        }
+    }
+
+    /// <summary>等画面稳定后截取 PNG；用于冻结失败/滚动截图的实时路径。</summary>
+    public static byte[]? CaptureStable(
+        int x,
+        int y,
+        int width,
+        int height,
+        bool? includeCursor = null)
+    {
+        var pixels = CaptureStableRaw(x, y, width, height, includeCursor: includeCursor);
         return pixels is null ? null : EncodePng(pixels, width, height);
     }
 
@@ -122,7 +192,8 @@ public static class ScreenCapture
         int width,
         int height,
         int attempts = 2,
-        int intervalMs = 40)
+        int intervalMs = 40,
+        bool? includeCursor = null)
     {
         var length = width * 4 * height;
         var maxDifferentPixels = Math.Max(64, length / 4 / 1000);
@@ -131,7 +202,7 @@ public static class ScreenCapture
 
         for (var attempt = 0; attempt < Math.Max(1, attempts); attempt++)
         {
-            var current = CaptureRaw(x, y, width, height, spare);
+            var current = CaptureRaw(x, y, width, height, spare, includeCursor);
             if (current is null)
                 return null;
 
@@ -236,6 +307,31 @@ public static class ScreenCapture
         return lines == 0 ? null : pixels;
     }
 
+    /// <summary>把像素写回内存 DC（还原滤镜后、画光标前）。</summary>
+    private static bool WritePixels(
+        IntPtr memoryDc,
+        IntPtr bitmap,
+        int width,
+        int height,
+        byte[] pixels)
+    {
+        var info = new BITMAPINFO
+        {
+            bmiHeader = new BITMAPINFOHEADER
+            {
+                biSize = (uint)Marshal.SizeOf<BITMAPINFOHEADER>(),
+                biWidth = width,
+                biHeight = -height,
+                biPlanes = 1,
+                biBitCount = 32,
+                biCompression = 0,
+                biSizeImage = (uint)(width * 4 * height)
+            }
+        };
+
+        return SetDIBits(memoryDc, bitmap, 0, (uint)height, pixels, ref info, DibRgbColors) != 0;
+    }
+
     /// <summary>BGRA 像素转 PNG（alpha 固定不透明）。</summary>
     public static byte[]? EncodePng(byte[] pixels, int width, int height)
     {
@@ -302,4 +398,61 @@ public static class ScreenCapture
     private static extern int GetDIBits(
         IntPtr hdc, IntPtr hbm, uint start, uint lines,
         byte[] bits, ref BITMAPINFO bmi, uint usage);
+
+    [DllImport("gdi32.dll")]
+    private static extern int SetDIBits(
+        IntPtr hdc, IntPtr hbm, uint start, uint lines,
+        byte[] bits, ref BITMAPINFO bmi, uint usage);
+
+    private const int CursorShowing = 0x00000001;
+    private const int DiNormal = 0x0003;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct CURSORINFO
+    {
+        public int cbSize;
+        public int flags;
+        public IntPtr hCursor;
+        public POINT ptScreenPos;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ICONINFO
+    {
+        [MarshalAs(UnmanagedType.Bool)]
+        public bool fIcon;
+
+        public int xHotspot;
+        public int yHotspot;
+        public IntPtr hbmMask;
+        public IntPtr hbmColor;
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorInfo(ref CURSORINFO info);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetIconInfo(IntPtr icon, out ICONINFO info);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DrawIconEx(
+        IntPtr hdc,
+        int x,
+        int y,
+        IntPtr icon,
+        int width,
+        int height,
+        int animationStep,
+        IntPtr flickerFreeBrush,
+        int flags);
 }

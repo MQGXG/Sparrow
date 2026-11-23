@@ -48,6 +48,9 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _selectedCaptureApi = CaptureApiOptions
             .FirstOrDefault(option => option.Key == settings.CaptureApi)
             ?? CaptureApiOptions[0];
+        _captureShowCursor = settings.CaptureShowCursor;
+        _captureUiInScroll = settings.CaptureUiInScroll;
+        _captureRestoreColors = settings.CaptureRestoreColors;
         _startWithWindows = startup.IsEnabled;
         _historyMaxEntries = settings.HistoryMaxEntries;
         _historyRetentionDays = settings.HistoryRetentionDays;
@@ -200,6 +203,35 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         };
 
         StatusMessage = $"截图捕获 API：{value.Label}";
+    }
+
+    [ObservableProperty]
+    private bool _captureShowCursor;
+
+    partial void OnCaptureShowCursorChanged(bool value)
+    {
+        _settings = _settings with { CaptureShowCursor = value };
+        _store.Save(_settings);
+        ScreenCapture.ShowCursor = value;
+    }
+
+    [ObservableProperty]
+    private bool _captureUiInScroll = true;
+
+    partial void OnCaptureUiInScrollChanged(bool value)
+    {
+        _settings = _settings with { CaptureUiInScroll = value };
+        _store.Save(_settings);
+    }
+
+    [ObservableProperty]
+    private bool _captureRestoreColors = true;
+
+    partial void OnCaptureRestoreColorsChanged(bool value)
+    {
+        _settings = _settings with { CaptureRestoreColors = value };
+        _store.Save(_settings);
+        ScreenCapture.RestoreColors = value;
     }
 
     [ObservableProperty]

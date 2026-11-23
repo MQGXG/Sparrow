@@ -632,7 +632,9 @@ public partial class App : Application
             CaptureToolHidden = _appSettings.CaptureToolHidden,
             CaptureToolbarPlacement = _appSettings.CaptureToolbarPlacement,
             CaptureElementApi = _appSettings.CaptureElementApi,
-            CaptureFrameApi = _appSettings.CaptureApi
+            CaptureFrameApi = _appSettings.CaptureApi,
+            CaptureShowCursor = _appSettings.CaptureShowCursor,
+            CaptureRestoreColors = _appSettings.CaptureRestoreColors
         };
 
         // 三槽样式模板：灌进去，关闭时读回
@@ -994,6 +996,10 @@ public partial class App : Application
 
         PositionScrollOverlay(overlay, rect);
         overlay.Show();
+
+        // 关闭「捕获界面」时把滚动提示条从取帧里排除，避免拼进结果
+        if (!_appSettings.CaptureUiInScroll)
+            WindowCaptureExclusion.Exclude(overlay);
 
         byte[]? png;
         try

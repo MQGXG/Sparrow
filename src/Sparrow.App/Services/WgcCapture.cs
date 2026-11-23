@@ -61,7 +61,7 @@ internal static class WgcCapture
     /// <summary>
     /// 捕获屏幕物理像素区域（BGRA，top-down）。失败 / 跨屏返回 null。
     /// </summary>
-    public static byte[]? CaptureRegion(int x, int y, int width, int height)
+    public static byte[]? CaptureRegion(int x, int y, int width, int height, bool includeCursor = false)
     {
         if (width <= 0 || height <= 0 || !IsSupported)
             return null;
@@ -94,7 +94,7 @@ internal static class WgcCapture
                 item.Size);
 
             session = pool.CreateCaptureSession(item);
-            session.IsCursorCaptureEnabled = false;
+            session.IsCursorCaptureEnabled = includeCursor;
             session.StartCapture();
 
             var deadline = Environment.TickCount64 + FrameTimeoutMilliseconds;

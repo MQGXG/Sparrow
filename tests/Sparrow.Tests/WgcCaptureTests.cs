@@ -43,4 +43,29 @@ public sealed class WgcCaptureTests
             ScreenCapture.Api = previous;
         }
     }
+
+    [Fact]
+    public void 开启光标_仍能取到像素()
+    {
+        var previousApi = ScreenCapture.Api;
+        var previousCursor = ScreenCapture.ShowCursor;
+
+        try
+        {
+            ScreenCapture.Api = CaptureApi.Gdi;
+            ScreenCapture.ShowCursor = true;
+
+            var pixels = ScreenCapture.CaptureRaw(0, 0, 60, 60);
+
+            if (pixels is null)
+                Assert.Skip("当前会话无法捕获（锁屏 / 无交互桌面）");
+
+            pixels!.Length.ShouldBe(60 * 60 * 4);
+        }
+        finally
+        {
+            ScreenCapture.Api = previousApi;
+            ScreenCapture.ShowCursor = previousCursor;
+        }
+    }
 }
