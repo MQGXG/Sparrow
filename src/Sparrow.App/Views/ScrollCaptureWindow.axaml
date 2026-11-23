@@ -21,7 +21,15 @@
           BoxShadow="0 12 32 0 #99000000">
 
     <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="8">
-      <StackPanel Grid.Row="0" Grid.Column="0" Spacing="2">
+      <Image Grid.Row="0"
+             Grid.ColumnSpan="2"
+             x:Name="PreviewImage"
+             MaxHeight="340"
+             Stretch="Uniform"
+             HorizontalAlignment="Center"
+             IsVisible="False" />
+
+      <StackPanel Grid.Row="1" Grid.Column="0" Spacing="2">
         <TextBlock Text="滚动页面，完成后点「完成」"
                    FontSize="12"
                    Foreground="{StaticResource TextPrimaryBrush}" />
@@ -31,7 +39,7 @@
                    Foreground="{StaticResource TextMutedBrush}" />
       </StackPanel>
 
-      <StackPanel Grid.Row="0"
+      <StackPanel Grid.Row="1"
                   Grid.Column="1"
                   Orientation="Horizontal"
                   Spacing="6"

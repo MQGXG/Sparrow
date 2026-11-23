@@ -1012,6 +1012,8 @@ public partial class App : Application
                     rect.Height,
                     rows => Avalonia.Threading.Dispatcher.UIThread.Post(
                         () => overlay.SetCaptured(rows, rect.Height)),
+                    preview => Avalonia.Threading.Dispatcher.UIThread.Post(
+                        () => overlay.SetPreview(preview)),
                     cts.Token),
                 cts.Token);
         }
@@ -1052,23 +1054,42 @@ public partial class App : Application
         var area = screen?.WorkingArea ?? new PixelRect(0, 0, 1920, 1080);
 
         var width = (int)(320 * scaling);
-        var height = (int)(96 * scaling);
+        // 缩略图最高 340 + 文本/按钮，按最大高度预留位置
+        var height = (int)(480 * scaling);
 
         var areaRight = area.X + area.Width;
         var areaBottom = area.Y + area.Height;
+        var minX = area.X + 8;
+        var minY = area.Y + 8;
+        var maxX = Math.Max(minX, areaRight - width - 8);
+        var maxY = Math.Max(minY, areaBottom - height - 8);
 
-        var x = Math.Clamp(
-            selection.X + selection.Width - width,
-            area.X + 8,
-            Math.Max(area.X + 8, areaRight - width - 8));
+        // 优先放选区右侧，避免盖住正在滚动的页面
+        var x = selection.X + selection.Width + 12;
+        var y = Math.Clamp(selection.Y, minY, maxY);
 
-        var y = selection.Y + selection.Height + 12;
-        if (y + height > areaBottom)
-            y = selection.Y - height - 12;
-        if (y < area.Y + 8)
-            y = area.Y + 8;
+        if (x > maxX)
+        {
+            var left = selection.X - width - 12;
 
-        overlay.Position = new PixelPoint(x, y);
+            if (left >= minX)
+            {
+                x = left;
+            }
+            else
+            {
+                // 两侧都放不下：回到底部 / 顶部
+                x = Math.Clamp(selection.X + selection.Width - width, minX, maxX);
+                y = selection.Y + selection.Height + 12;
+
+                if (y > maxY)
+                    y = selection.Y - height - 12;
+
+                y = Math.Clamp(y, minY, maxY);
+            }
+        }
+
+        overlay.Position = new PixelPoint(Math.Clamp(x, minX, maxX), y);
     }
 
     /// <summary>弹保存对话框，把截图写成 PNG。</summary>

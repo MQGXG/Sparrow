@@ -16,9 +16,13 @@ internal static class ScrollCaptureService
         int width,
         int height,
         Action<int>? onProgress,
+        Action<byte[]>? onPreview,
         CancellationToken cancellationToken)
     {
         using var stitcher = new ScrollStitcher(width, height);
+
+        // 缩略图节流：最多 4 帧/秒，避免每帧都缩放开销
+        var lastPreviewAt = 0L;
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -28,8 +32,18 @@ internal static class ScrollCaptureService
             if (frame is null)
                 break;
 
-            var outcome = stitcher.Append(frame, out _);
+            var outcome = stitcher.Append(frame, out var addedRows);
             onProgress?.Invoke(stitcher.TotalRows);
+
+            var now = Environment.TickCount64;
+            if (addedRows > 0 && onPreview is not null && now - lastPreviewAt >= 250)
+            {
+                lastPreviewAt = now;
+
+                var preview = stitcher.BuildPreviewPng(280, 420);
+                if (preview is not null)
+                    onPreview(preview);
+            }
 
             // 找不到重叠说明滚太快或页面跳变，保留已拼好的部分
             if (outcome == AppendOutcome.LostTracking)

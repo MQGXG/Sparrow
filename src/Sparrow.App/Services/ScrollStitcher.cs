@@ -143,6 +143,47 @@ internal sealed class ScrollStitcher : IDisposable
     }
 
     /// <summary>
+    /// 生成缩小后的预览 PNG（整张长图按比例缩进 maxWidth × maxHeight）。
+    /// 采样行列，不读整图；滚动截图时用来显示实时缩略图。
+    /// </summary>
+    public byte[]? BuildPreviewPng(int maxWidth, int maxHeight)
+    {
+        if (TotalRows == 0 || maxWidth <= 0 || maxHeight <= 0)
+            return null;
+
+        var scale = Math.Min(
+            1.0,
+            Math.Min((double)maxWidth / _width, (double)maxHeight / TotalRows));
+
+        var targetWidth = Math.Max(1, (int)Math.Round(_width * scale));
+        var targetHeight = Math.Max(1, (int)Math.Round(TotalRows * scale));
+
+        var pixels = new byte[targetWidth * targetHeight * 4];
+        var source = new byte[_stride];
+
+        for (var y = 0; y < targetHeight; y++)
+        {
+            var sourceRow = Math.Min(TotalRows - 1, y * TotalRows / targetHeight);
+            ReadRow(sourceRow, source);
+
+            var targetOffset = y * targetWidth * 4;
+
+            for (var x = 0; x < targetWidth; x++)
+            {
+                var sourceColumn = Math.Min(_width - 1, x * _width / targetWidth) * 4;
+                var targetIndex = targetOffset + x * 4;
+
+                pixels[targetIndex] = source[sourceColumn];
+                pixels[targetIndex + 1] = source[sourceColumn + 1];
+                pixels[targetIndex + 2] = source[sourceColumn + 2];
+                pixels[targetIndex + 3] = 255;
+            }
+        }
+
+        return ScreenCapture.EncodePng(pixels, targetWidth, targetHeight);
+    }
+
+    /// <summary>
     /// 从下往上扫，优先选「滚动量最小」的匹配：
     /// 页面里出现重复内容时，避免一次跳很远拼进重复片段。
     /// </summary>
