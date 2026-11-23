@@ -25,6 +25,7 @@ public static class WindowCandidates
     private const int GwlExStyle = -20;
     private const long WsExToolWindow = 0x00000080;
     private const uint DwmwaCloaked = 14;
+    private const uint DwmwaExtendedFrameBounds = 9;
 
     private static readonly HashSet<string> ShellClasses = new(StringComparer.Ordinal)
     {
@@ -63,7 +64,7 @@ public static class WindowCandidates
             if ((exStyle & WsExToolWindow) != 0)
                 return true;
 
-            if (!GetWindowRect(hwnd, out var rect))
+            if (!TryGetVisibleRect(hwnd, out var rect))
                 return true;
 
             var width = rect.Right - rect.Left;
@@ -111,6 +112,22 @@ public static class WindowCandidates
     /// <summary>当前鼠标位置（物理像素）。</summary>
     public static PixelPoint GetCursorPosition() =>
         GetCursorPos(out var point) ? new PixelPoint(point.X, point.Y) : default;
+
+    /// <summary>
+    /// 优先用 DWM 扩展边框：GetWindowRect 在 Win10/11 上包含不可见的缩放边框，
+    /// 框选时会把一圈透明边也算进去。DWM 失败再退回 GetWindowRect。
+    /// </summary>
+    private static bool TryGetVisibleRect(IntPtr hwnd, out RECT rect)
+    {
+        if (DwmGetWindowRect(hwnd, DwmwaExtendedFrameBounds, out rect, Marshal.SizeOf<RECT>()) == 0
+            && rect.Right - rect.Left >= 16
+            && rect.Bottom - rect.Top >= 16)
+        {
+            return true;
+        }
+
+        return GetWindowRect(hwnd, out rect);
+    }
 
     private static bool IsCloaked(IntPtr hwnd)
     {
@@ -184,4 +201,8 @@ public static class WindowCandidates
     [DllImport("dwmapi.dll")]
     private static extern int DwmGetWindowAttribute(
         IntPtr hwnd, uint attribute, out int value, int size);
+
+    [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")]
+    private static extern int DwmGetWindowRect(
+        IntPtr hwnd, uint attribute, out RECT rect, int size);
 }
