@@ -1683,14 +1683,11 @@ public partial class CaptureWindow : Window
         point.Y >= bounds.Y && point.Y < bounds.Y + bounds.Height;
 
     /// <summary>
-    /// 把探测投递到 UIA 线程。
-    ///
-    /// 浏览器（Chromium / Edge）的坑：无障碍树是「第一次查询才懒启用」的，
-    /// 第一次经常拿不到；而且鼠标一动就取消重建，会一直探不完。
-    /// 所以这里做三件事：
-    /// 1. 同一窗口已有探测在跑时不再开新的，避免鼠标一动就把建树任务取消；
-    /// 2. 探完发现鼠标移了，直接用已经缓存的树再命中一次（很快）；
-    /// 3. 静止时没命中就隔 350ms 重试，最多两次。
+    /// 把探测投递到 UIA 线程。和 snow-shot 一样分两段：
+    /// 1. 悬停先用 170ms 预算给一个粗结果，绝不卡住鼠标；
+    /// 2. 光标停住、且粗结果还没走到底时，再用 1.2s 预算细化，
+    ///    途中每 40ms 发布一次更小的框，看起来是「框逐渐收紧」。
+    /// 浏览器第一次查询才懒启用无障碍树，所以没命中时还会静止重试。
     /// </summary>
     private void ScheduleControlProbe()
     {
@@ -1715,6 +1712,15 @@ public partial class CaptureWindow : Window
         if (probe is null)
             return;
 
+        // 粗框也走 UI 线程：探测线程只负责 Report。
+        // 光标在细化途中移开时，把迟到的粗框丢掉，避免框停在旧位置。
+        var latestPoint = WindowCandidates.GetCursorPosition();
+        var preview = new Progress<UiElementCandidate>(candidate =>
+        {
+            if (IsProbeCurrent(generation, window) && !CursorMovedSince(latestPoint))
+                SetUiCandidate(candidate);
+        });
+
         try
         {
             var rehits = 0;
@@ -1723,20 +1729,20 @@ public partial class CaptureWindow : Window
             while (true)
             {
                 var point = WindowCandidates.GetCursorPosition();
+                latestPoint = point;
 
                 // worker 在真正遍历前会再看一次 generation，过时的任务直接返回
-                var candidate = await probe.ProbeAsync(
+                var foreground = await probe.ProbeAsync(
                     window.Handle,
                     point,
+                    UiElementProbe.ForegroundBudget,
+                    preview,
                     () => generation == Volatile.Read(ref _probeGeneration));
 
                 if (!IsProbeCurrent(generation, window))
                     return;
 
-                var latest = WindowCandidates.GetCursorPosition();
-
-                // 探测期间鼠标又动了：树已经缓存，按最新位置再命中一次
-                if (Math.Abs(latest.X - point.X) > 2 || Math.Abs(latest.Y - point.Y) > 2)
+                if (CursorMovedSince(point))
                 {
                     if (++rehits <= 3)
                         continue;
@@ -1744,8 +1750,32 @@ public partial class CaptureWindow : Window
                     return;
                 }
 
+                var result = foreground;
+
+                // 预算用完但已经有一个粗结果：光标没动，接着把路径走到底
+                if (!foreground.Completed)
+                {
+                    result = await probe.ProbeAsync(
+                        window.Handle,
+                        point,
+                        UiElementProbe.RefinementBudget,
+                        preview,
+                        () => generation == Volatile.Read(ref _probeGeneration));
+
+                    if (!IsProbeCurrent(generation, window))
+                        return;
+
+                    if (CursorMovedSince(point))
+                    {
+                        if (++rehits <= 3)
+                            continue;
+
+                        return;
+                    }
+                }
+
                 // 浏览器第一次查询后才懒启用无障碍树：停一下就重试
-                if (candidate is null && retries < 2)
+                if (result.Candidate is null && retries < 2)
                 {
                     retries++;
                     await Task.Delay(350);
@@ -1755,7 +1785,7 @@ public partial class CaptureWindow : Window
                     continue;
                 }
 
-                SetUiCandidate(candidate);
+                SetUiCandidate(result.Candidate);
                 return;
             }
         }
@@ -1763,6 +1793,12 @@ public partial class CaptureWindow : Window
         {
             // 探测失败就保持窗口级候选
         }
+    }
+
+    private static bool CursorMovedSince(PixelPoint point)
+    {
+        var latest = WindowCandidates.GetCursorPosition();
+        return Math.Abs(latest.X - point.X) > 2 || Math.Abs(latest.Y - point.Y) > 2;
     }
 
     private bool IsProbeCurrent(int generation, WindowCandidate window) =>

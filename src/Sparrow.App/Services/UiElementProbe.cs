@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Avalonia;
 using Interop.UIAutomationClient;
@@ -10,6 +11,14 @@ public sealed record UiElementCandidate(
     PixelRect Bounds,
     string Title,
     string ControlType);
+
+/// <summary>
+/// 一次探测的结果。Completed=false 表示「预算用完、还没走到底」，
+/// 调用方可以在光标停住后用更长的预算再细化一次。
+/// </summary>
+public readonly record struct UiElementProbeResult(
+    UiElementCandidate? Candidate,
+    bool Completed);
 
 /// <summary>
 /// 按窗口句柄探测光标下的 UI Automation 控件。
@@ -35,13 +44,17 @@ public sealed class UiElementProbe : IDisposable
     /// <summary>单个窗口最多保留多少懒展开节点，防止异常大树把内存撑爆。</summary>
     private const int MaxNodesPerWindow = 12000;
 
-    /// <summary>
-    /// 单次跨进程调用最多等多久（毫秒）。
-    /// 浏览器（Chromium/Edge）第一次查询要现场启用无障碍树，800ms 内经常回不来。
-    /// </summary>
-    private const int ConnectionTimeoutMilliseconds = 800;
+    /// <summary>单次跨进程调用最多等多久（毫秒）。实际值按剩余预算动态收紧。</summary>
+    private const int CallLimitMilliseconds = 400;
 
-    private const int TransactionTimeoutMilliseconds = 2000;
+    /// <summary>悬停探测的预算：和 snow-shot 一致，170ms 内必须给出结果。</summary>
+    public static readonly TimeSpan ForegroundBudget = TimeSpan.FromMilliseconds(170);
+
+    /// <summary>光标停住后的细化预算：可以慢慢把路径走到底。</summary>
+    public static readonly TimeSpan RefinementBudget = TimeSpan.FromMilliseconds(1200);
+
+    /// <summary>遍历途中发布粗框的间隔，让框先出来再收紧。</summary>
+    private const int PublicationIntervalMilliseconds = 40;
 
     /// <summary>容器节点连续拿到几次空子树后放弃（多半是应用还没建好树）。</summary>
     private const int MaxEmptyExpansions = 5;
@@ -68,46 +81,95 @@ public sealed class UiElementProbe : IDisposable
         _worker.Start();
     }
 
-    /// <summary>在专用线程上探测，永不抛异常；失败或无结果时返回 null。</summary>
-    /// <param name="stillWanted">每次遍历前询问；返回 false 说明结果已过时，立即放弃。</param>
-    public Task<UiElementCandidate?> ProbeAsync(
+    /// <summary>
+    /// 在专用线程上探测，永不抛异常。
+    /// <paramref name="budget"/> 是总预算：到点就带着「目前走到的最深节点」返回，
+    /// 由调用方决定要不要再用更长的预算细化。
+    /// <paramref name="preview"/> 会在遍历途中收到越来越小的粗框（约 40ms 一帧）。
+    /// </summary>
+    public Task<UiElementProbeResult> ProbeAsync(
         IntPtr hwnd,
         PixelPoint point,
+        TimeSpan? budget = null,
+        IProgress<UiElementCandidate>? preview = null,
         Func<bool>? stillWanted = null)
     {
         if (_disposed)
-            return Task.FromResult<UiElementCandidate?>(null);
+            return Task.FromResult(new UiElementProbeResult(null, true));
 
         var gate = stillWanted ?? AlwaysWanted;
-        var completion = new TaskCompletionSource<UiElementCandidate?>(
+        var completion = new TaskCompletionSource<UiElementProbeResult>(
             TaskCreationOptions.RunContinuationsAsynchronously);
 
         try
         {
             _queue.Add(() =>
             {
-                UiElementCandidate? candidate = null;
+                var result = new UiElementProbeResult(null, true);
 
                 try
                 {
                     // 排队期间鼠标已经移开：连根节点都不用查
                     if (gate())
-                        candidate = Probe(hwnd, point, gate);
+                    {
+                        var state = new ProbeState(
+                            Stopwatch.StartNew(),
+                            budget ?? ForegroundBudget,
+                            preview);
+
+                        result = Probe(hwnd, point, gate, state);
+                    }
                 }
                 catch
                 {
                     // 目标应用没有 UIA 树、COM 失败、窗口已关闭等：一律退回窗口级
                 }
 
-                completion.TrySetResult(candidate);
+                completion.TrySetResult(result);
             });
         }
         catch (InvalidOperationException)
         {
-            completion.TrySetResult(null);
+            completion.TrySetResult(new UiElementProbeResult(null, true));
         }
 
         return completion.Task;
+    }
+
+    /// <summary>一次探测的预算、计时和「粗框」发布节流。</summary>
+    private sealed class ProbeState(Stopwatch watch, TimeSpan budget, IProgress<UiElementCandidate>? preview)
+    {
+        public TimeSpan Remaining => budget - watch.Elapsed;
+
+        public bool Expired => Remaining <= TimeSpan.Zero;
+
+        public IProgress<UiElementCandidate>? Preview { get; } = preview;
+
+        public TimeSpan LastPublished { get; set; }
+
+        public void MaybePublish(Node current, Node root)
+        {
+            if (Preview is null || watch.Elapsed - LastPublished <
+                TimeSpan.FromMilliseconds(PublicationIntervalMilliseconds))
+            {
+                return;
+            }
+
+            var candidate = Pick(current, root, resolveName: false);
+            if (candidate is null)
+                return;
+
+            LastPublished = watch.Elapsed;
+
+            try
+            {
+                Preview.Report(candidate);
+            }
+            catch
+            {
+                // UI 已关闭时忽略
+            }
+        }
     }
 
     private static readonly Func<bool> AlwaysWanted = static () => true;
@@ -188,8 +250,8 @@ public sealed class UiElementProbe : IDisposable
     private void Initialize()
     {
         var automation = (IUIAutomation2)new CUIAutomation8Class();
-        automation.ConnectionTimeout = ConnectionTimeoutMilliseconds;
-        automation.TransactionTimeout = TransactionTimeoutMilliseconds;
+        automation.ConnectionTimeout = (uint)CallLimitMilliseconds;
+        automation.TransactionTimeout = (uint)CallLimitMilliseconds;
 
         var request = automation.CreateCacheRequest();
         request.TreeScope = TreeScope.TreeScope_Element | TreeScope.TreeScope_Children;
@@ -199,7 +261,8 @@ public sealed class UiElementProbe : IDisposable
         request.AddProperty(UIA_PropertyIds.UIA_BoundingRectanglePropertyId);
         request.AddProperty(UIA_PropertyIds.UIA_IsOffscreenPropertyId);
         request.AddProperty(UIA_PropertyIds.UIA_ControlTypePropertyId);
-        request.AddProperty(UIA_PropertyIds.UIA_NamePropertyId);
+        // 故意不缓存 Name：Chromium 上每个节点的名字都可能触发跨进程文本提取，
+        // 是首屏探测最大的开销。只对最终选中的节点按需取一次。
 
         _automation = automation;
         _request = request;
@@ -236,31 +299,39 @@ public sealed class UiElementProbe : IDisposable
         }
     }
 
-    private UiElementCandidate? Probe(IntPtr hwnd, PixelPoint point, Func<bool> stillWanted)
+    private UiElementProbeResult Probe(
+        IntPtr hwnd,
+        PixelPoint point,
+        Func<bool> stillWanted,
+        ProbeState state)
     {
         if (_request is null)
-            return null;
+            return new UiElementProbeResult(null, true);
 
-        var candidate = ProbeWindow(hwnd, point, stillWanted);
-        if (candidate is not null)
-            return candidate;
+        var outcome = ProbeWindow(hwnd, point, stillWanted, state);
+        if (outcome.Candidate is not null || !outcome.Completed)
+            return outcome;
 
         // UWP/WinUI 的顶层是 ApplicationFrameWindow，UIA 树里只有窗框；
         // 真正的内容在 Windows.UI.Core.CoreWindow 这类子窗口里
         foreach (var child in ChildWindowsAt(hwnd, point))
         {
-            if (!stillWanted())
-                return null;
+            if (!stillWanted() || state.Expired)
+                return new UiElementProbeResult(null, false);
 
-            candidate = ProbeWindow(child, point, stillWanted);
-            if (candidate is not null)
-                return candidate;
+            outcome = ProbeWindow(child, point, stillWanted, state);
+            if (outcome.Candidate is not null || !outcome.Completed)
+                return outcome;
         }
 
-        return null;
+        return new UiElementProbeResult(null, true);
     }
 
-    private UiElementCandidate? ProbeWindow(IntPtr hwnd, PixelPoint point, Func<bool> stillWanted)
+    private UiElementProbeResult ProbeWindow(
+        IntPtr hwnd,
+        PixelPoint point,
+        Func<bool> stillWanted,
+        ProbeState state)
     {
         if (!_trees.TryGetValue(hwnd, out var root))
         {
@@ -268,15 +339,15 @@ public sealed class UiElementProbe : IDisposable
             // 跨窗口累积会把工作集推到几百 MB
             EvictOtherTrees(hwnd);
 
-            root = BuildRoot(hwnd);
+            root = BuildRoot(hwnd, state.Remaining);
             if (root is null)
-                return null;
+                return new UiElementProbeResult(null, !state.Expired);
 
             _trees[hwnd] = root;
         }
 
         if (!Contains(root.Bounds, point))
-            return null;
+            return new UiElementProbeResult(null, true);
 
         var current = root;
 
@@ -284,10 +355,19 @@ public sealed class UiElementProbe : IDisposable
         {
             // 长时间遍历期间鼠标可能已经移开，及时收手
             if (!stillWanted())
-                return null;
+                return new UiElementProbeResult(null, true);
 
-            if (!TryExpand(current))
-                break;
+            // 预算到点：把已经走到的最深节点先交出去，调用方可以再细化
+            if (state.Expired)
+                return new UiElementProbeResult(Pick(current, root, resolveName: false), false);
+
+            if (!TryExpand(current, state.Remaining))
+            {
+                // 可重试的失败（预算/超时/空树）留给细化；彻底失败就收手
+                return new UiElementProbeResult(
+                    Pick(current, root, resolveName: true),
+                    current.ExpandFailed);
+            }
 
             var child = HitTest(current, point);
 
@@ -297,16 +377,17 @@ public sealed class UiElementProbe : IDisposable
                 // Pane/Group 盖住真正的内容分支，需要沿等大结构节点回溯
                 var alternative = StructuralAlternative(current, point);
                 if (alternative is null)
-                    break;
+                    return new UiElementProbeResult(Pick(current, root, resolveName: true), true);
 
                 current = alternative;
                 continue;
             }
 
             current = child;
+            state.MaybePublish(current, root);
         }
 
-        return Pick(current, root);
+        return new UiElementProbeResult(Pick(current, root, resolveName: true), true);
     }
 
     /// <summary>释放除当前窗口以外的控件树（每个窗口的树可能上千个元素）。</summary>
@@ -424,10 +505,12 @@ public sealed class UiElementProbe : IDisposable
         point.X >= rect.Left && point.X < rect.Right &&
         point.Y >= rect.Top && point.Y < rect.Bottom;
 
-    private Node? BuildRoot(IntPtr hwnd)
+    private Node? BuildRoot(IntPtr hwnd, TimeSpan remaining)
     {
         if (_automation is null || _request is null)
             return null;
+
+        ApplyTimeouts(remaining);
 
         try
         {
@@ -440,8 +523,31 @@ public sealed class UiElementProbe : IDisposable
         }
     }
 
+    /// <summary>
+    /// 每次跨进程调用前把 UIA 超时收在剩余预算内：
+    /// 单次调用最多 400ms，绝不把整次探测拖到卡住。
+    /// </summary>
+    private void ApplyTimeouts(TimeSpan remaining)
+    {
+        if (_automation is null)
+            return;
+
+        var milliseconds = (uint)Math.Clamp(
+            remaining.TotalMilliseconds, 1, CallLimitMilliseconds);
+
+        try
+        {
+            _automation.ConnectionTimeout = milliseconds;
+            _automation.TransactionTimeout = milliseconds;
+        }
+        catch
+        {
+            // 设置超时失败不影响本次探测
+        }
+    }
+
     /// <summary>取回这一层子节点（带缓存属性），每个节点一辈子只展开一次。</summary>
-    private bool TryExpand(Node node)
+    private bool TryExpand(Node node, TimeSpan remaining)
     {
         if (node.Children is not null)
             return true;
@@ -449,9 +555,15 @@ public sealed class UiElementProbe : IDisposable
         if (node.ExpandFailed || node.Element is null || _request is null)
             return false;
 
+        // 预算已经用完：这次先不调跨进程，留给细化
+        if (remaining <= TimeSpan.Zero)
+            return false;
+
         // 异常大树到上限就不再往下展开，宁可退回窗口级也不撑爆内存
         if (_nodeCount >= MaxNodesPerWindow)
             return false;
+
+        ApplyTimeouts(remaining);
 
         try
         {
@@ -526,16 +638,19 @@ public sealed class UiElementProbe : IDisposable
         return new Node(
             new PixelRect(rect.left, rect.top, width, height),
             controlType,
-            SafeName(element),
             element,
             parent);
     }
 
+    /// <summary>
+    /// 只在最终选中的节点上取一次名字。UIA 的 Name 在浏览器里可能触发
+    /// 跨进程文本提取，不能放进每个节点的缓存请求。
+    /// </summary>
     private static string? SafeName(IUIAutomationElement element)
     {
         try
         {
-            var name = element.CachedName;
+            var name = element.CurrentName;
             return string.IsNullOrWhiteSpace(name) ? null : name;
         }
         catch
@@ -587,8 +702,12 @@ public sealed class UiElementProbe : IDisposable
         return null;
     }
 
-    /// <summary>从最深处往上找第一个「值得框」的节点。</summary>
-    private static UiElementCandidate? Pick(Node current, Node root)
+    /// <summary>
+    /// 从最深处往上找第一个「值得框」的节点。
+    /// <paramref name="resolveName"/> 为 false 时（遍历途中的粗框）不读 Name，
+    /// 只用控件类型当标题，避免每个中间节点都付一次跨进程调用。
+    /// </summary>
+    private static UiElementCandidate? Pick(Node current, Node root, bool resolveName)
     {
         var windowArea = Math.Max(1L, (long)root.Bounds.Width * root.Bounds.Height);
         var visited = 0;
@@ -601,18 +720,28 @@ public sealed class UiElementProbe : IDisposable
             if (node.Bounds.Equals(root.Bounds))
                 continue;
 
-            // 无名布局容器只用来继续往上找，不当作可框目标
-            if (node.Structural && node.Name is null)
-                continue;
-
             var area = (long)node.Bounds.Width * node.Bounds.Height;
             if (area >= windowArea * 95 / 100)
                 return null;
 
-            return new UiElementCandidate(
-                node.Bounds,
-                node.Name ?? ControlTypeName(node.ControlType),
-                ControlTypeName(node.ControlType));
+            var kind = ControlTypeName(node.ControlType);
+
+            if (!node.Structural)
+            {
+                return new UiElementCandidate(
+                    node.Bounds,
+                    resolveName ? SafeName(node.Element) ?? kind : kind,
+                    kind);
+            }
+
+            // 结构容器只有最深的那个值得查名字；祖先 Pane 一律跳过。
+            // 这样一次最终命中也最多付一次跨进程调用。
+            if (visited == 1 && resolveName)
+            {
+                var name = SafeName(node.Element);
+                if (name is not null)
+                    return new UiElementCandidate(node.Bounds, name, kind);
+            }
         }
 
         return null;
@@ -676,13 +805,11 @@ public sealed class UiElementProbe : IDisposable
     private sealed class Node(
         PixelRect bounds,
         int controlType,
-        string? name,
         IUIAutomationElement element,
         Node? parent)
     {
         public PixelRect Bounds { get; } = bounds;
         public int ControlType { get; } = controlType;
-        public string? Name { get; } = name;
         public IUIAutomationElement Element { get; } = element;
         public Node? Parent { get; } = parent;
         public List<Node>? Children { get; set; }
