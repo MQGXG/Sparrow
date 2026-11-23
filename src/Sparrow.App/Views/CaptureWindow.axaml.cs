@@ -133,6 +133,9 @@ public partial class CaptureWindow : Window
     /// <summary>当前是否在"显示原图"（默认显示译文）。</summary>
     private bool _showOriginalView;
 
+    /// <summary>本次识别的翻译目标；为空表示只识别。</summary>
+    private string? _translateTarget;
+
     private (int Line, int Char)? _ocrSelAnchor;
     private (int Line, int Char)? _ocrSelFocus;
     private bool _ocrDragging;
@@ -6032,6 +6035,7 @@ public partial class CaptureWindow : Window
 
         _isRecognizing = true;
         _ocrCancellation = new CancellationTokenSource();
+        _translateTarget = options?.TranslateTarget;
         RecognizeButton.IsEnabled = false;
         TranslateButton.IsEnabled = false;
         OcrStatus.IsVisible = true;
@@ -6227,7 +6231,10 @@ public partial class CaptureWindow : Window
         _showOriginalView = false;
         TransLayer.Source = null;
         TransLayer.IsVisible = false;
-        ShowOriginalButton.IsVisible = false;
+        TransRow.IsVisible = false;
+        TransTargetText.Text = _translateTarget is { Length: > 0 } target
+            ? $"译文 · {target}"
+            : "译文";
 
         var lines = _ocrLines
             .Where(entry => !string.IsNullOrWhiteSpace(entry.Line.Translation))
@@ -6258,6 +6265,7 @@ public partial class CaptureWindow : Window
         Canvas.SetTop(TransLayer, _selection.Y);
 
         ShowOriginalButton.IsVisible = true;
+        TransRow.IsVisible = true;
         ApplyTranslationView();
     }
 
@@ -6273,8 +6281,20 @@ public partial class CaptureWindow : Window
             return;
 
         SetSelected(ShowOriginalButton, _showOriginalView);
+        ShowOriginalText.Text = _showOriginalView ? "显示译文" : "显示原图";
         ToolTip.SetTip(ShowOriginalButton, _showOriginalView ? "显示译文" : "显示原图");
         OcrStatus.Text = _showOriginalView ? "原文视图" : "译文视图 · 点眼睛切回原文";
+    }
+
+    /// <summary>退出译文视图：回到识别框，译文图保留但不再显示。</summary>
+    private void OnTransCloseClick(object? sender, RoutedEventArgs e)
+    {
+        _translatedPng = null;
+        _showOriginalView = false;
+        TransLayer.Source = null;
+        TransLayer.IsVisible = false;
+        TransRow.IsVisible = false;
+        ApplyTranslationView();
     }
 
     private void OnShowOriginalClick(object? sender, RoutedEventArgs e)
@@ -6306,7 +6326,7 @@ public partial class CaptureWindow : Window
         _showOriginalView = false;
         TransLayer.Source = null;
         TransLayer.IsVisible = false;
-        ShowOriginalButton.IsVisible = false;
+        TransRow.IsVisible = false;
         HideOcrMarkMenu();
         _hoveredOcrBox = null;
         OcrLayer.IsVisible = false;

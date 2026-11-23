@@ -886,14 +886,6 @@
               <MenuFlyout Placement="TopEdgeAlignedRight" />
             </Button.Flyout>
           </Button>
-          <!-- 翻译完成后出现：在原文 / 译文之间切换 -->
-          <Button x:Name="ShowOriginalButton"
-                  Classes="tool"
-                  IsVisible="False"
-                  Click="OnShowOriginalClick"
-                  ToolTip.Tip="显示原图">
-            <Path Data="{StaticResource IconEye}" StrokeThickness="1.2" />
-          </Button>
           <Button x:Name="SaveButton"
                   Classes="tool" Click="OnSaveClick" ToolTip.Tip="保存为 PNG（S）">
             <Path Data="{StaticResource IconSave}" StrokeThickness="1.161" />
@@ -1132,6 +1124,30 @@
             </Button.Flyout>
           </Button>
         </views:SpacingWrapPanel>
+      </Border>
+
+      <!-- 译文工具条：只在有译文时出现，和参考一样独立一行，不挤主工具条 -->
+      <Border x:Name="TransRow" Classes="capture-bar" HorizontalAlignment="Center" IsVisible="False">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Focusable="False" x:Name="ShowOriginalButton" Classes="prop"
+                  Click="OnShowOriginalClick" ToolTip.Tip="显示原图">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Path Data="{StaticResource IconEye}"
+                    Stroke="{DynamicResource TextPrimaryBrush}"
+                    StrokeThickness="1.2"
+                    Width="14"
+                    Height="14"
+                    Stretch="Uniform" />
+              <TextBlock x:Name="ShowOriginalText" Text="显示原图" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Border Classes="prop-sep" />
+          <TextBlock x:Name="TransTargetText" Classes="prop-label" Text="译文" />
+          <Button Focusable="False" x:Name="TransCompareButton" Classes="prop"
+                  Content="对比" IsVisible="False" ToolTip.Tip="左右对比（未实现）" />
+          <Button Focusable="False" Classes="prop" Content="关闭" Click="OnTransCloseClick"
+                  ToolTip.Tip="退出译文视图，回到识别框" />
+        </StackPanel>
       </Border>
     </StackPanel>
 
