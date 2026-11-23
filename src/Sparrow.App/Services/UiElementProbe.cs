@@ -53,8 +53,8 @@ public sealed class UiElementProbe : IDisposable
     /// <summary>悬停探测的预算：和 snow-shot 一致，170ms 内必须给出结果。</summary>
     public static readonly TimeSpan ForegroundBudget = TimeSpan.FromMilliseconds(170);
 
-    /// <summary>光标停住后的细化预算：可以慢慢把路径走到底。</summary>
-    public static readonly TimeSpan RefinementBudget = TimeSpan.FromMilliseconds(1200);
+    /// <summary>光标停住后的细化预算：和 snow-shot 的 1.5s 对齐，复杂窗口也够走完。</summary>
+    public static readonly TimeSpan RefinementBudget = TimeSpan.FromMilliseconds(1500);
 
     /// <summary>遍历途中发布粗框的间隔，让框先出来再收紧。</summary>
     private const int PublicationIntervalMilliseconds = 40;
@@ -150,6 +150,9 @@ public sealed class UiElementProbe : IDisposable
 
         public TimeSpan LastPublished { get; set; }
 
+        /// <summary>本次探测是否已经为超时重试过一次。</summary>
+        public bool RetryUsed { get; set; }
+
         public void MaybePublish(Node current, Node root)
         {
             if (Preview is null || watch.Elapsed - LastPublished <
@@ -158,7 +161,7 @@ public sealed class UiElementProbe : IDisposable
                 return;
             }
 
-            var candidate = Pick(current, root, resolveName: false);
+            var candidate = Pick(current, root, resolveName: false, preview: true);
             if (candidate is null)
                 return;
 
@@ -362,13 +365,25 @@ public sealed class UiElementProbe : IDisposable
 
             // 预算到点：把已经走到的最深节点先交出去，调用方可以再细化
             if (state.Expired)
-                return new UiElementProbeResult(Pick(current, root, resolveName: false), false);
+            {
+                return new UiElementProbeResult(
+                    Pick(current, root, resolveName: false, preview: true), false);
+            }
 
-            if (!TryExpand(current, state))
+            var expanded = TryExpand(current, state);
+
+            // 超时 / 空树在本次探测内重试一次；和 snow-shot 的 refinement retry 一致
+            if (!expanded && !state.RetryUsed && !current.ExpandFailed && !state.Expired)
+            {
+                state.RetryUsed = true;
+                expanded = TryExpand(current, state);
+            }
+
+            if (!expanded)
             {
                 // 可重试的失败（预算/超时/空树）留给细化；彻底失败就收手
                 return new UiElementProbeResult(
-                    Pick(current, root, resolveName: true),
+                    Pick(current, root, resolveName: true, preview: false),
                     current.ExpandFailed);
             }
 
@@ -380,7 +395,10 @@ public sealed class UiElementProbe : IDisposable
                 // Pane/Group 盖住真正的内容分支，需要沿等大结构节点回溯
                 var alternative = StructuralAlternative(current, point);
                 if (alternative is null)
-                    return new UiElementProbeResult(Pick(current, root, resolveName: true), true);
+                {
+                    return new UiElementProbeResult(
+                        Pick(current, root, resolveName: true, preview: false), true);
+                }
 
                 current = alternative;
                 continue;
@@ -390,7 +408,8 @@ public sealed class UiElementProbe : IDisposable
             state.MaybePublish(current, root);
         }
 
-        return new UiElementProbeResult(Pick(current, root, resolveName: true), true);
+        return new UiElementProbeResult(
+            Pick(current, root, resolveName: true, preview: false), true);
     }
 
     /// <summary>释放除当前窗口以外的控件树（每个窗口的树可能上千个元素）。</summary>
@@ -742,14 +761,20 @@ public sealed class UiElementProbe : IDisposable
     }
 
     /// <summary>
-    /// 从最深处往上找第一个「值得框」的节点。
-    /// <paramref name="resolveName"/> 为 false 时（遍历途中的粗框）不读 Name，
-    /// 只用控件类型当标题，避免每个中间节点都付一次跨进程调用。
+    /// 从最深处往上找「值得框」的节点。
+    /// <paramref name="preview"/> 为 true 时连结构容器也直接返回——粗框阶段要让框
+    /// 每下一层就收紧一次，不能等到非结构控件才出框（VS 这类窗口前几层全是 Pane）。
+    /// 最终结果才跳过结构容器，并最多为两个结构节点读名字。
     /// </summary>
-    private static UiElementCandidate? Pick(Node current, Node root, bool resolveName)
+    private static UiElementCandidate? Pick(
+        Node current,
+        Node root,
+        bool resolveName,
+        bool preview)
     {
         var windowArea = Math.Max(1L, (long)root.Bounds.Width * root.Bounds.Height);
         var visited = 0;
+        var structuralChecked = 0;
 
         for (var node = current; node is not null && !ReferenceEquals(node, root); node = node.Parent)
         {
@@ -773,9 +798,11 @@ public sealed class UiElementProbe : IDisposable
                     kind);
             }
 
-            // 结构容器只有最深的那个值得查名字；祖先 Pane 一律跳过。
-            // 这样一次最终命中也最多付一次跨进程调用。
-            if (visited == 1 && resolveName)
+            if (preview)
+                return new UiElementCandidate(node.Bounds, kind, kind);
+
+            // 结构容器只给最深的一个查名字；再往上通常是整块窗格，不值得跨进程
+            if (resolveName && structuralChecked++ < 1)
             {
                 var name = SafeName(node.Element);
                 if (name is not null)
