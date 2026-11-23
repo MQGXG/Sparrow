@@ -35,9 +35,16 @@ public sealed class UiElementProbe : IDisposable
     /// <summary>单个窗口最多保留多少懒展开节点，防止异常大树把内存撑爆。</summary>
     private const int MaxNodesPerWindow = 12000;
 
-    /// <summary>单次跨进程调用最多等多久（毫秒）。</summary>
-    private const int ConnectionTimeoutMilliseconds = 300;
-    private const int TransactionTimeoutMilliseconds = 800;
+    /// <summary>
+    /// 单次跨进程调用最多等多久（毫秒）。
+    /// 浏览器（Chromium/Edge）第一次查询要现场启用无障碍树，800ms 内经常回不来。
+    /// </summary>
+    private const int ConnectionTimeoutMilliseconds = 800;
+
+    private const int TransactionTimeoutMilliseconds = 2000;
+
+    /// <summary>容器节点连续拿到几次空子树后放弃（多半是应用还没建好树）。</summary>
+    private const int MaxEmptyExpansions = 5;
 
     private readonly BlockingCollection<Action> _queue = new();
     private readonly Thread _worker;
@@ -473,6 +480,19 @@ public sealed class UiElementProbe : IDisposable
             }
 
             node.Children = children;
+
+            // 容器返回空子树：Chromium 首次查询时树还在建，空结果不能永久缓存，
+            // 否则这一个窗口之后永远只剩「整窗候选」。
+            if (children.Count == 0 && IsContainer(node.ControlType))
+            {
+                node.Children = null;
+
+                if (++node.EmptyExpansions >= MaxEmptyExpansions)
+                    node.ExpandFailed = true;
+
+                return false;
+            }
+
             return true;
         }
         catch
@@ -607,6 +627,19 @@ public sealed class UiElementProbe : IDisposable
             or UIA_ControlTypeIds.UIA_GroupControlTypeId
             or UIA_ControlTypeIds.UIA_CustomControlTypeId;
 
+    /// <summary>可能装子控件的容器类型：空子树先当「树还没建好」处理。</summary>
+    private static bool IsContainer(int controlType) =>
+        IsStructural(controlType)
+        || controlType is UIA_ControlTypeIds.UIA_WindowControlTypeId
+            or UIA_ControlTypeIds.UIA_DocumentControlTypeId
+            or UIA_ControlTypeIds.UIA_ToolBarControlTypeId
+            or UIA_ControlTypeIds.UIA_MenuControlTypeId
+            or UIA_ControlTypeIds.UIA_ListControlTypeId
+            or UIA_ControlTypeIds.UIA_TreeControlTypeId
+            or UIA_ControlTypeIds.UIA_TabControlTypeId
+            or UIA_ControlTypeIds.UIA_TableControlTypeId
+            or UIA_ControlTypeIds.UIA_DataGridControlTypeId;
+
     private static string ControlTypeName(int controlTypeId) =>
         ControlTypeNames.TryGetValue(controlTypeId, out var name) ? name : "控件";
 
@@ -655,6 +688,7 @@ public sealed class UiElementProbe : IDisposable
         public List<Node>? Children { get; set; }
         public bool ExpandFailed { get; set; }
         public int Failures { get; set; }
+        public int EmptyExpansions { get; set; }
         public bool Structural => IsStructural(ControlType);
     }
 

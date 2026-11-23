@@ -158,6 +158,8 @@ public partial class CaptureWindow : Window
     private UiElementProbe? _uiProbe;
     private bool _forceWindowCandidate;
     private int _probeGeneration;
+    private Task? _probeTask;
+    private IntPtr _probingWindow;
     private Point _lastPointerPoint;
     private Rect _selection;
     private Rect _candidateDip;
@@ -1681,57 +1683,93 @@ public partial class CaptureWindow : Window
         point.Y >= bounds.Y && point.Y < bounds.Y + bounds.Height;
 
     /// <summary>
-    /// 立刻把探测投递到 UIA 线程，不做时间防抖。
-    /// 每次移动都把 generation 往前推，还没轮到的旧任务在 worker 里直接丢掉，
-    /// 所以鼠标扫过时不会真的去查控件树，停下来那一刻的结果才是最接近实时的。
+    /// 把探测投递到 UIA 线程。
+    ///
+    /// 浏览器（Chromium / Edge）的坑：无障碍树是「第一次查询才懒启用」的，
+    /// 第一次经常拿不到；而且鼠标一动就取消重建，会一直探不完。
+    /// 所以这里做三件事：
+    /// 1. 同一窗口已有探测在跑时不再开新的，避免鼠标一动就把建树任务取消；
+    /// 2. 探完发现鼠标移了，直接用已经缓存的树再命中一次（很快）；
+    /// 3. 静止时没命中就隔 350ms 重试，最多两次。
     /// </summary>
     private void ScheduleControlProbe()
     {
         if (_forceWindowCandidate || _hasSelection || OcrLayer.IsVisible || _currentCandidate is null)
             return;
 
-        var generation = ++_probeGeneration;
-        _ = ProbeAsync(generation);
-    }
-
-    private async Task ProbeAsync(int generation)
-    {
-        var window = _currentCandidate;
-        var probe = _uiProbe;
-
-        if (window is null || probe is null)
+        // 同一窗口正在探：让它跑完，结束后会按最新光标再命中。
+        // 用任务是否完成判断，而不是布尔标记——点空白会推进 generation，
+        // 旧任务不敢清标记，用布尔会把后续探测永久锁死。
+        if (_probeTask is { IsCompleted: false } && _probingWindow == _currentCandidate.Handle)
             return;
 
-        var point = WindowCandidates.GetCursorPosition();
+        var generation = ++_probeGeneration;
+        _probingWindow = _currentCandidate.Handle;
+        _probeTask = ProbeAsync(generation, _currentCandidate);
+    }
+
+    private async Task ProbeAsync(int generation, WindowCandidate window)
+    {
+        var probe = _uiProbe;
+
+        if (probe is null)
+            return;
 
         try
         {
-            // worker 在真正遍历前会再看一次 generation，过时的任务直接返回
-            var candidate = await probe.ProbeAsync(
-                window.Handle,
-                point,
-                () => generation == Volatile.Read(ref _probeGeneration));
+            var rehits = 0;
+            var retries = 0;
 
-            if (generation != _probeGeneration ||
-                _currentCandidate?.Handle != window.Handle ||
-                _hasSelection ||
-                _forceWindowCandidate)
+            while (true)
             {
+                var point = WindowCandidates.GetCursorPosition();
+
+                // worker 在真正遍历前会再看一次 generation，过时的任务直接返回
+                var candidate = await probe.ProbeAsync(
+                    window.Handle,
+                    point,
+                    () => generation == Volatile.Read(ref _probeGeneration));
+
+                if (!IsProbeCurrent(generation, window))
+                    return;
+
+                var latest = WindowCandidates.GetCursorPosition();
+
+                // 探测期间鼠标又动了：树已经缓存，按最新位置再命中一次
+                if (Math.Abs(latest.X - point.X) > 2 || Math.Abs(latest.Y - point.Y) > 2)
+                {
+                    if (++rehits <= 3)
+                        continue;
+
+                    return;
+                }
+
+                // 浏览器第一次查询后才懒启用无障碍树：停一下就重试
+                if (candidate is null && retries < 2)
+                {
+                    retries++;
+                    await Task.Delay(350);
+                    if (!IsProbeCurrent(generation, window))
+                        return;
+
+                    continue;
+                }
+
+                SetUiCandidate(candidate);
                 return;
             }
-
-            // 探测期间鼠标又动了：这次结果已过时，等下一次移动重新探测
-            var latest = WindowCandidates.GetCursorPosition();
-            if (Math.Abs(latest.X - point.X) > 2 || Math.Abs(latest.Y - point.Y) > 2)
-                return;
-
-            SetUiCandidate(candidate);
         }
         catch
         {
             // 探测失败就保持窗口级候选
         }
     }
+
+    private bool IsProbeCurrent(int generation, WindowCandidate window) =>
+        generation == Volatile.Read(ref _probeGeneration)
+        && _currentCandidate?.Handle == window.Handle
+        && !_hasSelection
+        && !_forceWindowCandidate;
 
     /// <summary>方向键微调：选区和标注一起反向平移，保持屏幕位置，并进撤销栈。</summary>
     private void NudgeSelection(double dx, double dy)
