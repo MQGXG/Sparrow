@@ -5,7 +5,7 @@
 | 参考 | 技术栈 | 源码位置 |
 |---|---|---|
 | LumaShot | Win32 + Direct2D 全手绘 | `D:\mycodeHub\LumaShot\src` |
-| snow-shot | Qt Widgets + 自研 Ad* 控件 | `%TEMP%\snow-shot\snow_shot` |
+| snow-shot | Qt Widgets + 自研 Ad* 控件 | `D:\mycodeHub\snow-shot\snow_shot` |
 
 本文记录**布局、画面、功能**三件事的实测参数与结构，供后续对齐时逐条核对。
 
@@ -934,6 +934,15 @@ m_manuallyDragged = false;
 - 不做拖拽排序（v1），菜单已能表达顺序；也不做「收进更多」。
 
 **验收**：隐藏重启仍隐藏 ✅；改入口后折叠按钮图标与点击目标同步 ✅；全部隐藏时指针/撤销/完成仍在 ✅；损坏配置回落默认不崩 ✅。
+
+### 批次 7 · OCR 文字层（未开始）
+
+> 参考实现的行为拆解、与 Sparrow 的逐项差距、五期落地方案见
+> [`ocr-text-layer.md`](ocr-text-layer.md)。
+
+一句话：参考把 OCR 结果画成**可选文字**（字符级选择 + 复制 / 荧光笔 / 波浪线 / 下划线 / 删除线），
+Sparrow 现在是**透明行框 + 文本面板**。最大的前置是行模型要带词框——`OcrTextLine` 目前只有
+`Text/X/Y/Width/Height` 五个字段。
 
 ---
 
