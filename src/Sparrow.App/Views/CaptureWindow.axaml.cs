@@ -160,6 +160,7 @@ public partial class CaptureWindow : Window
     private int _probeGeneration;
     private Task? _probeTask;
     private IntPtr _probingWindow;
+    private MsaaElementProbe? _msaaProbe;
     private Point _lastPointerPoint;
     private Rect _selection;
     private Rect _candidateDip;
@@ -681,6 +682,7 @@ public partial class CaptureWindow : Window
 
         _candidates = WindowCandidates.Enumerate(TryGetPlatformHandle()?.Handle ?? IntPtr.Zero);
         _uiProbe = new UiElementProbe();
+        _msaaProbe = new MsaaElementProbe();
 
         // 打开遮罩时鼠标可能已经停在目标控件上，不用晃一下才出候选
         ShowCandidateUnderCursor();
@@ -723,6 +725,8 @@ public partial class CaptureWindow : Window
         _probeGeneration++;
         _uiProbe?.Dispose();
         _uiProbe = null;
+        _msaaProbe?.Dispose();
+        _msaaProbe = null;
         _ocrCancellation?.Cancel();
         _ocrCancellation?.Dispose();
         _ocrCancellation = null;
@@ -1770,6 +1774,33 @@ public partial class CaptureWindow : Window
                         if (++rehits <= 3)
                             continue;
 
+                        return;
+                    }
+                }
+
+                // UIA 没命中：用 MSAA 兜底（Electron / 老应用往往只在这边暴露控件）
+                if (result.Candidate is null && _msaaProbe is { } msaa)
+                {
+                    var msaaCandidate = await msaa.ProbeAsync(
+                        window.Handle,
+                        point,
+                        UiElementProbe.ForegroundBudget,
+                        () => generation == Volatile.Read(ref _probeGeneration));
+
+                    if (!IsProbeCurrent(generation, window))
+                        return;
+
+                    if (CursorMovedSince(point))
+                    {
+                        if (++rehits <= 3)
+                            continue;
+
+                        return;
+                    }
+
+                    if (msaaCandidate is not null)
+                    {
+                        SetUiCandidate(msaaCandidate);
                         return;
                     }
                 }
