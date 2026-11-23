@@ -7,6 +7,12 @@
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <!--
+      宿主（Sparrow.App / 测试）的目标框架：WGC 需要 Windows SDK 投影。
+      插件仍用上面的 net10.0；插件的 CopyPluginToHost 也按这个属性找宿主输出目录，
+      不能再用插件自己的 $(TargetFramework)，否则名字一变插件就复制到旧目录。
+    -->
+    <SparrowHostTargetFramework>net10.0-windows10.0.19041.0</SparrowHostTargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

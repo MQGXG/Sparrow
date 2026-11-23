@@ -5,7 +5,7 @@
     <AssemblyName>Sparrow.App</AssemblyName>
     <RootNamespace>Sparrow.App</RootNamespace>
     <!-- WGC（Windows.Graphics.Capture）需要 Windows SDK 投影 -->
-    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetFramework>$(SparrowHostTargetFramework)</TargetFramework>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <!-- 编译绑定：绑定错误在编译期暴露，而不是运行时静默失败 -->

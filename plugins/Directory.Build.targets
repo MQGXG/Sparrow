@@ -27,7 +27,9 @@
           Condition="'$(PluginId)' != ''">
 
     <PropertyGroup>
-      <_PluginHostDir>$(MSBuildThisFileDirectory)..\src\Sparrow.App\bin\$(Configuration)\$(TargetFramework)\plugins\$(PluginId)</_PluginHostDir>
+      <!-- 宿主输出目录的 TFM 和插件自己的 TFM 不是一回事：插件是 net10.0，
+           宿主是 net10.0-windows...；写死 $(TargetFramework) 会复制到旧目录。 -->
+      <_PluginHostDir>$(MSBuildThisFileDirectory)..\src\Sparrow.App\bin\$(Configuration)\$(SparrowHostTargetFramework)\plugins\$(PluginId)</_PluginHostDir>
     </PropertyGroup>
 
     <ItemGroup>
