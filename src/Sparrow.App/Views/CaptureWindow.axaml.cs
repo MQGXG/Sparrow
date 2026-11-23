@@ -160,6 +160,7 @@ public partial class CaptureWindow : Window
     private int _probeGeneration;
     private Task? _probeTask;
     private IntPtr _probingWindow;
+    private bool _refining;
     private MsaaElementProbe? _msaaProbe;
     private Point _lastPointerPoint;
     private Rect _selection;
@@ -1726,10 +1727,19 @@ public partial class CaptureWindow : Window
         // 同一窗口正在探：让它跑完，结束后会按最新光标再命中。
         // 用任务是否完成判断，而不是布尔标记——点空白会推进 generation，
         // 旧任务不敢清标记，用布尔会把后续探测永久锁死。
-        if (_probeTask is { IsCompleted: false } && _probingWindow == _currentCandidate.Handle)
+        //
+        // 细化阶段例外：细化最长 1.5s，光标一动就必须放弃，
+        // 否则复杂页面里下一个位置要排队等它跑完，看起来像卡住。
+        var busy = _probeTask is { IsCompleted: false }
+                   && _probingWindow == _currentCandidate.Handle;
+
+        if (busy && !_refining)
             return;
 
         var generation = ++_probeGeneration;
+
+        // 旧细化已被 generation 取消；新探测从干净状态开始
+        _refining = false;
         _probingWindow = _currentCandidate.Handle;
         _probeTask = ProbeAsync(generation, _currentCandidate);
     }
@@ -1791,12 +1801,22 @@ public partial class CaptureWindow : Window
                 // 预算用完但已经有一个粗结果：光标没动，接着把路径走到底
                 if (!foreground.Completed)
                 {
-                    result = await probe.ProbeAsync(
-                        window.Handle,
-                        point,
-                        UiElementProbe.RefinementBudget,
-                        preview,
-                        () => generation == Volatile.Read(ref _probeGeneration));
+                    _refining = true;
+
+                    try
+                    {
+                        result = await probe.ProbeAsync(
+                            window.Handle,
+                            point,
+                            UiElementProbe.RefinementBudget,
+                            preview,
+                            () => generation == Volatile.Read(ref _probeGeneration));
+                    }
+                    finally
+                    {
+                        if (generation == Volatile.Read(ref _probeGeneration))
+                            _refining = false;
+                    }
 
                     if (!IsProbeCurrent(generation, window))
                         return;
