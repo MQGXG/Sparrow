@@ -115,6 +115,9 @@ public sealed class AiClientTests
 
         public static HttpResponseMessage Json(string json, HttpStatusCode status = HttpStatusCode.OK) =>
             new(status) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
+
+        public static HttpResponseMessage Sse(string body) =>
+            new(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "text/event-stream") };
     }
 
     [Fact]
@@ -274,5 +277,78 @@ public sealed class AiClientTests
                 CancellationToken.None));
 
         error.Kind.ShouldBe(AiErrorKind.Unauthorized);
+    }
+
+    [Fact]
+    public async Task 流式调用_按SSE增量返回累积文本()
+    {
+        var log = new NullLog();
+        var secrets = new AiSecretStore(TempKeyPath(), log);
+        secrets.Save("sk-test-key");
+
+        var handler = new FakeHandler
+        {
+            Response = FakeHandler.Sse(
+                """
+                data: {"choices":[{"delta":{"content":"你"}}]}
+
+                data: {"choices":[{"delta":{"content":"好"}}]}
+
+                data: [DONE]
+                """)
+        };
+
+        var client = new AiClient(secrets, log, handler);
+        client.Configure(new AppSettings
+        {
+            AiEnabled = true,
+            AiProvider = "openai",
+            AiBaseUrl = "https://example.com/v1",
+            AiModel = "gpt-test"
+        });
+
+        var snapshots = new List<string>();
+
+        await foreach (var snapshot in client.StreamAsync(
+                           new AiRequest { Messages = [new AiMessage(AiRole.User, "hi")] },
+                           TestContext.Current.CancellationToken))
+        {
+            snapshots.Add(snapshot);
+        }
+
+        snapshots.ShouldBe(["你", "你好"]);
+        handler.Body.ShouldNotBeNull().ShouldContain("\"stream\":true");
+    }
+
+    [Fact]
+    public async Task 流式调用_空流报无效响应()
+    {
+        var log = new NullLog();
+        var secrets = new AiSecretStore(TempKeyPath(), log);
+        secrets.Save("sk-test-key");
+
+        var handler = new FakeHandler
+        {
+            Response = FakeHandler.Sse("data: [DONE]\n")
+        };
+
+        var client = new AiClient(secrets, log, handler);
+        client.Configure(new AppSettings
+        {
+            AiEnabled = true,
+            AiBaseUrl = "https://example.com/v1",
+            AiModel = "gpt-test"
+        });
+
+        var error = await Should.ThrowAsync<AiException>(async () =>
+        {
+            await foreach (var _ in client.StreamAsync(
+                               new AiRequest { Messages = [new AiMessage(AiRole.User, "hi")] },
+                               TestContext.Current.CancellationToken))
+            {
+            }
+        });
+
+        error.Kind.ShouldBe(AiErrorKind.InvalidResponse);
     }
 }

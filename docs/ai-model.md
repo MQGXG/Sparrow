@@ -39,6 +39,9 @@ public interface IAiClient
     bool IsAvailable { get; }
     string? ModelName { get; }
     Task<AiResponse> CompleteAsync(AiRequest request, CancellationToken ct);
+
+    // 流式：每次 yield 累积文本；默认实现退化为一次 CompleteAsync
+    IAsyncEnumerable<string> StreamAsync(AiRequest request, CancellationToken ct = default);
 }
 ```
 
@@ -118,7 +121,7 @@ Requires = PlatformCapability.Ai
 
 ## 七、限制
 
-- 只支持非流式 `chat/completions`；流式以后按真实需求加
+- 默认走非流式 `chat/completions`；支持 SSE 的提供方可用 `StreamAsync` 逐 token 返回（OCR 截图用它边翻译边画）
 - 单次请求超时 90 秒
 - 长文本由工具自己切块（翻译工具在线按 3000 字、离线按 1200 字）
 - 本地推理由两种方式提供：外部进程（Ollama / LM Studio）或宿主下载的 GGUF（见 `docs/local-models.md`）

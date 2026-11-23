@@ -152,8 +152,17 @@ public sealed class OcrImageTool : ITool
                         ? payload.Lines.Select(line => line.Text).ToList()
                         : [payload.Text];
 
+                    // 先把行框交给截图窗口：边翻译边画，不必等整段完成
+                    if (translateTo != OcrParameters.TranslateNone
+                        && set.Images.Count == 1
+                        && payload.Lines.Count > 0)
+                    {
+                        context.Progress?.Report(
+                            new ToolProgress(0.45, "正在翻译…") { Lines = payload.Lines });
+                    }
+
                     var outcome = await TranslateLinesAsync(
-                        context, sourceLines, translateTo, engine, cancellationToken);
+                        context, sourceLines, payload.Lines, translateTo, engine, cancellationToken);
 
                     var sectionText = outcome.Lines is null
                         ? outcome.Unavailable
@@ -368,12 +377,13 @@ public sealed class OcrImageTool : ITool
         bool Unavailable);
 
     /// <summary>
-    /// 逐行翻译：编号发送、按编号解析。识别是主任务，翻译失败返回空结果，调用方保留原文。
-    /// 单独抽出来是为了给行框回填 `Translation`（译文叠层要用）。
+    /// 逐行翻译：编号发送、按编号解析，并在流式返回时把部分译文交给界面。
+    /// 识别是主任务，翻译失败返回空结果，调用方保留原文。
     /// </summary>
     private static async Task<TranslationOutcome> TranslateLinesAsync(
         ToolContext context,
         IReadOnlyList<string> lines,
+        IReadOnlyList<OcrTextLine> overlayLines,
         string target,
         string engine,
         CancellationToken cancellationToken)
@@ -395,25 +405,69 @@ public sealed class OcrImageTool : ITool
             ? OcrParameters.LocalModelId(engine) ?? PickInstalledModel(host)
             : null;
 
+        // 流式上报：普通帧 70ms 一帧；有新的一行译完就立刻上报
+        var lastReportedAt = 0L;
+        var lastCompleted = 0;
+        var lastSnapshot = string.Empty;
+
+        void Report(string? snapshot)
+        {
+            if (overlayLines.Count == 0
+                || string.IsNullOrEmpty(snapshot)
+                || snapshot == lastSnapshot)
+            {
+                return;
+            }
+
+            lastSnapshot = snapshot;
+
+            if (ParseTranslationResponse(snapshot, lines.Count) is not { } parsed)
+                return;
+
+            var attached = AttachTranslations(overlayLines, parsed);
+            var completed = attached.Count(line => line.Translation is not null);
+            if (completed == 0)
+                return;
+
+            var now = Environment.TickCount64;
+            if (completed <= lastCompleted && now - lastReportedAt < 70)
+                return;
+
+            lastReportedAt = now;
+            lastCompleted = completed;
+
+            context.Progress?.Report(
+                new ToolProgress(null, "正在翻译…") { Lines = attached });
+        }
+
         if (useOnline && host.Ai.IsAvailable)
         {
             try
             {
-                var response = await host.Ai.CompleteAsync(
-                    new AiRequest
-                    {
-                        System =
-                            $"把用户给出的编号文本翻译成{target}。输入每行是「编号|原文」，"
-                            + "输出必须保持编号：每行「编号|译文」，编号不能增删、不能合并行、不能加解释。"
-                            + "数字、编号、单位、专有名词原样保留；不需要翻译的内容原样返回。",
-                        Messages = [new AiMessage(AiRole.User, original)],
-                        Temperature = 0.2,
-                        MaxTokens = Math.Clamp(original.Length * 2, 512, 4096)
-                    },
-                    cancellationToken);
+                var request = new AiRequest
+                {
+                    System =
+                        $"把用户给出的编号文本翻译成{target}。输入每行是「编号|原文」，"
+                        + "输出必须保持编号：每行「编号|译文」，编号不能增删、不能合并行、不能加解释。"
+                        + "数字、编号、单位、专有名词原样保留；不需要翻译的内容原样返回。",
+                    Messages = [new AiMessage(AiRole.User, original)],
+                    Temperature = 0.2,
+                    MaxTokens = Math.Clamp(original.Length * 2, 512, 4096)
+                };
 
-                if (ParseTranslationResponse(response.Text, lines.Count) is { } parsed)
+                var last = string.Empty;
+                await foreach (var snapshot in host.Ai.StreamAsync(request, cancellationToken))
+                {
+                    last = snapshot;
+                    Report(snapshot);
+                }
+
+                if (ParseTranslationResponse(last, lines.Count) is { } parsed)
                     return new TranslationOutcome(parsed, false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (AiException ex)
             {
@@ -430,16 +484,22 @@ public sealed class OcrImageTool : ITool
         {
             try
             {
-                var translated = await host.LocalTranslation.TranslateAsync(
-                    new LocalTranslationRequest
-                    {
-                        ModelId = localId,
-                        Text = original,
-                        TargetLanguage = target
-                    },
-                    cancellationToken);
+                var request = new LocalTranslationRequest
+                {
+                    ModelId = localId,
+                    Text = original,
+                    TargetLanguage = target
+                };
 
-                if (ParseTranslationResponse(translated, lines.Count) is { } parsed)
+                var last = string.Empty;
+                await foreach (var snapshot in host.LocalTranslation.StreamAsync(
+                                   request, cancellationToken))
+                {
+                    last = snapshot;
+                    Report(snapshot);
+                }
+
+                if (ParseTranslationResponse(last, lines.Count) is { } parsed)
                     return new TranslationOutcome(parsed, false);
             }
             catch (OperationCanceledException)

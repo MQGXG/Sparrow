@@ -1,4 +1,5 @@
 using Sparrow.Plugin.Sdk.Inputs;
+using Sparrow.Plugin.Sdk.Payloads;
 
 namespace Sparrow.Plugin.Sdk;
 
@@ -66,5 +67,11 @@ public sealed record ToolContext
 /// </summary>
 public sealed record ToolProgress(double? Percent, string? Message = null)
 {
+    /// <summary>
+    /// 中间结果（OCR 才有）：带译文的部分行框。
+    /// 截图窗口用它边翻译边画，不必等整段完成；面板路径可以忽略。
+    /// </summary>
+    public IReadOnlyList<OcrTextLine>? Lines { get; init; }
+
     public static ToolProgress Indeterminate(string? message = null) => new(null, message);
 }

@@ -48,6 +48,19 @@ public interface ILocalTranslation
     Task<string?> TranslateAsync(
         LocalTranslationRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 流式翻译：每次 yield 的是「截至目前的完整译文」，不是增量片段。
+    /// 默认实现退化为一次 <see cref="TranslateAsync"/>。
+    /// </summary>
+    async IAsyncEnumerable<string> StreamAsync(
+        LocalTranslationRequest request,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var text = await TranslateAsync(request, cancellationToken);
+        if (!string.IsNullOrEmpty(text))
+            yield return text;
+    }
 }
 
 /// <summary>没有本地翻译能力时的空实现（测试或精简宿主）。</summary>

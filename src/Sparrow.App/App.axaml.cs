@@ -777,6 +777,7 @@ public partial class App : Application
     private async Task<CaptureOcrResult> RunCaptureOcrAsync(
         byte[] png,
         CaptureOcrOptions options,
+        IProgress<IReadOnlyList<OcrTextLine>>? partialLines,
         CancellationToken cancellationToken)
     {
         if (_catalog is null)
@@ -811,7 +812,15 @@ public partial class App : Application
                 ]),
                 Source = ToolSource.Screenshot,
                 Parameters = parameters,
-                Host = entry.Host
+                Host = entry.Host,
+                // 插件每翻译出一部分就上报一次，窗口边收边画
+                Progress = partialLines is null
+                    ? null
+                    : new Progress<ToolProgress>(progress =>
+                    {
+                        if (progress.Lines is { Count: > 0 } lines)
+                            partialLines.Report(lines);
+                    })
             };
 
             var result = await entry.Tool.ExecuteAsync(context, cancellationToken);

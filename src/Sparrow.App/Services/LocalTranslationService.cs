@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using LLama;
 using LLama.Common;
@@ -137,6 +138,92 @@ internal sealed class LocalTranslationService : ILocalTranslation
         {
             _log.Error($"本地翻译失败：{ex.Message}", ex);
             return null;
+        }
+        finally
+        {
+            Gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// 流式翻译：按 token 返回累积译文，截图窗口可以边生成边画。
+    /// 分块策略与 <see cref="TranslateAsync"/> 一致，只是把每块的结果实时吐出来。
+    /// </summary>
+    public async IAsyncEnumerable<string> StreamAsync(
+        LocalTranslationRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Text))
+            yield break;
+
+        if (!_models.IsInstalled(request.ModelId))
+        {
+            _log.Warn($"本地翻译：模型「{request.ModelId}」未下载");
+            yield break;
+        }
+
+        var chunks = Chunk(request.Text, ChunkLength).ToList();
+        if (chunks.Count == 0)
+            yield break;
+
+        if (chunks.Count > MaxChunks)
+        {
+            _log.Warn($"本地翻译：文本 {request.Text.Length} 字，超过 {MaxChunks} 块的限制");
+            yield break;
+        }
+
+        var path = await _models.EnsureAsync(request.ModelId, progress: null, cancellationToken);
+        if (path is null)
+        {
+            _log.Warn($"本地翻译：模型「{request.ModelId}」不可用");
+            yield break;
+        }
+
+        await Gate.WaitAsync(cancellationToken);
+
+        try
+        {
+            ConfigureNative();
+
+            var parameters = CreateParameters(path);
+            var weights = await Task.Run(
+                () => LLamaWeights.LoadFromFile(parameters),
+                cancellationToken);
+
+            using (weights)
+            {
+                var executor = new StatelessExecutor(weights, CreateParameters(path), NullLogger.Instance)
+                {
+                    ApplyTemplate = false
+                };
+
+                var glossary = BuildGlossary(request.Terms);
+                var finished = new StringBuilder();
+
+                foreach (var chunk in chunks)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var prompt = RenderPrompt(weights, request, glossary, chunk);
+                    var options = new InferenceParams
+                    {
+                        MaxTokens = Math.Clamp(chunk.Length * 2, 256, 3072),
+                        AntiPrompts = StopSequences,
+                        SamplingPipeline = CreateSampling()
+                    };
+
+                    var raw = new StringBuilder();
+
+                    await foreach (var token in executor.InferAsync(prompt, options, cancellationToken))
+                    {
+                        raw.Append(token);
+                        yield return finished + raw.ToString();
+                    }
+
+                    finished.Append(Clean(raw.ToString()));
+                    yield return finished.ToString();
+                }
+            }
         }
         finally
         {

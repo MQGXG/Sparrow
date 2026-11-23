@@ -173,6 +173,9 @@ public partial class CaptureWindow : Window
     private bool _isRecognizing;
     private string? _ocrText;
 
+    /// <summary>上一次中间译文重绘的时间（TickCount64），用来限帧。</summary>
+    private long _lastPartialRender;
+
     /// <summary>格式 / 标点：只影响复制出去的文本，不改行框与译文落点。</summary>
     private string _ocrFormatting = OcrTextTransform.FormatKeep;
 
@@ -498,8 +501,14 @@ public partial class CaptureWindow : Window
     /// 宿主注入的 OCR 执行器。为空时「识别文字」保持旧行为：
     /// 关窗、由宿主走面板识别。
     /// <c>options.TranslateTarget</c> 非空时宿主会把「翻译为」参数带给 OCR 工具。
+    /// <c>partialLines</c> 是翻译过程中的中间结果：截图窗口用它边翻译边画。
     /// </summary>
-    public Func<byte[], CaptureOcrOptions, CancellationToken, Task<CaptureOcrResult>>? OcrRunner { get; set; }
+    public Func<
+        byte[],
+        CaptureOcrOptions,
+        IProgress<IReadOnlyList<OcrTextLine>>?,
+        CancellationToken,
+        Task<CaptureOcrResult>>? OcrRunner { get; set; }
 
     /// <summary>
     /// 「翻译」按钮的语言列表（值 + 显示名），来自 OCR 工具的声明。
@@ -6162,7 +6171,9 @@ public partial class CaptureWindow : Window
 
         try
         {
-            var result = await OcrRunner(png, options ?? new CaptureOcrOptions(), _ocrCancellation.Token);
+            var progress = new Progress<IReadOnlyList<OcrTextLine>>(ApplyPartialOcrLines);
+            var result = await OcrRunner(
+                png, options ?? new CaptureOcrOptions(), progress, _ocrCancellation.Token);
 
             if (!string.IsNullOrEmpty(result.Error))
             {
@@ -6238,7 +6249,7 @@ public partial class CaptureWindow : Window
     }
 
     /// <summary>把行框叠在选区上；坐标按主屏缩放换算回 DIP。</summary>
-    internal void ShowOcrResult(CaptureOcrResult result)
+    internal void ShowOcrResult(CaptureOcrResult result, bool partial = false)
     {
         _ocrText = result.Text;
         OcrLayer.Children.Clear();
@@ -6307,14 +6318,51 @@ public partial class CaptureWindow : Window
         InvalidateToolbarMetrics();
         ApplyDensityVisibility();
         ApplyOcrBoxMode();
-        UpdateTranslatedLayer();
+        UpdateTranslatedLayer(allowWarning: !partial);
+    }
+
+    /// <summary>
+    /// 翻译过程的中间结果：第一帧先把行框画出来，之后随译文增长重画译文层。
+    /// 和 snow-shot 一样，用户看到的是「一行一行 / 一个词一个词」落上去，而不是等整段完成。
+    /// </summary>
+    private void ApplyPartialOcrLines(IReadOnlyList<OcrTextLine> lines)
+    {
+        // 窗口已关（用户取消/又截了一张）就别再动控件
+        if (!IsVisible || lines.Count == 0)
+            return;
+
+        if (_ocrLines.Count != lines.Count)
+        {
+            // 还没有行框：先把框画出来（此时译文为空，不能提示「没对齐」）
+            ShowOcrResult(new CaptureOcrResult(string.Empty, lines), partial: true);
+            OcrStatus.Text = "正在翻译…";
+            _lastPartialRender = Environment.TickCount64;
+            return;
+        }
+
+        // 一 token 一重绘太贵，80ms 一帧足够看出「逐词出现」
+        var now = Environment.TickCount64;
+        if (now - _lastPartialRender < 80)
+            return;
+
+        _lastPartialRender = now;
+
+        for (var index = 0; index < lines.Count; index++)
+        {
+            _ocrLines[index] = (
+                _ocrLines[index].Line with { Translation = lines[index].Translation },
+                _ocrLines[index].Chars);
+        }
+
+        UpdateTranslatedLayer(allowWarning: false, buildCompare: false);
+        OcrStatus.Text = "正在翻译…";
     }
 
     /// <summary>
     /// 有按行译文时生成"译文图"，盖在选区上；没有就什么都不做。
     /// 底图用这次识别时的截图（`Result`），尺寸和导出一致。
     /// </summary>
-    private void UpdateTranslatedLayer()
+    private void UpdateTranslatedLayer(bool allowWarning = true, bool buildCompare = true)
     {
         _translatedPng = null;
         _comparePng = null;
@@ -6338,7 +6386,7 @@ public partial class CaptureWindow : Window
         if (lines.Count == 0)
         {
             // 用户要了翻译但一行都没落上：多半是没有可用引擎，或模型没按编号返回
-            if (!string.IsNullOrEmpty(_translateTarget))
+            if (allowWarning && !string.IsNullOrEmpty(_translateTarget))
                 OcrStatus.Text = "没有拿到可对齐的译文，已保留原文（检查翻译引擎）";
             return;
         }
@@ -6361,8 +6409,9 @@ public partial class CaptureWindow : Window
         _translatedPng = png;
 
         // 左右对比图：原图和译文图并排（显示时按窗口可用区域等比放大并居中）
-        using (var translated = SKBitmap.Decode(png))
+        if (buildCompare)
         {
+            using var translated = SKBitmap.Decode(png);
             if (translated is not null)
                 _comparePng = TranslatedImageRenderer.BuildCompare(crop, translated);
         }

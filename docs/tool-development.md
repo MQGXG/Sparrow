@@ -198,6 +198,7 @@ public interface IToolHost
 | 记日志 | `Host.Logger.Info(...)` | `File.AppendAllText` |
 | 存配置 | `Host.Settings.Get/Set` | 自己读 JSON 文件 |
 | 报进度 | `context.Progress?.Report(...)` | 直接改 UI |
+| 流式中间结果 | `new ToolProgress(...) { Lines = ... }`（OCR 用） | 自己开窗口通信 |
 | 调接口 | `Host.Http.SendAsync` | `new HttpClient()` |
 | 产出文件 | 返回 `FileSetPayload` | 自己写磁盘 |
 | 读剪贴板 | 不需要，`ToolContext` 已给 | 调 Win32 API |

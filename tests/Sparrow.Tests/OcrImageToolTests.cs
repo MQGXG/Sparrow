@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Shouldly;
 using Sparrow.App;
 using Sparrow.App.Plugins;
@@ -97,6 +98,9 @@ public sealed class OcrImageToolTests
 
         public Exception? Throw { get; set; }
 
+        /// <summary>非空时按流式返回这些累积快照（测试「一个字一个字出来」）。</summary>
+        public List<string> StreamSnapshots { get; } = [];
+
         public Task<AiResponse> CompleteAsync(AiRequest request, CancellationToken cancellationToken)
         {
             LastRequest = request;
@@ -105,6 +109,26 @@ public sealed class OcrImageToolTests
                 throw Throw;
 
             return Task.FromResult(new AiResponse(Reply));
+        }
+
+        public async IAsyncEnumerable<string> StreamAsync(
+            AiRequest request,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            if (StreamSnapshots.Count == 0)
+            {
+                var response = await CompleteAsync(request, cancellationToken);
+                yield return response.Text;
+                yield break;
+            }
+
+            LastRequest = request;
+
+            foreach (var snapshot in StreamSnapshots)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return snapshot;
+            }
         }
     }
 
@@ -806,6 +830,62 @@ public sealed class OcrImageToolTests
         text.ShouldContain("## c.png");
         text.ShouldContain("未识别：1 个文件");
         text.ShouldContain("- b.png");
+    }
+
+    [Fact]
+    public async Task 流式翻译_边翻边上报部分行框()
+    {
+        var root = CreateWorkerDirectory();
+        try
+        {
+            var json = """
+            {"text":"订单号 张三","regions":[
+              {"text":"订单号","x":0,"y":0,"width":80,"height":20,"score":0.98},
+              {"text":"张三","x":0,"y":40,"width":40,"height":20,"score":0.98}
+            ]}
+            """;
+
+            var ai = new FakeAi();
+            ai.StreamSnapshots.Add("1|Order No.\n2|");
+            ai.StreamSnapshots.Add("1|Order No.\n2|Zhang San");
+
+            var progress = new CollectingProgress();
+
+            var result = await new OcrImageTool(new FakeRunner([json])).ExecuteAsync(
+                new ToolContext
+                {
+                    Input = new ImageSetInput([Image("a.png")]),
+                    Host = CreateHost(root, ai),
+                    Progress = progress,
+                    Parameters = new Dictionary<string, string>
+                    {
+                        ["translate"] = "English",
+                        ["engine"] = "ai"
+                    }
+                },
+                CancellationToken.None);
+
+            result.Success.ShouldBeTrue();
+
+            // 第一帧：行框先到，还没有译文
+            progress.Reports.Any(report =>
+                    report.Lines is { Count: 2 } && report.Lines.All(line => line.Translation is null))
+                .ShouldBeTrue();
+
+            // 中间帧：第一行已经译完就开始画
+            progress.Reports.Any(report =>
+                    report.Lines is { Count: 2 } && report.Lines[0].Translation == "Order No.")
+                .ShouldBeTrue();
+
+            var payload = result.Payload.ShouldBeOfType<OcrResultPayload>();
+            payload.Lines[0].Translation.ShouldBe("Order No.");
+            payload.Lines[1].Translation.ShouldBe("Zhang San");
+            payload.Text.ShouldContain("—— 译文（English）——");
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
     }
 
     [Fact]

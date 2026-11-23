@@ -77,4 +77,18 @@ public interface IAiClient
     string? ModelName { get; }
 
     Task<AiResponse> CompleteAsync(AiRequest request, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// 流式调用：每次 yield 的是「截至目前的完整文本」，不是增量片段。
+    ///
+    /// 默认实现退化为一次 <see cref="CompleteAsync"/>——不支持流式的提供方照样能用。
+    /// 想在界面上看到「一个字一个字出来」，就实现这个方法。
+    /// </summary>
+    async IAsyncEnumerable<string> StreamAsync(
+        AiRequest request,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var response = await CompleteAsync(request, cancellationToken);
+        yield return response.Text;
+    }
 }

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -71,15 +72,7 @@ public sealed class AiClient : IAiClient
 
     public async Task<AiResponse> CompleteAsync(AiRequest request, CancellationToken cancellationToken)
     {
-        if (!IsAvailable)
-        {
-            throw new AiException(
-                AiErrorKind.NotConfigured,
-                "未配置 AI 模型。请先在设置 › 模型里选择提供方并填写密钥。");
-        }
-
-        if (request.Messages.Count == 0 && string.IsNullOrWhiteSpace(request.System))
-            throw new ArgumentException("AiRequest 至少需要一条消息或系统提示词。", nameof(request));
+        EnsureUsable(request);
 
         if (ConfirmBeforeSend is { } confirm && !await confirm(request))
         {
@@ -88,38 +81,14 @@ public sealed class AiClient : IAiClient
         }
 
         var payload = BuildPayload(request);
-        var endpoint = BuildEndpoint(_settings.AiBaseUrl);
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(RequestTimeout);
 
-        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, endpoint);
-        httpRequest.Content = new StringContent(
-            JsonSerializer.Serialize(payload, SerializerOptions),
-            Encoding.UTF8,
-            "application/json");
-
-        if (!string.IsNullOrWhiteSpace(_apiKey))
-            httpRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
+        using var httpRequest = CreateRequest(payload);
 
         var startedAt = Stopwatch.GetTimestamp();
-        HttpResponseMessage response;
-
-        try
-        {
-            response = await _http.SendAsync(
-                httpRequest,
-                HttpCompletionOption.ResponseHeadersRead,
-                timeout.Token);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            throw new AiException(AiErrorKind.Timeout, "模型请求超时，请稍后重试。");
-        }
-        catch (HttpRequestException ex)
-        {
-            throw new AiException(AiErrorKind.ProviderError, $"无法连接模型服务：{ex.Message}", ex);
-        }
+        var response = await SendAsync(httpRequest, cancellationToken, timeout.Token);
 
         using (response)
         {
@@ -138,6 +107,153 @@ public sealed class AiClient : IAiClient
                 + $"{result.CompletionTokens?.ToString() ?? "?"}");
 
             return result;
+        }
+    }
+
+    /// <summary>
+    /// 流式调用（OpenAI 兼容 SSE）。每次 yield 累积文本，方便调用方直接重画。
+    /// </summary>
+    public async IAsyncEnumerable<string> StreamAsync(
+        AiRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        EnsureUsable(request);
+
+        if (ConfirmBeforeSend is { } confirm && !await confirm(request))
+            throw new OperationCanceledException("用户取消了发送。");
+
+        var payload = BuildPayload(request);
+        payload["stream"] = true;
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(RequestTimeout);
+
+        using var httpRequest = CreateRequest(payload);
+        var response = await SendAsync(httpRequest, cancellationToken, timeout.Token);
+
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(timeout.Token);
+                throw MapHttpError(response.StatusCode, body);
+            }
+
+            using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+
+            var builder = new StringBuilder();
+            var received = false;
+
+            while (true)
+            {
+                // ReadLineAsync 带取消：用户关窗 / 超时都从这里退出
+                var line = await reader.ReadLineAsync(timeout.Token);
+                if (line is null)
+                    break;
+
+                if (!line.StartsWith("data:", StringComparison.Ordinal))
+                    continue;
+
+                var data = line[5..].Trim();
+                if (data.Length == 0)
+                    continue;
+
+                if (data == "[DONE]")
+                    break;
+
+                var delta = ParseDelta(data);
+                if (string.IsNullOrEmpty(delta))
+                    continue;
+
+                builder.Append(delta);
+                received = true;
+
+                yield return builder.ToString();
+            }
+
+            if (!received)
+                throw new AiException(AiErrorKind.InvalidResponse, "模型流式返回了空内容。");
+        }
+    }
+
+    /// <summary>一次性调用与流式调用共用的前置校验。</summary>
+    private void EnsureUsable(AiRequest request)
+    {
+        if (!IsAvailable)
+        {
+            throw new AiException(
+                AiErrorKind.NotConfigured,
+                "未配置 AI 模型。请先在设置 › 模型里选择提供方并填写密钥。");
+        }
+
+        if (request.Messages.Count == 0 && string.IsNullOrWhiteSpace(request.System))
+            throw new ArgumentException("AiRequest 至少需要一条消息或系统提示词。", nameof(request));
+    }
+
+    private HttpRequestMessage CreateRequest(JsonObject payload)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, BuildEndpoint(_settings.AiBaseUrl));
+
+        request.Content = new StringContent(
+            JsonSerializer.Serialize(payload, SerializerOptions),
+            Encoding.UTF8,
+            "application/json");
+
+        if (!string.IsNullOrWhiteSpace(_apiKey))
+            request.Headers.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
+
+        return request;
+    }
+
+    private async Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken userToken,
+        CancellationToken timeoutToken)
+    {
+        try
+        {
+            return await _http.SendAsync(
+                request, HttpCompletionOption.ResponseHeadersRead, timeoutToken);
+        }
+        catch (OperationCanceledException) when (!userToken.IsCancellationRequested)
+        {
+            throw new AiException(AiErrorKind.Timeout, "模型请求超时，请稍后重试。");
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new AiException(AiErrorKind.ProviderError, $"无法连接模型服务：{ex.Message}", ex);
+        }
+    }
+
+    /// <summary>从一条 SSE data 里取增量文本；不是合法帧返回 null。</summary>
+    private static string? ParseDelta(string data)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(data);
+            var root = document.RootElement;
+
+            if (!root.TryGetProperty("choices", out var choices)
+                || choices.ValueKind != JsonValueKind.Array
+                || choices.GetArrayLength() == 0)
+            {
+                return null;
+            }
+
+            if (!choices[0].TryGetProperty("delta", out var delta)
+                || !delta.TryGetProperty("content", out var content)
+                || content.ValueKind != JsonValueKind.String)
+            {
+                return null;
+            }
+
+            return content.GetString();
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 
