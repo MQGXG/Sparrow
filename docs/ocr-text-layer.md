@@ -212,14 +212,29 @@ snow-shot 的**文档模型**（fingerprint / toggle / 序列化）值得借鉴�
 
 ## 五、Sparrow 要补的能力（分期建议）
 
-### P1 · 行模型升级（不动 UI）
+### P1 · 字符定位 ✅ 已落地（宿主近似）
 
-- `OcrTextLine` 增加可选字段：`Glyphs`（每个字的 X/Y/W/H）+ `Direction`（横/竖）。
-  **目标是逐字框**——LumaShot 的 CTC 解码本来就能出，snow-shot 至少能出词框。
-- 插件侧：PaddleOCR 的结果里如果有字级/词级框，直接透传；只有行框时退回近似。
-- 兼容：老插件不返回字框时，按「行宽 ÷ 字符数」近似（CJK 1em、西文 0.55em）。
+**先说结论**：Paddle 这条链路拿不到字框。
 
-**验收**：同一张图，字框数量与 OCR 调试输出一致；无字框时不崩。
+- worker 里 `result.Regions` 只有「文本行」的 `Rect`，`OcrRegionDto` 也只有这一个框；
+- LumaShot 的逐字框来自它自己的 CTC 解码（`DecodeCtc` 直接返回 `Line{glyphs}`），Sparrow 复制不了。
+
+所以没有改 SDK 契约，而是在宿主侧做近似：`src/Sparrow.App/Views/OcrTextLayout.cs`
+
+```csharp
+IReadOnlyList<OcrCharBox> Split(OcrTextLine line);   // 行 → 逐字框，宽度之和 = 行宽
+int HitIndex(IReadOnlyList<OcrCharBox> boxes, Point point);
+double Weight(Rune rune);                            // 中日韩 1.0 / 西文 0.55 / 空格 0.3
+```
+
+- 按**字素**切分（代理对算一个字，emoji 不会被选半个）；
+- 最后一个字符收到行右边界，消掉浮点累积误差；
+- 误差上限是「一个字宽」，且同一行内相对顺序是对的。
+
+测试：`tests/Sparrow.Tests/OcrTextLayoutTests.cs`（6 条：纯中文 / 纯西文 / 中英混排 / 非法输入 / 代理对 / 命中）。
+
+**如果将来换引擎能出字框**：给 `OcrTextLine` 加可选的 `Glyphs`，`OcrTextLayout` 优先用真实框，
+没有时再走近似——接口已经按这个形状留好了。
 
 ### P2 · 文字层渲染（可选，但强烈建议先做）
 
@@ -264,6 +279,9 @@ snow-shot 的**文档模型**（fingerprint / toggle / 序列化）值得借鉴�
 **最大的风险在 P1**：如果 OCR 插件拿不到词框，字符级选择就只能是近似，
 拖选 3 个字可能选中 2.7 个字的宽度。建议先确认 `sparrow.plugin.ocr` 的 Paddle 结果里
 是否有 `word_boxes`——有就直接透传，没有就退回「按行 + 字宽近似」并把误差写进文档。
+
+> **已确认（2026-11-23）**：Paddle 链路只有行框。已按「宿主近似」落地 `OcrTextLayout`，
+> 误差上限一个字宽。见第五节 P1。
 
 ---
 
