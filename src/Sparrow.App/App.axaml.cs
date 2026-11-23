@@ -631,7 +631,8 @@ public partial class App : Application
             CaptureToolPositions = _appSettings.CaptureToolPositions,
             CaptureToolHidden = _appSettings.CaptureToolHidden,
             CaptureToolbarPlacement = _appSettings.CaptureToolbarPlacement,
-            CaptureElementApi = _appSettings.CaptureElementApi
+            CaptureElementApi = _appSettings.CaptureElementApi,
+            CaptureFrameApi = _appSettings.CaptureApi
         };
 
         // 三槽样式模板：灌进去，关闭时读回

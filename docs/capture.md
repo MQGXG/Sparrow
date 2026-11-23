@@ -84,6 +84,16 @@ UIA 完全没命中时，再用 **MSAA（IAccessible）** 兜底一次——Elec
 
 UIA 侧还有两项和 snow-shot 一致的处理：子节点解码中途预算到点会保留「数组 + 断点」下次续传，不重复付跨进程调用；子节点超过 16 个时建空间索引（均匀网格，等价于它的 R-tree 阈值），避免逐个比较几百个框。
 
+### 3.2 取帧 API（WGC / GDI）
+
+设置里的「截图捕获 API」：
+
+- **自动**（默认）：平时走 GDI（`BitBlt`，最快），检测到 **HDR 显示器**时才用 WGC；
+- **Windows Graphics Capture**：强制 WGC，失败仍回退 GDI，保证截图不中断；
+- **GDI**：始终 `BitBlt`。
+
+WGC 只处理「完整落在一个显示器内」的区域；跨屏（含整个虚拟桌面冻结）自动回退 GDI。设备只创建一次，每帧用轮询 `TryGetNextFrame`（后台线程没有消息泵，事件模型不会触发）。
+
 ## 四、和 snow-shot 的差异
 | snow-shot | Sparrow |
 |---|---|

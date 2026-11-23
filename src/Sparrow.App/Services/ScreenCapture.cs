@@ -3,6 +3,19 @@ using SkiaSharp;
 
 namespace Sparrow.App.Services;
 
+/// <summary>截图取帧后端。</summary>
+public enum CaptureApi
+{
+    /// <summary>WGC 可用就优先，失败回退 GDI。</summary>
+    Auto,
+
+    /// <summary>只尝试 WGC（失败仍会回退 GDI，保证截图不中断）。</summary>
+    Wgc,
+
+    /// <summary>只用 GDI BitBlt。</summary>
+    Gdi
+}
+
 /// <summary>
 /// 屏幕区域截图（Windows）。
 ///
@@ -14,6 +27,9 @@ public static class ScreenCapture
     private const uint SrcCopy = 0x00CC0020;
     private const uint DibRgbColors = 0;
 
+    /// <summary>取帧后端：自动 / WGC / GDI。</summary>
+    public static CaptureApi Api { get; set; } = CaptureApi.Auto;
+
     /// <summary>截取屏幕物理像素区域，返回 PNG 字节。失败返回 null。</summary>
     public static byte[]? Capture(int x, int y, int width, int height)
     {
@@ -23,9 +39,27 @@ public static class ScreenCapture
 
     /// <summary>
     /// 截取原始 BGRA 像素（top-down，stride = width*4）。
-    /// 滚动截图每 200ms 抓一帧，跳过 PNG 编解码。
+    /// 自动 / WGC 模式先试 Windows Graphics Capture；跨屏或不支持时回退 GDI。
     /// </summary>
     public static byte[]? CaptureRaw(int x, int y, int width, int height, byte[]? reuse = null)
+    {
+        if (width <= 0 || height <= 0)
+            return null;
+
+        var useWgc = Api == CaptureApi.Wgc
+                     || (Api == CaptureApi.Auto && HdrDisplay.AnyEnabled);
+
+        if (useWgc && WgcCapture.IsSupported)
+        {
+            var captured = WgcCapture.CaptureRegion(x, y, width, height);
+            if (captured is not null)
+                return captured;
+        }
+
+        return CaptureRawGdi(x, y, width, height, reuse);
+    }
+
+    private static byte[]? CaptureRawGdi(int x, int y, int width, int height, byte[]? reuse)
     {
         if (width <= 0 || height <= 0)
             return null;

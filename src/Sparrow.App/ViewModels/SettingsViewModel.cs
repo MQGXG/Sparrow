@@ -45,6 +45,9 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _selectedCaptureElementApi = CaptureElementApiOptions
             .FirstOrDefault(option => option.Key == settings.CaptureElementApi)
             ?? CaptureElementApiOptions[0];
+        _selectedCaptureApi = CaptureApiOptions
+            .FirstOrDefault(option => option.Key == settings.CaptureApi)
+            ?? CaptureApiOptions[0];
         _startWithWindows = startup.IsEnabled;
         _historyMaxEntries = settings.HistoryMaxEntries;
         _historyRetentionDays = settings.HistoryRetentionDays;
@@ -158,20 +161,45 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
     /// <summary>窗口元素 API：auto（UIA 优先 + MSAA 兜底）/ uia / msaa。</summary>
     [ObservableProperty]
-    private CaptureElementApiOption _selectedCaptureElementApi = null!;
+    private SettingsChoiceOption _selectedCaptureElementApi = null!;
 
-    public IReadOnlyList<CaptureElementApiOption> CaptureElementApiOptions { get; } =
+    public IReadOnlyList<SettingsChoiceOption> CaptureElementApiOptions { get; } =
     [
         new("auto", "自动（UIA 优先，MSAA 兜底）"),
         new("uia", "仅 UI Automation"),
         new("msaa", "仅 MSAA")
     ];
 
-    partial void OnSelectedCaptureElementApiChanged(CaptureElementApiOption value)
+    partial void OnSelectedCaptureElementApiChanged(SettingsChoiceOption value)
     {
         _settings = _settings with { CaptureElementApi = value.Key };
         _store.Save(_settings);
         StatusMessage = $"窗口元素 API：{value.Label}";
+    }
+
+    /// <summary>截图取帧 API：auto（WGC 优先 / GDI 兜底）/ wgc / gdi。</summary>
+    [ObservableProperty]
+    private SettingsChoiceOption _selectedCaptureApi = null!;
+
+    public IReadOnlyList<SettingsChoiceOption> CaptureApiOptions { get; } =
+    [
+        new("auto", "自动（平时 GDI，HDR 用 WGC）"),
+        new("wgc", "Windows Graphics Capture"),
+        new("gdi", "GDI")
+    ];
+
+    partial void OnSelectedCaptureApiChanged(SettingsChoiceOption value)
+    {
+        _settings = _settings with { CaptureApi = value.Key };
+        _store.Save(_settings);
+        ScreenCapture.Api = value.Key switch
+        {
+            "gdi" => CaptureApi.Gdi,
+            "wgc" => CaptureApi.Wgc,
+            _ => CaptureApi.Auto
+        };
+
+        StatusMessage = $"截图捕获 API：{value.Label}";
     }
 
     [ObservableProperty]
@@ -691,4 +719,4 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 }
 
 /// <summary>窗口元素 API 选项：Key 存进设置，Label 给界面看。</summary>
-public sealed record CaptureElementApiOption(string Key, string Label);
+public sealed record SettingsChoiceOption(string Key, string Label);

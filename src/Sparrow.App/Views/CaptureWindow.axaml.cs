@@ -433,6 +433,9 @@ public partial class CaptureWindow : Window
     /// <summary>窗口元素识别 API：auto / uia / msaa。</summary>
     public string CaptureElementApi { get; set; } = "auto";
 
+    /// <summary>取帧 API：auto / wgc / gdi。</summary>
+    public string CaptureFrameApi { get; set; } = "auto";
+
     public Action<OcrBoxMode>? OcrBoxModeChanged { get; set; }
 
     /// <summary>
@@ -681,6 +684,14 @@ public partial class CaptureWindow : Window
     protected override void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
+
+        ScreenCapture.Api = CaptureFrameApi switch
+        {
+            "gdi" => CaptureApi.Gdi,
+            "wgc" => CaptureApi.Wgc,
+            _ => CaptureApi.Auto
+        };
+
         ApplyVirtualScreenBounds();
 
         _candidates = WindowCandidates.Enumerate(TryGetPlatformHandle()?.Handle ?? IntPtr.Zero);

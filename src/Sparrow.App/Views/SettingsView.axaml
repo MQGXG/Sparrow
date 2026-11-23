@@ -352,7 +352,34 @@
                         SelectedItem="{Binding SelectedCaptureElementApi, Mode=TwoWay}"
                         HorizontalAlignment="Stretch">
                 <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="vm:CaptureElementApiOption">
+                  <DataTemplate x:DataType="vm:SettingsChoiceOption">
+                    <TextBlock Text="{Binding Label}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <Grid ColumnDefinitions="*,Auto" Margin="20,14">
+              <StackPanel Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="截图捕获 API"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="取帧方式；自动 = 平时 GDI、HDR 显示器用 WGC。WGC 只处理单屏区域，跨屏自动走 GDI"
+                           FontSize="11"
+                           MaxWidth="520"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <ComboBox Grid.Column="1"
+                        Width="260"
+                        ItemsSource="{Binding CaptureApiOptions}"
+                        SelectedItem="{Binding SelectedCaptureApi, Mode=TwoWay}"
+                        HorizontalAlignment="Stretch">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:SettingsChoiceOption">
                     <TextBlock Text="{Binding Label}" />
                   </DataTemplate>
                 </ComboBox.ItemTemplate>
