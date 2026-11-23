@@ -70,9 +70,13 @@ public partial class CaptureWindow : Window
     }
 
     // 行框只画边框：填充透明（Transparent 而不是 null，否则中间不参与命中，点行复制会失效）
-    private static readonly IBrush LineFill = Brushes.Transparent;
-    private static readonly IBrush LineStroke = new SolidColorBrush(Color.Parse("#80E5A44C"));
+    // OCR 行框：常态红框 + 淡红底（参考 OmniSeeker 的识别块），
+    // 选中改琥珀，避免在深色截图里再引入第二种强调色
+    private static readonly IBrush LineFill = new SolidColorBrush(Color.Parse("#1FFF5F5F"));
+    private static readonly IBrush LineStroke = new SolidColorBrush(Color.Parse("#FF5F5F"));
     private static readonly IBrush LineHoverStroke = new SolidColorBrush(Color.Parse("#FFE5A44C"));
+    private static readonly IBrush LineHoverFill = new SolidColorBrush(Color.Parse("#33FF5F5F"));
+    private static readonly IBrush LineSelectedFill = new SolidColorBrush(Color.Parse("#1FE5A44C"));
     private static readonly IBrush HandleFill = Brushes.White;
     private static readonly IBrush HandleStroke = new SolidColorBrush(Color.Parse("#B3000000"));
 
@@ -104,8 +108,13 @@ public partial class CaptureWindow : Window
     private int _frozenWidth;
     private int _frozenHeight;
     private WriteableBitmap? _frozenBitmap;
-    private OcrBoxMode _ocrBoxMode = OcrBoxMode.Hover;
+    /// <summary>
+    /// 识别框显示方式。默认「全部显示」——识别完就能看到每一块文字在哪，
+    /// 和 OmniSeeker 的识别结果页一致；B 键可以切到悬停 / 关闭。
+    /// </summary>
+    private OcrBoxMode _ocrBoxMode = OcrBoxMode.All;
     private readonly List<Rectangle> _ocrBoxes = [];
+    private readonly HashSet<Rectangle> _selectedOcrBoxes = [];
     private Rectangle? _hoveredOcrBox;
     private IReadOnlyList<WindowCandidate> _candidates = [];
     private WindowCandidate? _currentCandidate;
@@ -6105,6 +6114,7 @@ public partial class CaptureWindow : Window
         _ocrText = result.Text;
         OcrLayer.Children.Clear();
         _ocrBoxes.Clear();
+        _selectedOcrBoxes.Clear();
         _hoveredOcrBox = null;
         HandleLayer.IsVisible = false;
 
@@ -6167,6 +6177,7 @@ public partial class CaptureWindow : Window
     {
         OcrLayer.Children.Clear();
         _ocrBoxes.Clear();
+        _selectedOcrBoxes.Clear();
         _hoveredOcrBox = null;
         OcrLayer.IsVisible = false;
         _ocrActionsAvailable = false;
@@ -6201,8 +6212,8 @@ public partial class CaptureWindow : Window
 
         foreach (var box in _ocrBoxes)
         {
-            box.Fill = LineFill;
             box.IsVisible = _ocrBoxMode == OcrBoxMode.All;
+            ApplyOcrBoxVisual(box, hovered: false);
         }
 
         if (OcrLayer.IsVisible)
@@ -6213,12 +6224,15 @@ public partial class CaptureWindow : Window
     {
         var hint = _ocrBoxMode switch
         {
-            OcrBoxMode.All => "点行复制",
+            OcrBoxMode.All => "点行选中 · 双击复制",
             OcrBoxMode.Hover => "悬停行可点",
             _ => "行框已关闭"
         };
 
-        OcrStatus.Text = $"{_ocrBoxes.Count} 行 · {hint}";
+        var selected = _selectedOcrBoxes.Count;
+        OcrStatus.Text = selected > 0
+            ? $"{_ocrBoxes.Count} 行 · 已选 {selected} · Ctrl+C 复制"
+            : $"{_ocrBoxes.Count} 行 · {hint}";
     }
 
     private void OnOcrLayerPointerMoved(object? sender, PointerEventArgs e)
@@ -6277,8 +6291,27 @@ public partial class CaptureWindow : Window
         _hoveredOcrBox = null;
     }
 
-    private void CopyAllText()
-    {
+    private void CopyAllText() => CopyOcrText();
+
+    /// <summary>
+    /// 有选中就复制选中的行，没有就复制全文。
+    /// 选中行按阅读顺序合并（先按 Y 聚行，行内按 X 排）。
+    /// </summary>
+    internal void CopyOcrText()    {
+        if (_selectedOcrBoxes.Count > 0)
+        {
+            var text = MergeOcrText(_selectedOcrBoxes.Select(box => (
+                (box.Tag as string) ?? string.Empty,
+                new Rect(Canvas.GetLeft(box), Canvas.GetTop(box), box.Width, box.Height))));
+
+            if (string.IsNullOrWhiteSpace(text))
+                return;
+
+            CopyText?.Invoke(text);
+            OcrStatus.Text = $"已复制选中 {_selectedOcrBoxes.Count} 行 · {text.Length} 字";
+            return;
+        }
+
         if (string.IsNullOrEmpty(_ocrText))
             return;
 
@@ -6286,33 +6319,127 @@ public partial class CaptureWindow : Window
         OcrStatus.Text = $"已复制全文 · {_ocrText.Length} 字";
     }
 
+    /// <summary>把若干行框按阅读顺序合并成文本；同一行内按 X 排，行间换行。</summary>
+    internal static string MergeOcrText(IEnumerable<(string Text, Rect Bounds)> boxes)
+    {
+        var items = boxes
+            .Where(item => !string.IsNullOrWhiteSpace(item.Text))
+            .OrderBy(item => item.Bounds.Y)
+            .ThenBy(item => item.Bounds.X)
+            .ToList();
+
+        if (items.Count == 0)
+            return string.Empty;
+
+        var lines = new List<List<(string Text, Rect Bounds)>>();
+        foreach (var item in items)
+        {
+            var line = lines.Count > 0 ? lines[^1] : null;
+            var tolerance = Math.Max(4, item.Bounds.Height / 2);
+
+            if (line is not null && Math.Abs(item.Bounds.Y - line[0].Bounds.Y) <= tolerance)
+                line.Add(item);
+            else
+                lines.Add([item]);
+        }
+
+        return string.Join(
+            "\n",
+            lines.Select(line => JoinFragments(line
+                .OrderBy(item => item.Bounds.X)
+                .Select(item => item.Text.Trim())
+                .ToList())));
+    }
+
+    /// <summary>同一行内的碎片拼接：两侧都是西文才补空格，中文之间不加。</summary>
+    private static string JoinFragments(IReadOnlyList<string> parts)
+    {
+        var builder = new System.Text.StringBuilder();
+        foreach (var part in parts)
+        {
+            if (part.Length == 0)
+                continue;
+
+            if (builder.Length > 0 && NeedsSpace(builder[^1], part[0]))
+                builder.Append(' ');
+
+            builder.Append(part);
+        }
+
+        return builder.ToString();
+    }
+
+    private static bool NeedsSpace(char left, char right) => left < 0x2E80 && right < 0x2E80;
+
     private void OnOcrLineEntered(object? sender, PointerEventArgs e)
     {
-        // 悬停只加亮边框，不再用填充色——中间要保持原图可见
+        // 悬停只加亮边框，中间保持原图可见
         if (sender is Rectangle box)
-        {
-            box.Stroke = LineHoverStroke;
-            box.StrokeThickness = 2;
-        }
+            ApplyOcrBoxVisual(box, hovered: true);
     }
 
     private void OnOcrLineExited(object? sender, PointerEventArgs e)
     {
         if (sender is Rectangle box)
-        {
-            box.Stroke = LineStroke;
-            box.StrokeThickness = 1;
-        }
+            ApplyOcrBoxVisual(box, hovered: false);
     }
 
     private void OnOcrLinePressed(object? sender, PointerPressedEventArgs e)
     {
-        if (sender is Rectangle { Tag: string text })
+        if (sender is not Rectangle { Tag: string text } box)
+            return;
+
+        // 双击：复制这一行；单击：切换选中（可多选，和 OmniSeeker 一致）
+        if (e.ClickCount >= 2)
         {
             CopyText?.Invoke(text);
             OcrStatus.Text = $"已复制：{Shorten(text)}";
             e.Handled = true;
+            return;
         }
+
+        ToggleOcrBoxSelection(box);
+        e.Handled = true;
+    }
+
+    /// <summary>切换一行框的选中状态（点击和测试共用）。</summary>
+    internal void ToggleOcrBoxSelection(Rectangle box)
+    {
+        if (!_selectedOcrBoxes.Remove(box))
+            _selectedOcrBoxes.Add(box);
+
+        // 点完先按「未悬停」画：悬停态交给 PointerEntered，避免和选中态撞色
+        ApplyOcrBoxVisual(box, hovered: false);
+        UpdateOcrSelectionStatus();
+    }
+
+    /// <summary>按「是否选中 / 是否悬停」刷新一个行框的三态外观。</summary>
+    private void ApplyOcrBoxVisual(Rectangle box, bool hovered)
+    {
+        if (_selectedOcrBoxes.Contains(box))
+        {
+            // 选中：琥珀实线 + 淡琥珀底，和工具条选中态一致
+            box.Stroke = LineHoverStroke;
+            box.StrokeThickness = 2;
+            box.Fill = LineSelectedFill;
+            return;
+        }
+
+        // 常态红框 1px；悬停红框 2px + 更重的底
+        box.Stroke = LineStroke;
+        box.StrokeThickness = hovered ? 2 : 1;
+        box.Fill = hovered ? LineHoverFill : LineFill;
+    }
+
+    /// <summary>选中数变化后刷新状态文字和复制按钮的提示。</summary>
+    private void UpdateOcrSelectionStatus()
+    {
+        UpdateOcrStatus();
+
+        var count = _selectedOcrBoxes.Count;
+        ToolTip.SetTip(
+            CopyAllButton,
+            count > 0 ? $"复制选中的 {count} 行（Ctrl+C）" : "复制全部识别文字（Ctrl+C）");
     }
 
     private static string Shorten(string text) =>
