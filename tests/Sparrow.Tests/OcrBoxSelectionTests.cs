@@ -5,6 +5,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Media;
 using Shouldly;
+using SkiaSharp;
 using Sparrow.App.Views;
 using Sparrow.Plugin.Sdk.Payloads;
 using Xunit;
@@ -88,6 +89,89 @@ public class OcrBoxSelectionTests
         copied.ShouldBe("第一行\n第二行");
 
         window.Close();
+    }
+
+    [Fact]
+    public void 字符定位_点在字上是该字_行外钳到首尾()
+    {
+        var line = new OcrTextLine("机械键盘", 100, 50, 80, 20);
+        var boxes = OcrTextLayout.Split(line);
+
+        OcrTextLayout.IndexAt(boxes, new Point(105, 60)).ShouldBe(0);
+        OcrTextLayout.IndexAt(boxes, new Point(125, 60)).ShouldBe(1);
+        // 行左外侧 / 右外侧钳到 0 / Count，方便拖到行首行尾
+        OcrTextLayout.IndexAt(boxes, new Point(50, 60)).ShouldBe(0);
+        OcrTextLayout.IndexAt(boxes, new Point(400, 60)).ShouldBe(4);
+    }
+
+    [Fact]
+    public void 字符区间_取子串和包围盒()
+    {
+        var line = new OcrTextLine("机械键盘", 100, 50, 80, 20);
+        var boxes = OcrTextLayout.Split(line);
+
+        OcrTextLayout.TextForRange(line.Text, 1, 2).ShouldBe("械键");
+
+        var box = OcrTextLayout.BoxesForRange(boxes, 1, 2).Single();
+        box.X.ShouldBe(120, 0.01);
+        box.Width.ShouldBe(40, 0.01);
+        box.Height.ShouldBe(20, 0.01);
+    }
+
+    [AvaloniaFact]
+    public void 标记_同一区间再点一次取消()
+    {
+        var window = CreateWithOcrLines();
+        window.SetOcrSelection(0, 0, 3);
+
+        window.ApplyOcrMark(TextMarkKind.Wave);
+        window.OcrMarkCount.ShouldBe(1);
+
+        window.ApplyOcrMark(TextMarkKind.Wave);
+        window.OcrMarkCount.ShouldBe(0);
+
+        window.Close();
+    }
+
+    [Fact]
+    public void 导出_波浪线烧进图片()
+    {
+        var png = CreateWhitePng(100, 100);
+        var mark = new OcrTextMark(
+            TextMarkKind.Wave,
+            [new Rect(10, 20, 60, 20)],
+            OcrTextMarks.ColorFor(TextMarkKind.Wave),
+            0);
+
+        var composed = AnnotationRenderer.Compose(png, [], 1, [mark]);
+
+        using var decoded = SkiaSharp.SKBitmap.Decode(composed);
+        // 波浪线在框底，沿 x 扫描必然碰到非白像素
+        var touched = false;
+        for (var x = 12; x < 68; x++)
+        {
+            var pixel = decoded.GetPixel(x, 39);
+            if (pixel.Red > 150 && pixel.Green < 150)
+            {
+                touched = true;
+                break;
+            }
+        }
+
+        touched.ShouldBeTrue();
+        // 框外仍是白的
+        ((int)decoded.GetPixel(90, 90).Red).ShouldBeGreaterThan(200);
+    }
+
+    private static byte[] CreateWhitePng(int width, int height)
+    {
+        using var bitmap = new SKBitmap(width, height);
+        using (var canvas = new SKCanvas(bitmap))
+            canvas.Clear(SKColors.White);
+
+        using var image = SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
     }
 
     private static CaptureWindow CreateWithOcrLines()

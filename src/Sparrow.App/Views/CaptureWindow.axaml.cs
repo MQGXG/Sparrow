@@ -14,6 +14,7 @@ using Avalonia.Threading;
 using Path = Avalonia.Controls.Shapes.Path;
 using Sparrow.App.Services;
 using Sparrow.App.Settings;
+using Sparrow.Plugin.Sdk.Payloads;
 
 namespace Sparrow.App.Views;
 
@@ -77,6 +78,9 @@ public partial class CaptureWindow : Window
     private static readonly IBrush LineHoverStroke = new SolidColorBrush(Color.Parse("#FFE5A44C"));
     private static readonly IBrush LineHoverFill = new SolidColorBrush(Color.Parse("#33FF5F5F"));
     private static readonly IBrush LineSelectedFill = new SolidColorBrush(Color.Parse("#1FE5A44C"));
+
+    /// <summary>字符级选区的底色：比行框选中更重，方便和"整行选中"区分。</summary>
+    private static readonly IBrush OcrCharSelectionFill = new SolidColorBrush(Color.Parse("#4DE5A44C"));
     private static readonly IBrush HandleFill = Brushes.White;
     private static readonly IBrush HandleStroke = new SolidColorBrush(Color.Parse("#B3000000"));
 
@@ -115,6 +119,19 @@ public partial class CaptureWindow : Window
     private OcrBoxMode _ocrBoxMode = OcrBoxMode.All;
     private readonly List<Rectangle> _ocrBoxes = [];
     private readonly HashSet<Rectangle> _selectedOcrBoxes = [];
+
+    /// <summary>OCR 行（DIP）+ 每行的字符框，字符级选择用。</summary>
+    private readonly List<(OcrTextLine Line, IReadOnlyList<OcrTextLayout.OcrCharBox> Chars)> _ocrLines = [];
+
+    /// <summary>已经打上的文字标记（烧进导出图）。</summary>
+    private readonly List<OcrTextMark> _ocrMarks = [];
+
+    private (int Line, int Char)? _ocrSelAnchor;
+    private (int Line, int Char)? _ocrSelFocus;
+    private bool _ocrDragging;
+    private int _ocrPressClickCount = 1;
+    private Point _ocrPressPoint;
+
     private Rectangle? _hoveredOcrBox;
     private IReadOnlyList<WindowCandidate> _candidates = [];
     private WindowCandidate? _currentCandidate;
@@ -327,6 +344,8 @@ public partial class CaptureWindow : Window
 
         OcrLayer.PointerMoved += OnOcrLayerPointerMoved;
         OcrLayer.PointerExited += OnOcrLayerPointerExited;
+        OcrLayer.PointerPressed += OnOcrLayerPressed;
+        OcrLayer.PointerReleased += OnOcrLayerReleased;
         UpdateStyleButtons();
         UpdateToolButtons();
 
@@ -5130,7 +5149,7 @@ public partial class CaptureWindow : Window
     /// <summary>导出前的合成：先画标注，再按需切圆角。</summary>
     private byte[] ComposeResult(byte[] png)
     {
-        var composed = AnnotationRenderer.Compose(png, _notes.Items, _scaling);
+        var composed = AnnotationRenderer.Compose(png, _notes.Items, _scaling, _ocrMarks);
         return AnnotationRenderer.RoundCorners(composed, _cornerRadius * _scaling);
     }
 
@@ -6115,6 +6134,10 @@ public partial class CaptureWindow : Window
         OcrLayer.Children.Clear();
         _ocrBoxes.Clear();
         _selectedOcrBoxes.Clear();
+        _ocrLines.Clear();
+        _ocrMarks.Clear();
+        ClearOcrCharSelection();
+        HideOcrMarkMenu();
         _hoveredOcrBox = null;
         HandleLayer.IsVisible = false;
 
@@ -6151,7 +6174,15 @@ public partial class CaptureWindow : Window
 
             box.PointerEntered += OnOcrLineEntered;
             box.PointerExited += OnOcrLineExited;
-            box.PointerPressed += OnOcrLinePressed;
+
+            // 字符级选择和点击都在 OcrLayer 上统一处理，行框只负责外观
+            var dipLine = new OcrTextLine(
+                line.Text,
+                line.X / _scaling,
+                line.Y / _scaling,
+                line.Width / _scaling,
+                line.Height / _scaling);
+            _ocrLines.Add((dipLine, OcrTextLayout.Split(dipLine)));
 
             OcrLayer.Children.Add(box);
             _ocrBoxes.Add(box);
@@ -6178,6 +6209,12 @@ public partial class CaptureWindow : Window
         OcrLayer.Children.Clear();
         _ocrBoxes.Clear();
         _selectedOcrBoxes.Clear();
+        _ocrLines.Clear();
+        _ocrMarks.Clear();
+        _ocrSelAnchor = null;
+        _ocrSelFocus = null;
+        _ocrDragging = false;
+        HideOcrMarkMenu();
         _hoveredOcrBox = null;
         OcrLayer.IsVisible = false;
         _ocrActionsAvailable = false;
@@ -6237,10 +6274,13 @@ public partial class CaptureWindow : Window
 
     private void OnOcrLayerPointerMoved(object? sender, PointerEventArgs e)
     {
+        var point = e.GetPosition(OcrLayer);
+
+        // 拖选优先：拖动中不参与悬停高亮
+        UpdateOcrSelectionDrag(point);
+
         if (_ocrBoxMode != OcrBoxMode.Hover || _ocrBoxes.Count == 0)
             return;
-
-        var point = e.GetPosition(OcrLayer);
         Rectangle? hit = null;
 
         foreach (var box in _ocrBoxes)
@@ -6384,23 +6424,349 @@ public partial class CaptureWindow : Window
             ApplyOcrBoxVisual(box, hovered: false);
     }
 
-    private void OnOcrLinePressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (sender is not Rectangle { Tag: string text } box)
-            return;
+    // ---------- OCR 字符级选择 ----------
 
-        // 双击：复制这一行；单击：切换选中（可多选，和 OmniSeeker 一致）
-        if (e.ClickCount >= 2)
+    private void OnOcrLayerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        var point = e.GetPosition(OcrLayer);
+        var line = OcrLineAt(point);
+
+        if (line < 0)
         {
-            CopyText?.Invoke(text);
-            OcrStatus.Text = $"已复制：{Shorten(text)}";
-            e.Handled = true;
+            ClearOcrCharSelection();
+            HideOcrMarkMenu();
             return;
         }
 
-        ToggleOcrBoxSelection(box);
+        _ocrPressPoint = point;
+        _ocrPressClickCount = e.ClickCount;
+        _ocrDragging = false;
+        var index = OcrTextLayout.IndexAt(_ocrLines[line].Chars, point);
+        _ocrSelAnchor = (line, index);
+        _ocrSelFocus = (line, index);
+        HideOcrMarkMenu();
         e.Handled = true;
     }
+
+    private void OnOcrLayerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_ocrSelAnchor is not { } anchor)
+            return;
+
+        e.Handled = true;
+
+        // 没有拖动：单击切换整行选中，双击复制这一行
+        if (!_ocrDragging)
+        {
+            if (anchor.Line >= 0 && anchor.Line < _ocrBoxes.Count)
+            {
+                if (_ocrPressClickCount >= 2)
+                {
+                    var text = _ocrLines[anchor.Line].Line.Text;
+                    CopyText?.Invoke(text);
+                    OcrStatus.Text = $"已复制：{Shorten(text)}";
+                }
+                else
+                {
+                    ToggleOcrBoxSelection(_ocrBoxes[anchor.Line]);
+                }
+            }
+
+            ClearOcrCharSelection();
+            return;
+        }
+
+        if (GetOcrSelectionRanges().Count == 0)
+        {
+            ClearOcrCharSelection();
+            return;
+        }
+
+        ShowOcrMarkMenu();
+    }
+
+    /// <summary>拖动中更新焦点；超过 4 DIP 才算拖选，避免和单击抢。</summary>
+    private void UpdateOcrSelectionDrag(Point point)
+    {
+        if (_ocrSelAnchor is not { } anchor)
+            return;
+
+        if (!_ocrDragging
+            && Math.Abs(point.X - _ocrPressPoint.X) + Math.Abs(point.Y - _ocrPressPoint.Y) < 4)
+        {
+            return;
+        }
+
+        _ocrDragging = true;
+
+        var line = OcrLineAt(point);
+        if (line < 0)
+            return;
+
+        _ocrSelFocus = (line, OcrTextLayout.IndexAt(_ocrLines[line].Chars, point));
+        RebuildOcrSelectionVisual();
+    }
+
+    private int OcrLineAt(Point point)
+    {
+        for (var i = 0; i < _ocrLines.Count; i++)
+        {
+            var line = _ocrLines[i].Line;
+            var rect = new Rect(line.X - 4, line.Y - 4, line.Width + 8, line.Height + 8);
+
+            if (rect.Contains(point))
+                return i;
+        }
+
+        return -1;
+    }
+
+    /// <summary>把 anchor/focus 归一成「每行一段」的字符区间。</summary>
+    internal IReadOnlyList<(int Line, int Start, int Length)> GetOcrSelectionRanges()
+    {
+        var result = new List<(int Line, int Start, int Length)>();
+
+        if (_ocrSelAnchor is not { } a || _ocrSelFocus is not { } f)
+            return result;
+
+        if (a.Line == f.Line && a.Char == f.Char)
+            return result;
+
+        if (a.Line > f.Line || (a.Line == f.Line && a.Char > f.Char))
+            (a, f) = (f, a);
+
+        for (var line = a.Line; line <= f.Line; line++)
+        {
+            if (line < 0 || line >= _ocrLines.Count)
+                continue;
+
+            var count = _ocrLines[line].Chars.Count;
+            var start = line == a.Line ? a.Char : 0;
+            var end = line == f.Line ? f.Char : count;
+
+            start = Math.Clamp(start, 0, count);
+            end = Math.Clamp(end, 0, count);
+
+            if (end > start)
+                result.Add((line, start, end - start));
+        }
+
+        return result;
+    }
+
+    /// <summary>选区文字：行内取子串，行间换行。</summary>
+    internal string SelectedOcrText()
+    {
+        var ranges = GetOcrSelectionRanges();
+        if (ranges.Count == 0)
+            return string.Empty;
+
+        return string.Join("\n", ranges.Select(range =>
+            OcrTextLayout.TextForRange(_ocrLines[range.Line].Line.Text, range.Start, range.Length)));
+    }
+
+    /// <summary>测试与将来的键盘选择用：直接设定字符区间。</summary>
+    internal void SetOcrSelection(int line, int start, int end)
+    {
+        _ocrSelAnchor = (line, start);
+        _ocrSelFocus = (line, end);
+        _ocrDragging = true;
+        RebuildOcrSelectionVisual();
+    }
+
+    /// <summary>已打上的文字标记数量。</summary>
+    internal int OcrMarkCount => _ocrMarks.Count;
+
+    /// <summary>把选区的字符框画成半透明底（和行框的选中态区分开）。</summary>
+    private void RebuildOcrSelectionVisual()    {
+        RemoveOcrChildren("ocr-selection");
+
+        foreach (var (line, start, length) in GetOcrSelectionRanges())
+        {
+            foreach (var box in OcrTextLayout.BoxesForRange(_ocrLines[line].Chars, start, length))
+            {
+                var highlight = new Rectangle
+                {
+                    Width = box.Width,
+                    Height = box.Height,
+                    Fill = OcrCharSelectionFill,
+                    IsHitTestVisible = false,
+                    Tag = "ocr-selection"
+                };
+
+                Canvas.SetLeft(highlight, box.X);
+                Canvas.SetTop(highlight, box.Y);
+                OcrLayer.Children.Add(highlight);
+            }
+        }
+    }
+
+    private void ClearOcrCharSelection()
+    {
+        _ocrSelAnchor = null;
+        _ocrSelFocus = null;
+        _ocrDragging = false;
+        RebuildOcrSelectionVisual();
+    }
+
+    /// <summary>切换一条文字标记：同样类型 + 同样框再点一次就取消。</summary>
+    internal void ApplyOcrMark(TextMarkKind kind)
+    {
+        var ranges = GetOcrSelectionRanges();
+        if (ranges.Count == 0)
+            return;
+
+        var boxes = ranges
+            .SelectMany(range => OcrTextLayout.BoxesForRange(
+                _ocrLines[range.Line].Chars, range.Start, range.Length))
+            .ToList();
+
+        if (boxes.Count == 0)
+            return;
+
+        var existing = _ocrMarks.FindIndex(mark => mark.Kind == kind && SameBoxes(mark.Boxes, boxes));
+
+        if (existing >= 0)
+            _ocrMarks.RemoveAt(existing);
+        else
+            _ocrMarks.Add(new OcrTextMark(kind, boxes, OcrTextMarks.ColorFor(kind), 0));
+
+        RebuildOcrMarksVisual();
+    }
+
+    private static bool SameBoxes(IReadOnlyList<Rect> left, IReadOnlyList<Rect> right)
+    {
+        if (left.Count != right.Count)
+            return false;
+
+        for (var i = 0; i < left.Count; i++)
+        {
+            if (Math.Abs(left[i].X - right[i].X) > 0.5 ||
+                Math.Abs(left[i].Y - right[i].Y) > 0.5 ||
+                Math.Abs(left[i].Width - right[i].Width) > 0.5 ||
+                Math.Abs(left[i].Height - right[i].Height) > 0.5)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>把标记画到 OCR 层（预览）；导出时同一批标记会画进 PNG。</summary>
+    private void RebuildOcrMarksVisual()
+    {
+        RemoveOcrChildren("ocr-mark");
+
+        foreach (var mark in _ocrMarks)
+        {
+            var brush = new SolidColorBrush(Color.FromUInt32(mark.Color));
+
+            foreach (var box in mark.Boxes)
+            {
+                if (mark.Kind == TextMarkKind.Highlight)
+                {
+                    var fill = new Rectangle
+                    {
+                        Width = box.Width,
+                        Height = box.Height,
+                        Fill = brush,
+                        IsHitTestVisible = false,
+                        Tag = "ocr-mark"
+                    };
+
+                    Canvas.SetLeft(fill, box.X);
+                    Canvas.SetTop(fill, box.Y);
+                    OcrLayer.Children.Add(fill);
+                    continue;
+                }
+
+                var width = Math.Clamp(box.Height / 14, 1.5, 3);
+                var y = mark.Kind == TextMarkKind.Strike ? box.Center.Y : box.Bottom - 1;
+                var line = new Polyline
+                {
+                    Stroke = brush,
+                    StrokeThickness = width,
+                    IsHitTestVisible = false,
+                    Tag = "ocr-mark"
+                };
+
+                if (mark.Kind == TextMarkKind.Wave)
+                {
+                    for (var x = box.X; x <= box.Right; x += 1)
+                        line.Points.Add(new Point(x, y + Math.Sin((x - box.X) * 0.7) * width));
+                }
+                else
+                {
+                    line.Points.Add(new Point(box.X, y));
+                    line.Points.Add(new Point(box.Right, y));
+                }
+
+                OcrLayer.Children.Add(line);
+            }
+        }
+    }
+
+    private void RemoveOcrChildren(string tag)
+    {
+        for (var i = OcrLayer.Children.Count - 1; i >= 0; i--)
+        {
+            if (OcrLayer.Children[i] is Control { Tag: string value } && value == tag)
+                OcrLayer.Children.RemoveAt(i);
+        }
+    }
+
+    /// <summary>在选区上方/下方摆浮动菜单。</summary>
+    private void ShowOcrMarkMenu()
+    {
+        var ranges = GetOcrSelectionRanges();
+        if (ranges.Count == 0)
+        {
+            HideOcrMarkMenu();
+            return;
+        }
+
+        var boxes = ranges
+            .SelectMany(range => OcrTextLayout.BoxesForRange(
+                _ocrLines[range.Line].Chars, range.Start, range.Length))
+            .ToList();
+
+        var bounds = boxes.Skip(1).Aggregate(boxes[0], (current, box) => current.Union(box));
+
+        OcrMarkMenu.IsVisible = true;
+        OcrMarkMenu.Measure(Size.Infinity);
+
+        var size = OcrMarkMenu.DesiredSize;
+        var origin = OcrLayer.TranslatePoint(new Point(0, 0), this) ?? new Point(0, 0);
+        var left = origin.X + bounds.Center.X - size.Width / 2;
+        var top = origin.Y + bounds.Bottom + 10;
+
+        if (top + size.Height > Height - 8)
+            top = origin.Y + bounds.Top - size.Height - 10;
+
+        Canvas.SetLeft(OcrMarkMenu, Math.Clamp(left, 8, Math.Max(8, Width - size.Width - 8)));
+        Canvas.SetTop(OcrMarkMenu, Math.Max(8, top));
+    }
+
+    private void HideOcrMarkMenu() => OcrMarkMenu.IsVisible = false;
+
+    private void OnOcrMarkCopyClick(object? sender, RoutedEventArgs e)
+    {
+        var text = SelectedOcrText();
+        if (string.IsNullOrEmpty(text))
+            return;
+
+        CopyText?.Invoke(text);
+        OcrStatus.Text = $"已复制选中文字 · {text.Length} 字";
+    }
+
+    private void OnOcrHighlightClick(object? sender, RoutedEventArgs e) => ApplyOcrMark(TextMarkKind.Highlight);
+
+    private void OnOcrWaveClick(object? sender, RoutedEventArgs e) => ApplyOcrMark(TextMarkKind.Wave);
+
+    private void OnOcrUnderlineClick(object? sender, RoutedEventArgs e) => ApplyOcrMark(TextMarkKind.Underline);
+
+    private void OnOcrStrikeClick(object? sender, RoutedEventArgs e) => ApplyOcrMark(TextMarkKind.Strike);
 
     /// <summary>切换一行框的选中状态（点击和测试共用）。</summary>
     internal void ToggleOcrBoxSelection(Rectangle box)

@@ -72,6 +72,75 @@ internal static class OcrTextLayout
     }
 
     /// <summary>
+    /// 点 → 字符边界下标（0..Count）。落在字上返回该字下标；
+    /// 落在行左/右外侧时钳到 0 / Count，这样拖选能拖到行首行尾。
+    /// </summary>
+    internal static int IndexAt(IReadOnlyList<OcrCharBox> boxes, Point point)
+    {
+        if (boxes.Count == 0)
+            return -1;
+
+        var hit = HitIndex(boxes, point);
+        if (hit >= 0)
+            return hit;
+
+        if (point.X <= boxes[0].Box.X)
+            return 0;
+
+        if (point.X >= boxes[^1].Box.Right)
+            return boxes.Count;
+
+        for (var i = 0; i < boxes.Count; i++)
+        {
+            if (point.X < boxes[i].Box.X)
+                return i;
+        }
+
+        return boxes.Count;
+    }
+
+    /// <summary>取 [start, start+length) 的字符框，按连续段合并成一个包围盒。</summary>
+    internal static IReadOnlyList<Rect> BoxesForRange(
+        IReadOnlyList<OcrCharBox> boxes, int start, int length)
+    {
+        if (length <= 0 || boxes.Count == 0)
+            return Array.Empty<Rect>();
+
+        start = Math.Clamp(start, 0, boxes.Count);
+        var end = Math.Clamp(start + length, start, boxes.Count);
+        if (start >= end)
+            return Array.Empty<Rect>();
+
+        var first = boxes[start].Box;
+        var left = first.X;
+        var top = first.Y;
+        var right = first.Right;
+        var bottom = first.Bottom;
+
+        for (var i = start + 1; i < end; i++)
+        {
+            var box = boxes[i].Box;
+            left = Math.Min(left, box.X);
+            top = Math.Min(top, box.Y);
+            right = Math.Max(right, box.Right);
+            bottom = Math.Max(bottom, box.Bottom);
+        }
+
+        return [new Rect(left, top, right - left, bottom - top)];
+    }
+
+    /// <summary>取 [start, start+length) 的原文。</summary>
+    internal static string TextForRange(string text, int start, int length)
+    {
+        if (string.IsNullOrEmpty(text) || length <= 0)
+            return string.Empty;
+
+        start = Math.Clamp(start, 0, text.Length);
+        var end = Math.Clamp(start + length, start, text.Length);
+        return text[start..end];
+    }
+
+    /// <summary>
     /// 字符宽度权重。中日韩/全角算 1，西文约 0.55，空格 0.3，其余 ASCII 约 0.35。
     /// 数值来自常见 UI 字体的经验比例，不追求排版精度，只要求「同一行内相对正确」。
     /// </summary>

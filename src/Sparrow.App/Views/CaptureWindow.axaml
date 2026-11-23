@@ -1120,6 +1120,25 @@
       </Border>
     </StackPanel>
 
+    <!-- OCR 字符选择后的浮动菜单：复制 + 四种文字标记 -->
+    <Border x:Name="OcrMarkMenu"
+            Classes="tool-popover"
+            IsVisible="False"
+            IsHitTestVisible="True">
+      <StackPanel Orientation="Horizontal" Spacing="2">
+        <Button Focusable="False" Classes="prop" Content="复制"
+                Click="OnOcrMarkCopyClick" ToolTip.Tip="复制选中的文字" />
+        <Button Focusable="False" Classes="prop" Content="荧光笔"
+                Click="OnOcrHighlightClick" ToolTip.Tip="给选中的字加底色" />
+        <Button Focusable="False" Classes="prop" Content="波浪线"
+                Click="OnOcrWaveClick" ToolTip.Tip="波浪下划线" />
+        <Button Focusable="False" Classes="prop" Content="下划线"
+                Click="OnOcrUnderlineClick" ToolTip.Tip="下划线" />
+        <Button Focusable="False" Classes="prop" Content="删除线"
+                Click="OnOcrStrikeClick" ToolTip.Tip="删除线" />
+      </StackPanel>
+    </Border>
+
     <!-- 工具组悬停弹出：内容是代码构建的，位置在触发按钮上方 -->
     <Border x:Name="ToolGroupPopover"
             Classes="tool-popover"

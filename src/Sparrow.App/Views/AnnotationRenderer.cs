@@ -11,10 +11,16 @@ namespace Sparrow.App.Views;
 /// </summary>
 internal static class AnnotationRenderer
 {
-    /// <summary>合成后的 PNG；没有标注时原样返回。</summary>
-    public static byte[] Compose(byte[] png, IReadOnlyList<IAnnotation> items, double scale)
+    /// <summary>合成后的 PNG；没有标注、也没有 OCR 文字标记时原样返回。</summary>
+    public static byte[] Compose(
+        byte[] png,
+        IReadOnlyList<IAnnotation> items,
+        double scale,
+        IReadOnlyList<OcrTextMark>? textMarks = null)
     {
-        if (items.Count == 0)
+        var hasMarks = textMarks is { Count: > 0 };
+
+        if (items.Count == 0 && !hasMarks)
             return png;
 
         using var bitmap = SKBitmap.Decode(png);
@@ -36,6 +42,10 @@ internal static class AnnotationRenderer
 
             foreach (var item in items)
                 Draw(canvas, item, paint, bitmap);
+
+            // OCR 文字标记画在标注之上：它是"批注文字"，应该压在最上层
+            if (hasMarks)
+                OcrTextMarks.Draw(canvas, textMarks!);
         }
 
         using var image = SKImage.FromBitmap(bitmap);
