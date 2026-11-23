@@ -29,10 +29,19 @@ public static class WindowCandidates
 
     private static readonly HashSet<string> ShellClasses = new(StringComparer.Ordinal)
     {
+        // 桌面窗口整屏大小，选中没有意义；任务栏要保留，
+        // 否则悬停图标时会去探测任务栏后面的应用（会出现整行的「文本」）。
         "Progman",
-        "WorkerW",
+        "WorkerW"
+    };
+
+    /// <summary>任务栏 / 托盘溢出等 shell 浮层：它们是工具窗口，但需要参与控件识别。</summary>
+    private static readonly HashSet<string> ShellElementClasses = new(StringComparer.Ordinal)
+    {
         "Shell_TrayWnd",
-        "Shell_SecondaryTrayWnd"
+        "Shell_SecondaryTrayWnd",
+        "NotifyIconOverflowWindow",
+        "TopLevelWindowForOverflowXamlIsland"
     };
 
     private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
@@ -59,9 +68,14 @@ public static class WindowCandidates
             if (className is not null && ShellClasses.Contains(className))
                 return true;
 
+            // 任务栏 / 托盘溢出本身是 WS_EX_TOOLWINDOW，但要保留：
+            // 悬停图标时 UIA 能直接命中单个图标；排掉它就会去探测后面的应用。
+            var isShellElement = className is not null
+                                 && ShellElementClasses.Contains(className);
+
             // 工具窗口多数是浮层/提示，不当作可截区域
             var exStyle = GetWindowLong(hwnd, GwlExStyle);
-            if ((exStyle & WsExToolWindow) != 0)
+            if (!isShellElement && (exStyle & WsExToolWindow) != 0)
                 return true;
 
             if (!TryGetVisibleRect(hwnd, out var rect))
