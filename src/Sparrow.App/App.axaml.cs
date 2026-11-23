@@ -1039,7 +1039,7 @@ public partial class App : Application
         if (result.Action == CaptureAction.None)
             return;
 
-        await HandleCaptureActionAsync(png, result.Action);
+        await HandleCaptureActionAsync(result.OutputPng ?? png, result.Action);
     }
 
     /// <summary>把提示条放在选区外（下方放不下就放上方），避免被自己截进去。</summary>

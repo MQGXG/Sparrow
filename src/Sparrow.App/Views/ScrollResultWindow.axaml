@@ -26,17 +26,48 @@
               Click="OnCloseClick" />
     </Grid>
 
-    <Border Grid.Row="1"
-            Classes="panel"
-            Margin="0,12,0,0"
-            Padding="8">
-      <ScrollViewer HorizontalScrollBarVisibility="Disabled"
-                    VerticalScrollBarVisibility="Auto">
-        <Image x:Name="Preview"
-               Stretch="Uniform"
-               HorizontalAlignment="Stretch" />
-      </ScrollViewer>
-    </Border>
+    <Grid Grid.Row="1"
+          ColumnDefinitions="*,Auto"
+          Margin="0,12,0,0">
+      <Border Grid.Column="0"
+              Classes="panel"
+              Padding="8">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+          <Image x:Name="Preview"
+                 Stretch="Uniform"
+                 HorizontalAlignment="Stretch" />
+        </ScrollViewer>
+      </Border>
+
+      <!-- 整图缩略 + 头尾裁剪手柄 -->
+      <Border Grid.Column="1"
+              Width="64"
+              Margin="12,0,0,0"
+              Padding="6"
+              Classes="panel"
+              ToolTip.Tip="拖动琥珀色手柄裁掉长图头尾">
+        <Grid>
+          <Image x:Name="TrimOverview"
+                 Stretch="Fill"
+                 Opacity="0.85" />
+
+          <Canvas x:Name="TrimTrack"
+                  Background="Transparent"
+                  ClipToBounds="True"
+                  Cursor="SizeNorthSouth"
+                  PointerPressed="OnTrimPointerPressed"
+                  PointerMoved="OnTrimPointerMoved"
+                  PointerReleased="OnTrimPointerReleased"
+                  PointerCaptureLost="OnTrimPointerCaptureLost">
+            <Border x:Name="TrimTopShade" Background="#99000000" />
+            <Border x:Name="TrimBottomShade" Background="#99000000" />
+            <Border x:Name="TrimTopHandle" Height="6" Background="{StaticResource AccentBrush}" />
+            <Border x:Name="TrimBottomHandle" Height="6" Background="{StaticResource AccentBrush}" />
+          </Canvas>
+        </Grid>
+      </Border>
+    </Grid>
 
     <!-- 和普通截图共用同一组结果动作 -->
     <StackPanel Grid.Row="2"
