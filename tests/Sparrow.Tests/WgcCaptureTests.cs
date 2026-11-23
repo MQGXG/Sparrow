@@ -21,4 +21,26 @@ public sealed class WgcCaptureTests
         pixels!.Length.ShouldBe(200 * 100 * 4);
         pixels!.Length.ShouldBe(200 * 100 * 4);
     }
+
+    [Fact]
+    public void 自动模式_取帧不因HDR检测或后端选择抛异常()
+    {
+        var previous = ScreenCapture.Api;
+
+        try
+        {
+            ScreenCapture.Api = CaptureApi.Auto;
+
+            var pixels = ScreenCapture.CaptureRaw(0, 0, 50, 50);
+
+            if (pixels is null)
+                Assert.Skip("当前会话无法捕获（锁屏 / 无交互桌面）");
+
+            pixels!.Length.ShouldBe(50 * 50 * 4);
+        }
+        finally
+        {
+            ScreenCapture.Api = previous;
+        }
+    }
 }
