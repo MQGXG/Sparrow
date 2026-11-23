@@ -151,6 +151,7 @@ public partial class CaptureWindow : Window
 
     private Rectangle? _hoveredOcrBox;
     private IReadOnlyList<WindowCandidate> _candidates = [];
+    private long _candidatesAt;
     private WindowCandidate? _currentCandidate;
     private WindowCandidate? _candidateAtPress;
     private UiElementCandidate? _uiCandidate;
@@ -704,6 +705,7 @@ public partial class CaptureWindow : Window
         ApplyVirtualScreenBounds();
 
         _candidates = WindowCandidates.Enumerate(TryGetPlatformHandle()?.Handle ?? IntPtr.Zero);
+        _candidatesAt = Environment.TickCount64;
         _uiProbe = new UiElementProbe();
         _msaaProbe = new MsaaElementProbe();
 
@@ -1580,6 +1582,7 @@ public partial class CaptureWindow : Window
         _forceWindowCandidate = false;
 
         var physical = ToPhysical(point);
+        RefreshCandidatesIfStale();
 
         // 还在同一个控件里：候选不变，不用再查任何东西
         if (_uiCandidate is not null &&
@@ -1600,6 +1603,22 @@ public partial class CaptureWindow : Window
     private PixelPoint ToPhysical(Point point) => new(
         _origin.X + (int)Math.Round(point.X * _scaling),
         _origin.Y + (int)Math.Round(point.Y * _scaling));
+
+    /// <summary>
+    /// 截图期间会新开菜单 / 托盘溢出 / 弹窗；窗口列表每 500ms 刷新一次，
+    /// 否则这些新 HWND 不在候选里，会去命中后面的应用。
+    /// </summary>
+    private void RefreshCandidatesIfStale()
+    {
+        var now = Environment.TickCount64;
+
+        if (now - _candidatesAt < 500)
+            return;
+
+        _candidatesAt = now;
+        _candidates = WindowCandidates.Enumerate(
+            TryGetPlatformHandle()?.Handle ?? IntPtr.Zero);
+    }
 
     private void SetWindowCandidate(WindowCandidate? candidate)
     {
@@ -1857,8 +1876,8 @@ public partial class CaptureWindow : Window
                     }
                 }
 
-                // 浏览器第一次查询后才懒启用无障碍树：停一下就重试
-                if (result.Candidate is null && retries < 2)
+                // 预算用完 / 树还没建全：停一下再来一次（Chromium 的懒启用经常这样）
+                if (!result.Completed && retries < 3)
                 {
                     retries++;
                     await Task.Delay(350);

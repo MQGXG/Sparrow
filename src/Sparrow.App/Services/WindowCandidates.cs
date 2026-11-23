@@ -23,30 +23,21 @@ public sealed record WindowCandidate(IntPtr Handle, string Title, PixelRect Boun
 public static class WindowCandidates
 {
     private const int GwlExStyle = -20;
-    private const long WsExToolWindow = 0x00000080;
+    private const long WsExLayered = 0x00080000;
+    private const long WsExTransparent = 0x00000020;
     private const uint DwmwaCloaked = 14;
     private const uint DwmwaExtendedFrameBounds = 9;
 
-    private static readonly HashSet<string> ShellClasses = new(StringComparer.Ordinal)
-    {
-        // 桌面窗口整屏大小，选中没有意义；任务栏要保留，
-        // 否则悬停图标时会去探测任务栏后面的应用（会出现整行的「文本」）。
-        "Progman",
-        "WorkerW"
-    };
-
-    /// <summary>任务栏 / 托盘溢出等 shell 浮层：它们是工具窗口，但需要参与控件识别。</summary>
-    private static readonly HashSet<string> ShellElementClasses = new(StringComparer.Ordinal)
-    {
-        "Shell_TrayWnd",
-        "Shell_SecondaryTrayWnd",
-        "NotifyIconOverflowWindow",
-        "TopLevelWindowForOverflowXamlIsland"
-    };
-
     private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
 
-    /// <summary>按 Z 序（最上层在前）返回可见窗口；排除本进程窗口。</summary>
+    /// <summary>
+    /// 按 Z 序（最上层在前）返回可见窗口；排除本进程窗口。
+    ///
+    /// 和 snow-shot 的规则一致：只排除「点击穿透」的 layered 窗口
+    /// （WS_EX_LAYERED + WS_EX_TRANSPARENT），不按工具窗口 / shell 类 / 大小过滤。
+    /// 否则任务栏、托盘、弹出菜单、浮动工具条这些地方会去探测后面的应用，
+    /// 或者干脆没有候选。
+    /// </summary>
     public static IReadOnlyList<WindowCandidate> Enumerate(IntPtr excludeHandle)
     {
         var candidates = new List<WindowCandidate>();
@@ -64,18 +55,10 @@ public static class WindowCandidates
             if (IsCloaked(hwnd))
                 return true;
 
-            var className = GetClassName(hwnd);
-            if (className is not null && ShellClasses.Contains(className))
-                return true;
-
-            // 任务栏 / 托盘溢出本身是 WS_EX_TOOLWINDOW，但要保留：
-            // 悬停图标时 UIA 能直接命中单个图标；排掉它就会去探测后面的应用。
-            var isShellElement = className is not null
-                                 && ShellElementClasses.Contains(className);
-
-            // 工具窗口多数是浮层/提示，不当作可截区域
+            // 点击穿透的 layered 窗口（手写画布、透明 HUD）不参与命中，
+            // 否则它会挡住下面所有真实窗口。
             var exStyle = GetWindowLong(hwnd, GwlExStyle);
-            if (!isShellElement && (exStyle & WsExToolWindow) != 0)
+            if ((exStyle & WsExLayered) != 0 && (exStyle & WsExTransparent) != 0)
                 return true;
 
             if (!TryGetVisibleRect(hwnd, out var rect))
@@ -84,10 +67,11 @@ public static class WindowCandidates
             var width = rect.Right - rect.Left;
             var height = rect.Bottom - rect.Top;
 
-            if (width < 16 || height < 16)
+            if (width <= 0 || height <= 0)
                 return true;
 
             var title = GetWindowTitle(hwnd);
+            var className = GetClassName(hwnd);
             candidates.Add(new WindowCandidate(
                 hwnd,
                 string.IsNullOrWhiteSpace(title) ? className ?? "窗口" : title,
