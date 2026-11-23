@@ -644,6 +644,155 @@ public sealed class OcrImageToolTests
     }
 
     [Fact]
+    public async Task 引擎选在线_即使有本地模型也只走在线()
+    {
+        var root = CreateWorkerDirectory();
+        try
+        {
+            var ai = new FakeAi { Reply = "1|你好，世界" };
+            var translation = new FakeTranslation("1|本地译文");
+
+            var host = new ToolHost(
+                "sparrow.plugin.ocr",
+                root,
+                new NullLog(),
+                ai: ai,
+                localModels: new FakeModels("hy-mt-1.8b"),
+                localTranslation: translation);
+
+            var result = await new OcrImageTool(new FakeRunner([Result("hello world")])).ExecuteAsync(
+                new ToolContext
+                {
+                    Input = new ImageSetInput([Image("a.png")]),
+                    Host = host,
+                    Parameters = new Dictionary<string, string>
+                    {
+                        ["translate"] = "中文",
+                        ["engine"] = "ai"
+                    }
+                },
+                CancellationToken.None);
+
+            result.Success.ShouldBeTrue();
+            result.Payload.ShouldBeOfType<OcrResultPayload>().Text.ShouldContain("你好，世界");
+
+            ai.LastRequest.ShouldNotBeNull();
+            translation.LastRequest.ShouldBeNull();   // 没走本地
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task 引擎选指定本地模型_即使在线可用也只走本地()
+    {
+        var root = CreateWorkerDirectory();
+        try
+        {
+            var ai = new FakeAi { Reply = "1|在线译文" };
+            var translation = new FakeTranslation("1|本地译文");
+
+            var host = new ToolHost(
+                "sparrow.plugin.ocr",
+                root,
+                new NullLog(),
+                ai: ai,
+                localModels: new FakeModels("hy-mt-1.8b"),
+                localTranslation: translation);
+
+            var result = await new OcrImageTool(new FakeRunner([Result("hello world")])).ExecuteAsync(
+                new ToolContext
+                {
+                    Input = new ImageSetInput([Image("a.png")]),
+                    Host = host,
+                    Parameters = new Dictionary<string, string>
+                    {
+                        ["translate"] = "中文",
+                        ["engine"] = "local:hy-mt-1.8b"
+                    }
+                },
+                CancellationToken.None);
+
+            result.Success.ShouldBeTrue();
+            result.Payload.ShouldBeOfType<OcrResultPayload>().Text.ShouldContain("本地译文");
+
+            translation.LastRequest.ShouldNotBeNull().ModelId.ShouldBe("hy-mt-1.8b");
+            ai.LastRequest.ShouldBeNull();
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task 引擎选在线但没配_不悄悄换本地而是提示未翻译()
+    {
+        var root = CreateWorkerDirectory();
+        try
+        {
+            var ai = new FakeAi { IsAvailable = false };
+            var translation = new FakeTranslation("1|本地译文");
+
+            var host = new ToolHost(
+                "sparrow.plugin.ocr",
+                root,
+                new NullLog(),
+                ai: ai,
+                localModels: new FakeModels("hy-mt-1.8b"),
+                localTranslation: translation);
+
+            var result = await new OcrImageTool(new FakeRunner([Result("hello world")])).ExecuteAsync(
+                new ToolContext
+                {
+                    Input = new ImageSetInput([Image("a.png")]),
+                    Host = host,
+                    Parameters = new Dictionary<string, string>
+                    {
+                        ["translate"] = "中文",
+                        ["engine"] = "ai"
+                    }
+                },
+                CancellationToken.None);
+
+            result.Success.ShouldBeTrue();
+
+            var text = result.Payload.ShouldBeOfType<OcrResultPayload>().Text;
+            text.ShouldContain("hello world");
+            text.ShouldContain("未翻译");
+            translation.LastRequest.ShouldBeNull();
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void 引擎取值_允许指定本地模型_未知值回退自动()
+    {
+        OcrParameters.ResolveEngine(Context("engine", "local:hy-mt-7b")).ShouldBe("local:hy-mt-7b");
+        OcrParameters.ResolveEngine(Context("engine", "未知")).ShouldBe("auto");
+        OcrParameters.ResolveEngine(Context()).ShouldBe("auto");
+    }
+
+    private static ToolContext Context(params string[] pairs)
+    {
+        var parameters = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        for (var index = 0; index + 1 < pairs.Length; index += 2)
+            parameters[pairs[index]] = pairs[index + 1];
+
+        return new ToolContext
+        {
+            Input = new TextInput("test"),
+            Parameters = parameters
+        };
+    }
+
+    [Fact]
     public void 多图拼接_关闭失败项只留正文()
     {
         var text = OcrImageTool.ComposeBatchText(

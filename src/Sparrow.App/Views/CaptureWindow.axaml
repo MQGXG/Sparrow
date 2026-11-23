@@ -36,6 +36,9 @@
     <StreamGeometry x:Key="IconEye">M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z M12 9.2a2.8 2.8 0 1 0 .01 0</StreamGeometry>
     <StreamGeometry x:Key="ToolPen">M4 20l4.5-1L19 8.5 15.5 5 5 15.5z M13 7.5l3.5 3.5</StreamGeometry>
     <StreamGeometry x:Key="ToolHighlighter">M4 20h6 M14.5 4.5l5 5-8.5 8.5-4-4z</StreamGeometry>
+    <StreamGeometry x:Key="IconTextWave">M3.5 12.5c1.6-3 3.2-3 4.8 0s3.2 3 4.8 0 3.2-3 4.8 0</StreamGeometry>
+    <StreamGeometry x:Key="IconTextUnderline">M7 4.5v6a5 5 0 0 0 10 0v-6 M5.5 19.5h13</StreamGeometry>
+    <StreamGeometry x:Key="IconTextStrike">M4.5 12h15 M8.3 8.2c0-1.6 1.6-2.7 3.7-2.7s3.7 1.1 3.7 2.7 M8.3 15.8c0 1.6 1.6 2.7 3.7 2.7s3.7-1.1 3.7-2.7</StreamGeometry>
     <StreamGeometry x:Key="ToolMosaic">M4 4h16v16H4z M4 9.3h16 M4 14.7h16 M9.3 4v16 M14.7 4v16</StreamGeometry>
     <StreamGeometry x:Key="ToolText">M6 6h12 M12 6v13 M9.5 19h5</StreamGeometry>
     <StreamGeometry x:Key="ToolNumber">M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z M10 10l1.5-1.2V16</StreamGeometry>
@@ -847,6 +850,15 @@
               <MenuFlyout Placement="TopEdgeAlignedRight" />
             </Button.Flyout>
           </Button>
+          <Button x:Name="EngineButton"
+                  Classes="tool"
+                  IsVisible="False"
+                  ToolTip.Tip="翻译引擎：自动">
+            <Path Data="{StaticResource IconSparkle}" StrokeThickness="1.1" />
+            <Button.Flyout>
+              <MenuFlyout Placement="TopEdgeAlignedRight" />
+            </Button.Flyout>
+          </Button>
           <Button x:Name="FormatButton"
                   Classes="tool"
                   IsVisible="False"
@@ -1138,16 +1150,36 @@
             IsVisible="False"
             IsHitTestVisible="True">
       <StackPanel Orientation="Horizontal" Spacing="2">
-        <Button Focusable="False" Classes="prop" Content="复制"
-                Click="OnOcrMarkCopyClick" ToolTip.Tip="复制选中的文字" />
-        <Button Focusable="False" Classes="prop" Content="荧光笔"
-                Click="OnOcrHighlightClick" ToolTip.Tip="给选中的字加底色" />
-        <Button Focusable="False" Classes="prop" Content="波浪线"
-                Click="OnOcrWaveClick" ToolTip.Tip="波浪下划线" />
-        <Button Focusable="False" Classes="prop" Content="下划线"
-                Click="OnOcrUnderlineClick" ToolTip.Tip="下划线" />
-        <Button Focusable="False" Classes="prop" Content="删除线"
-                Click="OnOcrStrikeClick" ToolTip.Tip="删除线" />
+        <Button Focusable="False" Classes="prop" Click="OnOcrMarkCopyClick"
+                ToolTip.Tip="复制选中的文字">
+          <Path Data="{StaticResource IconCopy}"
+                Stroke="{DynamicResource TextPrimaryBrush}"
+                StrokeThickness="1.4" Width="15" Height="15" Stretch="Uniform" />
+        </Button>
+        <Button Focusable="False" Classes="prop" Click="OnOcrHighlightClick"
+                ToolTip.Tip="荧光笔：给选中的字加底色">
+          <Path Data="{StaticResource ToolHighlighter}"
+                Stroke="{DynamicResource TextPrimaryBrush}"
+                StrokeThickness="1.4" Width="15" Height="15" Stretch="Uniform" />
+        </Button>
+        <Button Focusable="False" Classes="prop" Click="OnOcrWaveClick"
+                ToolTip.Tip="波浪线">
+          <Path Data="{StaticResource IconTextWave}"
+                Stroke="{DynamicResource TextPrimaryBrush}"
+                StrokeThickness="1.4" Width="15" Height="15" Stretch="Uniform" />
+        </Button>
+        <Button Focusable="False" Classes="prop" Click="OnOcrUnderlineClick"
+                ToolTip.Tip="下划线">
+          <Path Data="{StaticResource IconTextUnderline}"
+                Stroke="{DynamicResource TextPrimaryBrush}"
+                StrokeThickness="1.4" Width="15" Height="15" Stretch="Uniform" />
+        </Button>
+        <Button Focusable="False" Classes="prop" Click="OnOcrStrikeClick"
+                ToolTip.Tip="删除线">
+          <Path Data="{StaticResource IconTextStrike}"
+                Stroke="{DynamicResource TextPrimaryBrush}"
+                StrokeThickness="1.4" Width="15" Height="15" Stretch="Uniform" />
+        </Button>
       </StackPanel>
     </Border>
 

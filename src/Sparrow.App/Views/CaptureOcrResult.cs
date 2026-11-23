@@ -5,8 +5,9 @@ namespace Sparrow.App.Views;
 /// <summary>
 /// 截图 OCR 的请求选项。
 /// <see cref="TranslateTarget"/> 为空表示只识别；非空时工具会在结果里附上译文。
+/// <see cref="Engine"/> 为空表示沿用工具参数里保存的引擎。
 /// </summary>
-public sealed record CaptureOcrOptions(string? TranslateTarget = null);
+public sealed record CaptureOcrOptions(string? TranslateTarget = null, string? Engine = null);
 
 /// <summary>
 /// 截图 OCR 的宿主结果。

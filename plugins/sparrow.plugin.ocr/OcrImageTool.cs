@@ -50,6 +50,7 @@ public sealed class OcrImageTool : ITool
             OcrParameters.Formatting,
             OcrParameters.Punctuation,
             OcrParameters.Translate,
+            OcrParameters.Engine,
             OcrParameters.Output,
             OcrParameters.Reuse
         ]
@@ -69,6 +70,7 @@ public sealed class OcrImageTool : ITool
         var language = context.GetParameter(OcrParameters.LanguageKey, "ch");
         var formatting = OcrParameters.ResolveFormatting(context);
         var punctuation = OcrParameters.ResolvePunctuation(context);
+        var engine = OcrParameters.ResolveEngine(context);
         var layout = OcrParameters.ResolveLayout(context);
         var translateTo = context.GetParameter(OcrParameters.TranslateKey, OcrParameters.TranslateNone);
         var output = context.GetParameter(OcrParameters.OutputKey, OcrParameters.OutputText);
@@ -151,7 +153,7 @@ public sealed class OcrImageTool : ITool
                         : [payload.Text];
 
                     var outcome = await TranslateLinesAsync(
-                        context, sourceLines, translateTo, cancellationToken);
+                        context, sourceLines, translateTo, engine, cancellationToken);
 
                     var sectionText = outcome.Lines is null
                         ? outcome.Unavailable
@@ -373,6 +375,7 @@ public sealed class OcrImageTool : ITool
         ToolContext context,
         IReadOnlyList<string> lines,
         string target,
+        string engine,
         CancellationToken cancellationToken)
     {
         if (target == OcrParameters.TranslateNone || lines.Count == 0)
@@ -385,7 +388,14 @@ public sealed class OcrImageTool : ITool
         if (context.Host is not { } host)
             return new TranslationOutcome(null, true);
 
-        if (host.Ai.IsAvailable)
+        // 引擎选择：auto = 在线优先；ai = 只在线；local / local:{id} = 只本地
+        var useOnline = !engine.StartsWith(OcrParameters.EngineLocal, StringComparison.Ordinal);
+        var useLocal = engine != OcrParameters.EngineOnline;
+        var localId = useLocal
+            ? OcrParameters.LocalModelId(engine) ?? PickInstalledModel(host)
+            : null;
+
+        if (useOnline && host.Ai.IsAvailable)
         {
             try
             {
@@ -415,16 +425,15 @@ public sealed class OcrImageTool : ITool
             }
         }
 
-        // 没配在线模型时用宿主下载好的本地模型（和「翻译」工具共用同一套引擎）
-        var modelId = PickInstalledModel(host);
-        if (modelId is not null && host.LocalTranslation.IsAvailable(modelId))
+        // 本地模型（和「翻译」工具共用同一套引擎）；指定的模型没下载就不悄悄换别的
+        if (useLocal && localId is not null && host.LocalTranslation.IsAvailable(localId))
         {
             try
             {
                 var translated = await host.LocalTranslation.TranslateAsync(
                     new LocalTranslationRequest
                     {
-                        ModelId = modelId,
+                        ModelId = localId,
                         Text = original,
                         TargetLanguage = target
                     },
@@ -443,14 +452,19 @@ public sealed class OcrImageTool : ITool
             }
         }
 
-        // AI 通了但没解析出译文，也按「没译成」处理；没有引擎时额外标记，界面可提示去配置
-        var available = host.Ai.IsAvailable
-            || (modelId is not null && host.LocalTranslation.IsAvailable(modelId));
+        // AI 通了但没解析出译文，也按「没译成」处理；一个引擎都没有时额外标记，界面可提示去配置
+        var hasOnline = useOnline && host.Ai.IsAvailable;
+        var hasLocal = useLocal
+            && localId is not null
+            && host.LocalTranslation.IsAvailable(localId);
 
-        if (!available)
-            host.Logger.LogWarning("OCR 翻译跳过：没有可用的翻译引擎");
+        if (!hasOnline && !hasLocal)
+        {
+            host.Logger.LogWarning(
+                $"OCR 翻译跳过：没有可用的翻译引擎（engine={engine}）");
+        }
 
-        return new TranslationOutcome(null, !available);
+        return new TranslationOutcome(null, !hasOnline && !hasLocal);
     }
 
     /// <summary>

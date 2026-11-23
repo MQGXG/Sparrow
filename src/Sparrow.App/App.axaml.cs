@@ -39,6 +39,7 @@ public partial class App : Application
     private AppSettings _appSettings = new();
     private LocalModelManager? _localModels;
     private LocalTranslationService? _localTranslation;
+    private AiClient? _ai;
 
     /// <summary>本次运行是否已同意「发送到模型服务」。</summary>
     private bool _aiConsentGranted;
@@ -113,6 +114,7 @@ public partial class App : Application
         var ai = new AiClient(aiSecrets, log);
         ai.Configure(settings);
         ai.ConfirmBeforeSend = ConfirmAiSendAsync;
+        _ai = ai;
 
         // 剪贴板历史：监听 + 落盘都是宿主能力，插件经 IToolHost.ClipboardHistory 只读
         var clipboardHistoryPath = Path.Combine(
@@ -426,6 +428,44 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// 截图工具条的翻译引擎：在线模型（如果配好）+ 已下载的本地模型。
+    /// 只有一个「自动」时返回空，按钮自己隐藏——没有可选项就别放一个空菜单。
+    /// </summary>
+    private IReadOnlyList<(string Value, string Label)> TranslateEngines()
+    {
+        var engines = new List<(string Value, string Label)>
+        {
+            ("auto", "自动（在线优先）")
+        };
+
+        try
+        {
+            if (_ai is { IsAvailable: true })
+            {
+                var name = string.IsNullOrWhiteSpace(_ai.ModelName)
+                    ? "在线模型"
+                    : $"在线 · {_ai.ModelName}";
+                engines.Add(("ai", name));
+            }
+
+            if (_localModels is { } models)
+            {
+                foreach (var model in models.All)
+                {
+                    if (models.IsInstalled(model.Id))
+                        engines.Add(($"local:{model.Id}", model.Name));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"读取翻译引擎失败：{ex.Message}");
+        }
+
+        return engines.Count > 1 ? engines : [];
+    }
+
     private Task<bool> AskAiConsentAsync(AiRequest request)
     {
         var completion = new TaskCompletionSource<bool>();
@@ -607,6 +647,7 @@ public partial class App : Application
 
         // 窗口先出来再读语言列表：首次会顺手加载插件，别让它卡在显示之前
         capture.ConfigureTranslateTargets(TranslateTargets());
+        capture.ConfigureTranslateEngines(TranslateEngines());
         Log.Info($"截图窗口已显示：visible={capture.IsVisible}，title={capture.Title}，{MemoryText()}");
 
         await WaitForClosedAsync(capture);
@@ -757,6 +798,10 @@ public partial class App : Application
             // 截图工具的「翻译」下拉：覆盖 OCR 上次的选择，本次生效
             if (options.TranslateTarget is { Length: > 0 } target)
                 parameters["translate"] = target;
+
+            // 引擎：auto / ai / local:{模型Id}；空表示沿用参数里保存的值
+            if (options.Engine is { Length: > 0 } engine)
+                parameters["engine"] = engine;
 
             var context = new ToolContext
             {

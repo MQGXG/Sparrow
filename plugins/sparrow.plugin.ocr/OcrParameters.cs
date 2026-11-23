@@ -12,6 +12,16 @@ internal static class OcrParameters
     public const string LayoutKey = "layout";
     public const string TranslateKey = "translate";
     public const string ReuseKey = "reuse";
+    public const string EngineKey = "engine";
+
+    /// <summary>自动：在线模型优先，没配就用第一个已下载的本地模型。</summary>
+    public const string EngineAuto = "auto";
+
+    /// <summary>只用在线模型。</summary>
+    public const string EngineOnline = "ai";
+
+    /// <summary>只用本地模型（截图工具条可传 <c>local:{模型 Id}</c> 指定具体模型）。</summary>
+    public const string EngineLocal = "local";
 
     /// <summary>识别结束把 worker 留 60 秒（默认）：连续识别快，空闲自动退出。</summary>
     public const string ReuseAuto = "auto";
@@ -128,6 +138,23 @@ internal static class OcrParameters
         Hint = "把逗号、句号、括号等统一成半角或全角"
     };
 
+    /// <summary>翻译引擎：自动（在线优先）/ 在线 / 本地。截图工具条可传 local:{模型Id}。</summary>
+    public static ToolParameter Engine { get; } = new()
+    {
+        Key = EngineKey,
+        Label = "引擎",
+        Kind = ParameterKind.Choice,
+        Choices = [EngineAuto, EngineOnline, EngineLocal],
+        ChoiceLabels = new Dictionary<string, string>
+        {
+            [EngineAuto] = "自动（在线优先）",
+            [EngineOnline] = "在线模型",
+            [EngineLocal] = "本地模型"
+        },
+        Default = EngineAuto,
+        Hint = "自动：有在线模型就先用；否则用第一个已下载的本地模型"
+    };
+
     /// <summary>
     /// 识别后可选翻译：结果按「原文 / 译文」对照输出，方便核对。
     /// 需要先在设置里配好模型；没配时静默跳过，识别结果照常返回。
@@ -207,6 +234,29 @@ internal static class OcrParameters
             OcrTextTransform.PunctuationFull => OcrTextTransform.PunctuationFull,
             _ => OcrTextTransform.PunctuationNone
         };
+
+    /// <summary>
+    /// 引擎参数 → 取值。允许 <c>local:{模型Id}</c> 指定具体本地模型；
+    /// 未知值回退「自动」。
+    /// </summary>
+    public static string ResolveEngine(ToolContext context)
+    {
+        var value = context.GetParameter(EngineKey, EngineAuto);
+
+        if (value is EngineOnline or EngineAuto)
+            return value;
+
+        if (value == EngineLocal || value.StartsWith("local:", StringComparison.Ordinal))
+            return value;
+
+        return EngineAuto;
+    }
+
+    /// <summary>从引擎取值里取出指定的本地模型 Id；没指定返回 null。</summary>
+    public static string? LocalModelId(string engine) =>
+        engine.StartsWith("local:", StringComparison.Ordinal) && engine.Length > 6
+            ? engine[6..]
+            : null;
 
     /// <summary>worker 固定在插件目录的 worker 子目录下。</summary>
     public static string WorkerPath(IToolHost host) =>

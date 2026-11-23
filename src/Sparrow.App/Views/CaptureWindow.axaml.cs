@@ -178,6 +178,13 @@ public partial class CaptureWindow : Window
 
     private string _ocrPunctuation = OcrTextTransform.PunctuationNone;
 
+    /// <summary>翻译引擎：auto / ai / local:{模型Id}；截图窗口只在有多个可选时才显示按钮。</summary>
+    private string _translateEngine = "auto";
+
+    private string _translateEngineLabel = "自动（在线优先）";
+
+    private bool _engineAvailable;
+
     private static readonly (string Value, string Label)[] OcrFormattingOptions =
     [
         (OcrTextTransform.FormatNone, "不处理"),
@@ -521,6 +528,64 @@ public partial class CaptureWindow : Window
         TranslateButton.IsVisible = _translateAvailable && _toolbarDensity < 2;
         InvalidateToolbarMetrics();
     }
+
+    /// <summary>
+    /// 「翻译引擎」列表（值 + 显示名），来自宿主：在线模型 + 已下载的本地模型。
+    /// 只有一项时整个按钮隐藏，避免给出一个没得选的下拉。
+    /// </summary>
+    public void ConfigureTranslateEngines(IReadOnlyList<(string Value, string Label)> engines)
+    {
+        if (EngineButton.Flyout is not MenuFlyout menu)
+        {
+            _engineAvailable = false;
+            EngineButton.IsVisible = false;
+            InvalidateToolbarMetrics();
+            return;
+        }
+
+        menu.Items.Clear();
+
+        foreach (var (value, label) in engines)
+        {
+            var item = new MenuItem
+            {
+                Header = label,
+                ToggleType = MenuItemToggleType.Radio,
+                GroupName = "translate-engine",
+                IsChecked = value == _translateEngine
+            };
+
+            item.Click += (_, _) =>
+            {
+                _translateEngine = value;
+                _translateEngineLabel = label;
+                UpdateEngineTip();
+
+                foreach (var entry in menu.Items.OfType<MenuItem>())
+                    entry.IsChecked = ReferenceEquals(entry, item);
+            };
+
+            menu.Items.Add(item);
+        }
+
+        _engineAvailable = menu.Items.Count > 0;
+        EngineButton.IsVisible = _engineAvailable
+            && _translateAvailable
+            && _toolbarDensity < 2;
+
+        var current = menu.Items
+            .OfType<MenuItem>()
+            .FirstOrDefault(item => item.IsChecked);
+
+        if (current?.Header is string header)
+            _translateEngineLabel = header;
+
+        UpdateEngineTip();
+        InvalidateToolbarMetrics();
+    }
+
+    private void UpdateEngineTip() =>
+        ToolTip.SetTip(EngineButton, $"翻译引擎：{_translateEngineLabel}");
 
     /// <summary>构建「格式 / 标点」下拉；它们只影响复制出去的文本。</summary>
     private void BuildOcrTextMenus()
@@ -5728,6 +5793,7 @@ public partial class CaptureWindow : Window
 
         // 二级压缩：收起 OCR 辅助动作和状态文字；翻译是主功能，保留
         TranslateButton.IsVisible = _translateAvailable;
+        EngineButton.IsVisible = _engineAvailable && _translateAvailable && _toolbarDensity < 2;
         CopyAllButton.IsVisible = _ocrActionsAvailable && _toolbarDensity < 2;
         OcrBoxButton.IsVisible = _ocrActionsAvailable && _toolbarDensity < 2;
         FormatButton.IsVisible = _ocrActionsAvailable && _toolbarDensity < 2;
@@ -6163,7 +6229,7 @@ public partial class CaptureWindow : Window
             Result = await Task.Run(() => ComposeResult(png));
             Action = CaptureAction.Recognize;
 
-            await RunOcrAsync(new CaptureOcrOptions(target));
+            await RunOcrAsync(new CaptureOcrOptions(target, _translateEngine));
         }
         finally
         {
