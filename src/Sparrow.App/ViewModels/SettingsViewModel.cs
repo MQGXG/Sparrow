@@ -42,6 +42,9 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _searchHotkey = settings.SearchHotkey;
         _captureHotkey = settings.CaptureHotkey;
         _clipboardPanelHotkey = settings.ClipboardPanelHotkey;
+        _selectedCaptureElementApi = CaptureElementApiOptions
+            .FirstOrDefault(option => option.Key == settings.CaptureElementApi)
+            ?? CaptureElementApiOptions[0];
         _startWithWindows = startup.IsEnabled;
         _historyMaxEntries = settings.HistoryMaxEntries;
         _historyRetentionDays = settings.HistoryRetentionDays;
@@ -152,6 +155,24 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
     [ObservableProperty]
     private string _captureHotkey = "Ctrl+Alt+C";
+
+    /// <summary>窗口元素 API：auto（UIA 优先 + MSAA 兜底）/ uia / msaa。</summary>
+    [ObservableProperty]
+    private CaptureElementApiOption _selectedCaptureElementApi = null!;
+
+    public IReadOnlyList<CaptureElementApiOption> CaptureElementApiOptions { get; } =
+    [
+        new("auto", "自动（UIA 优先，MSAA 兜底）"),
+        new("uia", "仅 UI Automation"),
+        new("msaa", "仅 MSAA")
+    ];
+
+    partial void OnSelectedCaptureElementApiChanged(CaptureElementApiOption value)
+    {
+        _settings = _settings with { CaptureElementApi = value.Key };
+        _store.Save(_settings);
+        StatusMessage = $"窗口元素 API：{value.Label}";
+    }
 
     [ObservableProperty]
     private string _clipboardPanelHotkey = "Ctrl+Alt+B";
@@ -668,3 +689,6 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         StatusMessage = "插件设置已保存，重启应用生效";
     }
 }
+
+/// <summary>窗口元素 API 选项：Key 存进设置，Label 给界面看。</summary>
+public sealed record CaptureElementApiOption(string Key, string Label);

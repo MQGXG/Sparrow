@@ -61,6 +61,19 @@ public sealed class SettingsViewModelTests
     }
 
     [Fact]
+    public void 设置页_窗口元素API_默认自动且切换后立即保存()
+    {
+        var (viewModel, store, _) = Create();
+
+        viewModel.SelectedCaptureElementApi.Key.ShouldBe("auto");
+
+        var msaa = viewModel.CaptureElementApiOptions.First(option => option.Key == "msaa");
+        viewModel.SelectedCaptureElementApi = msaa;
+
+        store.Load().CaptureElementApi.ShouldBe("msaa");
+    }
+
+    [Fact]
     public void 设置页_冷启动不加载插件_切到热键分段才加载()
     {
         var (viewModel, _, catalog) = Create();

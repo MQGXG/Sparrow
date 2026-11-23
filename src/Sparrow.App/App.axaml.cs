@@ -630,7 +630,8 @@ public partial class App : Application
             ExportCornerRadius = _appSettings.CaptureCornerRadius,
             CaptureToolPositions = _appSettings.CaptureToolPositions,
             CaptureToolHidden = _appSettings.CaptureToolHidden,
-            CaptureToolbarPlacement = _appSettings.CaptureToolbarPlacement
+            CaptureToolbarPlacement = _appSettings.CaptureToolbarPlacement,
+            CaptureElementApi = _appSettings.CaptureElementApi
         };
 
         // 三槽样式模板：灌进去，关闭时读回

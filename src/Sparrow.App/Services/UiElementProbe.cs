@@ -41,6 +41,9 @@ public sealed class UiElementProbe : IDisposable
     private const int MaxRectangles = 100;
     private const int MaxChildWindows = 10;
 
+    /// <summary>子节点超过这个数才建空间索引（和 snow-shot 的阈值一致）。</summary>
+    private const int LinearChildLimit = 16;
+
     /// <summary>单个窗口最多保留多少懒展开节点，防止异常大树把内存撑爆。</summary>
     private const int MaxNodesPerWindow = 12000;
 
@@ -361,7 +364,7 @@ public sealed class UiElementProbe : IDisposable
             if (state.Expired)
                 return new UiElementProbeResult(Pick(current, root, resolveName: false), false);
 
-            if (!TryExpand(current, state.Remaining))
+            if (!TryExpand(current, state))
             {
                 // 可重试的失败（预算/超时/空树）留给细化；彻底失败就收手
                 return new UiElementProbeResult(
@@ -422,19 +425,33 @@ public sealed class UiElementProbe : IDisposable
         {
             var node = pending.Pop();
 
-            try
+            ReleaseCom(node.Element);
+            ReleaseCom(node.PendingChildren);
+
+            if (node.Children is not null)
             {
-                Marshal.FinalReleaseComObject(node.Element);
-            }
-            catch
-            {
+                foreach (var child in node.Children)
+                    pending.Push(child);
             }
 
-            if (node.Children is null)
-                continue;
+            // 解码中断时已建好但还没挂到 Children 上的节点也要释放
+            foreach (var entry in node.PendingEntries)
+                pending.Push(entry);
+        }
+    }
 
-            foreach (var child in node.Children)
-                pending.Push(child);
+    private static void ReleaseCom(object? comObject)
+    {
+        if (comObject is null || !Marshal.IsComObject(comObject))
+            return;
+
+        try
+        {
+            Marshal.FinalReleaseComObject(comObject);
+        }
+        catch
+        {
+            // 已释放 / 代理异常：忽略
         }
     }
 
@@ -547,7 +564,7 @@ public sealed class UiElementProbe : IDisposable
     }
 
     /// <summary>取回这一层子节点（带缓存属性），每个节点一辈子只展开一次。</summary>
-    private bool TryExpand(Node node, TimeSpan remaining)
+    private bool TryExpand(Node node, ProbeState state)
     {
         if (node.Children is not null)
             return true;
@@ -556,42 +573,61 @@ public sealed class UiElementProbe : IDisposable
             return false;
 
         // 预算已经用完：这次先不调跨进程，留给细化
-        if (remaining <= TimeSpan.Zero)
+        if (state.Expired)
             return false;
 
         // 异常大树到上限就不再往下展开，宁可退回窗口级也不撑爆内存
         if (_nodeCount >= MaxNodesPerWindow)
             return false;
 
-        ApplyTimeouts(remaining);
-
         try
         {
-            // 一次调用同时刷新本节点缓存并带回子节点集合
-            var updated = node.Element.BuildUpdatedCache(_request);
-            var array = updated.GetCachedChildren();
-            var children = new List<Node>(array?.Length ?? 0);
-
-            if (array is not null)
+            // 第一次展开：把整批子节点数组缓存下来，等会儿逐个解码
+            if (node.PendingChildren is null)
             {
-                var count = Math.Min(array.Length, MaxChildrenPerNode);
+                ApplyTimeouts(state.Remaining);
 
-                for (var index = 0; index < count; index++)
-                {
-                    if (_nodeCount >= MaxNodesPerWindow)
-                        break;
-
-                    var element = array.GetElement(index);
-                    if (element is null)
-                        continue;
-
-                    var child = CreateNode(element, node);
-                    if (child is not null)
-                        children.Add(child);
-                }
+                // 一次调用同时刷新本节点缓存并带回子节点集合
+                var updated = node.Element.BuildUpdatedCache(_request);
+                node.PendingChildren = updated.GetCachedChildren();
+                node.PendingIndex = 0;
+                node.PendingEntries.Clear();
             }
 
+            var array = node.PendingChildren;
+            var count = array is null ? 0 : Math.Min(array.Length, MaxChildrenPerNode);
+
+            // 解码途中预算到点：保留数组和下标，下一次探测从断点继续，
+            // 不用重新支付一次跨进程调用。
+            while (node.PendingIndex < count)
+            {
+                if (state.Expired)
+                    return false;
+
+                if (_nodeCount >= MaxNodesPerWindow)
+                    break;
+
+                var element = array!.GetElement(node.PendingIndex);
+                node.PendingIndex++;
+
+                if (element is null)
+                    continue;
+
+                var child = CreateNode(element, node);
+                if (child is not null)
+                    node.PendingEntries.Add(child);
+            }
+
+            var children = new List<Node>(node.PendingEntries);
+            node.PendingChildren = null;
+            node.PendingEntries.Clear();
             node.Children = children;
+
+            // 子节点多于 16 个时建空间索引；和 snow-shot 一样，
+            // 小列表用线性倒序扫描更快，大列表（浏览器文档）用索引避免逐个比较。
+            node.Index = children.Count > LinearChildLimit
+                ? new ChildIndex(children, node.Bounds)
+                : null;
 
             // 容器返回空子树：Chromium 首次查询时树还在建，空结果不能永久缓存，
             // 否则这一个窗口之后永远只剩「整窗候选」。
@@ -663,6 +699,9 @@ public sealed class UiElementProbe : IDisposable
     {
         if (node.Children is null)
             return null;
+
+        if (node.Index is { } spatial)
+            return spatial.Hit(point);
 
         // 后面的兄弟更靠前：从后往前找第一个包含光标的
         for (var index = node.Children.Count - 1; index >= 0; index--)
@@ -801,6 +840,83 @@ public sealed class UiElementProbe : IDisposable
         [UIA_ControlTypeIds.UIA_CustomControlTypeId] = "控件"
     };
 
+    /// <summary>
+    /// 子节点空间索引：均匀网格（R-tree 的简化版）。
+    /// 只需要「点在哪个格子里」，不需要维护树的平衡，常数更小。
+    /// </summary>
+    private sealed class ChildIndex
+    {
+        private const int CellSize = 64;
+
+        /// <summary>跨太多格的子节点单独放全局列表，避免索引膨胀。</summary>
+        private const int MaxCellsPerChild = 64;
+
+        private readonly PixelRect _bounds;
+        private readonly Dictionary<(int X, int Y), List<(int Order, Node Node)>> _cells = [];
+        private readonly List<(int Order, Node Node)> _global = [];
+
+        public ChildIndex(IReadOnlyList<Node> children, PixelRect bounds)
+        {
+            _bounds = bounds;
+
+            for (var order = 0; order < children.Count; order++)
+            {
+                var child = children[order];
+                var minX = (child.Bounds.X - bounds.X) / CellSize;
+                var minY = (child.Bounds.Y - bounds.Y) / CellSize;
+                var maxX = (child.Bounds.X + child.Bounds.Width - 1 - bounds.X) / CellSize;
+                var maxY = (child.Bounds.Y + child.Bounds.Height - 1 - bounds.Y) / CellSize;
+                var cells = (long)(maxX - minX + 1) * (maxY - minY + 1);
+
+                if (cells <= 0 || cells > MaxCellsPerChild)
+                {
+                    _global.Add((order, child));
+                    continue;
+                }
+
+                for (var y = minY; y <= maxY; y++)
+                {
+                    for (var x = minX; x <= maxX; x++)
+                    {
+                        if (!_cells.TryGetValue((x, y), out var list))
+                            _cells[(x, y)] = list = [];
+
+                        list.Add((order, child));
+                    }
+                }
+            }
+        }
+
+        public Node? Hit(PixelPoint point)
+        {
+            var cellX = (point.X - _bounds.X) / CellSize;
+            var cellY = (point.Y - _bounds.Y) / CellSize;
+            var bestOrder = -1;
+            Node? best = null;
+
+            foreach (var (order, child) in _global)
+                Consider(order, child);
+
+            if (_cells.TryGetValue((cellX, cellY), out var cell))
+            {
+                foreach (var (order, child) in cell)
+                    Consider(order, child);
+            }
+
+            return best;
+
+            void Consider(int order, Node child)
+            {
+                // 后面的兄弟更靠前：取 order 最大的包含光标的节点
+                if (order > bestOrder && Contains(child.Bounds, point))
+                {
+                    bestOrder = order;
+                    best = child;
+                }
+            }
+        }
+    }
+
     /// <summary>懒展开的一层控件节点。</summary>
     private sealed class Node(
         PixelRect bounds,
@@ -813,9 +929,18 @@ public sealed class UiElementProbe : IDisposable
         public IUIAutomationElement Element { get; } = element;
         public Node? Parent { get; } = parent;
         public List<Node>? Children { get; set; }
+        public ChildIndex? Index { get; set; }
         public bool ExpandFailed { get; set; }
         public int Failures { get; set; }
         public int EmptyExpansions { get; set; }
+
+        /// <summary>解码中途停下时保留的原始子节点数组和断点位置。</summary>
+        public IUIAutomationElementArray? PendingChildren { get; set; }
+
+        public int PendingIndex { get; set; }
+
+        public List<Node> PendingEntries { get; } = [];
+
         public bool Structural => IsStructural(ControlType);
     }
 

@@ -336,6 +336,33 @@
 
             <Grid ColumnDefinitions="*,Auto" Margin="20,14">
               <StackPanel Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="窗口元素 API"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="识别光标下的控件（图标 / 按钮 / 列表项）；自动 = UIA 优先，MSAA 兜底"
+                           FontSize="11"
+                           MaxWidth="520"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <ComboBox Grid.Column="1"
+                        Width="260"
+                        ItemsSource="{Binding CaptureElementApiOptions}"
+                        SelectedItem="{Binding SelectedCaptureElementApi, Mode=TwoWay}"
+                        HorizontalAlignment="Stretch">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:CaptureElementApiOption">
+                    <TextBlock Text="{Binding Label}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <Grid ColumnDefinitions="*,Auto" Margin="20,14">
+              <StackPanel Spacing="3" VerticalAlignment="Center">
                 <TextBlock Text="剪贴板面板"
                            FontSize="13"
                            FontWeight="SemiBold"

@@ -430,6 +430,9 @@ public partial class CaptureWindow : Window
         }
     }
 
+    /// <summary>窗口元素识别 API：auto / uia / msaa。</summary>
+    public string CaptureElementApi { get; set; } = "auto";
+
     public Action<OcrBoxMode>? OcrBoxModeChanged { get; set; }
 
     /// <summary>
@@ -1698,6 +1701,9 @@ public partial class CaptureWindow : Window
         if (_forceWindowCandidate || _hasSelection || OcrLayer.IsVisible || _currentCandidate is null)
             return;
 
+        if (!UsesUia && !UsesMsaa)
+            return;
+
         // 同一窗口正在探：让它跑完，结束后会按最新光标再命中。
         // 用任务是否完成判断，而不是布尔标记——点空白会推进 generation，
         // 旧任务不敢清标记，用布尔会把后续探测永久锁死。
@@ -1711,6 +1717,13 @@ public partial class CaptureWindow : Window
 
     private async Task ProbeAsync(int generation, WindowCandidate window)
     {
+        // 只选了 MSAA：不走 UIA，直接用 MSAA 命中
+        if (!UsesUia)
+        {
+            await ProbeMsaaOnlyAsync(generation, window);
+            return;
+        }
+
         var probe = _uiProbe;
 
         if (probe is null)
@@ -1779,7 +1792,7 @@ public partial class CaptureWindow : Window
                 }
 
                 // UIA 没命中：用 MSAA 兜底（Electron / 老应用往往只在这边暴露控件）
-                if (result.Candidate is null && _msaaProbe is { } msaa)
+                if (UsesMsaa && result.Candidate is null && _msaaProbe is { } msaa)
                 {
                     var msaaCandidate = await msaa.ProbeAsync(
                         window.Handle,
@@ -1825,6 +1838,53 @@ public partial class CaptureWindow : Window
             // 探测失败就保持窗口级候选
         }
     }
+
+    /// <summary>只走 MSAA：没有 UIA 的两段式，单次预算内给结果。</summary>
+    private async Task ProbeMsaaOnlyAsync(int generation, WindowCandidate window)
+    {
+        if (_msaaProbe is not { } probe)
+            return;
+
+        try
+        {
+            var rehits = 0;
+
+            while (true)
+            {
+                var point = WindowCandidates.GetCursorPosition();
+
+                var candidate = await probe.ProbeAsync(
+                    window.Handle,
+                    point,
+                    TimeSpan.FromMilliseconds(600),
+                    () => generation == Volatile.Read(ref _probeGeneration));
+
+                if (!IsProbeCurrent(generation, window))
+                    return;
+
+                if (CursorMovedSince(point))
+                {
+                    if (++rehits <= 3)
+                        continue;
+
+                    return;
+                }
+
+                SetUiCandidate(candidate);
+                return;
+            }
+        }
+        catch
+        {
+            // MSAA 失败就保持窗口级候选
+        }
+    }
+
+    private bool UsesUia =>
+        !string.Equals(CaptureElementApi, "msaa", StringComparison.OrdinalIgnoreCase);
+
+    private bool UsesMsaa =>
+        !string.Equals(CaptureElementApi, "uia", StringComparison.OrdinalIgnoreCase);
 
     private static bool CursorMovedSince(PixelPoint point)
     {

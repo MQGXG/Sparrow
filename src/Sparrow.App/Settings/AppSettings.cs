@@ -63,6 +63,9 @@ public sealed record AppSettings
     /// <summary>截图 OCR 识别框显示方式：all / hover / off。</summary>
     public string CaptureOcrBoxMode { get; init; } = "hover";
 
+    /// <summary>窗口元素识别 API：auto / uia / msaa。</summary>
+    public string CaptureElementApi { get; init; } = "auto";
+
     /// <summary>顺序粘贴热键：在目标应用里按下，写入队列下一条并模拟 Ctrl+V。</summary>
     public string QueuePasteHotkey { get; init; } = "Ctrl+Alt+V";
 

@@ -19,6 +19,10 @@ public sealed class MsaaElementProbe : IDisposable
     private const uint ObjIdWindow = 0x00000000;
     private const int ChildIdSelf = 0;
 
+    /// <summary>MSAA 下钻的最大层数 / 最大子节点数，防止异常树把预算耗光。</summary>
+    private const int MaxDescendDepth = 16;
+    private const int MaxChildrenPerNode = 400;
+
     private const int StateSystemInvisible = 0x00008000;
     private const int StateSystemOffscreen = 0x00010000;
 
@@ -55,6 +59,7 @@ public sealed class MsaaElementProbe : IDisposable
         var wanted = stillWanted ?? AlwaysWanted;
         var completion = new TaskCompletionSource<UiElementCandidate?>(
             TaskCreationOptions.RunContinuationsAsynchronously);
+        var deadline = Environment.TickCount64 + (long)Math.Max(1, budget.TotalMilliseconds);
 
         try
         {
@@ -65,7 +70,7 @@ public sealed class MsaaElementProbe : IDisposable
                 try
                 {
                     if (wanted())
-                        candidate = Probe(hwnd, point, wanted);
+                        candidate = Probe(hwnd, point, wanted, deadline);
                 }
                 catch
                 {
@@ -137,7 +142,11 @@ public sealed class MsaaElementProbe : IDisposable
             _unresponsive.Add(hwnd);
     }
 
-    private static UiElementCandidate? Probe(IntPtr hwnd, PixelPoint point, Func<bool> wanted)
+    private static UiElementCandidate? Probe(
+        IntPtr hwnd,
+        PixelPoint point,
+        Func<bool> wanted,
+        long deadline)
     {
         if (!GetWindowRect(hwnd, out var windowRect))
             return null;
@@ -148,7 +157,8 @@ public sealed class MsaaElementProbe : IDisposable
         if (root is null)
             return null;
 
-        IAccessible? hitNode = null;
+        // 下钻会顺路拿到新的 IDispatch，全部集中释放
+        var created = new List<object> { root };
 
         try
         {
@@ -156,40 +166,160 @@ public sealed class MsaaElementProbe : IDisposable
             if (hit is not { } found)
                 return null;
 
-            hitNode = ReferenceEquals(found.Node, root) ? null : found.Node;
+            if (!ReferenceEquals(found.Node, root))
+                created.Add(found.Node);
 
-            if (!wanted())
+            // accHitTest 有时只给到文档/窗格：再沿子元素下钻到真正包含光标的节点
+            var element = Descend(found.Node, found.ChildId, point, wanted, deadline, created);
+
+            if (!wanted() || Environment.TickCount64 >= deadline)
                 return null;
 
-            if (!TryGetBounds(found.Node, found.ChildId, out var bounds))
+            if (!TryGetBounds(element.Node, element.ChildId, out var bounds))
                 return null;
 
             // 整窗、窗框外、小于 2px 的都不算「控件」
             if (!IsUsable(bounds, windowRect))
                 return null;
 
-            if ((TryGetState(found.Node, found.ChildId) &
+            if ((TryGetState(element.Node, element.ChildId) &
                  (StateSystemInvisible | StateSystemOffscreen)) != 0)
             {
                 return null;
             }
 
-            var role = TryGetRole(found.Node, found.ChildId);
+            var role = TryGetRole(element.Node, element.ChildId);
             var kind = RoleName(role);
+            var name = TryGetName(element.Node, element.ChildId);
 
             // 无名的大容器（窗格/文档/客户端）没有框选价值，交给窗口级候选
-            if (IsStructuralRole(role) && TryGetName(found.Node, found.ChildId) is null)
+            if (IsStructuralRole(role) && name is null)
                 return null;
 
-            var name = TryGetName(found.Node, found.ChildId);
             return new UiElementCandidate(bounds, name ?? kind, kind);
         }
         finally
         {
-            Release(hitNode);
-            Release(root);
+            foreach (var comObject in created)
+                Release(comObject);
         }
     }
+
+    /// <summary>沿 accChild 往下找到最深的、包含光标的子元素。</summary>
+    private static (IAccessible Node, int ChildId) Descend(
+        IAccessible start,
+        int startChildId,
+        PixelPoint point,
+        Func<bool> wanted,
+        long deadline,
+        List<object> created)
+    {
+        var node = start;
+        var childId = startChildId;
+
+        for (var depth = 0; depth < MaxDescendDepth; depth++)
+        {
+            if (!wanted() || Environment.TickCount64 >= deadline)
+                break;
+
+            var next = HitChild(node, childId, point, wanted, deadline, created);
+            if (next is null)
+                break;
+
+            node = next.Value.Node;
+            childId = next.Value.ChildId;
+        }
+
+        return (node, childId);
+    }
+
+    /// <summary>在这一层的子元素里找包含光标的那个；没有就返回 null。</summary>
+    private static (IAccessible Node, int ChildId)? HitChild(
+        IAccessible node,
+        int childId,
+        PixelPoint point,
+        Func<bool> wanted,
+        long deadline,
+        List<object> created)
+    {
+        var container = node;
+
+        // 传进来的是 child id：优先换成子元素的 IDispatch，才能继续往下走
+        if (childId != ChildIdSelf)
+        {
+            if (TryGetChildObject(node, childId) is not { } childObject)
+                return null;
+
+            created.Add(childObject);
+            container = childObject;
+            childId = ChildIdSelf;
+        }
+
+        int count;
+
+        try
+        {
+            count = container.accChildCount;
+        }
+        catch
+        {
+            return null;
+        }
+
+        if (count <= 0 || count > MaxChildrenPerNode)
+            return null;
+
+        (IAccessible Node, int ChildId)? hit = null;
+
+        for (var index = count; index >= 1; index--)
+        {
+            if (!wanted() || Environment.TickCount64 >= deadline)
+                break;
+
+            if ((TryGetState(container, index) &
+                 (StateSystemInvisible | StateSystemOffscreen)) != 0)
+            {
+                continue;
+            }
+
+            if (!TryGetBounds(container, index, out var bounds) ||
+                !Contains(bounds, point))
+            {
+                continue;
+            }
+
+            // 后面的兄弟更靠前：取第一个包含光标的（倒序遍历）
+            if (TryGetChildObject(container, index) is { } child)
+            {
+                created.Add(child);
+                hit = (child, ChildIdSelf);
+            }
+            else
+            {
+                hit = (container, index);
+            }
+
+            break;
+        }
+
+        return hit;
+    }
+
+    private static IAccessible? TryGetChildObject(IAccessible node, int childId)
+    {
+        try
+        {
+            return node.accChild(childId) as IAccessible;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool Contains(PixelRect bounds, PixelPoint point) =>
+        point.X >= bounds.X && point.X < bounds.X + bounds.Width &&
+        point.Y >= bounds.Y && point.Y < bounds.Y + bounds.Height;
 
     private static (IAccessible Node, int ChildId)? HitTest(IAccessible root, PixelPoint point)
     {
@@ -440,6 +570,12 @@ public sealed class MsaaElementProbe : IDisposable
     [InterfaceType(ComInterfaceType.InterfaceIsIDispatch)]
     private interface IAccessible
     {
+        [DispId(-5001)]
+        int accChildCount { get; }
+
+        [DispId(-5002)]
+        object? accChild([MarshalAs(UnmanagedType.Struct)] object varChild);
+
         [DispId(-5003)]
         object? accName([MarshalAs(UnmanagedType.Struct)] object varChild);
 
