@@ -849,6 +849,10 @@ public partial class CaptureWindow : Window
             SelectNote(-1);   // 点空白：先取消选中，再走原来的移动/拉伸
         }
 
+        // 识别结果卡片 / 文字标记菜单：点它们只是操作卡片，不能当成"点空白清空识别"
+        if (IsPointInControl(ResultCard, point) || IsPointInControl(OcrMarkMenu, point))
+            return;
+
         // 第一次点击先清掉识别结果，不直接开始拉新框
         if (OcrLayer.IsVisible)
         {
@@ -2035,8 +2039,13 @@ public partial class CaptureWindow : Window
         if (!control.IsVisible)
             return false;
 
+        // 刚显示、还没跑过布局时 Bounds 是空的，用 DesiredSize 兜底
+        var size = control.Bounds.Size;
+        if (size.Width <= 0 || size.Height <= 0)
+            size = control.DesiredSize;
+
         return control.TranslatePoint(new Point(0, 0), this) is { } origin
-               && new Rect(origin, control.Bounds.Size).Contains(point);
+               && new Rect(origin, size).Contains(point);
     }
 
     /// <summary>
