@@ -15,6 +15,7 @@ using Path = Avalonia.Controls.Shapes.Path;
 using Sparrow.App.Services;
 using Sparrow.App.Settings;
 using Sparrow.Plugin.Sdk.Payloads;
+using SkiaSharp;
 
 namespace Sparrow.App.Views;
 
@@ -125,6 +126,12 @@ public partial class CaptureWindow : Window
 
     /// <summary>已经打上的文字标记（烧进导出图）。</summary>
     private readonly List<OcrTextMark> _ocrMarks = [];
+
+    /// <summary>译文图（PNG）；非空表示这次识别带了翻译。</summary>
+    private byte[]? _translatedPng;
+
+    /// <summary>当前是否在"显示原图"（默认显示译文）。</summary>
+    private bool _showOriginalView;
 
     private (int Line, int Char)? _ocrSelAnchor;
     private (int Line, int Char)? _ocrSelFocus;
@@ -5155,10 +5162,11 @@ public partial class CaptureWindow : Window
         }
     }
 
-    /// <summary>导出前的合成：先画标注，再按需切圆角。</summary>
+    /// <summary>导出前的合成：先画标注，再按需切圆角。译文视图下以译文图为底。</summary>
     private byte[] ComposeResult(byte[] png)
     {
-        var composed = AnnotationRenderer.Compose(png, _notes.Items, _scaling, _ocrMarks);
+        var basePng = _translatedPng is not null && !_showOriginalView ? _translatedPng : png;
+        var composed = AnnotationRenderer.Compose(basePng, _notes.Items, _scaling, _ocrMarks);
         return AnnotationRenderer.RoundCorners(composed, _cornerRadius * _scaling);
     }
 
@@ -6190,7 +6198,8 @@ public partial class CaptureWindow : Window
                 line.X / _scaling,
                 line.Y / _scaling,
                 line.Width / _scaling,
-                line.Height / _scaling);
+                line.Height / _scaling,
+                line.Translation);
             _ocrLines.Add((dipLine, OcrTextLayout.Split(dipLine)));
 
             OcrLayer.Children.Add(box);
@@ -6205,6 +6214,76 @@ public partial class CaptureWindow : Window
         InvalidateToolbarMetrics();
         ApplyDensityVisibility();
         ApplyOcrBoxMode();
+        UpdateTranslatedLayer();
+    }
+
+    /// <summary>
+    /// 有按行译文时生成"译文图"，盖在选区上；没有就什么都不做。
+    /// 底图用这次识别时的截图（`Result`），尺寸和导出一致。
+    /// </summary>
+    private void UpdateTranslatedLayer()
+    {
+        _translatedPng = null;
+        _showOriginalView = false;
+        TransLayer.Source = null;
+        TransLayer.IsVisible = false;
+        ShowOriginalButton.IsVisible = false;
+
+        var lines = _ocrLines
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.Line.Translation))
+            .Select(entry => new TranslatedImageRenderer.LineBox(
+                new Rect(entry.Line.X, entry.Line.Y, entry.Line.Width, entry.Line.Height),
+                entry.Line.Text,
+                entry.Line.Translation))
+            .ToList();
+
+        if (lines.Count == 0 || Result is not { Length: > 0 } cropPng)
+            return;
+
+        using var crop = SKBitmap.Decode(cropPng);
+        if (crop is null)
+            return;
+
+        var png = TranslatedImageRenderer.Render(crop, _scaling, lines);
+        if (png is null)
+            return;
+
+        _translatedPng = png;
+
+        using var stream = new MemoryStream(png);
+        TransLayer.Source = WriteableBitmap.Decode(stream);
+        TransLayer.Width = _selection.Width;
+        TransLayer.Height = _selection.Height;
+        Canvas.SetLeft(TransLayer, _selection.X);
+        Canvas.SetTop(TransLayer, _selection.Y);
+
+        ShowOriginalButton.IsVisible = true;
+        ApplyTranslationView();
+    }
+
+    /// <summary>按当前视图状态同步译文层 / 行框 / 按钮。</summary>
+    private void ApplyTranslationView()
+    {
+        var hasTranslation = _translatedPng is not null;
+
+        TransLayer.IsVisible = hasTranslation && !_showOriginalView;
+        OcrLayer.IsVisible = hasTranslation ? _showOriginalView : OcrLayer.IsVisible;
+
+        if (!hasTranslation)
+            return;
+
+        SetSelected(ShowOriginalButton, _showOriginalView);
+        ToolTip.SetTip(ShowOriginalButton, _showOriginalView ? "显示译文" : "显示原图");
+        OcrStatus.Text = _showOriginalView ? "原文视图" : "译文视图 · 点眼睛切回原文";
+    }
+
+    private void OnShowOriginalClick(object? sender, RoutedEventArgs e)
+    {
+        if (_translatedPng is null)
+            return;
+
+        _showOriginalView = !_showOriginalView;
+        ApplyTranslationView();
     }
 
     private void ShowOcrError(string message)
@@ -6223,6 +6302,11 @@ public partial class CaptureWindow : Window
         _ocrSelAnchor = null;
         _ocrSelFocus = null;
         _ocrDragging = false;
+        _translatedPng = null;
+        _showOriginalView = false;
+        TransLayer.Source = null;
+        TransLayer.IsVisible = false;
+        ShowOriginalButton.IsVisible = false;
         HideOcrMarkMenu();
         _hoveredOcrBox = null;
         OcrLayer.IsVisible = false;

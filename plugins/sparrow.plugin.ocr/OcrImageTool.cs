@@ -139,21 +139,28 @@ public sealed class OcrImageTool : ITool
 
                     var payload = OcrOutputComposer.Compose(workerOutput, layout);
 
-                    // 多图时标题带序号和尺寸，「这段字是哪张图」一眼能对上；
-                    // 选了翻译就把原文和译文对照着放进同一段
-                    var sectionText = await MaybeTranslateAsync(context, payload.Text, translateTo, cancellationToken);
+                    // 翻译：整段拼给文本区，同时按行回填给「译文叠层」用
+                    var translated = await TranslateTextAsync(context, payload.Text, translateTo, cancellationToken);
+                    var sectionText = translated is null
+                        ? payload.Text
+                        : $"{payload.Text.TrimEnd()}\n\n—— 译文（{translateTo}）——\n\n{translated}";
+
+                    var sectionLines = translated is null
+                        ? payload.Lines
+                        : AttachTranslations(payload.Lines, translated);
+
                     sections.Add(new TextSection
                     {
                         Title = FormatTitle(image, index),
                         SourceIndex = index,
                         Text = sectionText,
                         Status = TextSectionStatus.Ok,
-                        Lines = payload.Lines
+                        Lines = sectionLines
                     });
 
-                    // 行框只对单张有意义：截图叠加层用它做「点行复制」
+                    // 行框只对单张有意义：截图叠加层用它做「点行复制」和译文叠层
                     if (set.Images.Count == 1)
-                        lines.AddRange(payload.Lines);
+                        lines.AddRange(sectionLines);
                 }
                 catch (OcrWorkerException ex)
                 {
@@ -252,6 +259,34 @@ public sealed class OcrImageTool : ITool
     }
 
     /// <summary>
+    /// 把译文按行拆开回填到行框。行数对不上就不回填——
+    /// 宁可不叠译文，也不把句子叠到错的格子里。
+    /// </summary>
+    internal static IReadOnlyList<OcrTextLine> AttachTranslations(
+        IReadOnlyList<OcrTextLine> lines, string translated)
+    {
+        if (lines.Count == 0 || string.IsNullOrWhiteSpace(translated))
+            return lines;
+
+        var parts = translated
+            .Replace("\r\n", "\n")
+            .Replace('\r', '\n')
+            .Split('\n')
+            .Select(part => part.Trim())
+            .Where(part => part.Length > 0)
+            .ToList();
+
+        if (parts.Count != lines.Count)
+            return lines;
+
+        var result = new List<OcrTextLine>(lines.Count);
+        for (var index = 0; index < lines.Count; index++)
+            result.Add(lines[index] with { Translation = parts[index] });
+
+        return result;
+    }
+
+    /// <summary>
     /// 可选翻译：把识别结果送给模型，按「原文 / 译文」对照拼回去。
     /// 没配模型或翻译失败都返回原文——识别是主任务，不能因为附加的翻译丢掉结果。
     /// </summary>
@@ -261,11 +296,27 @@ public sealed class OcrImageTool : ITool
         string target,
         CancellationToken cancellationToken)
     {
+        var translated = await TranslateTextAsync(context, original, target, cancellationToken);
+        return translated is null
+            ? original
+            : $"{original.TrimEnd()}\n\n—— 译文（{target}）——\n\n{translated}";
+    }
+
+    /// <summary>
+    /// 只返回译文（不含原文和标题）。识别是主任务，翻译失败返回 null，调用方保留原文。
+    /// 单独抽出来是为了给行框回填 `Translation`（译文叠层要用）。
+    /// </summary>
+    private static async Task<string?> TranslateTextAsync(
+        ToolContext context,
+        string original,
+        string target,
+        CancellationToken cancellationToken)
+    {
         if (target == OcrParameters.TranslateNone || string.IsNullOrWhiteSpace(original))
-            return original;
+            return null;
 
         if (context.Host is not { } host)
-            return original;
+            return null;
 
         if (host.Ai.IsAvailable)
         {
@@ -284,7 +335,7 @@ public sealed class OcrImageTool : ITool
 
                 var translated = response.Text.Trim();
                 if (!string.IsNullOrEmpty(translated))
-                    return $"{original.TrimEnd()}\n\n—— 译文（{target}）——\n\n{translated}";
+                    return translated;
             }
             catch (AiException ex)
             {
@@ -312,7 +363,7 @@ public sealed class OcrImageTool : ITool
                     cancellationToken);
 
                 if (!string.IsNullOrWhiteSpace(translated))
-                    return $"{original.TrimEnd()}\n\n—— 译文（{target}）——\n\n{translated}";
+                    return translated;
             }
             catch (OperationCanceledException)
             {

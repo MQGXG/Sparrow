@@ -28,7 +28,9 @@ public sealed record OcrTextLine(
     double X,
     double Y,
     double Width,
-    double Height);
+    double Height,
+    /// <summary>该行的译文（可选）；为空表示没翻译或译文行数对不上。</summary>
+    string? Translation = null);
 
 /// <summary>一段结果的状态。</summary>
 public enum TextSectionStatus
