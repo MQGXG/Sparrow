@@ -1,7 +1,15 @@
 # OCR 文字层：参考实现分析与差距
 
-对照对象：snow-shot（`D:\mycodeHub\snow-shot`，已从 `%TEMP%` 移入仓库目录）。
-截图展示的是它的「识别结果 = 可选文字层」交互：拖选文字 → 浮动菜单 → 给选中的字加波浪线。
+对照对象：
+
+| 参考 | 位置 | 源码 |
+|---|---|---|
+| LumaShot | 置顶贴图窗口（pin） | `D:\mycodeHub\LumaShot\src\pin\selection_tools.*`、`src/ocr/text.h` |
+| snow-shot | 截图识别窗口 | `D:\mycodeHub\snow-shot\snow_shot` |
+
+**两个参考都做了同一件事**：OCR 文字可以被拖选，选中后弹一个浮动菜单，
+给选中的字加荧光笔 / 波浪线 / 下划线 / 删除线，**并且这些标记会烧进最终复制/保存的图片**。
+差别在深度和位置，不在效果。
 
 本文只谈**交互层**，不谈 OCR 引擎本身（引擎见 `ocr-engine-comparison.md`）。
 
@@ -90,6 +98,69 @@ struct ScreenshotTextAnnotationStyle { QColor color = #F5222D; qreal width = 2.0
 文字是**画在图上**的（`prepareForRendering()` 按 quad 拟合字号），
 标注也画在文字下面，所以导出时波浪线正好压在字的下沿，而不是浮在空白处。
 
+### 1.6 LumaShot：同一效果的轻量版
+
+LumaShot 走的是另一条路，代码量小得多（`pin/selection_tools.h` 只有 17 行声明）。
+
+**行模型**（`ocr/text.h`）比 snow-shot 更细：
+
+```cpp
+struct Glyph { std::wstring text; Box box; float confidence; };   // ← 逐字框
+struct Line  { std::vector<Glyph> glyphs; Box box; std::array<Point,4> quad; };
+struct Position { size_t line, glyph; };                          // 字形边界，不是 UTF-16 码元
+struct Selection { Position anchor, caret; };
+```
+
+它从 CTC 解码（`DecodeCtc`）里直接拿到**每个字的框**，所以选择粒度是「字」，不是「词」。
+
+**选择与菜单**：
+
+```cpp
+std::vector<Box> SelectionBoxes(const ocr::Text&, ocr::Selection);  // 每行合并成一个 box
+SelectionHandles TextHandles(...);   // {左上角上移 5px, 右下角下移 5px}
+int HitTextHandle(...);              // 命中半径 10px
+SelectionBar PlaceSelectionBar(...); // 菜单 400×80（按 scale 缩），在选区下方 18px，越界翻上方
+```
+
+**四种标记 + 烧进图片**：
+
+```cpp
+enum class TextDecoration { Highlight, Wave, Underline, Strike };
+struct SelectionMark { TextDecoration kind; std::vector<Box> boxes; };
+Frame FlattenTextMarks(const Frame&, const std::vector<SelectionMark>&);  // 复制/保存时调用
+```
+
+具体像素规格（`DrawTextMarks`）：
+
+| 标记 | 颜色 | 画法 |
+|---|---|---|
+| 荧光笔 | `#FFDF42` α0.4 | 填充 box |
+| 波浪线 | `#F43F67` | 沿底边画正弦折线，`y + sin(x*0.7)*stroke` |
+| 下划线 | `#183451` | 底边 -1px 直线 |
+| 删除线 | `#183451` | 中线直线 |
+
+线宽 = `clamp(行高/14, 1.5, 3)`，跟着字号自动变。
+
+**位置差别**：LumaShot 的这套交互在**置顶贴图窗口**（pin）里，不在截图选区上；
+snow-shot 在**截图识别窗口**里。Sparrow 要放哪边，见第五节。
+
+### 1.7 两者对比
+
+| 维度 | LumaShot | snow-shot |
+|---|---|---|
+| 位置 | pin 窗口 | 截图识别窗口 |
+| 位置粒度 | **逐字框**（CTC） | 词框 + quad |
+| 选择模型 | `anchor/caret (line, glyph)` | `anchor/focus (line, char)` + 框选整行 |
+| 菜单 | 400×80 定长条，5 键 | 自适应工具条，5 键 |
+| 手柄 | 两个点（左上 -5 / 右下 +5） | 两个点 |
+| 标记存储 | `vector<SelectionMark>` + undo 栈 | run 文档 + fingerprint + 序列化 |
+| 默认色 | 荧光 `#FFDF42`／波 `#F43F67`／线 `#183451` | 统一 `#F5222D`，可配色 |
+| 落地方式 | `FlattenTextMarks` 烧进图 | 导出时按 run 绘制 |
+| 翻译叠层 | 有（`selection_translator`） | 有 |
+
+对 Sparrow 来说，**LumaShot 的数值可以直接抄**（颜色、线宽公式、手柄偏移、菜单尺寸）；
+snow-shot 的**文档模型**（fingerprint / toggle / 序列化）值得借鉴，但不必一次做全。
+
 ---
 
 ## 二、Sparrow 现在是什么
@@ -143,11 +214,12 @@ struct ScreenshotTextAnnotationStyle { QColor color = #F5222D; qreal width = 2.0
 
 ### P1 · 行模型升级（不动 UI）
 
-- `OcrTextLine` 增加可选字段：`Words`（每个词的 X/Y/W/H）+ `Direction`（横/竖）。
-- 插件侧：PaddleOCR 本来就返回词框，只是现在被丢掉了；把它们透传出来。
-- 兼容：老插件不返回 `Words` 时，按行宽 / 字符数近似。
+- `OcrTextLine` 增加可选字段：`Glyphs`（每个字的 X/Y/W/H）+ `Direction`（横/竖）。
+  **目标是逐字框**——LumaShot 的 CTC 解码本来就能出，snow-shot 至少能出词框。
+- 插件侧：PaddleOCR 的结果里如果有字级/词级框，直接透传；只有行框时退回近似。
+- 兼容：老插件不返回字框时，按「行宽 ÷ 字符数」近似（CJK 1em、西文 0.55em）。
 
-**验收**：同一张图，词框数量和 OCR 调试输出一致；无词框时不崩。
+**验收**：同一张图，字框数量与 OCR 调试输出一致；无字框时不崩。
 
 ### P2 · 文字层渲染（可选，但强烈建议先做）
 
