@@ -12,7 +12,7 @@ namespace Sparrow.App.Services;
 /// <summary>
 /// Windows Graphics Capture（WGC）屏幕区域捕获。
 ///
-/// 只在「目标矩形完整落在一个显示器里」时使用；跨屏 / 不支持的系统返回 null，
+/// 跨多个显示器时逐屏抓取再拼接（每屏一个 capture item）；不支持的系统返回 null，
 /// 由 <see cref="ScreenCapture"/> 回退 GDI。WGC 走桌面合成器，能抓到 GDI
 /// 抓不到的硬件加速内容和部分受保护窗口。
 ///
@@ -32,7 +32,6 @@ internal static class WgcCapture
 
     private const int D3dDriverTypeHardware = 1;
     private const int D3d11SdkVersion = 7;
-    private const uint MonitorDefaultToNearest = 2;
 
     /// <summary>抓一帧最多等多久（毫秒）。</summary>
     private const int FrameTimeoutMilliseconds = 1200;
@@ -59,21 +58,54 @@ internal static class WgcCapture
     }
 
     /// <summary>
-    /// 捕获屏幕物理像素区域（BGRA，top-down）。失败 / 跨屏返回 null。
+    /// 捕获屏幕物理像素区域（BGRA，top-down）。
+    /// 跨多个显示器时逐屏抓取再拼接；任一屏失败返回 null（由调用方回退 GDI）。
     /// </summary>
     public static byte[]? CaptureRegion(int x, int y, int width, int height, bool includeCursor = false)
     {
         if (width <= 0 || height <= 0 || !IsSupported)
             return null;
 
-        if (!TryGetSingleMonitor(
-                new PixelRect(x, y, width, height),
-                out var monitor,
-                out var monitorRect))
-        {
+        var requested = new PixelRect(x, y, width, height);
+        var monitors = IntersectingMonitors(requested);
+
+        if (monitors.Count == 0)
             return null;
+
+        // 单屏且完整覆盖：直接裁出请求区域
+        if (monitors.Count == 1 && Contains(monitors[0].Rect, requested))
+        {
+            return CaptureMonitorRegion(
+                monitors[0].Handle, monitors[0].Rect, requested, includeCursor);
         }
 
+        // 跨屏：逐屏抓取，按交集拼回请求坐标；没被显示器覆盖的空隙保持黑色（和 GDI 一致）
+        var output = new byte[width * 4 * height];
+
+        foreach (var monitor in monitors)
+        {
+            if (Intersect(monitor.Rect, requested) is not { } region)
+                continue;
+
+            var patch = CaptureMonitorRegion(
+                monitor.Handle, monitor.Rect, region, includeCursor);
+
+            if (patch is null)
+                return null;
+
+            Blit(patch, region, output, width, x, y);
+        }
+
+        return output;
+    }
+
+    /// <summary>抓一个显示器的一帧，裁出 <paramref name="region"/>（屏幕绝对坐标）。</summary>
+    private static byte[]? CaptureMonitorRegion(
+        IntPtr monitor,
+        PixelRect monitorRect,
+        PixelRect region,
+        bool includeCursor)
+    {
         if (SharedDevice.Value is not { } device)
             return null;
 
@@ -97,21 +129,19 @@ internal static class WgcCapture
             session.IsCursorCaptureEnabled = includeCursor;
             session.StartCapture();
 
+            var crop = new PixelRect(
+                region.X - monitorRect.X,
+                region.Y - monitorRect.Y,
+                region.Width,
+                region.Height);
+
             var deadline = Environment.TickCount64 + FrameTimeoutMilliseconds;
 
             while (Environment.TickCount64 < deadline)
             {
                 using var frame = pool.TryGetNextFrame();
                 if (frame is not null)
-                {
-                    return Extract(
-                        frame,
-                        new PixelRect(
-                            x - monitorRect.X,
-                            y - monitorRect.Y,
-                            width,
-                            height));
-                }
+                    return Extract(frame, crop);
 
                 Thread.Sleep(8);
             }
@@ -126,6 +156,30 @@ internal static class WgcCapture
         {
             session?.Dispose();
             pool?.Dispose();
+        }
+    }
+
+    /// <summary>把一块区域拷到整张输出图的对应位置。</summary>
+    private static void Blit(
+        byte[] patch,
+        PixelRect region,
+        byte[] output,
+        int outputWidth,
+        int originX,
+        int originY)
+    {
+        var destX = region.X - originX;
+        var destY = region.Y - originY;
+        var rowBytes = region.Width * 4;
+
+        for (var row = 0; row < region.Height; row++)
+        {
+            Buffer.BlockCopy(
+                patch,
+                row * rowBytes,
+                output,
+                ((destY + row) * outputWidth + destX) * 4,
+                rowBytes);
         }
     }
 
@@ -296,43 +350,52 @@ internal static class WgcCapture
         }
     }
 
-    /// <summary>目标矩形必须完整落在一个显示器里；跨屏交给 GDI。</summary>
-    private static bool TryGetSingleMonitor(
-        PixelRect rect,
-        out IntPtr monitor,
-        out PixelRect monitorRect)
+    /// <summary>请求区域相交的所有显示器（物理像素）。</summary>
+    private static List<(IntPtr Handle, PixelRect Rect)> IntersectingMonitors(PixelRect rect)
     {
-        monitor = IntPtr.Zero;
-        monitorRect = default;
+        var monitors = new List<(IntPtr, PixelRect)>();
 
-        var native = new RECT
+        try
         {
-            Left = rect.X,
-            Top = rect.Y,
-            Right = rect.X + rect.Width,
-            Bottom = rect.Y + rect.Height
-        };
+            EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (IntPtr monitor, IntPtr hdc, ref RECT native, IntPtr data) =>
+            {
+                var bounds = new PixelRect(
+                    native.Left,
+                    native.Top,
+                    native.Right - native.Left,
+                    native.Bottom - native.Top);
 
-        monitor = MonitorFromRect(ref native, MonitorDefaultToNearest);
-        if (monitor == IntPtr.Zero)
-            return false;
+                if (Intersect(bounds, rect) is not null)
+                    monitors.Add((monitor, bounds));
 
-        var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+                return true;
+            }, IntPtr.Zero);
+        }
+        catch
+        {
+            monitors.Clear();
+        }
 
-        if (!GetMonitorInfo(monitor, ref info))
-            return false;
-
-        monitorRect = new PixelRect(
-            info.rcMonitor.Left,
-            info.rcMonitor.Top,
-            info.rcMonitor.Right - info.rcMonitor.Left,
-            info.rcMonitor.Bottom - info.rcMonitor.Top);
-
-        return rect.X >= monitorRect.X
-               && rect.Y >= monitorRect.Y
-               && rect.X + rect.Width <= monitorRect.X + monitorRect.Width
-               && rect.Y + rect.Height <= monitorRect.Y + monitorRect.Height;
+        return monitors;
     }
+
+    private static PixelRect? Intersect(PixelRect left, PixelRect right)
+    {
+        var x = Math.Max(left.X, right.X);
+        var y = Math.Max(left.Y, right.Y);
+        var rightEdge = Math.Min(left.X + left.Width, right.X + right.Width);
+        var bottomEdge = Math.Min(left.Y + left.Height, right.Y + right.Height);
+
+        return rightEdge <= x || bottomEdge <= y
+            ? null
+            : new PixelRect(x, y, rightEdge - x, bottomEdge - y);
+    }
+
+    private static bool Contains(PixelRect outer, PixelRect inner) =>
+        inner.X >= outer.X
+        && inner.Y >= outer.Y
+        && inner.X + inner.Width <= outer.X + outer.Width
+        && inner.Y + inner.Height <= outer.Y + outer.Height;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT
@@ -341,15 +404,6 @@ internal static class WgcCapture
         public int Top;
         public int Right;
         public int Bottom;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MONITORINFO
-    {
-        public int cbSize;
-        public RECT rcMonitor;
-        public RECT rcWork;
-        public uint dwFlags;
     }
 
     [ComImport]
@@ -400,10 +454,11 @@ internal static class WgcCapture
     private static extern int CreateDirect3D11DeviceFromDXGIDevice(
         IntPtr dxgiDevice, out IntPtr graphicsDevice);
 
-    [DllImport("user32.dll")]
-    private static extern IntPtr MonitorFromRect(ref RECT rect, uint flags);
+    private delegate bool MonitorEnumProc(
+        IntPtr monitor, IntPtr hdc, ref RECT rect, IntPtr data);
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFO info);
+    private static extern bool EnumDisplayMonitors(
+        IntPtr hdc, IntPtr clip, MonitorEnumProc callback, IntPtr data);
 }

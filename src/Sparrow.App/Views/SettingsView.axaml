@@ -367,7 +367,7 @@
                            FontSize="13"
                            FontWeight="SemiBold"
                            Foreground="{StaticResource TextPrimaryBrush}" />
-                <TextBlock Text="取帧方式；自动 = 平时 GDI、HDR 显示器用 WGC。WGC 只处理单屏区域，跨屏自动走 GDI"
+                <TextBlock Text="取帧方式；自动 = 平时 GDI、HDR 显示器用 WGC。WGC 跨屏时逐屏抓取再拼接"
                            FontSize="11"
                            MaxWidth="520"
                            TextWrapping="Wrap"
