@@ -82,6 +82,52 @@ internal static class OcrParameters
         Hint = "表格：Tab 分隔，可直接粘贴进 Excel；按位置：空格还原排版"
     };
 
+    /// <summary>识别文本的换行整理；只影响复制出去的文本，不改行框。</summary>
+    public static ToolParameter Formatting { get; } = new()
+    {
+        Key = OcrTextTransform.FormattingKey,
+        Label = "格式",
+        Kind = ParameterKind.Choice,
+        Choices =
+        [
+            OcrTextTransform.FormatNone,
+            OcrTextTransform.FormatKeep,
+            OcrTextTransform.FormatRemove,
+            OcrTextTransform.FormatSmart
+        ],
+        ChoiceLabels = new Dictionary<string, string>
+        {
+            [OcrTextTransform.FormatNone] = "不处理",
+            [OcrTextTransform.FormatKeep] = "保留换行",
+            [OcrTextTransform.FormatRemove] = "去掉换行",
+            [OcrTextTransform.FormatSmart] = "智能排版"
+        },
+        Default = OcrTextTransform.FormatKeep,
+        Hint = "智能排版：保留句末换行，把被硬折行的句子接回去"
+    };
+
+    /// <summary>标点半角 / 全角统一；同样只影响复制出去的文本。</summary>
+    public static ToolParameter Punctuation { get; } = new()
+    {
+        Key = OcrTextTransform.PunctuationKey,
+        Label = "标点",
+        Kind = ParameterKind.Choice,
+        Choices =
+        [
+            OcrTextTransform.PunctuationNone,
+            OcrTextTransform.PunctuationHalf,
+            OcrTextTransform.PunctuationFull
+        ],
+        ChoiceLabels = new Dictionary<string, string>
+        {
+            [OcrTextTransform.PunctuationNone] = "不处理",
+            [OcrTextTransform.PunctuationHalf] = "半角",
+            [OcrTextTransform.PunctuationFull] = "全角"
+        },
+        Default = OcrTextTransform.PunctuationNone,
+        Hint = "把逗号、句号、括号等统一成半角或全角"
+    };
+
     /// <summary>
     /// 识别后可选翻译：结果按「原文 / 译文」对照输出，方便核对。
     /// 需要先在设置里配好模型；没配时静默跳过，识别结果照常返回。
@@ -141,6 +187,25 @@ internal static class OcrParameters
             LayoutPosition => OcrLayoutMode.Position,
             LayoutTable => OcrLayoutMode.Table,
             _ => OcrLayoutMode.Line
+        };
+
+    /// <summary>格式参数 → 取值；未知值回退「保留换行」。</summary>
+    public static string ResolveFormatting(ToolContext context) =>
+        context.GetParameter(OcrTextTransform.FormattingKey, OcrTextTransform.FormatKeep) switch
+        {
+            OcrTextTransform.FormatNone => OcrTextTransform.FormatNone,
+            OcrTextTransform.FormatRemove => OcrTextTransform.FormatRemove,
+            OcrTextTransform.FormatSmart => OcrTextTransform.FormatSmart,
+            _ => OcrTextTransform.FormatKeep
+        };
+
+    /// <summary>标点参数 → 取值；未知值回退「不处理」。</summary>
+    public static string ResolvePunctuation(ToolContext context) =>
+        context.GetParameter(OcrTextTransform.PunctuationKey, OcrTextTransform.PunctuationNone) switch
+        {
+            OcrTextTransform.PunctuationHalf => OcrTextTransform.PunctuationHalf,
+            OcrTextTransform.PunctuationFull => OcrTextTransform.PunctuationFull,
+            _ => OcrTextTransform.PunctuationNone
         };
 
     /// <summary>worker 固定在插件目录的 worker 子目录下。</summary>

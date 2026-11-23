@@ -659,6 +659,75 @@ public sealed class OcrImageToolTests
         text.ShouldContain("- b.png");
     }
 
+    [Fact]
+    public void 翻译请求_每行带编号()
+    {
+        OcrImageTool.BuildTranslationRequest(["订单号", "ORD-001"])
+            .ShouldBe("1|订单号\n2|ORD-001");
+    }
+
+    [Fact]
+    public void 译文解析_按编号回填且允许缺号()
+    {
+        var parsed = OcrImageTool.ParseTranslationResponse(
+            "1|Order No.\n3|Amount", 4);
+
+        parsed.ShouldNotBeNull();
+        parsed![0].ShouldBe("Order No.");
+        parsed[1].ShouldBeNull();
+        parsed[2].ShouldBe("Amount");
+        parsed[3].ShouldBeNull();
+    }
+
+    [Fact]
+    public void 译文解析_忽略编号时按位置回填()
+    {
+        var parsed = OcrImageTool.ParseTranslationResponse("Order No.\nCustomer", 2);
+
+        parsed.ShouldNotBeNull();
+        parsed![0].ShouldBe("Order No.");
+        parsed[1].ShouldBe("Customer");
+    }
+
+    [Fact]
+    public void 译文解析_行数对不上且无编号时返回空()
+    {
+        OcrImageTool.ParseTranslationResponse("只有一行", 3).ShouldBeNull();
+    }
+
+    [Fact]
+    public void 译文回填_缺号的行保持原文()
+    {
+        var lines = new List<OcrTextLine>
+        {
+            new("订单号", 0, 0, 80, 20),
+            new("ORD-001", 0, 40, 80, 20)
+        };
+
+        var result = OcrImageTool.AttachTranslations(lines, ["Order No.", null]);
+
+        result.Count.ShouldBe(2);
+        result[0].Translation.ShouldBe("Order No.");
+
+        // 第二行没译文：保持原样，不画任何东西
+        result[1].Translation.ShouldBeNull();
+    }
+
+    [Fact]
+    public void 译文回填_原样返回的格子不重画()
+    {
+        var lines = new List<OcrTextLine>
+        {
+            new("ORD-001", 0, 0, 80, 20),
+            new("张三", 0, 40, 80, 20)
+        };
+
+        var result = OcrImageTool.AttachTranslations(lines, ["ORD-001", "Zhang San"]);
+
+        result[0].Translation.ShouldBeNull();     // 编号原样返回
+        result[1].Translation.ShouldBe("Zhang San");
+    }
+
     /// <summary>
     /// 真实 IPC：宿主 → 子进程 → 宿主。
     /// 依赖 OCR 插件构建目录里的 worker，路径从仓库根算，不依赖测试输出目录。

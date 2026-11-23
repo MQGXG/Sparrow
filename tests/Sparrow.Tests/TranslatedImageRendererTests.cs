@@ -59,6 +59,34 @@ public class TranslatedImageRendererTests
         HasInk(decoded, 70, 5, 119, 59).ShouldBeFalse();
     }
 
+    [Fact]
+    public void 对比图_左右并排且按缝分隔()
+    {
+        using var left = WhiteBitmap(40, 20);
+        using (var c = new SKCanvas(left)) c.Clear(SKColors.Red);
+        using var right = WhiteBitmap(30, 20);
+        using (var c = new SKCanvas(right)) c.Clear(SKColors.Blue);
+
+        var png = TranslatedImageRenderer.BuildCompare(left, right, gap: 10);
+
+        png.ShouldNotBeNull();
+        using var decoded = SKBitmap.Decode(png);
+        decoded.Width.ShouldBe(80);   // 40 + 10 + 30
+        decoded.Height.ShouldBe(20);
+
+        ((int)decoded.GetPixel(5, 5).Red).ShouldBeGreaterThan(200);     // 左：原文
+        ((int)decoded.GetPixel(55, 5).Blue).ShouldBeGreaterThan(200);   // 右：译文（左 40 + 缝 10 之后）
+    }
+
+    [Fact]
+    public void 从结果文本里取出译文段()
+    {
+        var text = "原文第一行\n原文第二行\n\n—— 译文（English）——\n\nTranslated";
+
+        CaptureWindow.ExtractTranslatedText(text).ShouldBe("Translated");
+        CaptureWindow.ExtractTranslatedText("只有原文").ShouldBeNull();
+    }
+
     private static SKBitmap WhiteBitmap(int width, int height)
     {
         var bitmap = new SKBitmap(width, height);

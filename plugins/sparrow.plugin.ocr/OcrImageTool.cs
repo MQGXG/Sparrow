@@ -47,6 +47,8 @@ public sealed class OcrImageTool : ITool
         [
             OcrParameters.Language,
             OcrParameters.Layout,
+            OcrParameters.Formatting,
+            OcrParameters.Punctuation,
             OcrParameters.Translate,
             OcrParameters.Output,
             OcrParameters.Reuse
@@ -65,6 +67,8 @@ public sealed class OcrImageTool : ITool
             return ToolResult.Failed("宿主未注入能力，无法定位 OCR worker");
 
         var language = context.GetParameter(OcrParameters.LanguageKey, "ch");
+        var formatting = OcrParameters.ResolveFormatting(context);
+        var punctuation = OcrParameters.ResolvePunctuation(context);
         var layout = OcrParameters.ResolveLayout(context);
         var translateTo = context.GetParameter(OcrParameters.TranslateKey, OcrParameters.TranslateNone);
         var output = context.GetParameter(OcrParameters.OutputKey, OcrParameters.OutputText);
@@ -137,17 +141,29 @@ public sealed class OcrImageTool : ITool
                         continue;
                     }
 
-                    var payload = OcrOutputComposer.Compose(workerOutput, layout);
+                    var payload = OcrOutputComposer.Compose(workerOutput, layout, formatting, punctuation);
 
-                    // 翻译：整段拼给文本区，同时按行回填给「译文叠层」用
-                    var translated = await TranslateTextAsync(context, payload.Text, translateTo, cancellationToken);
-                    var sectionText = translated is null
-                        ? payload.Text
-                        : $"{payload.Text.TrimEnd()}\n\n—— 译文（{translateTo}）——\n\n{translated}";
+                    // 翻译：按「行/格」送给模型并带上编号，回填时按编号对齐。
+                    // 表格时一格一行，模型不会把整行重排成「字段: 值」；
+                    // 老插件/无 region 时退回整段文本，当作一行处理。
+                    var sourceLines = payload.Lines.Count > 0
+                        ? payload.Lines.Select(line => line.Text).ToList()
+                        : [payload.Text];
 
-                    var sectionLines = translated is null
+                    var outcome = await TranslateLinesAsync(
+                        context, sourceLines, translateTo, cancellationToken);
+
+                    var sectionText = outcome.Lines is null
+                        ? outcome.Unavailable
+                            ? $"{payload.Text.TrimEnd()}\n\n—— 未翻译：没有可用的翻译引擎。" +
+                              "可在「设置 › 模型」启用在线模型，或下载一个离线模型——"
+                            : payload.Text
+                        : $"{payload.Text.TrimEnd()}\n\n—— 译文（{translateTo}）——\n\n" +
+                          string.Join("\n", sourceLines.Select((source, i) => outcome.Lines[i] ?? source));
+
+                    var sectionLines = outcome.Lines is null
                         ? payload.Lines
-                        : AttachTranslations(payload.Lines, translated);
+                        : AttachTranslations(payload.Lines, outcome.Lines);
 
                     sections.Add(new TextSection
                     {
@@ -259,64 +275,115 @@ public sealed class OcrImageTool : ITool
     }
 
     /// <summary>
-    /// 把译文按行拆开回填到行框。行数对不上就不回填——
-    /// 宁可不叠译文，也不把句子叠到错的格子里。
+    /// 编号协议：把每行写成「序号|原文」。
+    /// 行数一旦对不上，按位置回填就会错位；编号把「对不上」变成「某行没译」。
     /// </summary>
-    internal static IReadOnlyList<OcrTextLine> AttachTranslations(
-        IReadOnlyList<OcrTextLine> lines, string translated)
-    {
-        if (lines.Count == 0 || string.IsNullOrWhiteSpace(translated))
-            return lines;
+    internal static string BuildTranslationRequest(IReadOnlyList<string> lines) =>
+        string.Join("\n", lines.Select((line, index) => $"{index + 1}|{line}"));
 
-        var parts = translated
-            .Replace("\r\n", "\n")
-            .Replace('\r', '\n')
-            .Split('\n')
+    /// <summary>
+    /// 解析编号译文：返回与输入等长的数组，缺号/空值为 null。
+    /// 模型忽略编号时，行数正好对得上就退回按位置回填（兼容老模型）。
+    /// </summary>
+    internal static IReadOnlyList<string?>? ParseTranslationResponse(string? response, int count)
+    {
+        if (count <= 0 || string.IsNullOrWhiteSpace(response))
+            return null;
+
+        var result = new string?[count];
+        var matched = 0;
+
+        foreach (var raw in SplitLines(response))
+        {
+            var line = raw.Trim();
+            var separator = line.IndexOfAny(['|', '｜']);
+            if (separator <= 0)
+                continue;
+
+            if (!int.TryParse(line[..separator].Trim(), out var number))
+                continue;
+
+            if (number < 1 || number > count)
+                continue;
+
+            var value = line[(separator + 1)..].Trim();
+            if (value.Length == 0)
+                continue;
+
+            result[number - 1] = value;
+            matched++;
+        }
+
+        if (matched > 0)
+            return result;
+
+        var parts = SplitLines(response)
             .Select(part => part.Trim())
             .Where(part => part.Length > 0)
             .ToList();
 
-        if (parts.Count != lines.Count)
+        return parts.Count == count ? parts : null;
+    }
+
+    /// <summary>
+    /// 把译文按编号回填到行框。缺号的行保持原文（不画译文）；
+    /// 原样返回的格子（数字、编号）也不重画，省一次遮原文。
+    /// </summary>
+    internal static IReadOnlyList<OcrTextLine> AttachTranslations(
+        IReadOnlyList<OcrTextLine> lines, IReadOnlyList<string?> translations)
+    {
+        if (lines.Count == 0 || translations.Count == 0)
             return lines;
 
         var result = new List<OcrTextLine>(lines.Count);
+        var changed = false;
+
         for (var index = 0; index < lines.Count; index++)
-            result.Add(lines[index] with { Translation = parts[index] });
+        {
+            var translation = index < translations.Count ? translations[index] : null;
 
-        return result;
+            if (string.IsNullOrWhiteSpace(translation)
+                || string.Equals(
+                    translation.Trim(), lines[index].Text.Trim(), StringComparison.Ordinal))
+            {
+                result.Add(lines[index]);
+                continue;
+            }
+
+            result.Add(lines[index] with { Translation = translation.Trim() });
+            changed = true;
+        }
+
+        return changed ? result : lines;
     }
 
-    /// <summary>
-    /// 可选翻译：把识别结果送给模型，按「原文 / 译文」对照拼回去。
-    /// 没配模型或翻译失败都返回原文——识别是主任务，不能因为附加的翻译丢掉结果。
-    /// </summary>
-    private static async Task<string> MaybeTranslateAsync(
-        ToolContext context,
-        string original,
-        string target,
-        CancellationToken cancellationToken)
-    {
-        var translated = await TranslateTextAsync(context, original, target, cancellationToken);
-        return translated is null
-            ? original
-            : $"{original.TrimEnd()}\n\n—— 译文（{target}）——\n\n{translated}";
-    }
+    private static List<string> SplitLines(string text) =>
+        text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n').ToList();
+
+    /// <summary>翻译结果：<see cref="Lines"/> 为空表示没译成；<see cref="Unavailable"/> 表示没有可用引擎。</summary>
+    private readonly record struct TranslationOutcome(
+        IReadOnlyList<string?>? Lines,
+        bool Unavailable);
 
     /// <summary>
-    /// 只返回译文（不含原文和标题）。识别是主任务，翻译失败返回 null，调用方保留原文。
+    /// 逐行翻译：编号发送、按编号解析。识别是主任务，翻译失败返回空结果，调用方保留原文。
     /// 单独抽出来是为了给行框回填 `Translation`（译文叠层要用）。
     /// </summary>
-    private static async Task<string?> TranslateTextAsync(
+    private static async Task<TranslationOutcome> TranslateLinesAsync(
         ToolContext context,
-        string original,
+        IReadOnlyList<string> lines,
         string target,
         CancellationToken cancellationToken)
     {
-        if (target == OcrParameters.TranslateNone || string.IsNullOrWhiteSpace(original))
-            return null;
+        if (target == OcrParameters.TranslateNone || lines.Count == 0)
+            return new TranslationOutcome(null, false);
+
+        var original = BuildTranslationRequest(lines);
+        if (string.IsNullOrWhiteSpace(original))
+            return new TranslationOutcome(null, false);
 
         if (context.Host is not { } host)
-            return null;
+            return new TranslationOutcome(null, true);
 
         if (host.Ai.IsAvailable)
         {
@@ -326,16 +393,17 @@ public sealed class OcrImageTool : ITool
                     new AiRequest
                     {
                         System =
-                            $"把用户给出的文字翻译成{target}。只输出译文，不要解释、不要加引号，保留原有分段。",
+                            $"把用户给出的编号文本翻译成{target}。输入每行是「编号|原文」，"
+                            + "输出必须保持编号：每行「编号|译文」，编号不能增删、不能合并行、不能加解释。"
+                            + "数字、编号、单位、专有名词原样保留；不需要翻译的内容原样返回。",
                         Messages = [new AiMessage(AiRole.User, original)],
                         Temperature = 0.2,
                         MaxTokens = Math.Clamp(original.Length * 2, 512, 4096)
                     },
                     cancellationToken);
 
-                var translated = response.Text.Trim();
-                if (!string.IsNullOrEmpty(translated))
-                    return translated;
+                if (ParseTranslationResponse(response.Text, lines.Count) is { } parsed)
+                    return new TranslationOutcome(parsed, false);
             }
             catch (AiException ex)
             {
@@ -362,8 +430,8 @@ public sealed class OcrImageTool : ITool
                     },
                     cancellationToken);
 
-                if (!string.IsNullOrWhiteSpace(translated))
-                    return translated;
+                if (ParseTranslationResponse(translated, lines.Count) is { } parsed)
+                    return new TranslationOutcome(parsed, false);
             }
             catch (OperationCanceledException)
             {
@@ -375,11 +443,14 @@ public sealed class OcrImageTool : ITool
             }
         }
 
-        // 用户明确要求了翻译却没有可用的引擎：不能静默返回原文，
-        // 否则会以为识别结果本来就是目标语言。
-        return original.TrimEnd()
-            + "\n\n—— 未翻译：没有可用的翻译引擎。"
-            + "可在「设置 › 模型」启用在线模型，或下载一个离线模型——";
+        // AI 通了但没解析出译文，也按「没译成」处理；没有引擎时额外标记，界面可提示去配置
+        var available = host.Ai.IsAvailable
+            || (modelId is not null && host.LocalTranslation.IsAvailable(modelId));
+
+        if (!available)
+            host.Logger.LogWarning("OCR 翻译跳过：没有可用的翻译引擎");
+
+        return new TranslationOutcome(null, !available);
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Sparrow.Plugin.Sdk;
 using Sparrow.Plugin.Sdk.Payloads;
 
 namespace Sparrow.Plugin.Ocr;
@@ -16,7 +17,11 @@ public static class OcrOutputComposer
         PropertyNameCaseInsensitive = true
     };
 
-    public static OcrResultPayload Compose(string output, OcrLayoutMode mode)
+    public static OcrResultPayload Compose(
+        string output,
+        OcrLayoutMode mode,
+        string? formatting = null,
+        string? punctuation = null)
     {
         var trimmed = output.Trim();
 
@@ -29,12 +34,21 @@ public static class OcrOutputComposer
             if (payload is null)
                 return new OcrResultPayload(trimmed, Array.Empty<OcrTextLine>());
 
-            var lines = OcrTextComposer.ComposeLines(payload.Regions);
+            // 表格形状时保留 region 粒度（一格一行），否则合并成阅读行。
+            // 粒度决定三件事：点选复制一行的范围、字符选择的锚点、译文落点。
+            var lines = OcrTextComposer.LooksLikeTable(payload.Regions)
+                ? OcrTextComposer.ComposeRegionLines(payload.Regions)
+                : OcrTextComposer.ComposeLines(payload.Regions);
+
+            // 文本区仍按整行合成：复制出去的是「一行表格」而不是竖排的单元格
             var text = OcrTextComposer.ComposeText(payload.Regions, mode, payload.Text);
 
             // 坐标拼不出来时回退到 worker 的原始全文
             if (string.IsNullOrWhiteSpace(text))
                 text = payload.Text;
+
+            // 格式 / 标点只改「复制出去的文本」，行框保持原样
+            text = OcrTextTransform.Apply(text, formatting, punctuation);
 
             return new OcrResultPayload(text, lines);
         }

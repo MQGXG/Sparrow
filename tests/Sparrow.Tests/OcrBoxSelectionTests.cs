@@ -163,29 +163,6 @@ public class OcrBoxSelectionTests
         ((int)decoded.GetPixel(90, 90).Red).ShouldBeGreaterThan(200);
     }
 
-    [AvaloniaFact]
-    public void 点击识别结果卡片_不会清空识别()
-    {
-        var window = CreateWithOcrLines();
-        window.ShowResultCard("识别结果示意\n—— 译文 ——\nTranslation");
-
-        window.ResultCard.IsVisible.ShouldBeTrue();
-        window.UpdateLayout();
-
-        var center = window.ResultCard.TranslatePoint(
-            new Point(window.ResultCard.Bounds.Width / 2, window.ResultCard.Bounds.Height / 2),
-            window)!.Value;
-
-        window.MouseDown(center, MouseButton.Left);
-        window.MouseUp(center, MouseButton.Left);
-
-        // 卡片和识别层都还在：点卡片只是操作卡片
-        window.ResultCard.IsVisible.ShouldBeTrue();
-        window.OcrLayer.IsVisible.ShouldBeTrue();
-
-        window.Close();
-    }
-
     private static byte[] CreateWhitePng(int width, int height)
     {
         using var bitmap = new SKBitmap(width, height);

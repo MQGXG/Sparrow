@@ -134,6 +134,70 @@ public static class OcrTextComposer
         }).ToList();
     }
 
+    /// <summary>
+    /// 区域级行：一个 region 一行，不做同行合并。
+    ///
+    /// 表格里 Paddle 本来就给每格一个 region；合并成「一行表格」后，
+    /// 点选/复制/译文都只能按整行走。这里保留原始粒度，按阅读顺序（行→列）输出。
+    /// </summary>
+    public static IReadOnlyList<OcrTextLine> ComposeRegionLines(
+        IReadOnlyList<OcrRegion> regions,
+        float minimumScore = 0.5f)
+    {
+        var valid = Filter(regions, minimumScore);
+        if (valid.Count == 0)
+            return [];
+
+        // 表格行距通常比正文字行更紧，用收紧阈值防止相邻表格行被并成一组
+        var groups = GroupByLine(valid, TableThresholdFactor);
+        var result = new List<OcrTextLine>(valid.Count);
+
+        foreach (var group in groups)
+        {
+            foreach (var region in group.OrderBy(r => r.X))
+            {
+                result.Add(new OcrTextLine(
+                    region.Text.Trim(),
+                    region.X,
+                    region.Y,
+                    region.Width,
+                    region.Height));
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// 判断这批区域是不是表格：至少两行，且每行平均 ≥3 块，相邻行的列位置能对上。
+    /// 纯文本段落通常一行只有一两个 region，不会误判——
+    /// 两列的表单（"字段: 值"）也按整行处理，翻译成句更像人话。
+    /// </summary>
+    public static bool LooksLikeTable(
+        IReadOnlyList<OcrRegion> regions,
+        float minimumScore = 0.5f)
+    {
+        var valid = Filter(regions, minimumScore);
+        if (valid.Count < 6)
+            return false;
+
+        var groups = GroupByLine(valid, TableThresholdFactor);
+        if (groups.Count < 2)
+            return false;
+
+        var dense = groups.Where(group => group.Count >= 3).ToList();
+        if (dense.Count < 2)
+            return false;
+
+        // 相邻两行至少有两列的左边缘能对上（容差取行高的一半）
+        var first = dense[0].OrderBy(r => r.X).ToList();
+        var second = dense[1].OrderBy(r => r.X).ToList();
+        var tolerance = Math.Max(4.0, first.Average(r => r.Height) * 0.5);
+        var aligned = first.Count(a => second.Any(b => Math.Abs(a.X - b.X) <= tolerance));
+
+        return aligned >= 2;
+    }
+
     /// <summary>普通行聚类的阈值系数：中心点距离 &lt; 平均行高 × 该系数视为同一行。</summary>
     private const double LineThresholdFactor = 0.5;
 

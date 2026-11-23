@@ -14,6 +14,7 @@ using Avalonia.Threading;
 using Path = Avalonia.Controls.Shapes.Path;
 using Sparrow.App.Services;
 using Sparrow.App.Settings;
+using Sparrow.Plugin.Sdk;
 using Sparrow.Plugin.Sdk.Payloads;
 using SkiaSharp;
 
@@ -136,6 +137,12 @@ public partial class CaptureWindow : Window
     /// <summary>本次识别的翻译目标；为空表示只识别。</summary>
     private string? _translateTarget;
 
+    /// <summary>左右对比图（PNG）。</summary>
+    private byte[]? _comparePng;
+
+    /// <summary>是否处于左右对比视图。</summary>
+    private bool _compareView;
+
     private (int Line, int Char)? _ocrSelAnchor;
     private (int Line, int Char)? _ocrSelFocus;
     private bool _ocrDragging;
@@ -165,6 +172,26 @@ public partial class CaptureWindow : Window
     private CancellationTokenSource? _ocrCancellation;
     private bool _isRecognizing;
     private string? _ocrText;
+
+    /// <summary>格式 / 标点：只影响复制出去的文本，不改行框与译文落点。</summary>
+    private string _ocrFormatting = OcrTextTransform.FormatKeep;
+
+    private string _ocrPunctuation = OcrTextTransform.PunctuationNone;
+
+    private static readonly (string Value, string Label)[] OcrFormattingOptions =
+    [
+        (OcrTextTransform.FormatNone, "不处理"),
+        (OcrTextTransform.FormatKeep, "保留换行"),
+        (OcrTextTransform.FormatRemove, "去掉换行"),
+        (OcrTextTransform.FormatSmart, "智能排版")
+    ];
+
+    private static readonly (string Value, string Label)[] OcrPunctuationOptions =
+    [
+        (OcrTextTransform.PunctuationNone, "不处理"),
+        (OcrTextTransform.PunctuationHalf, "半角"),
+        (OcrTextTransform.PunctuationFull, "全角")
+    ];
 
     /// <summary>当前会话的标注；导出时合成进 PNG。</summary>
     private readonly AnnotationDocument _notes = new();
@@ -373,6 +400,7 @@ public partial class CaptureWindow : Window
             Color.Parse("#5FA8FF")
         ]);
         BuildRecentColors();
+        BuildOcrTextMenus();
     }
 
     /// <summary>显示前是否先冻结整屏；测试/无桌面场景由调用方关掉。</summary>
@@ -492,6 +520,67 @@ public partial class CaptureWindow : Window
         _translateAvailable = menu.Items.Count > 0;
         TranslateButton.IsVisible = _translateAvailable && _toolbarDensity < 2;
         InvalidateToolbarMetrics();
+    }
+
+    /// <summary>构建「格式 / 标点」下拉；它们只影响复制出去的文本。</summary>
+    private void BuildOcrTextMenus()
+    {
+        BuildOptionMenu(FormatButton, OcrFormattingOptions, _ocrFormatting, value =>
+        {
+            _ocrFormatting = value;
+            UpdateOcrTextOptionTips();
+        });
+
+        BuildOptionMenu(PunctuationButton, OcrPunctuationOptions, _ocrPunctuation, value =>
+        {
+            _ocrPunctuation = value;
+            UpdateOcrTextOptionTips();
+        });
+
+        UpdateOcrTextOptionTips();
+    }
+
+    private static void BuildOptionMenu(
+        Button button,
+        IReadOnlyList<(string Value, string Label)> options,
+        string current,
+        Action<string> apply)
+    {
+        if (button.Flyout is not MenuFlyout menu)
+            return;
+
+        menu.Items.Clear();
+        var group = button.Name ?? "ocr-text-option";
+
+        foreach (var (value, label) in options)
+        {
+            var item = new MenuItem
+            {
+                Header = label,
+                ToggleType = MenuItemToggleType.Radio,
+                GroupName = group,
+                IsChecked = value == current
+            };
+
+            // 同一个值反复点也只改一次状态；手写勾选，避免依赖 Radio 的自动互斥
+            item.Click += (_, _) =>
+            {
+                apply(value);
+                foreach (var entry in menu.Items.OfType<MenuItem>())
+                    entry.IsChecked = ReferenceEquals(entry, item);
+            };
+
+            menu.Items.Add(item);
+        }
+    }
+
+    private void UpdateOcrTextOptionTips()
+    {
+        var format = OcrFormattingOptions.First(option => option.Value == _ocrFormatting).Label;
+        var punctuation = OcrPunctuationOptions.First(option => option.Value == _ocrPunctuation).Label;
+
+        ToolTip.SetTip(FormatButton, $"格式：{format}");
+        ToolTip.SetTip(PunctuationButton, $"标点：{punctuation}");
     }
 
     /// <summary>宿主注入的复制实现。窗口不直接碰剪贴板。</summary>
@@ -859,8 +948,8 @@ public partial class CaptureWindow : Window
             SelectNote(-1);   // 点空白：先取消选中，再走原来的移动/拉伸
         }
 
-        // 识别结果卡片 / 文字标记菜单：点它们只是操作卡片，不能当成"点空白清空识别"
-        if (IsPointInControl(ResultCard, point) || IsPointInControl(OcrMarkMenu, point))
+        // 文字标记菜单：点它只是操作菜单，不能当成"点空白清空识别"
+        if (IsPointInControl(OcrMarkMenu, point))
             return;
 
         // 第一次点击先清掉识别结果，不直接开始拉新框
@@ -1210,9 +1299,10 @@ public partial class CaptureWindow : Window
         OcrStatus.IsVisible = false;
         CopyAllButton.IsVisible = false;
         OcrBoxButton.IsVisible = false;
+        FormatButton.IsVisible = false;
+        PunctuationButton.IsVisible = false;
         _ocrActionsAvailable = false;
         HintBar.IsVisible = false;
-        HideResultCard();
         _notes.Clear();
         _pendingAnnotation = null;
         _penPoints = null;
@@ -1979,8 +2069,7 @@ public partial class CaptureWindow : Window
         if (IsPointInActionBar(point)
             || IsPointInControl(SizeBadge, point)
             || IsPointInControl(CustomColorPanel, point)
-            || IsPointInControl(ToolGroupPopover, point)
-            || IsPointInControl(ResultCard, point))
+            || IsPointInControl(ToolGroupPopover, point))
         {
             Cursor = ArrowCursor;
             return;
@@ -2208,7 +2297,6 @@ public partial class CaptureWindow : Window
         SizeBadge.IsVisible = false;
         HideToolGroupPopover();
         HintBar.IsVisible = true;
-        HideResultCard();
         _notes.Clear();
         _nextNumber = 1;
         _pendingAnnotation = null;
@@ -5642,6 +5730,8 @@ public partial class CaptureWindow : Window
         TranslateButton.IsVisible = _translateAvailable;
         CopyAllButton.IsVisible = _ocrActionsAvailable && _toolbarDensity < 2;
         OcrBoxButton.IsVisible = _ocrActionsAvailable && _toolbarDensity < 2;
+        FormatButton.IsVisible = _ocrActionsAvailable && _toolbarDensity < 2;
+        PunctuationButton.IsVisible = _ocrActionsAvailable && _toolbarDensity < 2;
 
         if (_toolbarDensity >= 2)
             OcrStatus.IsVisible = false;
@@ -5863,45 +5953,6 @@ public partial class CaptureWindow : Window
         return new Point(clampedX, Math.Clamp(below.Y, minY, maxY));
     }
 
-    /// <summary>结果卡片：优先选区右侧，其次左侧，最后钳制到窗口内。</summary>
-    internal static Point ComputeCardPosition(
-        Rect selection,
-        Size card,
-        Size bounds,
-        double gap = 12,
-        double margin = 8) =>
-        ComputeCardPosition(
-            selection,
-            card,
-            new Rect(0, 0, bounds.Width, bounds.Height),
-            gap,
-            margin);
-
-    internal static Point ComputeCardPosition(
-        Rect selection,
-        Size card,
-        Rect bounds,
-        double gap = 12,
-        double margin = 8)
-    {
-        var left = selection.Right + gap;
-
-        if (left + card.Width > bounds.Right - margin)
-            left = selection.X - card.Width - gap;
-
-        left = Math.Clamp(
-            left,
-            bounds.X + margin,
-            Math.Max(bounds.X + margin, bounds.Right - card.Width - margin));
-
-        var top = Math.Clamp(
-            selection.Y,
-            bounds.Y + margin,
-            Math.Max(bounds.Y + margin, bounds.Bottom - card.Height - margin));
-
-        return new Point(left, top);
-    }
-
     private bool IsPointInActionBar(Point point)
     {
         if (!ActionBar.IsVisible)
@@ -6020,7 +6071,7 @@ public partial class CaptureWindow : Window
         }
     }
 
-    private async Task RunOcrAsync(CaptureOcrOptions? options = null, bool showText = false)
+    private async Task RunOcrAsync(CaptureOcrOptions? options = null)
     {
         // 没有注入 runner 或还没截图时，退回旧流程
         if (OcrRunner is null || Result is not { Length: > 0 } png)
@@ -6063,9 +6114,6 @@ public partial class CaptureWindow : Window
             }
 
             ShowOcrResult(result);
-
-            if (showText && !string.IsNullOrWhiteSpace(result.Text))
-                ShowResultCard(result.Text);
         }
         catch (OperationCanceledException)
         {
@@ -6115,37 +6163,12 @@ public partial class CaptureWindow : Window
             Result = await Task.Run(() => ComposeResult(png));
             Action = CaptureAction.Recognize;
 
-            await RunOcrAsync(new CaptureOcrOptions(target), showText: true);
+            await RunOcrAsync(new CaptureOcrOptions(target));
         }
         finally
         {
             _isActing = false;
         }
-    }
-
-    /// <summary>把结果卡片放在选区旁边：优先右侧，放不下就左侧和下方。</summary>
-    internal void ShowResultCard(string text)
-    {
-        ResultText.Text = text;
-        ResultCard.IsVisible = true;
-
-        ResultCard.Measure(Size.Infinity);
-        var size = ResultCard.DesiredSize;
-
-        var screen = ScreenDipFor(_selection) ?? new Rect(0, 0, Width, Height);
-        var position = ComputeCardPosition(_selection, size, screen);
-        Canvas.SetLeft(ResultCard, position.X);
-        Canvas.SetTop(ResultCard, position.Y);
-    }
-
-    private void HideResultCard() => ResultCard.IsVisible = false;
-
-    private void OnResultCloseClick(object? sender, RoutedEventArgs e) => HideResultCard();
-
-    private void OnResultCopyClick(object? sender, RoutedEventArgs e)
-    {
-        if (!string.IsNullOrEmpty(ResultText.Text))
-            CopyText?.Invoke(ResultText.Text);
     }
 
     /// <summary>把行框叠在选区上；坐标按主屏缩放换算回 DIP。</summary>
@@ -6228,6 +6251,8 @@ public partial class CaptureWindow : Window
     private void UpdateTranslatedLayer()
     {
         _translatedPng = null;
+        _comparePng = null;
+        _compareView = false;
         _showOriginalView = false;
         TransLayer.Source = null;
         TransLayer.IsVisible = false;
@@ -6244,46 +6269,155 @@ public partial class CaptureWindow : Window
                 entry.Line.Translation))
             .ToList();
 
-        if (lines.Count == 0 || Result is not { Length: > 0 } cropPng)
+        if (lines.Count == 0)
+        {
+            // 用户要了翻译但一行都没落上：多半是没有可用引擎，或模型没按编号返回
+            if (!string.IsNullOrEmpty(_translateTarget))
+                OcrStatus.Text = "没有拿到可对齐的译文，已保留原文（检查翻译引擎）";
+            return;
+        }
+
+        if (Result is not { Length: > 0 } cropPng)
             return;
 
         using var crop = SKBitmap.Decode(cropPng);
         if (crop is null)
             return;
 
+        // 对不上就不画：宁可不叠译文，也不把整段盖在原文上
         var png = TranslatedImageRenderer.Render(crop, _scaling, lines);
         if (png is null)
+        {
+            OcrStatus.Text = "译文未能按行对齐，已保留原文";
             return;
+        }
 
         _translatedPng = png;
 
-        using var stream = new MemoryStream(png);
-        TransLayer.Source = WriteableBitmap.Decode(stream);
-        TransLayer.Width = _selection.Width;
-        TransLayer.Height = _selection.Height;
-        Canvas.SetLeft(TransLayer, _selection.X);
-        Canvas.SetTop(TransLayer, _selection.Y);
+        // 左右对比图：原图和译文图并排（显示时按窗口可用区域等比放大并居中）
+        using (var translated = SKBitmap.Decode(png))
+        {
+            if (translated is not null)
+                _comparePng = TranslatedImageRenderer.BuildCompare(crop, translated);
+        }
 
         ShowOriginalButton.IsVisible = true;
+        TransCompareButton.IsVisible = _comparePng is not null;
         TransRow.IsVisible = true;
         ApplyTranslationView();
+    }
+
+    /// <summary>从"原文 + —— 译文（x）——"里取出译文部分；没有返回 null。</summary>
+    internal static string? ExtractTranslatedText(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return null;
+
+        var start = text.IndexOf("—— 译文（", StringComparison.Ordinal);
+        if (start < 0)
+            return null;
+
+        var end = text.IndexOf("）——", start, StringComparison.Ordinal);
+        if (end < 0)
+            return null;
+
+        var body = text[(end + 3)..].Trim();
+        return body.Length == 0 ? null : body;
     }
 
     /// <summary>按当前视图状态同步译文层 / 行框 / 按钮。</summary>
     private void ApplyTranslationView()
     {
         var hasTranslation = _translatedPng is not null;
-
-        TransLayer.IsVisible = hasTranslation && !_showOriginalView;
-        OcrLayer.IsVisible = hasTranslation ? _showOriginalView : OcrLayer.IsVisible;
+        var showingCompare = hasTranslation && _compareView && _comparePng is not null;
 
         if (!hasTranslation)
+        {
+            TransLayer.Source = null;
+            TransLayer.IsVisible = false;
             return;
+        }
+
+        // 对比图是两张并排：塞进选区会被压扁，改成「按窗口可用区域等比放大」并居中到选区
+        TransLayer.Stretch = Stretch.Fill;
+        TransLayer.Source = DecodePng(showingCompare ? _comparePng : _translatedPng);
+        TransLayer.IsVisible = showingCompare || !_showOriginalView;
+        OcrLayer.IsVisible = !showingCompare && _showOriginalView;
+
+        if (showingCompare)
+            PlaceCompareLayer(_comparePng!);
+        else
+            PlaceTranslatedLayer();
 
         SetSelected(ShowOriginalButton, _showOriginalView);
         ShowOriginalText.Text = _showOriginalView ? "显示译文" : "显示原图";
         ToolTip.SetTip(ShowOriginalButton, _showOriginalView ? "显示译文" : "显示原图");
-        OcrStatus.Text = _showOriginalView ? "原文视图" : "译文视图 · 点眼睛切回原文";
+
+        SetSelected(TransCompareButton, showingCompare);
+        ToolTip.SetTip(TransCompareButton, showingCompare ? "退出对比" : "左右对比");
+
+        OcrStatus.Text = showingCompare
+            ? "左右对比 · 左原文 / 右译文"
+            : _showOriginalView ? "原文视图" : "译文视图 · 点眼睛切回原文";
+    }
+
+    /// <summary>译文图铺满选区：和原图逐像素重合，切换时不跳动。</summary>
+    private void PlaceTranslatedLayer()
+    {
+        TransLayer.Width = _selection.Width;
+        TransLayer.Height = _selection.Height;
+        Canvas.SetLeft(TransLayer, _selection.X);
+        Canvas.SetTop(TransLayer, _selection.Y);
+    }
+
+    /// <summary>
+    /// 对比图居中放大：宽高受窗口可用区域限制，等比缩放到放得下，
+    /// 再以选区中心为基准摆放——不再被压进选区里变成两张小邮票。
+    /// </summary>
+    private void PlaceCompareLayer(byte[] comparePng)
+    {
+        using var bitmap = SKBitmap.Decode(comparePng);
+        if (bitmap is null || bitmap.Width <= 0 || bitmap.Height <= 0)
+            return;
+
+        // 物理像素 → DIP
+        var width = bitmap.Width / Math.Max(_scaling, 0.01);
+        var height = bitmap.Height / Math.Max(_scaling, 0.01);
+
+        var maxWidth = Math.Max(200, Width - 96);
+        var maxHeight = Math.Max(150, Height - 220);   // 给上下工具条留位置
+        var factor = Math.Min(1.0, Math.Min(maxWidth / width, maxHeight / height));
+
+        var targetWidth = width * factor;
+        var targetHeight = height * factor;
+
+        var center = _selection.Center;
+        var left = Math.Clamp(center.X - targetWidth / 2, 48, Math.Max(48, Width - targetWidth - 48));
+        var top = Math.Clamp(center.Y - targetHeight / 2, 96, Math.Max(96, Height - targetHeight - 96));
+
+        TransLayer.Width = targetWidth;
+        TransLayer.Height = targetHeight;
+        Canvas.SetLeft(TransLayer, left);
+        Canvas.SetTop(TransLayer, top);
+    }
+
+    private static WriteableBitmap? DecodePng(byte[]? png)
+    {
+        if (png is null)
+            return null;
+
+        using var stream = new MemoryStream(png);
+        return WriteableBitmap.Decode(stream);
+    }
+
+    private void OnTransCompareClick(object? sender, RoutedEventArgs e)
+    {
+        if (_comparePng is null)
+            return;
+
+        _compareView = !_compareView;
+        _showOriginalView = false;
+        ApplyTranslationView();
     }
 
     /// <summary>退出译文视图：回到识别框，译文图保留但不再显示。</summary>
@@ -6291,10 +6425,21 @@ public partial class CaptureWindow : Window
     {
         _translatedPng = null;
         _showOriginalView = false;
+        _compareView = false;
+        _comparePng = null;
         TransLayer.Source = null;
         TransLayer.IsVisible = false;
         TransRow.IsVisible = false;
+        OcrLayer.IsVisible = true;
         ApplyTranslationView();
+    }
+
+    /// <summary>只复制译文（不含原文与分隔标题）。</summary>
+    private void OnTransCopyClick(object? sender, RoutedEventArgs e)
+    {
+        var translation = ExtractTranslatedText(_ocrText);
+        if (!string.IsNullOrEmpty(translation))
+            CopyText?.Invoke(FormatOcrText(translation));
     }
 
     private void OnShowOriginalClick(object? sender, RoutedEventArgs e)
@@ -6302,6 +6447,7 @@ public partial class CaptureWindow : Window
         if (_translatedPng is null)
             return;
 
+        _compareView = false;
         _showOriginalView = !_showOriginalView;
         ApplyTranslationView();
     }
@@ -6323,6 +6469,8 @@ public partial class CaptureWindow : Window
         _ocrSelFocus = null;
         _ocrDragging = false;
         _translatedPng = null;
+        _comparePng = null;
+        _compareView = false;
         _showOriginalView = false;
         TransLayer.Source = null;
         TransLayer.IsVisible = false;
@@ -6333,10 +6481,12 @@ public partial class CaptureWindow : Window
         _ocrActionsAvailable = false;
         CopyAllButton.IsVisible = false;
         OcrBoxButton.IsVisible = false;
+        FormatButton.IsVisible = false;
+        PunctuationButton.IsVisible = false;
         OcrStatus.IsVisible = false;
         InvalidateToolbarMetrics();
         ToolTip.SetTip(RecognizeButton, "识别选区文字（Enter / R）");
-        HideResultCard();        _ocrText = null;
+        _ocrText = null;
         UpdateHandles();
     }
 
@@ -6460,6 +6610,7 @@ public partial class CaptureWindow : Window
             if (string.IsNullOrWhiteSpace(text))
                 return;
 
+            text = FormatOcrText(text);
             CopyText?.Invoke(text);
             OcrStatus.Text = $"已复制选中 {_selectedOcrBoxes.Count} 行 · {text.Length} 字";
             return;
@@ -6468,9 +6619,14 @@ public partial class CaptureWindow : Window
         if (string.IsNullOrEmpty(_ocrText))
             return;
 
-        CopyText?.Invoke(_ocrText);
-        OcrStatus.Text = $"已复制全文 · {_ocrText.Length} 字";
+        var all = FormatOcrText(_ocrText);
+        CopyText?.Invoke(all);
+        OcrStatus.Text = $"已复制全文 · {all.Length} 字";
     }
+
+    /// <summary>套用「格式 / 标点」；只改复制出去的文本，行框与译文图不动。</summary>
+    internal string FormatOcrText(string text) =>
+        OcrTextTransform.Apply(text, _ocrFormatting, _ocrPunctuation);
 
     /// <summary>把若干行框按阅读顺序合并成文本；同一行内按 X 排，行间换行。</summary>
     internal static string MergeOcrText(IEnumerable<(string Text, Rect Bounds)> boxes)

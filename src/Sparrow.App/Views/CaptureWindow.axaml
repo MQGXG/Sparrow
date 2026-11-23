@@ -650,46 +650,7 @@
            IsHitTestVisible="False"
            Stretch="Fill" />
 
-    <!-- 识别 / 翻译结果：跟随选区浮在空白处，可选中、可复制 -->
-    <Border x:Name="ResultCard"
-            IsVisible="False"
-            Cursor="Arrow"
-            Background="{StaticResource OverlayBrush}"
-            BorderBrush="{StaticResource LineStrongBrush}"
-            BorderThickness="1"
-            CornerRadius="10"
-            Padding="12,10"
-            MaxWidth="520"
-            BoxShadow="0 12 32 0 #99000000">
-      <Grid RowDefinitions="Auto,*,Auto" RowSpacing="8" MinWidth="300">
-        <Grid ColumnDefinitions="*,Auto">
-          <TextBlock Text="识别结果"
-                     FontSize="11"
-                     Foreground="{StaticResource TextMutedBrush}" />
-          <Button Grid.Column="1"
-                  Classes="ghost"
-                  Content="关闭"
-                  FontSize="11"
-                  Padding="6,2"
-                  Click="OnResultCloseClick" />
-        </Grid>
-
-        <ScrollViewer Grid.Row="1" MaxHeight="240">
-          <SelectableTextBlock x:Name="ResultText"
-                               FontSize="12"
-                               LineHeight="19"
-                               TextWrapping="Wrap"
-                               Foreground="{StaticResource TextPrimaryBrush}" />
-        </ScrollViewer>
-
-        <Button Grid.Row="2"
-                Classes="accent"
-                Content="复制"
-                HorizontalAlignment="Right"
-                Click="OnResultCopyClick" />
-      </Grid>
-    </Border>
-
+    <!-- 识别 / 翻译结果：文字留在图上（行框可点选复制），长文本去工作区看 -->
     <Border x:Name="HintBar"
             Canvas.Left="0"
             Canvas.Top="24"
@@ -882,6 +843,24 @@
                   IsVisible="False"
                   ToolTip.Tip="识别并翻译（点击选目标语言）">
             <Path Data="{StaticResource IconTranslate}" StrokeThickness="1.143" />
+            <Button.Flyout>
+              <MenuFlyout Placement="TopEdgeAlignedRight" />
+            </Button.Flyout>
+          </Button>
+          <Button x:Name="FormatButton"
+                  Classes="tool"
+                  IsVisible="False"
+                  ToolTip.Tip="格式：保留换行">
+            <TextBlock Text="Aa" FontSize="11.5" VerticalAlignment="Center" />
+            <Button.Flyout>
+              <MenuFlyout Placement="TopEdgeAlignedRight" />
+            </Button.Flyout>
+          </Button>
+          <Button x:Name="PunctuationButton"
+                  Classes="tool"
+                  IsVisible="False"
+                  ToolTip.Tip="标点：不处理">
+            <TextBlock Text="，" FontSize="15" VerticalAlignment="Center" />
             <Button.Flyout>
               <MenuFlyout Placement="TopEdgeAlignedRight" />
             </Button.Flyout>
@@ -1144,7 +1123,9 @@
           <Border Classes="prop-sep" />
           <TextBlock x:Name="TransTargetText" Classes="prop-label" Text="译文" />
           <Button Focusable="False" x:Name="TransCompareButton" Classes="prop"
-                  Content="对比" IsVisible="False" ToolTip.Tip="左右对比（未实现）" />
+                  Content="对比" Click="OnTransCompareClick" ToolTip.Tip="左右对比" />
+          <Button Focusable="False" Classes="prop" Content="复制译文"
+                  Click="OnTransCopyClick" ToolTip.Tip="只复制译文部分" />
           <Button Focusable="False" Classes="prop" Content="关闭" Click="OnTransCloseClick"
                   ToolTip.Tip="退出译文视图，回到识别框" />
         </StackPanel>

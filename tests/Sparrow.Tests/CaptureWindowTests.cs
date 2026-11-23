@@ -231,19 +231,6 @@ public sealed class CaptureWindowTests
         position.Y.ShouldBe(158);
     }
 
-    [Fact]
-    public void 结果卡片_优先右侧_放不下换左侧()
-    {
-        var right = CaptureWindow.ComputeCardPosition(
-            new Rect(100, 200, 300, 150), new Size(320, 220), new Size(1280, 800));
-        right.X.ShouldBe(412);
-        right.Y.ShouldBe(200);
-
-        var left = CaptureWindow.ComputeCardPosition(
-            new Rect(900, 200, 300, 150), new Size(320, 220), new Size(1280, 800));
-        left.X.ShouldBe(900 - 320 - 12);
-    }
-
     [AvaloniaFact]
     public void 截图工具条_按语言列表生成翻译菜单()
     {
@@ -258,22 +245,6 @@ public sealed class CaptureWindowTests
         // 没有语言声明时整个按钮隐藏，避免点了没反应
         window.ConfigureTranslateTargets([]);
         window.TranslateButton.IsVisible.ShouldBeFalse();
-    }
-
-    [AvaloniaFact]
-    public void 结果卡片_显示后贴着选区并留在窗口内()
-    {
-        var window = CreateWithSelection();
-
-        window.ShowResultCard("原文\n\n—— 译文（English）——\n\nTranslated");
-
-        window.ResultCard.IsVisible.ShouldBeTrue();
-        window.ResultText.Text.ShouldNotBeNull().ShouldContain("Translated");
-
-        var left = Canvas.GetLeft(window.ResultCard);
-        var top = Canvas.GetTop(window.ResultCard);
-        left.ShouldBeGreaterThanOrEqualTo(8);
-        top.ShouldBeGreaterThanOrEqualTo(8);
     }
 
     [AvaloniaFact]
