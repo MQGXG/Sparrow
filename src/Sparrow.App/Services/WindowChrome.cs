@@ -12,6 +12,7 @@ internal static class WindowChrome
 {
     private const int DwmwaUseImmersiveDarkMode = 20;
     private const int DwmwaUseImmersiveDarkModeBefore20H1 = 19;
+    private const int DwmwaCaptionColor = 35;
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(
@@ -34,5 +35,10 @@ internal static class WindowChrome
         // Windows 10 1809+ 用 20；更早的预览版本用 19
         if (DwmSetWindowAttribute(handle.Value, DwmwaUseImmersiveDarkMode, ref enabled, sizeof(int)) != 0)
             DwmSetWindowAttribute(handle.Value, DwmwaUseImmersiveDarkModeBefore20H1, ref enabled, sizeof(int));
+
+        // 扩展标题栏时平台可能仍会给右上角按钮区刷一层系统标题栏底色；
+        // 刷成窗口底色，48px 顶栏才是一整块。COLORREF = 0x00BBGGRR。
+        var captionColor = 0x0018110D;
+        DwmSetWindowAttribute(handle.Value, DwmwaCaptionColor, ref captionColor, sizeof(int));
     }
 }

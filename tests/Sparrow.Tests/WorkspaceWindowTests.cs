@@ -109,16 +109,48 @@ public sealed class WorkspaceWindowTests
     }
 
     [AvaloniaFact]
-    public void 最近页_切换tab行仍然可见()
+    public void 内容区_承载主导航_标题栏只放品牌与动作()
+    {
+        var (window, _, catalog) = Create();
+        try
+        {
+            var titleBar = window.FindControl<Grid>("TitleBar");
+            titleBar.ShouldNotBeNull();
+
+            var tabRow = window.FindControl<Grid>("WallTabRow");
+            tabRow.ShouldNotBeNull();
+            tabRow.GetVisualAncestors().OfType<Grid>().ShouldNotContain(titleBar,
+                "主导航应该回到内容区，不再占用系统标题栏");
+            tabRow.IsEffectivelyVisible.ShouldBeTrue();
+
+            window.FindControl<Button>("TopSearchButton").ShouldNotBeNull();
+            window.FindControl<Button>("SettingsButton").ShouldNotBeNull();
+        }
+        finally
+        {
+            catalog.Dispose();
+        }
+    }
+
+    [AvaloniaFact]
+    public void 设置页_返回入口在内容区顶部()
     {
         var (window, viewModel, catalog) = Create();
         try
         {
-            viewModel.ShowRecent();
+            viewModel.IsSettingsVisible = true;
+
+            var visibleBacks = window.GetVisualDescendants()
+                .OfType<Button>()
+                .Where(button => button.IsEffectivelyVisible &&
+                                 button.Content is string text &&
+                                 text.Contains("返回"))
+                .ToList();
+            visibleBacks.Count.ShouldBe(1, "设置页应该只有一个返回入口，放在内容区顶部");
 
             var tabRow = window.FindControl<Grid>("WallTabRow");
-            tabRow.ShouldNotBeNull("最近页必须保留「工具 / 最近使用」切换入口");
-            tabRow.IsVisible.ShouldBeTrue();
+            tabRow.ShouldNotBeNull();
+            tabRow.IsEffectivelyVisible.ShouldBeFalse("设置页不显示主视图页签");
         }
         finally
         {
@@ -402,6 +434,80 @@ public sealed class WorkspaceWindowTests
             window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.None, null);
 
             viewModel.IsDetailOpen.ShouldBeTrue();
+        }
+        finally
+        {
+            catalog.Dispose();
+        }
+    }
+
+    [AvaloniaFact]
+    public void 顶栏_搜索默认收起_点开展开_Esc清空并收起()
+    {
+        var (window, viewModel, catalog) = Create();
+        try
+        {
+            var pill = window.FindControl<Border>("TopSearchPill");
+            var box = window.FindControl<TextBox>("TopSearchBox");
+            var button = window.FindControl<Button>("TopSearchButton");
+
+            pill.ShouldNotBeNull("顶栏搜索胶囊必须存在");
+            box.ShouldNotBeNull("顶栏搜索输入框必须存在");
+            button.ShouldNotBeNull("顶栏搜索图标必须存在");
+
+            box!.IsVisible.ShouldBeFalse("搜索默认只占一枚图标，不占整行");
+            pill!.Classes.Contains("open").ShouldBeFalse();
+
+            button!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            box.IsVisible.ShouldBeTrue("点图标后输入框向左展开");
+            pill.Classes.Contains("open").ShouldBeTrue("展开时胶囊显示描边底色");
+
+            viewModel.ToolQuery = "json";
+
+            window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.None, null);
+
+            box.IsVisible.ShouldBeFalse("Esc 收起搜索");
+            pill.Classes.Contains("open").ShouldBeFalse();
+            viewModel.ToolQuery.ShouldBeEmpty("收起时清掉过滤词，工具墙恢复全量");
+        }
+        finally
+        {
+            catalog.Dispose();
+        }
+    }
+
+    [AvaloniaFact]
+    public void 顶栏_CtrlF聚焦搜索()
+    {
+        var (window, viewModel, catalog) = Create();
+        try
+        {
+            var box = window.FindControl<TextBox>("TopSearchBox");
+            box.ShouldNotBeNull();
+
+            window.KeyPress(Key.F, RawInputModifiers.Control, PhysicalKey.F, "f");
+
+            box!.IsVisible.ShouldBeTrue("Ctrl+F 直接展开并聚焦顶栏搜索");
+        }
+        finally
+        {
+            catalog.Dispose();
+        }
+    }
+
+    [AvaloniaFact]
+    public void 顶栏_设置图标打开设置页()
+    {
+        var (window, viewModel, catalog) = Create();
+        try
+        {
+            var button = window.FindControl<Button>("SettingsButton");
+            button.ShouldNotBeNull("设置入口必须是顶栏图标按钮");
+
+            button!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            viewModel.IsSettingsVisible.ShouldBeTrue();
         }
         finally
         {

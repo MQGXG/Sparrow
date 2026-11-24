@@ -144,6 +144,37 @@
     <Setter Property="Opacity" Value="0.45" />
   </Style>
 
+  <!--
+    窗口标题栏按钮：不属于应用内的按钮体系。
+    全局 Button 样式会把按钮区刷成 SurfaceRaised（顶栏右侧多出一条灰带），
+    这里用类选择器压回来：透明、方角、48px 高。
+  -->
+  <Style Selector="Button.caption">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Foreground" Value="#9BA8BA" />
+  </Style>
+
+  <Style Selector="Button.caption:pointerover">
+    <Setter Property="Background" Value="#242D3A" />
+    <Setter Property="Foreground" Value="#E9EEF6" />
+  </Style>
+
+  <Style Selector="Button.caption:pressed">
+    <Setter Property="Background" Value="#12171F" />
+  </Style>
+
+  <Style Selector="Button.caption.close:pointerover">
+    <Setter Property="Background" Value="#C42B1C" />
+    <Setter Property="Foreground" Value="#FFFFFF" />
+  </Style>
+
+  <Style Selector="Button.caption.close:pressed">
+    <Setter Property="Background" Value="#9E2114" />
+  </Style>
+
   <!-- 主按钮：整屏只允许一个。琥珀渐变从上到下压暗，按下再沉一档 -->
   <Style Selector="Button.accent">
     <Setter Property="Background" Value="{StaticResource AccentGradientBrush}" />
@@ -227,7 +258,7 @@
 
   <!-- 卡片右下角的「打开 →」：平时隐藏，hover 才浮现，减少墙上的静态噪声 -->
   <Style Selector="Button.tool-card TextBlock.hint">
-    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Opacity" Value="0.35" />
     <Setter Property="Transitions">
       <Transitions>
         <DoubleTransition Property="Opacity" Duration="0:0:0.15" />
@@ -594,6 +625,61 @@
   <!-- 类型 chip 是图标 + 计数：选中时图标也要转琥珀，否则只有数字变色 -->
   <Style Selector="Button.hud-chip.selected Path.icon">
     <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+  </Style>
+
+  <!-- 分类索引：无边框文字项，选中时文字转亮 + 下方 2px 刻度 -->
+  <Style Selector="Button.hud-filter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Padding" Value="0,2,0,0" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+  </Style>
+
+  <Style Selector="Button.hud-filter /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Button.hud-filter TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Foreground" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.hud-filter TextBlock.num">
+    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+  </Style>
+
+  <Style Selector="Button.hud-filter:pointerover TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+  </Style>
+
+  <Style Selector="Button.hud-filter Border.tick">
+    <Setter Property="Height" Value="2" />
+    <Setter Property="Margin" Value="0,5,0,0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.15" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.hud-filter.selected TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <Style Selector="Button.hud-filter.selected TextBlock.num">
+    <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+  </Style>
+
+  <Style Selector="Button.hud-filter.selected Border.tick">
+    <Setter Property="Background" Value="{StaticResource AccentBrush}" />
   </Style>
 
   <!-- 分组标题：透明底、hover 才浮一层；点击折叠 -->

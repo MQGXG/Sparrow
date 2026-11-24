@@ -9,13 +9,20 @@ namespace Sparrow.App.ViewModels;
 /// </summary>
 public sealed partial class ToolGroupViewModel : ObservableObject
 {
-    public ToolGroupViewModel(string category, IEnumerable<ToolItemViewModel> tools)
+    public ToolGroupViewModel(string category, IEnumerable<ToolItemViewModel> tools, int index = 0)
     {
         Category = category;
+        Index = index;
         Tools = new ObservableCollection<ToolItemViewModel>(tools);
     }
 
     public string Category { get; }
+
+    /// <summary>工具墙上的分组序号（01 起）；不在墙上时为 0。</summary>
+    public int Index { get; }
+
+    /// <summary>分组标题左侧的两位序号，给墙面一个目录感。</summary>
+    public string IndexLabel => Index.ToString("D2");
 
     public string DisplayName => ToolCategories.Display(Category);
 

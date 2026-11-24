@@ -60,6 +60,18 @@ public partial class WorkspaceWindow : Window
     /// </summary>
     private void OnPreviewKeyDown(object? sender, KeyEventArgs e)
     {
+        // Ctrl+F：顶栏搜索只在工作区可用，设置页不抢
+        if (e.Key == Key.F && e.KeyModifiers == KeyModifiers.Control)
+        {
+            if (DataContext is WorkspaceViewModel { IsSettingsVisible: false })
+            {
+                OpenTopSearch();
+                e.Handled = true;
+            }
+
+            return;
+        }
+
         if (e.Key != Key.Escape)
             return;
 
@@ -84,10 +96,92 @@ public partial class WorkspaceWindow : Window
         if (viewModel.IsSettingsVisible)
             return;
 
+        // 顶栏搜索展开时，Esc 收起并把过滤词一起清掉
+        if (IsTopSearchOpen)
+        {
+            CloseTopSearch(clearQuery: true);
+            e.Handled = true;
+            return;
+        }
+
         if (viewModel.IsDetailOpen)
         {
             viewModel.CloseDetail();
             e.Handled = true;
+        }
+    }
+
+    private const double TopSearchCollapsedWidth = 30;
+    private const double TopSearchExpandedWidth = 300;
+
+    private bool IsTopSearchOpen => TopSearchBox.IsVisible;
+
+    private void OnTopSearchClick(object? sender, RoutedEventArgs e)
+    {
+        if (IsTopSearchOpen)
+            CloseTopSearch(clearQuery: true);
+        else
+            OpenTopSearch();
+
+        e.Handled = true;
+    }
+
+    private void OnTopSearchKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape)
+            return;
+
+        CloseTopSearch(clearQuery: true);
+        e.Handled = true;
+    }
+
+    private void OpenTopSearch()
+    {
+        if (IsTopSearchOpen)
+        {
+            TopSearchBox.Focus();
+            return;
+        }
+
+        // 先显示再展开：宽度过渡会把它从图标后面「拉」出来
+        TopSearchBox.IsVisible = true;
+        TopSearchPill.Width = TopSearchExpandedWidth;
+        SetClass(TopSearchPill, "open", true);
+        SetClass(TopSearchButton, "active", true);
+
+        TopSearchBox.Focus();
+        TopSearchBox.CaretIndex = TopSearchBox.Text?.Length ?? 0;
+    }
+
+    private void CloseTopSearch(bool clearQuery)
+    {
+        if (!IsTopSearchOpen)
+            return;
+
+        if (clearQuery)
+        {
+            if (DataContext is WorkspaceViewModel viewModel)
+                viewModel.ToolQuery = string.Empty;
+            else
+                TopSearchBox.Text = string.Empty;
+        }
+
+        TopSearchBox.IsVisible = false;
+        TopSearchPill.Width = TopSearchCollapsedWidth;
+        SetClass(TopSearchPill, "open", false);
+        SetClass(TopSearchButton, "active", false);
+    }
+
+    private static void SetClass(Control control, string name, bool on)
+    {
+        if (on)
+        {
+            if (!control.Classes.Contains(name))
+                control.Classes.Add(name);
+        }
+        else
+        {
+            control.Classes.Remove(name);
         }
     }
 
@@ -607,15 +701,7 @@ public partial class WorkspaceWindow : Window
     private void OnRecentToolClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: RecentToolViewModel recent } && DataContext is WorkspaceViewModel viewModel)
-            viewModel.OpenTool(recent.Tool, fromRecent: true);
-    }
-
-    private void OnShowRecentClick(object? sender, RoutedEventArgs e)
-    {
-        HideClipboardDetail();
-
-        if (DataContext is WorkspaceViewModel viewModel)
-            viewModel.ShowRecent();
+            viewModel.OpenTool(recent.Tool);
     }
 
     private void OnShowToolsClick(object? sender, RoutedEventArgs e)
@@ -780,21 +866,10 @@ public partial class WorkspaceWindow : Window
             viewModel.ShowSvgSourceView();
     }
 
-    private void OnHistoryClick(object? sender, RoutedEventArgs e)
-    {
-        if (sender is Button { Tag: HistoryEntryViewModel history } && DataContext is WorkspaceViewModel viewModel)
-            viewModel.CopyHistory(history);
-    }
-
-    private void OnClearHistoryClick(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is WorkspaceViewModel viewModel)
-            viewModel.ClearHistory();
-    }
-
     private void OnSettingsClick(object? sender, RoutedEventArgs e)
     {
         HideClipboardDetail();
+        CloseTopSearch(clearQuery: true);
 
         if (DataContext is WorkspaceViewModel viewModel)
             viewModel.ShowSettings();

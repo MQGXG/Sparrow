@@ -32,6 +32,12 @@ public sealed partial class ToolItemViewModel : ObservableObject
     /// <summary>界面显示的分类名；未知分类原样显示。</summary>
     public string CategoryDisplay => ToolCategories.Display(CategoryLabel);
 
+    /// <summary>工具墙上的全局序号（01 起）；最近页等其它列表保持 0。</summary>
+    public int Index { get; set; }
+
+    /// <summary>卡片右上角的两位序号。</summary>
+    public string IndexLabel => Index.ToString("D2");
+
     /// <summary>工作区左栏的选中态。由 WorkspaceViewModel 在 SelectedTool 变化时维护。</summary>
     [ObservableProperty]
     private bool _isSelected;

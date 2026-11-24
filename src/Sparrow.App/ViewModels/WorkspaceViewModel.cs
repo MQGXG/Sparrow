@@ -79,6 +79,9 @@ public partial class WorkspaceViewModel : ObservableObject
 
     public ObservableCollection<CategoryViewModel> Categories { get; } = [];
 
+    /// <summary>工具墙统计：当前过滤后的工具数。</summary>
+    public int ToolCount => VisibleTools.Count;
+
     public ObservableCollection<RecentToolViewModel> RecentTools { get; } = [];
 
     public ObservableCollection<ParameterViewModel> Parameters { get; } = [];
@@ -704,21 +707,26 @@ public partial class WorkspaceViewModel : ObservableObject
         var list = items.ToList();
         var tools = list.Select(entry => new ToolItemViewModel(entry)).ToList();
 
+        // 全局序号：卡片右上角 01..N，墙面像一份可检索的目录
+        for (var i = 0; i < tools.Count; i++)
+            tools[i].Index = i + 1;
+
         Groups.Clear();
         VisibleTools.Clear();
 
         foreach (var tool in tools)
             VisibleTools.Add(tool);
 
-        foreach (var group in tools
-                     .GroupBy(tool => tool.CategoryLabel)
-                     .OrderBy(group => group.Key, StringComparer.Ordinal))
-        {
-            Groups.Add(new ToolGroupViewModel(group.Key, group));
-        }
+        var orderedGroups = tools
+            .GroupBy(tool => tool.CategoryLabel)
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .ToList();
 
-        HasTools = list.Count > 0;
-        UpdateGroupExpansion();
+        for (var i = 0; i < orderedGroups.Count; i++)
+            Groups.Add(new ToolGroupViewModel(orderedGroups[i].Key, orderedGroups[i], i + 1));
+
+        OnPropertyChanged(nameof(ToolCount));
+        HasTools = list.Count > 0;        UpdateGroupExpansion();
         OnPropertyChanged(nameof(EmptyToolMessage));
     }
 

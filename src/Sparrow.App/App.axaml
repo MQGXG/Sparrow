@@ -8,6 +8,8 @@
       <ResourceDictionary.MergedDictionaries>
         <!-- 图标几何：放 Application.Resources，DataTemplate 里也能 StaticResource 到 -->
         <ResourceInclude Source="avares://Sparrow.App/Styles/Icons.axaml" />
+        <!-- 自绘窗口装饰：Avalonia 12 用 Window.WindowDecorationsTheme 接管标题栏按钮 -->
+        <ResourceInclude Source="avares://Sparrow.App/Styles/WindowDecorations.axaml" />
       </ResourceDictionary.MergedDictionaries>
     </ResourceDictionary>
   </Application.Resources>
