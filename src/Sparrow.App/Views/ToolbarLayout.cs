@@ -11,7 +11,7 @@ internal sealed class ToolbarLayout
     /// <summary>四个折叠组的默认成员；最后一个就是入口。</summary>
     public static readonly AnnotationTool[][] Groups =
     [
-        [AnnotationTool.Ellipse, AnnotationTool.Bracket, AnnotationTool.Rectangle],
+        [AnnotationTool.Diamond, AnnotationTool.Ellipse, AnnotationTool.Bracket, AnnotationTool.Rectangle],
         [AnnotationTool.Line, AnnotationTool.Distance, AnnotationTool.Angle, AnnotationTool.Arrow],
         [AnnotationTool.Highlighter, AnnotationTool.Pen],
         [AnnotationTool.Number, AnnotationTool.Watermark, AnnotationTool.Bubble, AnnotationTool.Text]
@@ -86,6 +86,23 @@ internal sealed class ToolbarLayout
                 layout.Hidden.Add(tool);
         }
 
+        // 菱形是后加的工具：老配置里没提到它时自动补回形状组，而不是被当成隐藏
+        var configMentionsDiamond = positions?.Any(entry =>
+            entry?.Contains(nameof(AnnotationTool.Diamond), StringComparison.OrdinalIgnoreCase) == true) ?? false;
+
+        if (positions is not null && !configMentionsDiamond && !layout.Contains(AnnotationTool.Diamond))
+        {
+            layout.Hidden.Remove(AnnotationTool.Diamond);
+
+            var shapes = layout.Positions.FirstOrDefault(position =>
+                position.Any(tool => GroupIndexFor(tool) == 0));
+
+            if (shapes is not null)
+                shapes.Add(AnnotationTool.Diamond);
+            else
+                layout.Positions.Add([AnnotationTool.Diamond]);
+        }
+
         return layout;
     }
 
@@ -126,14 +143,16 @@ internal sealed class ToolbarLayout
         position.Add(tool);
     }
 
-    public static int GroupIndexFor(AnnotationTool tool) =>
-        tool is AnnotationTool.Ellipse or AnnotationTool.Bracket or AnnotationTool.Rectangle ? 0
-        : tool is AnnotationTool.Line or AnnotationTool.Distance or AnnotationTool.Angle
-            or AnnotationTool.Arrow ? 1
-        : tool is AnnotationTool.Highlighter or AnnotationTool.Pen ? 2
-        : tool is AnnotationTool.Number or AnnotationTool.Watermark or AnnotationTool.Bubble
-            or AnnotationTool.Text ? 3
-        : -1;
+    public static int GroupIndexFor(AnnotationTool tool)
+    {
+        for (var index = 0; index < Groups.Length; index++)
+        {
+            if (Groups[index].Contains(tool))
+                return index;
+        }
+
+        return -1;
+    }
 
     public static string GroupLabel(int index) => index switch
     {

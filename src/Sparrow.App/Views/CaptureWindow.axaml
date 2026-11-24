@@ -24,6 +24,7 @@
     <!-- 标注工具图标（24×24 线稿） -->
     <StreamGeometry x:Key="ToolRect">M4 6.5h16v11H4z</StreamGeometry>
     <StreamGeometry x:Key="ToolEllipse">M12 5.5c4.4 0 8 2.9 8 6.5s-3.6 6.5-8 6.5-8-2.9-8-6.5 3.6-6.5 8-6.5z</StreamGeometry>
+    <StreamGeometry x:Key="ToolDiamond">M12 3.5 20.5 12 12 20.5 3.5 12z</StreamGeometry>
     <StreamGeometry x:Key="ToolArrow">M5 19 19 5 M11.5 5H19v7.5</StreamGeometry>
     <StreamGeometry x:Key="ToolLine">M5 19 19 5</StreamGeometry>
     <StreamGeometry x:Key="ToolDistance">M4 12h16 M4 8v8 M20 8v8</StreamGeometry>
@@ -367,6 +368,19 @@
       <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource AccentOnBrush}" />
+    </Style>
+    <!-- 用图标的分段按钮（形状切换）：图标 14，线宽 1.4，选中跟随强调色 -->
+    <Style Selector="Button.prop.seg Path">
+      <Setter Property="Width" Value="14" />
+      <Setter Property="Height" Value="14" />
+      <Setter Property="Stretch" Value="Uniform" />
+      <Setter Property="Stroke" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="StrokeThickness" Value="1.4" />
+      <Setter Property="StrokeLineCap" Value="Round" />
+      <Setter Property="StrokeJoin" Value="Round" />
+    </Style>
+    <Style Selector="Button.prop.seg.selected Path">
+      <Setter Property="Stroke" Value="{DynamicResource AccentOnBrush}" />
     </Style>
     <!-- 带色块预览的分段按钮：选中时用琥珀描边，不能铺实心底，否则预览被盖住 -->
     <Style Selector="Button.prop.seg.swatch-seg.selected">
@@ -730,6 +744,10 @@
                   ToolTip.Tip="椭圆（3）" Click="OnEllipseToolClick">
             <Path Data="{StaticResource ToolEllipse}" />
           </Button>
+          <Button x:Name="DiamondToolButton" Classes="tool" IsVisible="False"
+                  ToolTip.Tip="菱形" Click="OnDiamondToolClick">
+            <Path Data="{StaticResource ToolDiamond}" />
+          </Button>
           <Button x:Name="BracketToolButton" Classes="tool" IsVisible="False"
                   ToolTip.Tip="括号（[）" Click="OnBracketToolClick">
             <Path Data="{StaticResource ToolBracket}" />
@@ -953,20 +971,44 @@
       <Border x:Name="StyleRow" Classes="capture-bar" HorizontalAlignment="Center" IsVisible="False">
         <views:SpacingWrapPanel x:Name="StyleGroups" Spacing="8" LineSpacing="6">
 
+          <!-- 形状类型：矩形 / 椭圆 / 括号。参考 snow-shot 属性栏第一组，
+               把形状切换放到手边，画完一个形状不用再回主条折叠组 -->
+          <StackPanel x:Name="ShapeTypeGroup" Orientation="Horizontal" Spacing="4">
+            <TextBlock Classes="prop-label" Text="形状" />
+            <Button x:Name="ShapeRectButton" Classes="prop seg"
+                    Click="OnRectToolClick" ToolTip.Tip="矩形（2）">
+              <Path Data="{StaticResource ToolRect}" />
+            </Button>
+            <Button x:Name="ShapeEllipseButton" Classes="prop seg"
+                    Click="OnEllipseToolClick" ToolTip.Tip="椭圆（3）">
+              <Path Data="{StaticResource ToolEllipse}" />
+            </Button>
+            <Button x:Name="ShapeDiamondButton" Classes="prop seg"
+                    Click="OnDiamondToolClick" ToolTip.Tip="菱形">
+              <Path Data="{StaticResource ToolDiamond}" />
+            </Button>
+            <Button x:Name="ShapeBracketButton" Classes="prop seg"
+                    Click="OnBracketToolClick" ToolTip.Tip="括号（[）">
+              <Path Data="{StaticResource ToolBracket}" />
+            </Button>
+            <!-- 分隔线放在组内：非形状工具整组隐藏时，颜色组不会多出前导分隔 -->
+            <Border Classes="prop-sep" />
+          </StackPanel>
+
           <StackPanel x:Name="ColorGroup" Orientation="Horizontal" Spacing="4">
             <TextBlock Classes="prop-label" Text="颜色" />
             <Button x:Name="ColorAmberButton" Classes="swatch" Tag="#E5A44C"
-                    Background="#E5A44C" ToolTip.Tip="琥珀" Click="OnColorClick" />
+                    Background="#E5A44C" ToolTip.Tip="描边颜色 #E5A44C" Click="OnColorClick" />
             <Button x:Name="ColorWhiteButton" Classes="swatch" Tag="#FFFFFF"
-                    Background="#FFFFFF" ToolTip.Tip="白色" Click="OnColorClick" />
+                    Background="#FFFFFF" ToolTip.Tip="描边颜色 #FFFFFF" Click="OnColorClick" />
             <Button x:Name="ColorRedButton" Classes="swatch" Tag="#FF5F5F"
-                    Background="#FF5F5F" ToolTip.Tip="红色" Click="OnColorClick" />
+                    Background="#FF5F5F" ToolTip.Tip="描边颜色 #FF5F5F" Click="OnColorClick" />
             <Button x:Name="ColorGreenButton" Classes="swatch" Tag="#5FD08C"
-                    Background="#5FD08C" ToolTip.Tip="绿色" Click="OnColorClick" />
+                    Background="#5FD08C" ToolTip.Tip="描边颜色 #5FD08C" Click="OnColorClick" />
             <Button x:Name="ColorBlueButton" Classes="swatch" Tag="#5FA8FF"
-                    Background="#5FA8FF" ToolTip.Tip="蓝色" Click="OnColorClick" />
+                    Background="#5FA8FF" ToolTip.Tip="描边颜色 #5FA8FF" Click="OnColorClick" />
             <Button x:Name="CustomColorButton" Classes="swatch"
-                    ToolTip.Tip="自定义颜色" Click="OnCustomColorClick">
+                    ToolTip.Tip="颜色与线型" Click="OnCustomColorClick">
               <Button.Background>
                 <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
                   <GradientStop Color="#FF5F5F" Offset="0" />
@@ -982,42 +1024,26 @@
           <StackPanel x:Name="WidthGroup" Orientation="Horizontal" Spacing="4">
             <Border Classes="prop-sep" />
             <TextBlock Classes="prop-label" Text="线宽" />
-            <Button x:Name="WidthMenuButton" Classes="prop" Content="2 px">
-              <Button.Flyout>
-                <MenuFlyout Placement="Top">
-                  <MenuItem Header="2 px" Click="OnWidth2Menu" />
-                  <MenuItem Header="3 px" Click="OnWidth3Menu" />
-                  <MenuItem Header="4 px" Click="OnWidth4Menu" />
-                  <MenuItem Header="8 px" Click="OnWidth8Menu" />
-                  <MenuItem Header="12 px" Click="OnWidth12Menu" />
-                </MenuFlyout>
-              </Button.Flyout>
+            <!-- 可视化档位：横线粗细就是实际线宽，比下拉少一次点击（参考 snow-shot） -->
+            <Button x:Name="Width2Button" Classes="prop seg" Click="OnWidth2Menu"
+                    ToolTip.Tip="2 px">
+              <Border Classes="seg-line" Width="16" Height="2" CornerRadius="1" />
             </Button>
-          </StackPanel>
-
-          <StackPanel x:Name="DashGroup" Orientation="Horizontal" Spacing="4">
-            <Border Classes="prop-sep" />
-            <TextBlock Classes="prop-label" Text="线型" />
-            <!-- 枚举改分段按钮：参考里所有小选项都是并排的，不是下拉 -->
-            <Button x:Name="DashSolidButton" Classes="prop seg"
-                    Click="OnDashSolidMenu" ToolTip.Tip="实线">
-              <Border Classes="seg-line" Width="16" Height="2" />
+            <Button x:Name="Width3Button" Classes="prop seg" Click="OnWidth3Menu"
+                    ToolTip.Tip="3 px">
+              <Border Classes="seg-line" Width="16" Height="3" CornerRadius="1.5" />
             </Button>
-            <Button x:Name="DashDashButton" Classes="prop seg"
-                    Click="OnDashDashMenu" ToolTip.Tip="虚线">
-              <StackPanel Orientation="Horizontal" Spacing="2">
-                <Border Classes="seg-line" Width="4" Height="2" />
-                <Border Classes="seg-line" Width="4" Height="2" />
-                <Border Classes="seg-line" Width="4" Height="2" />
-              </StackPanel>
+            <Button x:Name="Width4Button" Classes="prop seg" Click="OnWidth4Menu"
+                    ToolTip.Tip="4 px">
+              <Border Classes="seg-line" Width="16" Height="4" CornerRadius="2" />
             </Button>
-            <Button x:Name="DashDotButton" Classes="prop seg"
-                    Click="OnDashDotMenu" ToolTip.Tip="点线">
-              <StackPanel Orientation="Horizontal" Spacing="2">
-                <Border Classes="seg-line" Width="2" Height="2" CornerRadius="1" />
-                <Border Classes="seg-line" Width="2" Height="2" CornerRadius="1" />
-                <Border Classes="seg-line" Width="2" Height="2" CornerRadius="1" />
-              </StackPanel>
+            <Button x:Name="Width8Button" Classes="prop seg" Click="OnWidth8Menu"
+                    ToolTip.Tip="8 px">
+              <Border Classes="seg-line" Width="16" Height="6" CornerRadius="3" />
+            </Button>
+            <Button x:Name="Width12Button" Classes="prop seg" Click="OnWidth12Menu"
+                    ToolTip.Tip="12 px">
+              <Border Classes="seg-line" Width="16" Height="8" CornerRadius="4" />
             </Button>
           </StackPanel>
 
@@ -1026,9 +1052,31 @@
             <TextBlock Classes="prop-label" Text="填充" />
             <Button x:Name="FillNoneButton" Classes="prop seg swatch-seg"
                     Click="OnFillNoneMenu" ToolTip.Tip="无填充">
-              <Border Classes="seg-swatch" Width="12" Height="12" CornerRadius="2"
-                      Background="Transparent" BorderThickness="1" />
+              <!-- 透明用棋盘格表示（参考 snow-shot），比空心框更直观 -->
+              <Border Classes="seg-swatch" Width="12" Height="12" CornerRadius="2">
+                <Border.Background>
+                  <DrawingBrush TileMode="Tile" Stretch="None"
+                                SourceRect="0,0,8,8" DestinationRect="0,0,6,6">
+                    <DrawingBrush.Drawing>
+                      <DrawingGroup>
+                        <GeometryDrawing Brush="#FF4A5260" Geometry="M0,0 H4 V4 H0 Z" />
+                        <GeometryDrawing Brush="#FF2A313B" Geometry="M4,4 H8 V8 H4 Z" />
+                      </DrawingGroup>
+                    </DrawingBrush.Drawing>
+                  </DrawingBrush>
+                </Border.Background>
+              </Border>
             </Button>
+            <!-- 填充预设色：点一下 = 实心 + 该颜色（参考 snow-shot 的填充色块） -->
+            <Button x:Name="FillPresetPinkButton" Classes="swatch"
+                    Background="#FFCCC7" ToolTip.Tip="填充色 #FFCCC7"
+                    Click="OnFillPresetClick" Tag="#FFCCC7" />
+            <Button x:Name="FillPresetWhiteButton" Classes="swatch"
+                    Background="#FFFFFF" ToolTip.Tip="填充色 #FFFFFF"
+                    Click="OnFillPresetClick" Tag="#FFFFFF" />
+            <Button x:Name="FillPresetBlueButton" Classes="swatch"
+                    Background="#BAE0FF" ToolTip.Tip="填充色 #BAE0FF"
+                    Click="OnFillPresetClick" Tag="#BAE0FF" />
             <Button x:Name="FillSoftButton" Classes="prop seg swatch-seg"
                     Click="OnFillSoftMenu" ToolTip.Tip="淡色填充">
               <Border Classes="seg-swatch soft" Width="12" Height="12" CornerRadius="2" />
@@ -1036,6 +1084,50 @@
             <Button x:Name="FillSolidButton" Classes="prop seg swatch-seg"
                     Click="OnFillSolidMenu" ToolTip.Tip="实心填充">
               <Border Classes="seg-swatch solid" Width="12" Height="12" CornerRadius="2" />
+            </Button>
+            <Button x:Name="FillLineButton" Classes="prop seg swatch-seg"
+                    Click="OnFillLineMenu" ToolTip.Tip="斜线填充">
+              <Border Classes="seg-swatch" Width="12" Height="12" CornerRadius="2">
+                <Border.Background>
+                  <DrawingBrush TileMode="Tile" Stretch="None"
+                                SourceRect="0,0,6,6" DestinationRect="0,0,4,4">
+                    <DrawingBrush.Drawing>
+                      <DrawingGroup>
+                        <GeometryDrawing Geometry="M-1,5 L5,-1 M1,7 L7,1">
+                          <GeometryDrawing.Pen>
+                            <Pen Brush="#FFE5A44C" Thickness="1" />
+                          </GeometryDrawing.Pen>
+                        </GeometryDrawing>
+                      </DrawingGroup>
+                    </DrawingBrush.Drawing>
+                  </DrawingBrush>
+                </Border.Background>
+              </Border>
+            </Button>
+            <Button x:Name="FillCrossButton" Classes="prop seg swatch-seg"
+                    Click="OnFillCrossMenu" ToolTip.Tip="交叉斜线填充">
+              <Border Classes="seg-swatch" Width="12" Height="12" CornerRadius="2">
+                <Border.Background>
+                  <DrawingBrush TileMode="Tile" Stretch="None"
+                                SourceRect="0,0,6,6" DestinationRect="0,0,4,4">
+                    <DrawingBrush.Drawing>
+                      <DrawingGroup>
+                        <GeometryDrawing Geometry="M-1,5 L5,-1 M1,7 L7,1 M-1,1 L5,7 M1,-1 L7,5">
+                          <GeometryDrawing.Pen>
+                            <Pen Brush="#FFE5A44C" Thickness="1" />
+                          </GeometryDrawing.Pen>
+                        </GeometryDrawing>
+                      </DrawingGroup>
+                    </DrawingBrush.Drawing>
+                  </DrawingBrush>
+                </Border.Background>
+              </Border>
+            </Button>
+            <!-- 填充色独立于描边色；直接点开调色板 -->
+            <Button x:Name="FillColorButton" Classes="prop"
+                    Click="OnFillColorClick" ToolTip.Tip="填充颜色">
+              <Border x:Name="FillColorSwatch" Width="12" Height="12" CornerRadius="3"
+                      BorderThickness="1" BorderBrush="#40FFFFFF" Background="Transparent" />
             </Button>
           </StackPanel>
 
@@ -1059,6 +1151,9 @@
 
           <StackPanel x:Name="FontGroup" Orientation="Horizontal" Spacing="4">
             <Border Classes="prop-sep" />
+            <TextBlock Classes="prop-label" Text="字体" />
+            <ComboBox x:Name="FontFamilyBox" Width="136" Height="26" FontSize="11"
+                      SelectionChanged="OnFontFamilyChanged" ToolTip.Tip="文字字体" />
             <TextBlock Classes="prop-label" Text="字号" />
             <!-- S/M/L/XL 档位 + 数值（参考做法），比下拉少两次点击 -->
             <Button x:Name="FontSButton" Classes="prop seg"
@@ -1072,10 +1167,117 @@
             <Button x:Name="BoldButton" Classes="prop" Content="B"
                     FontWeight="Bold" Padding="8,0" Click="OnBoldClick"
                     ToolTip.Tip="加粗" />
+            <Button x:Name="ItalicButton" Classes="prop" Content="I"
+                    FontStyle="Italic" Padding="8,0" Click="OnItalicClick"
+                    ToolTip.Tip="斜体" />
+          </StackPanel>
+
+          <!-- 文字排版：对齐 / 背景 / 描边，只在文字工具出现 -->
+          <StackPanel x:Name="TextLayoutGroup" Orientation="Horizontal" Spacing="4">
+            <Border Classes="prop-sep" />
+            <TextBlock Classes="prop-label" Text="对齐" />
+            <Button x:Name="AlignLeftButton" Classes="prop seg" Content="左"
+                    Click="OnAlignLeftMenu" ToolTip.Tip="左对齐" />
+            <Button x:Name="AlignCenterButton" Classes="prop seg" Content="中"
+                    Click="OnAlignCenterMenu" ToolTip.Tip="居中对齐" />
+            <Button x:Name="AlignRightButton" Classes="prop seg" Content="右"
+                    Click="OnAlignRightMenu" ToolTip.Tip="右对齐" />
+
+            <TextBlock Classes="prop-label" Text="背景" />
+            <Button x:Name="BackgroundMenuButton" Classes="prop" Content="无背景">
+              <Button.Flyout>
+                <MenuFlyout Placement="Top">
+                  <MenuItem Header="无背景" Click="OnBackgroundNoneMenu" />
+                  <MenuItem Header="黑底" Click="OnBackgroundBlackMenu" />
+                  <MenuItem Header="白底" Click="OnBackgroundWhiteMenu" />
+                  <MenuItem Header="琥珀底" Click="OnBackgroundAmberMenu" />
+                </MenuFlyout>
+              </Button.Flyout>
+            </Button>
+
+            <TextBlock Classes="prop-label" Text="描边" />
+            <Button x:Name="StrokeWidthMenuButton" Classes="prop" Content="无描边">
+              <Button.Flyout>
+                <MenuFlyout Placement="Top">
+                  <MenuItem Header="无描边" Click="OnStrokeWidth0Menu" />
+                  <MenuItem Header="1 px" Click="OnStrokeWidth1Menu" />
+                  <MenuItem Header="2 px" Click="OnStrokeWidth2Menu" />
+                  <MenuItem Header="4 px" Click="OnStrokeWidth4Menu" />
+                </MenuFlyout>
+              </Button.Flyout>
+            </Button>
+            <Button x:Name="StrokeColorMenuButton" Classes="prop" Content="黑">
+              <Button.Flyout>
+                <MenuFlyout Placement="Top">
+                  <MenuItem Header="黑" Click="OnStrokeColorBlackMenu" />
+                  <MenuItem Header="白" Click="OnStrokeColorWhiteMenu" />
+                  <MenuItem Header="琥珀" Click="OnStrokeColorAmberMenu" />
+                </MenuFlyout>
+              </Button.Flyout>
+            </Button>
+          </StackPanel>
+
+          <!-- 水印文本：选中水印时直接改它，没选中时改下次创建的默认值 -->
+          <StackPanel x:Name="WatermarkGroup" Orientation="Horizontal" Spacing="4">
+            <Border Classes="prop-sep" />
+            <TextBlock Classes="prop-label" Text="文本" />
+            <TextBox x:Name="WatermarkBox" Width="150" Height="26" FontSize="11"
+                     PlaceholderText="水印文字"
+                     ToolTip.Tip="自定义平铺的水印文字"
+                     TextChanged="OnWatermarkBoxChanged"
+                     KeyDown="OnWatermarkBoxKeyDown"
+                     LostFocus="OnWatermarkBoxLostFocus" />
+          </StackPanel>
+
+          <!-- 序号：类型与外形单独一组，避免整条过宽在窄窗口溢出 -->
+          <StackPanel x:Name="NumberFormatGroup" Orientation="Horizontal" Spacing="4">
+            <Border Classes="prop-sep" />
+            <TextBlock Classes="prop-label" Text="类型" />
+            <Button x:Name="NumberFormatButton" Classes="prop" Content="阿拉伯 1 2 3">
+              <Button.Flyout>
+                <MenuFlyout Placement="Top">
+                  <MenuItem Header="阿拉伯数字 1 2 3" Click="OnNumberArabicMenu" />
+                  <MenuItem Header="罗马数字 Ⅰ Ⅱ Ⅲ" Click="OnNumberRomanMenu" />
+                  <MenuItem Header="小写字母 a b c" Click="OnNumberLowerMenu" />
+                  <MenuItem Header="大写字母 A B C" Click="OnNumberUpperMenu" />
+                  <MenuItem Header="中文数字 一 二 三" Click="OnNumberChineseMenu" />
+                </MenuFlyout>
+              </Button.Flyout>
+            </Button>
+
+            <TextBlock Classes="prop-label" Text="外形" />
+            <Button x:Name="NumberShapeButton" Classes="prop" Content="实心圆">
+              <Button.Flyout>
+                <MenuFlyout Placement="Top">
+                  <MenuItem Header="实心圆" Tag="SolidCircle" Click="OnNumberShapeMenu" />
+                  <MenuItem Header="描边圆" Tag="OutlineCircle" Click="OnNumberShapeMenu" />
+                  <MenuItem Header="双层圆" Tag="DoubleCircle" Click="OnNumberShapeMenu" />
+                  <MenuItem Header="实心方块" Tag="SolidSquare" Click="OnNumberShapeMenu" />
+                  <MenuItem Header="圆角方块" Tag="RoundedSquare" Click="OnNumberShapeMenu" />
+                  <MenuItem Header="胶囊标签" Tag="Capsule" Click="OnNumberShapeMenu" />
+                  <MenuItem Header="旗标" Tag="Flag" Click="OnNumberShapeMenu" />
+                  <MenuItem Header="定位针" Tag="Pin" Click="OnNumberShapeMenu" />
+                  <MenuItem Header="六边形" Tag="Hexagon" Click="OnNumberShapeMenu" />
+                  <MenuItem Header="角标标签" Tag="Corner" Click="OnNumberShapeMenu" />
+                </MenuFlyout>
+              </Button.Flyout>
+            </Button>
+
           </StackPanel>
 
           <StackPanel x:Name="NumberGroup" Orientation="Horizontal" Spacing="4">
-            <Border Classes="prop-sep" />
+            <TextBlock Classes="prop-label" Text="序号" />
+            <TextBox x:Name="NumberBox" Width="54" Height="26" FontSize="11"
+                     HorizontalContentAlignment="Center" PlaceholderText="自动"
+                     ToolTip.Tip="留空自动递增，填数字手动指定"
+                     KeyDown="OnNumberBoxKeyDown" LostFocus="OnNumberBoxLostFocus" />
+
+            <TextBlock Classes="prop-label" Text="标签" />
+            <TextBox x:Name="LabelBox" Width="84" Height="26" FontSize="11"
+                     PlaceholderText="自动序号"
+                     ToolTip.Tip="留空显示序号，填了就用这段文字"
+                     KeyDown="OnLabelBoxKeyDown" LostFocus="OnLabelBoxLostFocus" />
+
             <TextBlock Classes="prop-label" Text="大小" />
             <Button x:Name="NumberSizeMenuButton" Classes="prop" Content="24 px">
               <Button.Flyout>
@@ -1194,7 +1396,7 @@
     <!-- 自定义颜色：贴在属性栏上方的浮层 -->
     <Border x:Name="CustomColorPanel"
             IsVisible="False"
-            Width="216"
+            Width="256"
             Background="{StaticResource OverlayBrush}"
             BorderBrush="{StaticResource LineStrongBrush}"
             BorderThickness="1"
@@ -1203,10 +1405,53 @@
             BoxShadow="0 12 32 0 #99000000">
       <StackPanel Spacing="8">
         <Grid ColumnDefinitions="*,Auto">
-          <TextBlock Text="自定义颜色" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" />
+          <TextBlock x:Name="ColorPanelTitle" Text="描边颜色" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" />
           <Button Grid.Column="1" Classes="ghost" Content="✕" FontSize="11" Padding="6,0"
                   Click="OnCloseColorPanel" ToolTip.Tip="关闭" />
         </Grid>
+
+        <!-- 线型与笔触：和颜色共用同一个调色板（参考 snow-shot），形状/直线/画笔都从这里改 -->
+        <StackPanel x:Name="DashGroup" Spacing="4">
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <TextBlock Classes="prop-label" Text="线型" VerticalAlignment="Center" Width="28" />
+            <Button x:Name="DashSolidButton" Classes="prop seg"
+                    Click="OnDashSolidMenu" ToolTip.Tip="实线描边">
+              <Border Classes="seg-line" Width="16" Height="2" />
+            </Button>
+            <Button x:Name="DashDashButton" Classes="prop seg"
+                    Click="OnDashDashMenu" ToolTip.Tip="虚线描边">
+              <StackPanel Orientation="Horizontal" Spacing="2">
+                <Border Classes="seg-line" Width="4" Height="2" />
+                <Border Classes="seg-line" Width="4" Height="2" />
+                <Border Classes="seg-line" Width="4" Height="2" />
+              </StackPanel>
+            </Button>
+            <Button x:Name="DashDotButton" Classes="prop seg"
+                    Click="OnDashDotMenu" ToolTip.Tip="点线描边">
+              <StackPanel Orientation="Horizontal" Spacing="2">
+                <Border Classes="seg-line" Width="2" Height="2" CornerRadius="1" />
+                <Border Classes="seg-line" Width="2" Height="2" CornerRadius="1" />
+                <Border Classes="seg-line" Width="2" Height="2" CornerRadius="1" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <TextBlock Classes="prop-label" Text="笔触" VerticalAlignment="Center" Width="28" />
+            <Button x:Name="StyleNeatButton" Classes="prop seg"
+                    Click="OnStyleNeatMenu" ToolTip.Tip="规整：直尺描边">
+              <Border Classes="seg-line" Width="16" Height="2" CornerRadius="1" />
+            </Button>
+            <Button x:Name="StyleSketchButton" Classes="prop seg"
+                    Click="OnStyleSketchMenu" ToolTip.Tip="手绘：轻微抖动">
+              <Path Data="M1 9 C4.5 3 7.5 3 11 9 C13 12.5 15 12.5 17 9" />
+            </Button>
+            <Button x:Name="StyleRoughButton" Classes="prop seg"
+                    Click="OnStyleRoughMenu" ToolTip.Tip="涂鸦：双线粗手绘">
+              <Path Data="M1 9 C3 4 5 11 7.5 7 C10 3 12 10 14 7 C15.5 5 16.5 7 17 9" />
+            </Button>
+          </StackPanel>
+        </StackPanel>
 
         <Border x:Name="SvArea" Height="110" CornerRadius="6" ClipToBounds="True"
                 Cursor="Cross"
@@ -1252,12 +1497,55 @@
           </Border.Background>
         </Border>
 
-        <StackPanel Orientation="Horizontal" Spacing="8">
-          <TextBlock x:Name="HexText" Classes="prop-value" Text="#E5A44C" VerticalAlignment="Center" />
-          <Button Classes="prop" Content="应用" Click="OnApplyCustomColor" HorizontalAlignment="Right" />
-        </StackPanel>
+        <!-- 透明度条：棋盘格底 + 当前色到透明的渐变（参考 snow-shot 的 alpha 条） -->
+        <Border x:Name="AlphaBar" Height="12" CornerRadius="6" ClipToBounds="True"
+                Cursor="Hand"
+                PointerPressed="OnAlphaPressed"
+                PointerMoved="OnAlphaMoved">
+          <Panel>
+            <Border>
+              <Border.Background>
+                <DrawingBrush TileMode="Tile" Stretch="None"
+                              SourceRect="0,0,8,8" DestinationRect="0,0,6,6">
+                  <DrawingBrush.Drawing>
+                    <DrawingGroup>
+                      <GeometryDrawing Brush="#FF4A5260" Geometry="M0,0 H4 V4 H0 Z" />
+                      <GeometryDrawing Brush="#FF2A313B" Geometry="M4,4 H8 V8 H4 Z" />
+                    </DrawingGroup>
+                  </DrawingBrush.Drawing>
+                </DrawingBrush>
+              </Border.Background>
+            </Border>
+            <Border x:Name="AlphaGradient">
+              <Border.Background>
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                  <GradientStop Color="#00E5A44C" Offset="0" />
+                  <GradientStop Color="#FFE5A44C" Offset="1" />
+                </LinearGradientBrush>
+              </Border.Background>
+            </Border>
+            <Ellipse x:Name="AlphaCursor" Width="12" Height="12"
+                     HorizontalAlignment="Left" VerticalAlignment="Center"
+                     Stroke="#FFFFFFFF" StrokeThickness="2" IsHitTestVisible="False" />
+          </Panel>
+        </Border>
 
+        <!-- HEX 输入 + 透明度读数 -->
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <TextBlock Classes="prop-label" Text="HEX" VerticalAlignment="Center" />
+          <TextBox x:Name="HexBox" Grid.Column="1" Height="26" FontSize="11" Margin="6,0"
+                   KeyDown="OnHexBoxKeyDown" LostFocus="OnHexBoxLostFocus" />
+          <TextBlock x:Name="AlphaText" Grid.Column="2" Classes="prop-value"
+                     Text="100%" VerticalAlignment="Center" />
+        </Grid>
+
+        <!-- 预设色板 -->
+        <WrapPanel x:Name="PresetColors" ItemWidth="22" ItemHeight="22" Orientation="Horizontal" />
+
+        <!-- 最近使用 -->
         <WrapPanel x:Name="RecentColors" ItemWidth="22" ItemHeight="22" Orientation="Horizontal" />
+
+        <Button Classes="prop" Content="应用" Click="OnApplyCustomColor" HorizontalAlignment="Right" />
       </StackPanel>
     </Border>
   </Canvas>

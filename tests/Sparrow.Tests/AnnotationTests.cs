@@ -999,4 +999,329 @@ public sealed class AnnotationTests
 
         strong.GetPixel(40, 40).Green.ShouldBeLessThan(light.GetPixel(40, 40).Green);
     }
+
+    [Fact]
+    public void 笔触_手绘和涂鸦会偏离直线轴线()
+    {
+        var png = CreateWhitePng(120, 60);
+        var solid = new LineAnnotation(
+            new Point(10, 30), new Point(110, 30), 0xFFFF0000, 2);
+
+        int TopInk(SKBitmap bitmap)
+        {
+            var top = int.MaxValue;
+            for (var x = 12; x < 108; x++)
+            {
+                for (var y = 0; y < 60; y++)
+                {
+                    var pixel = bitmap.GetPixel(x, y);
+                    if (pixel.Red > 180 && pixel.Green < 160)
+                    {
+                        if (y < top)
+                            top = y;
+                        break;
+                    }
+                }
+            }
+
+            return top;
+        }
+
+        using var solidImage = SKBitmap.Decode(AnnotationRenderer.Compose(png, [solid], 1));
+        using var waveImage = SKBitmap.Decode(
+            AnnotationRenderer.Compose(png, [solid with { Style = LineStyle.Sketch }], 1));
+        using var zigzagImage = SKBitmap.Decode(
+            AnnotationRenderer.Compose(png, [solid with { Style = LineStyle.Rough }], 1));
+
+        var solidTop = TopInk(solidImage);
+        solidTop.ShouldBeLessThan(int.MaxValue);
+
+        // 手绘/涂鸦沿法线鼓出，最高点会比直线更靠上
+        var sketchTop = TopInk(waveImage);
+        var roughTop = TopInk(zigzagImage);
+        sketchTop.ShouldBeLessThan(solidTop);
+        roughTop.ShouldBeLessThan(solidTop);
+
+        // 涂鸦抖动更大，而且是双线，墨迹比手绘多
+        roughTop.ShouldBeLessThan(sketchTop);
+        Ink(zigzagImage).ShouldBeGreaterThan(Ink(waveImage));
+    }
+
+    private static int Ink(SKBitmap bitmap)
+    {
+        var count = 0;
+        for (var x = 0; x < bitmap.Width; x++)
+        {
+            for (var y = 0; y < bitmap.Height; y++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.Red > 180 && pixel.Green < 160)
+                    count++;
+            }
+        }
+
+        return count;
+    }
+
+    [AvaloniaFact]
+    public void 选中标注后_属性栏修改直接作用于该标注()
+    {
+        var window = new CaptureWindow();
+        window.Show();
+
+        // 拉选区 + 画一个矩形
+        window.MouseDown(new Point(50, 50), MouseButton.Left);
+        window.MouseMove(new Point(400, 300));
+        window.MouseUp(new Point(400, 300), MouseButton.Left);
+
+        window.RectToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.MouseDown(new Point(100, 100), MouseButton.Left);
+        window.MouseMove(new Point(300, 250));
+        window.MouseUp(new Point(300, 250), MouseButton.Left);
+        window.Notes.Count.ShouldBe(1);
+
+        // 选中该矩形：属性栏的线型/线宽/填充应直接改这条标注
+        window.SelectNote(0);
+
+        window.StyleSketchButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.Notes[0].ShouldBeOfType<ShapeAnnotation>().Style.ShouldBe(LineStyle.Sketch);
+
+        window.Width8Button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.Notes[0].ShouldBeOfType<ShapeAnnotation>().Width.ShouldBe(8);
+
+        window.FillLineButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.Notes[0].ShouldBeOfType<ShapeAnnotation>().Fill.ShouldBe(ShapeFill.Line);
+
+        window.ColorRedButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.Notes[0].ShouldBeOfType<ShapeAnnotation>().Color.ShouldBe(0xFFFF5F5F);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 线型组在调色板中_不再占属性栏一行()
+    {
+        var window = new CaptureWindow();
+        window.RectToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.CustomColorButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        window.CustomColorPanel.IsVisible.ShouldBeTrue();
+        window.DashGroup.IsVisible.ShouldBeTrue();
+        window.StyleGroups.Children.Contains(window.DashGroup).ShouldBeFalse();
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 线型与笔触是两个独立维度()
+    {
+        var window = new CaptureWindow();
+        window.Show();
+
+        window.MouseDown(new Point(50, 50), MouseButton.Left);
+        window.MouseMove(new Point(400, 300));
+        window.MouseUp(new Point(400, 300), MouseButton.Left);
+
+        window.RectToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.MouseDown(new Point(100, 100), MouseButton.Left);
+        window.MouseMove(new Point(300, 250));
+        window.MouseUp(new Point(300, 250), MouseButton.Left);
+
+        window.SelectNote(0);
+        window.DashDashButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.StyleRoughButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        var shape = window.Notes[0].ShouldBeOfType<ShapeAnnotation>();
+        shape.Dash.ShouldBe(LineDash.Dash);
+        shape.Style.ShouldBe(LineStyle.Rough);
+
+        // 改笔触不会把线型重置回实线
+        window.StyleSketchButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.Notes[0].ShouldBeOfType<ShapeAnnotation>().Dash.ShouldBe(LineDash.Dash);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 序号_外形直接作用于选中标注()
+    {
+        var window = CreateWindowWithSelection();
+        window.NumberToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        window.MouseDown(new Point(180, 180), MouseButton.Left);
+        window.MouseUp(new Point(180, 180), MouseButton.Left);
+
+        window.SelectNote(0);
+        window.Notes[0].ShouldBeOfType<NumberAnnotation>().Shape.ShouldBe(NumberShape.SolidCircle);
+
+        window.SetNumberShape(NumberShape.Pin);
+        window.Notes[0].ShouldBeOfType<NumberAnnotation>().Shape.ShouldBe(NumberShape.Pin);
+        window.NumberShapeButton.Content.ShouldBe("定位针");
+
+        window.SetNumberShape(NumberShape.Hexagon);
+        window.Notes[0].ShouldBeOfType<NumberAnnotation>().Shape.ShouldBe(NumberShape.Hexagon);
+        window.NumberShapeButton.Content.ShouldBe("六边形");
+
+        window.Close();
+    }
+
+    [Fact]
+    public void 序号外形_顶点与文字锚点()
+    {
+        var bounds = new Rect(0, 0, 40, 40);
+
+        // 圆 / 方族没有顶点，各自有画法
+        NumberGeometry.Polygon(NumberShape.SolidCircle, bounds).ShouldBeNull();
+        NumberGeometry.Polygon(NumberShape.Capsule, bounds).ShouldBeNull();
+
+        // 六边形尖顶朝上
+        var hexagon = NumberGeometry.Polygon(NumberShape.Hexagon, bounds)!;
+        hexagon.Count.ShouldBe(6);
+        hexagon[0].X.ShouldBe(20, 0.01);
+        hexagon[0].Y.ShouldBe(0, 0.01);
+
+        // 旗标 5 点、底边中央有 V 形缺口；角标是右上三角
+        var flag = NumberGeometry.Polygon(NumberShape.Flag, bounds)!;
+        flag.Count.ShouldBe(5);
+        flag[3].Y.ShouldBe(30, 0.01);   // bottom - r*0.5 = 40 - 20*0.5
+
+        NumberGeometry.Polygon(NumberShape.Corner, bounds)!.Count.ShouldBe(3);
+
+        // 胶囊更宽、定位针更高
+        NumberGeometry.BadgeBounds(new Point(0, 0), 32, NumberShape.Capsule).Width.ShouldBe(48, 0.01);
+        NumberGeometry.BadgeBounds(new Point(0, 0), 32, NumberShape.Pin).Height.ShouldBe(41.6, 0.01);
+
+        // 定位针的文字在圆头里；角标文字靠右上
+        var pin = NumberGeometry.BadgeBounds(new Point(0, 0), 32, NumberShape.Pin);
+        NumberGeometry.TextAnchor(pin, NumberShape.Pin).Y.ShouldBe(pin.Top + 16, 0.01);
+        NumberGeometry.TextAnchor(bounds, NumberShape.Corner).X
+            .ShouldBeGreaterThan(bounds.Center.X);
+    }
+
+    [Fact]
+    public void 形状标注_斜线与交叉斜线填充换用独立填充色()
+    {
+        var png = CreateWhitePng(120, 120);
+
+        ShapeAnnotation Make(ShapeFill fill) => new(
+            new Rect(10, 10, 100, 100),
+            0xFFFF0000,   // 红色描边
+            2,
+            false,
+            Opacity: 1,
+            Fill: fill,
+            FillColor: 0xFF0000FF);   // 蓝色填充
+
+        int BluePixels(SKBitmap bitmap)
+        {
+            var count = 0;
+            for (var x = 20; x < 100; x++)
+            {
+                for (var y = 20; y < 100; y++)
+                {
+                    var pixel = bitmap.GetPixel(x, y);
+                    if (pixel.Blue > 180 && pixel.Red < 140)
+                        count++;
+                }
+            }
+
+            return count;
+        }
+
+        using var line = SKBitmap.Decode(
+            AnnotationRenderer.Compose(png, [Make(ShapeFill.Line)], 1));
+        using var cross = SKBitmap.Decode(
+            AnnotationRenderer.Compose(png, [Make(ShapeFill.CrossLine)], 1));
+
+        var linePixels = BluePixels(line);
+        linePixels.ShouldBeGreaterThan(0);
+
+        // 交叉斜线比单向斜线多一组线，蓝色像素更多
+        BluePixels(cross).ShouldBeGreaterThan(linePixels);
+    }
+
+    [AvaloniaFact]
+    public void 序号_类型与手动序号直接作用于选中标注()
+    {
+        var window = CreateWindowWithSelection();
+        window.NumberToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        window.MouseDown(new Point(180, 180), MouseButton.Left);
+        window.MouseUp(new Point(180, 180), MouseButton.Left);
+
+        window.Notes.Count.ShouldBe(1);
+        window.Notes[0].ShouldBeOfType<NumberAnnotation>().Number.ShouldBe(1);
+
+        window.SelectNote(0);
+
+        // 数字类型：阿拉伯 → 罗马
+        window.SetNumberFormat(NumberFormat.Roman);
+        window.Notes[0].ShouldBeOfType<NumberAnnotation>().Format.ShouldBe(NumberFormat.Roman);
+
+        // 手动序号：改成 7，显示也跟着变
+        window.NumberBox.Text = "7";
+        window.CommitNumberBox();
+        window.Notes[0].ShouldBeOfType<NumberAnnotation>().Number.ShouldBe(7);
+        window.NumberBox.Text.ShouldBe("7");
+
+        // 标签：留空显示序号，填了就覆盖
+        window.LabelBox.Text = "第一步";
+        window.CommitLabelBox();
+        window.Notes[0].ShouldBeOfType<NumberAnnotation>().Label.ShouldBe("第一步");
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 水印_属性栏文本直接作用于选中标注()
+    {
+        var window = CreateWindowWithSelection();
+        window.WatermarkToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        window.MouseDown(new Point(200, 200), MouseButton.Left);
+        window.MouseUp(new Point(200, 200), MouseButton.Left);
+
+        window.Notes.Count.ShouldBe(1);
+        window.Notes[0].ShouldBeOfType<WatermarkAnnotation>().Text.ShouldBe("Sparrow");
+
+        window.SelectNote(0);
+        window.WatermarkBox.Text = "机密文件";
+        window.CommitWatermarkBox();
+        window.Notes[0].ShouldBeOfType<WatermarkAnnotation>().Text.ShouldBe("机密文件");
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 文字_字体对齐背景描边直接作用于选中标注()
+    {
+        var window = CreateWindowWithSelection();
+        window.TextToolButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        window.MouseDown(new Point(170, 170), MouseButton.Left);
+        window.MouseUp(new Point(170, 170), MouseButton.Left);
+
+        window.TextNoteBox.Text = "Hello";
+        window.CommitTextNote();
+        window.Notes.Count.ShouldBe(1);
+
+        window.SelectNote(0);
+
+        window.SetTextAlign(TextAlign.Center);
+        window.Notes[0].ShouldBeOfType<TextAnnotation>().Align.ShouldBe(TextAlign.Center);
+
+        window.SetTextBackground(0xFF000000);
+        window.Notes[0].ShouldBeOfType<TextAnnotation>().BackgroundColor.ShouldBe(0xFF000000u);
+
+        window.SetTextStrokeWidth(2);
+        window.Notes[0].ShouldBeOfType<TextAnnotation>().StrokeWidth.ShouldBe(2);
+
+        window.SetTextStrokeColor(0xFFFFFFFF);
+        window.Notes[0].ShouldBeOfType<TextAnnotation>().StrokeColor.ShouldBe(0xFFFFFFFFu);
+
+        window.ItalicButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.Notes[0].ShouldBeOfType<TextAnnotation>().Italic.ShouldBeTrue();
+
+        window.Close();
+    }
 }

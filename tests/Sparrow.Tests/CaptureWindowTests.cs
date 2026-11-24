@@ -662,9 +662,9 @@ public sealed class CaptureWindowTests
         window.MouseMove(new Point(origin.X + 16, origin.Y + 16));
 
         window.ToolGroupPopover.IsVisible.ShouldBeTrue();
-        window.ToolGroupOptions.Children.Count.ShouldBe(3);
+        window.ToolGroupOptions.Children.Count.ShouldBe(4);
 
-        // 反序排：括号、入口（矩形）、椭圆
+        // 反序排：入口（矩形）、括号、椭圆、菱形
         var ellipseOption = (Button)window.ToolGroupOptions.Children[2];
         ellipseOption.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 

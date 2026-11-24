@@ -17,17 +17,36 @@ internal static class AnnotationText
     public const double PaddingX = 4;
     public const double PaddingY = 2;
 
-    public static SKFont CreateFont(double size, bool bold = false)
+    private static IReadOnlyList<string>? _families;
+
+    /// <summary>系统字体族：用 Skia 枚举，保证预览和导出看到同一份列表。</summary>
+    public static IReadOnlyList<string> Families =>
+        _families ??= SKFontManager.Default.FontFamilies
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    public static SKFont CreateFont(double size, bool bold = false, string? family = null, bool italic = false)
     {
-        var style = bold ? SKFontStyle.Bold : SKFontStyle.Normal;
-        var typeface = SKTypeface.FromFamilyName(Family, style) ?? SKTypeface.Default;
+        var style = new SKFontStyle(
+            bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal,
+            SKFontStyleWidth.Normal,
+            italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright);
+
+        var typeface =
+            (!string.IsNullOrWhiteSpace(family) ? SKTypeface.FromFamilyName(family, style) : null)
+            ?? SKTypeface.FromFamilyName(Family, style)
+            ?? SKTypeface.Default;
+
         return new SKFont(typeface, (float)Math.Max(1, size));
     }
 
     /// <summary>导出的文字宽度（DIP）。预览侧用 TextBlock 实测，不调用这里。</summary>
-    public static double Measure(string text, double size, bool bold = false)
+    public static double Measure(string text, double size, bool bold = false,
+        string? family = null, bool italic = false)
     {
-        using var font = CreateFont(size, bold);
+        using var font = CreateFont(size, bold, family, italic);
         return font.MeasureText(text);
     }
 

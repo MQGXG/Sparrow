@@ -29,7 +29,7 @@ public sealed class ToolbarLayoutWindowTests
     public void 工具条_隐藏折叠组成员后只剩独立按钮()
     {
         var window = new CaptureWindow();
-        window.CaptureToolHidden = ["Ellipse", "Bracket"];
+        window.CaptureToolHidden = ["Diamond", "Ellipse", "Bracket"];
         window.Show();
 
         window.ShapeGroupButton.IsVisible.ShouldBeFalse();
@@ -85,7 +85,7 @@ public sealed class ToolbarLayoutWindowTests
         window.CaptureToolPositions = ["???", "not-a-tool"];
         window.Show();
 
-        window.CaptureToolPositions[0].ShouldBe("Ellipse|Bracket|Rectangle");
+        window.CaptureToolPositions[0].ShouldBe("Diamond|Ellipse|Bracket|Rectangle");
         window.ToolButtons.Children.Count.ShouldBe(8);
         window.ShapeGroupButton.IsVisible.ShouldBeTrue();
 

@@ -14,7 +14,7 @@ public sealed class ToolbarLayoutTests
 
         layout.Positions.Count.ShouldBe(8);
         layout.Hidden.ShouldBeEmpty();
-        layout.SerializePositions()[0].ShouldBe("Ellipse|Bracket|Rectangle");
+        layout.SerializePositions()[0].ShouldBe("Diamond|Ellipse|Bracket|Rectangle");
         layout.SerializePositions()[^1].ShouldBe("Number|Watermark|Bubble|Text");
     }
 
@@ -34,7 +34,8 @@ public sealed class ToolbarLayoutTests
             ["Ellipse|???|Ellipse|Rectangle", "Bracket|Rectangle"], null);
 
         layout.Positions.Count.ShouldBe(2);
-        layout.Positions[0].ShouldBe([AnnotationTool.Ellipse, AnnotationTool.Rectangle]);
+        layout.Positions[0].ShouldBe(
+            [AnnotationTool.Ellipse, AnnotationTool.Rectangle, AnnotationTool.Diamond]);
         layout.Positions[1].ShouldBe([AnnotationTool.Bracket]);
 
         layout.IsVisible(AnnotationTool.Rectangle).ShouldBeTrue();
@@ -65,7 +66,8 @@ public sealed class ToolbarLayoutTests
         layout.SetEntry(AnnotationTool.Ellipse);
 
         layout.Positions[0].ShouldBe(
-            [AnnotationTool.Bracket, AnnotationTool.Rectangle, AnnotationTool.Ellipse]);
+            [AnnotationTool.Diamond, AnnotationTool.Bracket, AnnotationTool.Rectangle,
+                AnnotationTool.Ellipse]);
     }
 
     [Fact]
