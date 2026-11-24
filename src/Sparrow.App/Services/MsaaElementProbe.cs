@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Avalonia;
 
@@ -19,9 +20,11 @@ public sealed class MsaaElementProbe : IDisposable
     private const uint ObjIdWindow = 0x00000000;
     private const int ChildIdSelf = 0;
 
-    /// <summary>MSAA 下钻的最大层数 / 最大子节点数，防止异常树把预算耗光。</summary>
-    private const int MaxDescendDepth = 16;
-    private const int MaxChildrenPerNode = 400;
+    /// <summary>MSAA 下钻的最大层数（snow-shot 是 64），防止异常树把预算耗光。</summary>
+    private const int MaxDescendDepth = 64;
+
+    /// <summary>路径最多保留多少层矩形（snow-shot 是 100）。</summary>
+    private const int MaxPathRects = 100;
 
     private const int StateSystemInvisible = 0x00008000;
     private const int StateSystemOffscreen = 0x00010000;
@@ -32,6 +35,19 @@ public sealed class MsaaElementProbe : IDisposable
     private static readonly Guid IidIAccessible = new("618736E0-3C3D-11CF-810C-00AA00389B71");
 
     private static readonly Func<bool> AlwaysWanted = static () => true;
+
+    private static readonly bool DiagnosticsEnabled = Debugger.IsAttached
+        || Environment.GetEnvironmentVariable("SPARROW_SELECTOR_DIAGNOSTICS") == "1";
+
+    private static void Log(string message)
+    {
+        if (DiagnosticsEnabled)
+            Debug.WriteLine($"[Sparrow.Selector] msaa {message}");
+    }
+
+    private static string DescribePath(IReadOnlyList<UiElementCandidate> path) =>
+        string.Join(" > ", path.Select(candidate =>
+            $"{candidate.ControlType}:{candidate.Bounds.Width}x{candidate.Bounds.Height}"));
 
     private readonly BlockingCollection<Action> _queue = new();
     private readonly HashSet<IntPtr> _unresponsive = [];
@@ -44,20 +60,21 @@ public sealed class MsaaElementProbe : IDisposable
     public MsaaElementProbe() => StartWorker();
 
     /// <summary>
-    /// 在独立线程上做 MSAA 命中，超时返回 null 并把这个窗口加入黑名单。
+    /// 在独立线程上做 MSAA 命中，超时返回空路径并把这个窗口加入黑名单。
     /// <paramref name="budget"/> 同时是「调用卡死」的上限。
     /// </summary>
-    public async Task<UiElementCandidate?> ProbeAsync(
+    public async Task<UiElementProbeResult> ProbeAsync(
         IntPtr hwnd,
         PixelPoint point,
         TimeSpan budget,
-        Func<bool>? stillWanted = null)
+        Func<bool>? stillWanted = null,
+        string? windowTitle = null)
     {
         if (_disposed || _disabled || IsUnresponsive(hwnd) || IsHungAppWindow(hwnd))
-            return null;
+            return new UiElementProbeResult([], UiElementStopReason.ProviderFailure);
 
         var wanted = stillWanted ?? AlwaysWanted;
-        var completion = new TaskCompletionSource<UiElementCandidate?>(
+        var completion = new TaskCompletionSource<UiElementProbeResult>(
             TaskCreationOptions.RunContinuationsAsynchronously);
         var deadline = Environment.TickCount64 + (long)Math.Max(1, budget.TotalMilliseconds);
 
@@ -65,24 +82,31 @@ public sealed class MsaaElementProbe : IDisposable
         {
             _queue.Add(() =>
             {
-                UiElementCandidate? candidate = null;
+                var result = new UiElementProbeResult([], UiElementStopReason.ProviderFailure);
 
                 try
                 {
                     if (wanted())
-                        candidate = Probe(hwnd, point, wanted, deadline);
+                        result = Probe(hwnd, point, wanted, deadline, windowTitle);
                 }
                 catch
                 {
                     // 没有 MSAA 树、COM 失败、窗口已关闭：都按「没命中」处理
                 }
 
-                completion.TrySetResult(candidate);
+                Log($"hwnd=0x{hwnd.ToInt64():X} " +
+                    $"path=[{DescribePath(result.Path)}] reason={result.Reason}");
+
+                SelectorTrace.Write(
+                    $"msaa hwnd=0x{hwnd.ToInt64():X} path=[{DescribePath(result.Path)}] " +
+                    $"reason={result.Reason}");
+
+                completion.TrySetResult(result);
             });
         }
         catch (InvalidOperationException)
         {
-            completion.TrySetResult(null);
+            completion.TrySetResult(new UiElementProbeResult([], UiElementStopReason.ProviderFailure));
         }
 
         try
@@ -101,7 +125,7 @@ public sealed class MsaaElementProbe : IDisposable
             else
                 _disabled = true;   // 放弃太多线程就彻底停用，避免线程泄漏
 
-            return null;
+            return new UiElementProbeResult([], UiElementStopReason.ProviderTimeout);
         }
     }
 
@@ -142,61 +166,96 @@ public sealed class MsaaElementProbe : IDisposable
             _unresponsive.Add(hwnd);
     }
 
-    private static UiElementCandidate? Probe(
+    private static UiElementProbeResult Probe(
         IntPtr hwnd,
         PixelPoint point,
         Func<bool> wanted,
-        long deadline)
+        long deadline,
+        string? windowTitle)
     {
         if (!GetWindowRect(hwnd, out var windowRect))
-            return null;
+            return new UiElementProbeResult([], UiElementStopReason.ProviderFailure);
 
-        var root = AccessibleFromWindow(hwnd, ObjIdClient)
-                   ?? AccessibleFromWindow(hwnd, ObjIdWindow);
+        var windowBounds = new PixelRect(
+            windowRect.Left,
+            windowRect.Top,
+            windowRect.Right - windowRect.Left,
+            windowRect.Bottom - windowRect.Top);
+
+        if (windowBounds.Width < 2 || windowBounds.Height < 2)
+            return new UiElementProbeResult([], UiElementStopReason.ProviderFailure);
+
+        // 和 snow-shot 一致先取 OBJID_WINDOW：Chrome 的 OBJID_CLIENT 经常只给
+        // 一个无用的 client，先试它会把 OBJID_WINDOW 挡掉。
+        var root = AccessibleFromWindow(hwnd, ObjIdWindow)
+                   ?? AccessibleFromWindow(hwnd, ObjIdClient);
 
         if (root is null)
-            return null;
+            return new UiElementProbeResult([], UiElementStopReason.ProviderFailure);
 
         // 下钻会顺路拿到新的 IDispatch，全部集中释放
         var created = new List<object> { root };
 
         try
         {
-            var hit = HitTest(root, point);
-            if (hit is not { } found)
-                return null;
+            var (steps, reason) = BuildHitPath(
+                root, windowBounds, point, wanted, deadline, created);
 
-            if (!ReferenceEquals(found.Node, root))
-                created.Add(found.Node);
-
-            // accHitTest 有时只给到文档/窗格：再沿子元素下钻到真正包含光标的节点
-            var element = Descend(found.Node, found.ChildId, point, wanted, deadline, created);
-
-            if (!wanted() || Environment.TickCount64 >= deadline)
-                return null;
-
-            if (!TryGetBounds(element.Node, element.ChildId, out var bounds))
-                return null;
-
-            // 整窗、窗框外、小于 2px 的都不算「控件」
-            if (!IsUsable(bounds, windowRect))
-                return null;
-
-            if ((TryGetState(element.Node, element.ChildId) &
-                 (StateSystemInvisible | StateSystemOffscreen)) != 0)
+            // OBJID_WINDOW 只给到窗口时，再试 OBJID_CLIENT（UWP/部分自绘应用）
+            if (steps.Count <= 1)
             {
-                return null;
+                var clientRoot = AccessibleFromWindow(hwnd, ObjIdClient);
+
+                if (clientRoot is not null && !SameAccessible(clientRoot, root))
+                {
+                    created.Add(clientRoot);
+
+                    var (clientSteps, clientReason) = BuildHitPath(
+                        clientRoot, windowBounds, point, wanted, deadline, created);
+
+                    if (clientSteps.Count > steps.Count)
+                    {
+                        steps = clientSteps;
+                        reason = clientReason;
+                    }
+                }
             }
 
-            var role = TryGetRole(element.Node, element.ChildId);
-            var kind = RoleName(role);
-            var name = TryGetName(element.Node, element.ChildId);
+            if (steps.Count == 0)
+                return new UiElementProbeResult([], reason);
 
-            // 无名的大容器（窗格/文档/客户端）没有框选价值，交给窗口级候选
-            if (IsStructuralRole(role) && name is null)
-                return null;
+            // MSAA 只给到窗口（老 Win32 把按钮做成子 HWND）：用可见子窗口矩形补层，
+            // 和 snow-shot 的 merge_hit_paths 一致。
+            steps = MergeFallbackRects(steps, hwnd, windowBounds, point, root);
 
-            return new UiElementCandidate(bounds, name ?? kind, kind);
+            var path = new List<UiElementCandidate>(steps.Count + 1);
+
+            for (var i = 0; i < steps.Count; i++)
+            {
+                var step = steps[i];
+                var kind = RoleName(step.Role);
+                var title = kind;
+
+                // 只给最深一层查名字；MSAA 的 accName 也可能触发跨进程文本提取
+                if (i == 0 && step.ChildId >= 0)
+                    title = TryGetName(step.Node, step.ChildId) ?? kind;
+
+                // 路径末项就是窗口：统一用调用方给的窗口标题
+                if (i == steps.Count - 1 && step.Bounds.Equals(windowBounds))
+                    title = string.IsNullOrWhiteSpace(windowTitle) ? "窗口" : windowTitle;
+
+                path.Add(new UiElementCandidate(step.Bounds, title, kind));
+            }
+
+            if (path.Count == 0 || !path[^1].Bounds.Equals(windowBounds))
+            {
+                path.Add(new UiElementCandidate(
+                    windowBounds,
+                    string.IsNullOrWhiteSpace(windowTitle) ? "窗口" : windowTitle,
+                    "窗口"));
+            }
+
+            return new UiElementProbeResult(path, reason);
         }
         finally
         {
@@ -205,105 +264,249 @@ public sealed class MsaaElementProbe : IDisposable
         }
     }
 
-    /// <summary>沿 accChild 往下找到最深的、包含光标的子元素。</summary>
-    private static (IAccessible Node, int ChildId) Descend(
-        IAccessible start,
-        int startChildId,
+    private readonly record struct HitStep(
+        PixelRect Bounds,
+        int Role,
+        IAccessible Node,
+        int ChildId);
+
+    /// <summary>
+    /// 从窗口根开始，沿 accHitTest / accChild 往下收集完整路径（深 → 浅），
+    /// 每层裁剪到窗口、跳过不可见/脱屏/重复的矩形。形状对齐 Snow Shot 的 MSAA 路径。
+    /// </summary>
+    private static (List<HitStep> Steps, UiElementStopReason Reason) BuildHitPath(
+        IAccessible root,
+        PixelRect windowBounds,
         PixelPoint point,
         Func<bool> wanted,
         long deadline,
         List<object> created)
     {
-        var node = start;
-        var childId = startChildId;
+        var steps = new List<HitStep>(8);
+        var node = root;
+        var childId = ChildIdSelf;
+        var reason = UiElementStopReason.Complete;
+        var depth = 0;
 
-        for (var depth = 0; depth < MaxDescendDepth; depth++)
+        for (; depth < MaxDescendDepth; depth++)
         {
-            if (!wanted() || Environment.TickCount64 >= deadline)
-                break;
-
-            var next = HitChild(node, childId, point, wanted, deadline, created);
-            if (next is null)
-                break;
-
-            node = next.Value.Node;
-            childId = next.Value.ChildId;
-        }
-
-        return (node, childId);
-    }
-
-    /// <summary>在这一层的子元素里找包含光标的那个；没有就返回 null。</summary>
-    private static (IAccessible Node, int ChildId)? HitChild(
-        IAccessible node,
-        int childId,
-        PixelPoint point,
-        Func<bool> wanted,
-        long deadline,
-        List<object> created)
-    {
-        var container = node;
-
-        // 传进来的是 child id：优先换成子元素的 IDispatch，才能继续往下走
-        if (childId != ChildIdSelf)
-        {
-            if (TryGetChildObject(node, childId) is not { } childObject)
-                return null;
-
-            created.Add(childObject);
-            container = childObject;
-            childId = ChildIdSelf;
-        }
-
-        int count;
-
-        try
-        {
-            count = container.accChildCount;
-        }
-        catch
-        {
-            return null;
-        }
-
-        if (count <= 0 || count > MaxChildrenPerNode)
-            return null;
-
-        (IAccessible Node, int ChildId)? hit = null;
-
-        for (var index = count; index >= 1; index--)
-        {
-            if (!wanted() || Environment.TickCount64 >= deadline)
-                break;
-
-            if ((TryGetState(container, index) &
-                 (StateSystemInvisible | StateSystemOffscreen)) != 0)
+            if (!wanted())
             {
+                reason = UiElementStopReason.Cancelled;
+                break;
+            }
+
+            if (Environment.TickCount64 >= deadline)
+            {
+                reason = UiElementStopReason.BudgetExhausted;
+                break;
+            }
+
+            AddStep(steps, node, childId, windowBounds, point);
+
+            object? result;
+
+            try
+            {
+                result = node.accHitTest(point.X, point.Y);
+            }
+            catch
+            {
+                break;
+            }
+
+            // VT_I4：命中当前节点的某个子元素（<=0 是 self/无效）
+            if (result is int hitChildId)
+            {
+                if (hitChildId <= ChildIdSelf)
+                    break;
+
+                if (TryGetChildObject(node, hitChildId) is { } child)
+                {
+                    created.Add(child);
+                    node = child;
+                    childId = ChildIdSelf;
+                    continue;
+                }
+
+                // 简单子元素拿不到 IDispatch：补一层矩形后结束
+                AddStep(steps, node, hitChildId, windowBounds, point);
+                break;
+            }
+
+            if (AsAccessible(result) is { } hit)
+            {
+                if (SameAccessible(hit, node))
+                    break;
+
+                created.Add(hit);
+                node = hit;
+                childId = ChildIdSelf;
                 continue;
-            }
-
-            if (!TryGetBounds(container, index, out var bounds) ||
-                !Contains(bounds, point))
-            {
-                continue;
-            }
-
-            // 后面的兄弟更靠前：取第一个包含光标的（倒序遍历）
-            if (TryGetChildObject(container, index) is { } child)
-            {
-                created.Add(child);
-                hit = (child, ChildIdSelf);
-            }
-            else
-            {
-                hit = (container, index);
             }
 
             break;
         }
 
-        return hit;
+        if (reason == UiElementStopReason.Complete && depth >= MaxDescendDepth)
+            reason = UiElementStopReason.TraversalLimit;
+
+        // 收集顺序是浅 → 深；翻转成与 UIA 一致的深 → 浅
+        steps.Reverse();
+
+        // 末项固定为窗口；模型和界面都以「最后一项是窗口」为前提
+        if (steps.Count == 0 || !steps[^1].Bounds.Equals(windowBounds))
+        {
+            AddStep(steps, root, ChildIdSelf, windowBounds, point);
+
+            if (steps.Count == 0 || !steps[^1].Bounds.Equals(windowBounds))
+                steps.Add(new HitStep(windowBounds, RoleSystemWindow, root, ChildIdSelf));
+        }
+
+        return (steps, reason);
     }
+
+    private static void AddStep(
+        List<HitStep> steps,
+        IAccessible node,
+        int childId,
+        PixelRect windowBounds,
+        PixelPoint point)
+    {
+        if (steps.Count >= MaxPathRects)
+            return;
+
+        if ((TryGetState(node, childId) &
+             (StateSystemInvisible | StateSystemOffscreen)) != 0)
+        {
+            return;
+        }
+
+        if (!TryGetBounds(node, childId, out var bounds))
+            return;
+
+        var clipped = Intersect(bounds, windowBounds);
+
+        if (clipped.Width < 2 || clipped.Height < 2 || !Contains(clipped, point))
+            return;
+
+        if (steps.Count > 0 && steps[^1].Bounds.Equals(clipped))
+            return;
+
+        steps.Add(new HitStep(clipped, TryGetRole(node, childId), node, childId));
+    }
+
+    private static PixelRect Intersect(PixelRect left, PixelRect right)
+    {
+        var x = Math.Max(left.X, right.X);
+        var y = Math.Max(left.Y, right.Y);
+        var rightEdge = Math.Min(left.X + left.Width, right.X + right.Width);
+        var bottomEdge = Math.Min(left.Y + left.Height, right.Y + right.Height);
+
+        return rightEdge <= x || bottomEdge <= y
+            ? default
+            : new PixelRect(x, y, rightEdge - x, bottomEdge - y);
+    }
+
+    /// <summary>
+    /// 可见子窗口矩形（小 → 大）。老 Win32 应用把控件做成子 HWND，
+    /// MSAA 树只到 client 时靠这层兜底；Snow Shot 的 MSAA 也用同一招。
+    /// </summary>
+    private static List<PixelRect> ChildWindowRects(
+        IntPtr hwnd, PixelRect windowBounds, PixelPoint point)
+    {
+        var rects = new List<PixelRect>(8);
+
+        EnumChildWindows(hwnd, (child, _) =>
+        {
+            if (rects.Count >= 16)
+                return false;
+
+            if (!IsWindowVisible(child) || !GetWindowRect(child, out var rect))
+                return true;
+
+            var bounds = new PixelRect(
+                rect.Left,
+                rect.Top,
+                rect.Right - rect.Left,
+                rect.Bottom - rect.Top);
+            var clipped = Intersect(bounds, windowBounds);
+
+            if (clipped.Width < 2 || clipped.Height < 2 || !Contains(clipped, point))
+                return true;
+
+            if (!rects.Any(existing => existing.Equals(clipped)))
+                rects.Add(clipped);
+
+            return true;
+        }, IntPtr.Zero);
+
+        rects.Sort((left, right) =>
+            ((long)left.Width * left.Height).CompareTo((long)right.Width * right.Height));
+
+        return rects;
+    }
+
+    /// <summary>
+    /// 把 MSAA 路径和可见子窗口矩形合并成一条「小 → 大」的包含链，
+    /// 对齐 snow-shot 的 merge_hit_paths：MSAA 只到客户端时，子窗口/文档层仍可选。
+    /// </summary>
+    private static List<HitStep> MergeFallbackRects(
+        List<HitStep> steps,
+        IntPtr hwnd,
+        PixelRect windowBounds,
+        PixelPoint point,
+        IAccessible root)
+    {
+        var candidates = new List<HitStep>(steps);
+
+        foreach (var rect in ChildWindowRects(hwnd, windowBounds, point))
+            candidates.Add(new HitStep(rect, RoleSystemClient, root, -1));
+
+        if (candidates.Count == 0)
+            return steps;
+
+        var seen = new HashSet<(int X, int Y, int Width, int Height)>();
+        var sorted = candidates
+            .Where(candidate => candidate.Bounds.Width > 0
+                                && candidate.Bounds.Height > 0
+                                && seen.Add((
+                                    candidate.Bounds.X,
+                                    candidate.Bounds.Y,
+                                    candidate.Bounds.Width,
+                                    candidate.Bounds.Height)))
+            .OrderBy(candidate => (long)candidate.Bounds.Width * candidate.Bounds.Height)
+            .ToList();
+
+        var seed = sorted.FirstOrDefault(candidate => Contains(candidate.Bounds, point));
+
+        if (seed.Bounds.Width <= 0)
+            return steps;
+
+        var path = new List<HitStep> { seed };
+
+        foreach (var candidate in sorted)
+        {
+            var current = path[^1];
+
+            if (candidate.Bounds.Equals(current.Bounds))
+                continue;
+
+            if (ContainsRect(candidate.Bounds, current.Bounds))
+                path.Add(candidate);
+        }
+
+        if (!path[^1].Bounds.Equals(windowBounds))
+            path.Add(new HitStep(windowBounds, RoleSystemWindow, root, ChildIdSelf));
+
+        return path;
+    }
+
+    private static bool ContainsRect(PixelRect outer, PixelRect inner) =>
+        inner.X >= outer.X &&
+        inner.Y >= outer.Y &&
+        inner.X + inner.Width <= outer.X + outer.Width &&
+        inner.Y + inner.Height <= outer.Y + outer.Height;
 
     private static IAccessible? TryGetChildObject(IAccessible node, int childId)
     {
@@ -317,32 +520,57 @@ public sealed class MsaaElementProbe : IDisposable
         }
     }
 
-    private static bool Contains(PixelRect bounds, PixelPoint point) =>
-        point.X >= bounds.X && point.X < bounds.X + bounds.Width &&
-        point.Y >= bounds.Y && point.Y < bounds.Y + bounds.Height;
-
-    private static (IAccessible Node, int ChildId)? HitTest(IAccessible root, PixelPoint point)
+    private static IAccessible? AsAccessible(object? value)
     {
-        object? result;
+        if (value is IAccessible accessible)
+            return accessible;
+
+        if (value is null || !Marshal.IsComObject(value))
+            return null;
 
         try
         {
-            result = root.accHitTest(point.X, point.Y);
+            return (IAccessible)value;
         }
         catch
         {
             return null;
         }
-
-        // VT_I4：命中 Root 的某个子元素，node 仍是 root
-        if (result is int childId)
-            return (root, childId);
-
-        if (result is IAccessible hit)
-            return (hit, ChildIdSelf);
-
-        return null;
     }
+
+    /// <summary>COM 对象身份比较：不同 RCW 可能指向同一个 IAccessible，ReferenceEquals 不可靠。</summary>
+    private static bool SameAccessible(object? left, object? right)
+    {
+        if (ReferenceEquals(left, right))
+            return true;
+
+        if (left is null || right is null)
+            return false;
+
+        try
+        {
+            var leftUnknown = Marshal.GetIUnknownForObject(left);
+            var rightUnknown = Marshal.GetIUnknownForObject(right);
+
+            try
+            {
+                return leftUnknown == rightUnknown;
+            }
+            finally
+            {
+                Marshal.Release(leftUnknown);
+                Marshal.Release(rightUnknown);
+            }
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool Contains(PixelRect bounds, PixelPoint point) =>
+        point.X >= bounds.X && point.X < bounds.X + bounds.Width &&
+        point.Y >= bounds.Y && point.Y < bounds.Y + bounds.Height;
 
     private static bool TryGetBounds(IAccessible node, int childId, out PixelRect bounds)
     {
@@ -407,33 +635,6 @@ public sealed class MsaaElementProbe : IDisposable
         short number => number,
         long number => (int)number,
         _ => 0
-    };
-
-    private static bool IsUsable(PixelRect bounds, RECT window)
-    {
-        if (bounds.Width < 2 || bounds.Height < 2)
-            return false;
-
-        // 必须落在窗口里
-        if (bounds.X < window.Left || bounds.Y < window.Top
-            || bounds.X + bounds.Width > window.Right
-            || bounds.Y + bounds.Height > window.Bottom)
-        {
-            return false;
-        }
-
-        var windowArea = Math.Max(1L, (long)(window.Right - window.Left) * (window.Bottom - window.Top));
-        var area = (long)bounds.Width * bounds.Height;
-
-        return area < windowArea * 95 / 100;
-    }
-
-    /// <summary>MSAA 里没有框选价值的容器角色。</summary>
-    private static bool IsStructuralRole(int role) => role switch
-    {
-        RoleSystemWindow or RoleSystemClient or RoleSystemDocument
-            or RoleSystemPane or RoleSystemGrouping or RoleSystemApplication => true,
-        _ => false
     };
 
     private static IAccessible? AccessibleFromWindow(IntPtr hwnd, uint objectId)
@@ -560,6 +761,15 @@ public sealed class MsaaElementProbe : IDisposable
 
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+
+    private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumChildWindows(
+        IntPtr parent, EnumWindowsProc callback, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hwnd);
 
     [DllImport("user32.dll")]
     private static extern bool IsHungAppWindow(IntPtr hwnd);

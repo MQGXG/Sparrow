@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Runtime;
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -41,6 +42,19 @@ public partial class CaptureWindow : Window
 {
     private const double OcrLinePadding = 2;
     private const double MinSelectionSize = 4;
+
+    private static readonly bool SelectorDiagnostics = Debugger.IsAttached
+        || Environment.GetEnvironmentVariable("SPARROW_SELECTOR_DIAGNOSTICS") == "1";
+
+    private static void SelectorLog(string message)
+    {
+        if (SelectorDiagnostics)
+            Debug.WriteLine($"[Sparrow.Selector] {message}");
+    }
+
+    private static string Describe(IReadOnlyList<UiElementCandidate> path) =>
+        string.Join(" > ", path.Select(candidate =>
+            $"{candidate.ControlType}:{candidate.Bounds.Width}x{candidate.Bounds.Height}"));
 
     private enum DragMode
     {
@@ -157,10 +171,21 @@ public partial class CaptureWindow : Window
     private UiElementCandidate? _uiCandidate;
     private UiElementCandidate? _uiCandidateAtPress;
     private UiElementProbe? _uiProbe;
-    private bool _forceWindowCandidate;
+    private UiElementProbe? _refinementProbe;
+
+    /// <summary>已经做过 IAccessible 激活的窗口：每个窗口只激活一次。</summary>
+    private readonly HashSet<IntPtr> _accessibilityActivated = [];
+
+    /// <summary>宿主在遮罩显示前预建好的 UIA 探测实例（浏览器窗口用）。</summary>
+    public UiElementProbe? ElementProbe { get; set; }
+
+    private bool UsePrewarmedTree => ElementProbe is not null;
+    private readonly ElementSelectionModel _elementSelection = new();
+    private IntPtr _captureHandle;
     private int _probeGeneration;
     private Task? _probeTask;
     private IntPtr _probingWindow;
+    private PixelPoint _probePoint;
     private bool _refining;
     private MsaaElementProbe? _msaaProbe;
     private Point _lastPointerPoint;
@@ -704,9 +729,13 @@ public partial class CaptureWindow : Window
 
         ApplyVirtualScreenBounds();
 
-        _candidates = WindowCandidates.Enumerate(TryGetPlatformHandle()?.Handle ?? IntPtr.Zero);
+        _captureHandle = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        SelectorTrace.Write(
+            $"open api={CaptureElementApi} handle=0x{_captureHandle.ToInt64():X} " +
+            $"cursor={WindowCandidates.GetCursorPosition()} prewarmed={ElementProbe is not null}");
+        _candidates = WindowCandidates.Enumerate(_captureHandle);
         _candidatesAt = Environment.TickCount64;
-        _uiProbe = new UiElementProbe();
+        _uiProbe = ElementProbe ?? new UiElementProbe();
         _msaaProbe = new MsaaElementProbe();
 
         // 打开遮罩时鼠标可能已经停在目标控件上，不用晃一下才出候选
@@ -750,6 +779,8 @@ public partial class CaptureWindow : Window
         _probeGeneration++;
         _uiProbe?.Dispose();
         _uiProbe = null;
+        _refinementProbe?.Dispose();
+        _refinementProbe = null;
         _msaaProbe?.Dispose();
         _msaaProbe = null;
         _ocrCancellation?.Cancel();
@@ -1098,11 +1129,9 @@ public partial class CaptureWindow : Window
         }
 
         // 框外按下：重新拉一个
-        // 任何按下都先结束候选态：拖动就是自由选区，单击才用候选窗口
+        // 任何按下都先结束候选态：拖动就是自由选区，单击才用当前路径层
         _candidateAtPress = _currentCandidate;
-        _uiCandidateAtPress = _uiCandidate is not null && Contains(_uiCandidate.Bounds, ToPhysical(point))
-            ? _uiCandidate
-            : null;
+        _uiCandidateAtPress = _elementSelection.Current;
         HideCandidate();
 
         BeginCreate(point);
@@ -1576,27 +1605,25 @@ public partial class CaptureWindow : Window
         return (left, top, right, bottom);
     }
 
-    /// <summary>鼠标悬停：高亮窗口，并在短暂停顿后细化到 UIA 控件。</summary>
+    /// <summary>鼠标悬停：高亮窗口，并持续细化到完整命中路径。</summary>
     private void UpdateCandidateAt(Point point)
     {
-        _forceWindowCandidate = false;
-
         var physical = ToPhysical(point);
-        RefreshCandidatesIfStale();
 
-        // 还在同一个控件里：候选不变，不用再查任何东西
-        if (_uiCandidate is not null &&
-            _currentCandidate is not null &&
-            Contains(_uiCandidate.Bounds, physical))
+        // 探测/细化进行中，光标没真正移动就不要取消它；否则 1.5s 细化
+        // 会被轻微的鼠标/焦点事件不断打断，浏览器永远等不到完整树。
+        if (_probeTask is { IsCompleted: false }
+            && _probePoint != default
+            && !CursorMovedSince(_probePoint))
         {
             return;
         }
 
-        if (_uiCandidate is not null)
-            SetUiCandidate(null);
+        RefreshCandidatesIfStale();
 
+        // 不在“当前控件内就跳过探测”：Snow Shot 每次移动都会重新命中。
+        // 同一行里从空白移到链接、从容器移到按钮，都可能出现更深的元素。
         SetWindowCandidate(WindowCandidates.Pick(_candidates, physical));
-
         ScheduleControlProbe();
     }
 
@@ -1616,17 +1643,28 @@ public partial class CaptureWindow : Window
             return;
 
         _candidatesAt = now;
-        _candidates = WindowCandidates.Enumerate(
-            TryGetPlatformHandle()?.Handle ?? IntPtr.Zero);
+
+        if (_captureHandle == IntPtr.Zero)
+            _captureHandle = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+
+        _candidates = WindowCandidates.Enumerate(_captureHandle);
     }
 
     private void SetWindowCandidate(WindowCandidate? candidate)
     {
-        if (candidate?.Handle == _currentCandidate?.Handle)
+        // 同一窗口（同一 HWND）：只更新窗口信息，保留当前命中路径；
+        // 不要每次鼠标移动都把路径清空重来。
+        if (candidate is not null
+            && _currentCandidate is not null
+            && candidate.Handle == _currentCandidate.Handle)
+        {
+            _currentCandidate = candidate;
             return;
+        }
 
         _currentCandidate = candidate;
         _uiCandidate = null;
+        _elementSelection.Reset();
 
         if (candidate is null)
         {
@@ -1634,16 +1672,85 @@ public partial class CaptureWindow : Window
             return;
         }
 
+        SelectorLog($"window=0x{candidate.Handle.ToInt64():X} {candidate.Title} " +
+                    $"{candidate.Bounds.X},{candidate.Bounds.Y} " +
+                    $"{candidate.Bounds.Width}x{candidate.Bounds.Height}");
+
+        SelectorTrace.Write(
+            $"candidate hwnd=0x{candidate.Handle.ToInt64():X} class={candidate.ClassName} " +
+            $"{candidate.Bounds.X},{candidate.Bounds.Y} " +
+            $"{candidate.Bounds.Width}x{candidate.Bounds.Height} {candidate.Title}");
+
         ShowCandidateVisual(candidate.Bounds, candidate.Title, kind: null);
     }
 
-    private void SetUiCandidate(UiElementCandidate? candidate)
+    /// <summary>应用一次命中路径：剪掉重复层、按当前模式选层。</summary>
+    private void ApplyHitPath(IReadOnlyList<UiElementCandidate> path)
     {
-        _uiCandidate = candidate;
+        if (_currentCandidate is null)
+            return;
 
-        if (candidate is not null)
+        if (!_elementSelection.ApplyPath(path, _currentCandidate.Bounds, MinimumElementSize))
+            return;
+
+        SelectorLog($"hit current={_elementSelection.Current?.ControlType} " +
+                    $"{_elementSelection.Current?.Bounds} layers={_elementSelection.Path.Count}");
+
+        SelectorTrace.Write(
+            $"apply hit current={_elementSelection.Current?.ControlType} " +
+            $"{_elementSelection.Current?.Bounds} layers={_elementSelection.Path.Count}");
+
+        ShowCurrentHit();
+    }
+
+    /// <summary>细化路径优先按“旧路径扩展”处理；子窗口切换/树重建时允许同窗替换。</summary>
+    private void ApplyRefinementPath(IReadOnlyList<UiElementCandidate> path)
+    {
+        if (_currentCandidate is null)
+            return;
+
+        if (_elementSelection.ApplyRefinement(
+                path, _currentCandidate.Bounds, MinimumElementSize))
         {
-            ShowCandidateVisual(candidate.Bounds, candidate.Title, candidate.ControlType);
+            SelectorLog($"refine current={_elementSelection.Current?.ControlType} " +
+                        $"{_elementSelection.Current?.Bounds} layers={_elementSelection.Path.Count}");
+            ShowCurrentHit();
+            return;
+        }
+
+        // UIA 顶层 Document → Chrome 渲染子窗口这类切换：旧层不会再出现，
+        // 但仍是同一窗口、且新路径更深，按替换处理，否则会一直卡在文档层。
+        if (_elementSelection.CanReplaceWith(
+                path, _currentCandidate.Bounds, MinimumElementSize)
+            && _elementSelection.ApplyPath(
+                path, _currentCandidate.Bounds, MinimumElementSize))
+        {
+            SelectorLog($"replace current={_elementSelection.Current?.ControlType} " +
+                        $"{_elementSelection.Current?.Bounds} layers={_elementSelection.Path.Count}");
+            ShowCurrentHit();
+        }
+    }
+
+    /// <summary>路径的物理像素最小尺寸。</summary>
+    private int MinimumElementSize =>
+        Math.Max(2, (int)Math.Ceiling(MinSelectionSize * _scaling));
+
+    private void ShowCurrentHit()
+    {
+        var current = _elementSelection.Current;
+        _uiCandidate = current;
+
+        if (current is not null)
+        {
+            // 窗口层用 DWM 窗口矩形，UIA 的根矩形可能不含标题栏/阴影
+            if (current.ControlType == "窗口" && _currentCandidate is not null)
+            {
+                ShowCandidateVisual(
+                    _currentCandidate.Bounds, _currentCandidate.Title, kind: null);
+                return;
+            }
+
+            ShowCandidateVisual(current.Bounds, current.Title, current.ControlType);
             return;
         }
 
@@ -1674,7 +1781,9 @@ public partial class CaptureWindow : Window
 
         CandidateText.Text = kind is null
             ? $"{name}  {bounds.Width} × {bounds.Height}"
-            : $"{kind} · {name}  {bounds.Width} × {bounds.Height}";
+            : string.Equals(name, kind, StringComparison.Ordinal)
+                ? $"{kind}  {bounds.Width} × {bounds.Height}"
+                : $"{kind} · {name}  {bounds.Width} × {bounds.Height}";
 
         Canvas.SetLeft(CandidateBadge, Math.Max(0, x));
         Canvas.SetTop(CandidateBadge, y >= 34 ? y - 30 : y + 6);
@@ -1686,16 +1795,158 @@ public partial class CaptureWindow : Window
         _probeGeneration++;
         _currentCandidate = null;
         _uiCandidate = null;
+        _elementSelection.Reset();
+        HideCandidateVisuals();
+    }
+
+    private void HideCandidateVisuals()
+    {
         CandidateBox.IsVisible = false;
         CandidateBadge.IsVisible = false;
         _candidateDip = default;
         UpdateDim();
     }
 
-    /// <summary>单击候选：控件优先，否则整个窗口。</summary>
+    /// <summary>Ctrl+Tab：在光标下重叠的窗口之间循环。</summary>
+    private void CycleWindowCandidate()
+    {
+        if (_candidates.Count == 0)
+            return;
+
+        _probeGeneration++;
+        _uiCandidate = null;
+        _elementSelection.Reset();
+
+        var previous = _currentCandidate;
+        _currentCandidate = null;
+
+        var next = WindowCandidates.Next(
+            _candidates,
+            WindowCandidates.GetCursorPosition(),
+            previous);
+
+        if (next is null)
+        {
+            HideCandidate();
+            return;
+        }
+
+        _currentCandidate = next;
+        ShowCandidateVisual(next.Bounds, next.Title, kind: null);
+        ScheduleControlProbe();
+    }
+
+    /// <summary>Tab：整窗 ↔ 子元素模式切换。</summary>
+    private void ToggleElementTarget()
+    {
+        _elementSelection.ToggleTarget();
+
+        // 切回子元素但路径里只有窗口：重新探测，别一直停在窗口级
+        if (_elementSelection.Target == ElementSelectionTarget.WindowSubElement
+            && _elementSelection.Path.Count <= 1)
+        {
+            ScheduleControlProbe();
+        }
+
+        if (_elementSelection.HasSelection)
+            ShowCurrentHit();
+    }
+
+    /// <summary>Tab：整窗 ↔ 子元素；Ctrl+Tab：循环重叠窗口。</summary>
+    private bool HandleTabKey(bool control)
+    {
+        if (_hasSelection || OcrLayer.IsVisible)
+            return false;
+
+        if (control)
+        {
+            CycleWindowCandidate();
+            return true;
+        }
+
+        if (_currentCandidate is not null)
+        {
+            ToggleElementTarget();
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Esc 的逐级退出逻辑；键盘钩子和正常 OnKeyDown 共用。</summary>
+    private bool HandleEscape()
+    {
+        if (_colorSampling)
+        {
+            ExitColorSampling();
+            return true;
+        }
+
+        if (_angleDraft.IsActive || _anglePhase != AnglePhase.None)
+        {
+            CancelAngleDraft();
+            return true;
+        }
+
+        // 正在拖选区/拖标注/画一半：先取消这次操作，不关窗口
+        if (CancelActiveDrag())
+            return true;
+
+        if (_isRecognizing)
+        {
+            _ocrCancellation?.Cancel();
+            return true;
+        }
+
+        if (OcrLayer.IsVisible)
+        {
+            ClearOcrOverlay();
+            return true;
+        }
+
+        Action = CaptureAction.None;
+        Close();
+        return true;
+    }
+
+    /// <summary>
+    /// 无选区时滚轮在命中路径内逐级切换：向上滚放大到父容器，向下滚收紧到子元素。
+    /// 整窗模式下滚轮交给系统/其它逻辑，不改变选区。
+    /// </summary>
+    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
+    {
+        if (_hasSelection
+            || OcrLayer.IsVisible
+            || _colorSampling
+            || _mode != DragMode.None
+            || _elementSelection.Target != ElementSelectionTarget.WindowSubElement
+            || !_elementSelection.HasSelection)
+        {
+            base.OnPointerWheelChanged(e);
+            return;
+        }
+
+        var delta = e.Delta.Y > 0 ? 1 : e.Delta.Y < 0 ? -1 : 0;
+
+        if (delta == 0 || !_elementSelection.Step(delta))
+        {
+            base.OnPointerWheelChanged(e);
+            return;
+        }
+
+        ShowCurrentHit();
+        e.Handled = true;
+    }
+
+    /// <summary>单击候选：当前路径层优先，否则整个窗口。</summary>
     private void ApplyCandidate(WindowCandidate candidate, UiElementCandidate? uiCandidate)
     {
-        ApplyRect(uiCandidate?.Bounds ?? candidate.Bounds);
+        // 窗口层用 DWM 矩形，UIA 根矩形可能少一圈
+        var bounds = uiCandidate is not null && uiCandidate.ControlType != "窗口"
+            ? uiCandidate.Bounds
+            : candidate.Bounds;
+
+        ApplyRect(bounds);
     }
 
     private void ApplyRect(PixelRect bounds)
@@ -1724,23 +1975,23 @@ public partial class CaptureWindow : Window
         _uiProbe?.ReleaseTrees();
     }
 
-    private static bool Contains(PixelRect bounds, PixelPoint point) =>
-        point.X >= bounds.X && point.X < bounds.X + bounds.Width &&
-        point.Y >= bounds.Y && point.Y < bounds.Y + bounds.Height;
+    /// <summary>细化专用探测实例：独立 MTA 线程，不阻塞前景 hover 响应。</summary>
+    private UiElementProbe RefinementProbe => _refinementProbe ??= new UiElementProbe();
 
     /// <summary>
     /// 把探测投递到 UIA 线程。和 snow-shot 一样分两段：
-    /// 1. 悬停先用 170ms 预算给一个粗结果，绝不卡住鼠标；
-    /// 2. 光标停住、且粗结果还没走到底时，再用 1.2s 预算细化，
-    ///    途中每 40ms 发布一次更小的框，看起来是「框逐渐收紧」。
+    /// 1. 悬停先用 170ms 预算给一条粗路径，绝不卡住鼠标；
+    /// 2. 光标停住、且粗路径还没走到底时，再用 1.5s 预算细化，
+    ///    途中每 40ms 发布一次更深的路径，看起来是「框逐渐收紧」。
     /// 浏览器第一次查询才懒启用无障碍树，所以没命中时还会静止重试。
     /// </summary>
     private void ScheduleControlProbe()
     {
-        if (_forceWindowCandidate || _hasSelection || OcrLayer.IsVisible || _currentCandidate is null)
+        // 整窗模式不需要元素探测
+        if (_elementSelection.Target == ElementSelectionTarget.Window)
             return;
 
-        if (!UsesUia && !UsesMsaa)
+        if (_hasSelection || OcrLayer.IsVisible || _currentCandidate is null)
             return;
 
         // 同一窗口正在探：让它跑完，结束后会按最新光标再命中。
@@ -1778,23 +2029,56 @@ public partial class CaptureWindow : Window
             return;
 
         // 粗框也走 UI 线程：探测线程只负责 Report。
-        // 光标在细化途中移开时，把迟到的粗框丢掉，避免框停在旧位置。
+        // 光标在细化途中移开时，把迟到的路径丢掉，避免框停在旧位置。
         var latestPoint = WindowCandidates.GetCursorPosition();
-        var preview = new Progress<UiElementCandidate>(candidate =>
+        var preview = new Progress<IReadOnlyList<UiElementCandidate>>(path =>
         {
             if (IsProbeCurrent(generation, window) && !CursorMovedSince(latestPoint))
-                SetUiCandidate(candidate);
+                ApplyHitPath(path);
+        });
+
+        // 细化阶段只接受“旧路径的尾部扩展”，避免重建树后框跳到另一棵子树
+        var refinementPreview = new Progress<IReadOnlyList<UiElementCandidate>>(path =>
+        {
+            if (IsProbeCurrent(generation, window) && !CursorMovedSince(latestPoint))
+                ApplyRefinementPath(path);
         });
 
         try
         {
             var rehits = 0;
-            var retries = 0;
+            var browserRetries = 0;
 
             while (true)
             {
                 var point = WindowCandidates.GetCursorPosition();
                 latestPoint = point;
+                _probePoint = point;
+
+                // Chrome/Edge 的网页无障碍要收到一次 IAccessible 请求才会建树。
+                // 这里只做激活，不使用 MSAA 的选区结果。
+                if (!UsePrewarmedTree
+                    && IsBrowserLike(window)
+                    && _accessibilityActivated.Add(window.Handle)
+                    && _msaaProbe is { } activation)
+                {
+                    try
+                    {
+                        await activation.ProbeAsync(
+                            window.Handle,
+                            point,
+                            UiElementProbe.RefinementBudget,
+                            () => generation == Volatile.Read(ref _probeGeneration),
+                            window.Title);
+                    }
+                    catch
+                    {
+                    }
+
+                    await Task.Delay(120);
+                    if (!IsProbeCurrent(generation, window))
+                        return;
+                }
 
                 // worker 在真正遍历前会再看一次 generation，过时的任务直接返回
                 var foreground = await probe.ProbeAsync(
@@ -1802,9 +2086,16 @@ public partial class CaptureWindow : Window
                     point,
                     UiElementProbe.ForegroundBudget,
                     preview,
-                    () => generation == Volatile.Read(ref _probeGeneration));
+                    () => generation == Volatile.Read(ref _probeGeneration),
+                    window.Title,
+                    refreshTree: !UsePrewarmedTree
+                                 && (IsBrowserLike(window) || browserRetries > 0),
+                    rawView: false);
 
                 if (!IsProbeCurrent(generation, window))
+                    return;
+
+                if (foreground.Reason == UiElementStopReason.Cancelled)
                     return;
 
                 if (CursorMovedSince(point))
@@ -1816,23 +2107,48 @@ public partial class CaptureWindow : Window
                 }
 
                 var result = foreground;
+                var needsRefinement = !UsePrewarmedTree
+                    && (foreground.CanRefine
+                        || (IsCoarsePath(foreground)
+                            && IsBrowserLike(window)
+                            && browserRetries == 0));
 
-                // 预算用完但已经有一个粗结果：光标没动，接着把路径走到底
-                if (!foreground.Completed)
+                // 和 snow-shot 的 AccessibilityPending 类似：浏览器首次 UIA 查询
+                // 常常只给窗口/窗格，等树初始化完再走一次细化预算。
+                if (needsRefinement)
                 {
+                    if (foreground.Path.Count > 0)
+                        ApplyHitPath(foreground.Path);
+
                     _refining = true;
+                    var refinementProbe = RefinementProbe;
 
                     try
                     {
-                        result = await probe.ProbeAsync(
+                        // 和 snow-shot 一样让前景框先稳定 80ms；期间光标一动就放弃细化
+                        await Task.Delay(80);
+                        if (!IsProbeCurrent(generation, window))
+                            return;
+
+                        SelectorTrace.Write($"refine start hwnd=0x{window.Handle.ToInt64():X} point={point}");
+
+                        result = await refinementProbe.ProbeAsync(
                             window.Handle,
                             point,
                             UiElementProbe.RefinementBudget,
-                            preview,
-                            () => generation == Volatile.Read(ref _probeGeneration));
+                            refinementPreview,
+                            () => generation == Volatile.Read(ref _probeGeneration),
+                            window.Title,
+                            refreshTree: true,
+                            rawView: IsBrowserLike(window));
+
+                        SelectorTrace.Write(
+                            $"refine result path={Describe(result.Path)} reason={result.Reason}");
                     }
                     finally
                     {
+                        refinementProbe.ReleaseTrees();
+
                         if (generation == Volatile.Read(ref _probeGeneration))
                             _refining = false;
                     }
@@ -1840,25 +2156,7 @@ public partial class CaptureWindow : Window
                     if (!IsProbeCurrent(generation, window))
                         return;
 
-                    if (CursorMovedSince(point))
-                    {
-                        if (++rehits <= 3)
-                            continue;
-
-                        return;
-                    }
-                }
-
-                // UIA 没命中：用 MSAA 兜底（Electron / 老应用往往只在这边暴露控件）
-                if (UsesMsaa && result.Candidate is null && _msaaProbe is { } msaa)
-                {
-                    var msaaCandidate = await msaa.ProbeAsync(
-                        window.Handle,
-                        point,
-                        UiElementProbe.ForegroundBudget,
-                        () => generation == Volatile.Read(ref _probeGeneration));
-
-                    if (!IsProbeCurrent(generation, window))
+                    if (result.Reason == UiElementStopReason.Cancelled)
                         return;
 
                     if (CursorMovedSince(point))
@@ -1869,33 +2167,32 @@ public partial class CaptureWindow : Window
                         return;
                     }
 
-                    if (msaaCandidate is not null)
-                    {
-                        SetUiCandidate(msaaCandidate);
-                        return;
-                    }
+                    // 细化只在旧路径上向外扩展；不兼容就保留当前层
+                    if (result.Path.Count > 1)
+                        ApplyRefinementPath(result.Path);
+                }
+                else if (result.Path.Count > 0)
+                {
+                    ApplyHitPath(result.Path);
                 }
 
-                // 预算用完 / 树还没建全：停一下再来一次（Chromium 的懒启用经常这样）。
-                // 文档 / 整块窗格也算「粗结果」：网页第一次查询往往只给到文档，
-                // 再等 350ms 树里才会出现链接/按钮。
-                var coarse = IsCoarseCandidate(result, window);
-
-                if ((!result.Completed || coarse) && retries < 3)
+                // 浏览器无障碍树是异步建立的：窗格/文档/分组都还不算命中，
+                // 隔 300ms 再用前景预算探一次，最多约 3 秒；鼠标一动就重新开始。
+                if (!UsePrewarmedTree
+                    && IsBrowserLike(window)
+                    && IsCoarsePath(result)
+                    && browserRetries < 8)
                 {
-                    // 先把粗结果画出来，不要一直停在整窗
-                    if (result.Candidate is not null && !CursorMovedSince(point))
-                        SetUiCandidate(result.Candidate);
-
-                    retries++;
-                    await Task.Delay(350);
+                    browserRetries++;
+                    SelectorTrace.Write(
+                        $"browser retry {browserRetries} path={Describe(result.Path)}");
+                    await Task.Delay(300);
                     if (!IsProbeCurrent(generation, window))
                         return;
 
                     continue;
                 }
 
-                SetUiCandidate(result.Candidate);
                 return;
             }
         }
@@ -1919,13 +2216,17 @@ public partial class CaptureWindow : Window
             {
                 var point = WindowCandidates.GetCursorPosition();
 
-                var candidate = await probe.ProbeAsync(
+                var result = await probe.ProbeAsync(
                     window.Handle,
                     point,
                     TimeSpan.FromMilliseconds(600),
-                    () => generation == Volatile.Read(ref _probeGeneration));
+                    () => generation == Volatile.Read(ref _probeGeneration),
+                    window.Title);
 
                 if (!IsProbeCurrent(generation, window))
+                    return;
+
+                if (result.Reason == UiElementStopReason.Cancelled)
                     return;
 
                 if (CursorMovedSince(point))
@@ -1936,7 +2237,9 @@ public partial class CaptureWindow : Window
                     return;
                 }
 
-                SetUiCandidate(candidate);
+                if (result.Path.Count > 1)
+                    ApplyHitPath(result.Path);
+
                 return;
             }
         }
@@ -1949,8 +2252,19 @@ public partial class CaptureWindow : Window
     private bool UsesUia =>
         !string.Equals(CaptureElementApi, "msaa", StringComparison.OrdinalIgnoreCase);
 
-    private bool UsesMsaa =>
-        !string.Equals(CaptureElementApi, "uia", StringComparison.OrdinalIgnoreCase);
+    /// <summary>浏览器 / Electron / UWP：首次 UIA 树可能异步初始化。</summary>
+    private static bool IsBrowserLike(WindowCandidate window) => window.ClassName is
+        "Chrome_WidgetWin_1" or "Chrome_WidgetWin_0" or "MozillaWindowClass"
+        or "ApplicationFrameWindow" or "CefWebView" or "CefBrowserWindow" or "WebViewHost";
+
+    /// <summary>UIA 只给到窗口/文档/窗格/分组，说明还没走到具体控件。</summary>
+    private static bool IsCoarsePath(UiElementProbeResult result)
+    {
+        if (result.Path.Count <= 1)
+            return true;
+
+        return result.Path[0].ControlType is "文档" or "窗格" or "分组" or "窗口" or "应用";
+    }
 
     private static bool CursorMovedSince(PixelPoint point)
     {
@@ -1958,33 +2272,10 @@ public partial class CaptureWindow : Window
         return Math.Abs(latest.X - point.X) > 2 || Math.Abs(latest.Y - point.Y) > 2;
     }
 
-    /// <summary>
-    /// 结果是不是「还没走到底」：文档/窗格/整窗大小。
-    /// 网页第一次查询常只给到文档；这时候 Completed 可能已经是 true，
-    /// 但树里其实还会长出链接和按钮，值得再等几拍。
-    /// </summary>
-    private static bool IsCoarseCandidate(UiElementProbeResult result, WindowCandidate window)
-    {
-        if (result.Candidate is null)
-            return true;
-
-        if (result.Candidate.ControlType is "文档" or "窗格" or "窗口" or "应用")
-            return true;
-
-        var bounds = result.Candidate.Bounds;
-        var windowBounds = window.Bounds;
-
-        return windowBounds.Width > 0
-               && windowBounds.Height > 0
-               && bounds.Width >= windowBounds.Width * 95 / 100
-               && bounds.Height >= windowBounds.Height * 95 / 100;
-    }
-
     private bool IsProbeCurrent(int generation, WindowCandidate window) =>
         generation == Volatile.Read(ref _probeGeneration)
         && _currentCandidate?.Handle == window.Handle
-        && !_hasSelection
-        && !_forceWindowCandidate;
+        && !_hasSelection;
 
     /// <summary>方向键微调：选区和标注一起反向平移，保持屏幕位置，并进撤销栈。</summary>
     private void NudgeSelection(double dx, double dy)
@@ -7579,31 +7870,9 @@ public partial class CaptureWindow : Window
             return;
         }
 
-        // Tab：没有选区时切换窗口；控件级由鼠标停顿后自动探测
-        if (key == Key.Tab && !_hasSelection && !OcrLayer.IsVisible && _candidates.Count > 0)
+        // Tab：整窗 ↔ 子元素；Ctrl+Tab：在光标下重叠的窗口之间循环
+        if (key == Key.Tab && HandleTabKey(e.KeyModifiers.HasFlag(KeyModifiers.Control)))
         {
-            _forceWindowCandidate = true;
-            _probeGeneration++;
-            _uiCandidate = null;
-
-            var previous = _currentCandidate;
-            _currentCandidate = null;
-
-            var next = WindowCandidates.Next(
-                _candidates,
-                WindowCandidates.GetCursorPosition(),
-                previous);
-
-            if (next is null)
-            {
-                HideCandidate();
-            }
-            else
-            {
-                _currentCandidate = next;
-                ShowCandidateVisual(next.Bounds, next.Title, kind: null);
-            }
-
             e.Handled = true;
             return;
         }
@@ -7632,45 +7901,8 @@ public partial class CaptureWindow : Window
             return;
         }
 
-        if (key == Key.Escape)
+        if (key == Key.Escape && HandleEscape())
         {
-            if (_colorSampling)
-            {
-                ExitColorSampling();
-                e.Handled = true;
-                return;
-            }
-
-            if (_angleDraft.IsActive || _anglePhase != AnglePhase.None)
-            {
-                CancelAngleDraft();
-                e.Handled = true;
-                return;
-            }
-
-            // 正在拖选区/拖标注/画一半：先取消这次操作，不关窗口
-            if (CancelActiveDrag())
-            {
-                e.Handled = true;
-                return;
-            }
-
-            if (_isRecognizing)
-            {
-                _ocrCancellation?.Cancel();
-                e.Handled = true;
-                return;
-            }
-
-            if (OcrLayer.IsVisible)
-            {
-                ClearOcrOverlay();
-                e.Handled = true;
-                return;
-            }
-
-            Action = CaptureAction.None;
-            Close();
             e.Handled = true;
             return;
         }

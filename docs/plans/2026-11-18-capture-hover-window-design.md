@@ -1,6 +1,8 @@
 # 2026-11-18 截图悬停选区（窗口级 + 控件级）
 
 > 状态：已实现
+> 2026-11-23 扩展为「命中路径 + 层级切换」，见
+> `2026-11-23-capture-element-selection-alignment-design.md`。
 
 ## 一、需求
 
@@ -14,10 +16,12 @@
 |---|---|
 | 打开遮罩 | 立刻按当前光标位置显示候选（含控件级） |
 | 鼠标移动 | 光标下最上层窗口显示虚线候选 + 标题/尺寸 |
-| 继续移动 | 候选细化到光标下的控件（无固定等待），徽标标出类型（`按钮 · 保存`） |
-| 单击 | 选中当前候选（控件优先，否则整窗），弹出动作栏 |
+| 继续移动 | 候选细化到光标下的完整命中路径，徽标标出类型（`按钮 · 保存`） |
+| 滚轮 | 在命中路径内逐级放大 / 缩小（子元素模式） |
+| 单击 | 选中当前路径层（控件优先，否则整窗），弹出动作栏 |
 | 按住拖动 | 自由选区优先；拖动超过最小尺寸后候选消失 |
-| `Tab` | 在光标下重叠的窗口之间循环（强制窗口级）；到末尾隐藏候选 |
+| `Tab` | 整窗 / 子元素模式切换 |
+| `Ctrl+Tab` | 在光标下重叠的窗口之间循环（强制窗口级） |
 | `Esc` | 有 OCR 结果先清结果，否则取消截图 |
 
 智能框选默认开启，不额外占用修饰键。
@@ -27,36 +31,43 @@
 ### 窗口级
 
 - `WindowCandidates`：`EnumWindows` 枚举可见顶层窗口，按 Z 序（最上层在前）
-  - 排除本进程窗口、最小化窗口、DWM cloaked、工具窗口、桌面壳层（Progman/WorkerW/任务栏）
+  - 只排除显式传入的 HWND（截图遮罩及子窗口），同进程的钉图窗口仍可被选中
+  - 排除最小化窗口、DWM cloaked、点击穿透的 layered 窗口
+  - 可见矩形按显示器裁剪；桌面宿主（Progman/WorkerW/Shell）按屏拆分，普通跨屏窗口取并集
   - 返回物理像素 `PixelRect` 与标题
-  - `Pick` 返回包含点的最上层窗口；`Next` 用于 Tab 循环
+  - `Pick` 返回包含点的最上层窗口；`Next` 用于 Ctrl+Tab 循环
 - `CaptureWindow`
-  - 打开时枚举一次（冻结帧前后窗口位置一致）
+  - 打开时枚举一次（冻结帧前后窗口位置一致）；截图期间每 500ms 刷新
   - `OnPointerMoved` 更新候选虚线框与徽标
-  - `OnPointerPressed` 记下候选并开始自由选区；`OnPointerReleased` 时若几乎没有拖动
-    且有候选，则把选区设为候选
+  - `OnPointerPressed` 记下当前路径层并开始自由选区；`OnPointerReleased` 时若几乎没有拖动
+    且有候选，则把选区设为该层
 
 ### 控件级
 
 - 新增依赖 `Interop.UIAutomationClient`（UI Automation COM 互操作，netstandard2.0）
 - `UiElementProbe`：专用 MTA 线程 + 逐层懒缓存，接口 `ProbeAsync(hwnd, point)`
   - 缓存请求：`TreeScope = Element | Children`、`ControlViewCondition`、
-    `AutomationElementMode_Full`，一次带回 `BoundingRectangle / IsOffscreen / ControlType / Name`
+    `AutomationElementMode_Full`，一次带回 `BoundingRectangle / IsOffscreen / ControlType`
   - 根节点 `ElementFromHandleBuildCache`，子节点 `BuildUpdatedCache` + `GetCachedChildren`：
     **每层只付一次跨进程调用**，命中在内存里查表
   - 子节点按兄弟顺序从后往前命中（后面的更靠前）；等大 `Pane/Group` 结构节点回溯，
     解决 Chromium 冗余容器盖住内容分支的问题（Snow Shot 同款做法）
-  - `ConnectionTimeout = 300ms`、`TransactionTimeout = 800ms`，无响应应用不会拖死探测
-  - 跳过窗口本身、无名布局容器；结果 ≥ 窗口 95% 时退回窗口级
+  - 每个子节点裁剪到窗口矩形，路径按「深 → 浅」保留，末项固定为窗口
+  - 子节点多于 16 个建 64px 网格索引；大列表命中不逐个比较
+  - 跳过窗口本身、无名布局容器；结构容器也保留在路径里，用户可逐层选择
   - 顶层探不到时枚举包含光标的子窗口（面积小的优先），解决 UWP/WinUI：
     顶层是 `ApplicationFrameWindow`，真正内容在 `Windows.UI.Core.CoreWindow`
   - 控件类型用 `CurrentControlType` 映射成中文（`按钮`/`输入框`/`列表项`/`文档`…），
     因为部分应用的 `LocalizedControlType` 是空串
+  - 结果带 `UiElementStopReason`（预算/超时/失败/解码中/遍历上限）
+- `MsaaElementProbe`：UIA 只给到窗口时兜底；从 `accHitTest` / `accChild` 下钻收集
+  同形状的路径，超时窗口加入黑名单
+- `ElementSelectionModel`：路径状态、整窗/子元素模式、显式选层、细化尾部校验
 - 探测调度：**不做时间防抖**，每次移动立刻投递到 UIA 线程
   - 打开遮罩时先按当前光标位置出一次候选，不用先晃鼠标
   - 每次移动把 generation 往前推；worker 在遍历前读一次 generation，过时的任务直接丢掉
   - 遍历过程中每步再检查一次，鼠标扫过时不会白跑完整棵树
-  - 光标还停在当前控件里时直接返回，不投递任何探测
+  - 光标还停在当前层里时直接返回，不投递任何探测
   - 结果回来后再次校验 generation / 窗口句柄 / 光标位置
 - 单击：`_uiCandidateAtPress` 只有包含按下点时才生效，避免用过时的控件框
 
@@ -101,6 +112,6 @@
 
 - Electron / Chromium 是否暴露细粒度控件取决于其无障碍树；没开时只能到文档区或窗口级
 - Canvas / 游戏 / 自绘界面没有控件树，自然回落到窗口级
-- 多屏不同缩放仍沿用主屏缩放（M1 已知限制）
+- 多屏不同缩放仍沿用主屏缩放做 DIP 换算（M1 已知限制）；候选矩形已按各显示器裁剪
 - 窗口在冻结后移动不会再更新候选（位置按冻结帧计算）
 - 缓存按窗口句柄保存到本次截图结束；界面在冻结帧之后发生变化时仍按缓存结果

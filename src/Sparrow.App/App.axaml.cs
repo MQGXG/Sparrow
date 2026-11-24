@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -617,8 +618,58 @@ public partial class App : Application
         if (_palette is null || _paletteViewModel is null || _catalog is null)
             return;
 
+        // 浏览器被遮罩覆盖后 Chrome 会丢掉网页无障碍树，所以先在无遮挡时预建 UIA 树。
+        UiElementProbe? prewarmedProbe = null;
+        SelectorTrace.Reset();
+
+        try
+        {
+            var cursor = WindowCandidates.GetCursorPosition();
+            var candidates = WindowCandidates.Enumerate(IntPtr.Zero);
+            var target = WindowCandidates.Pick(candidates, cursor);
+
+            SelectorTrace.Write(
+                $"prewarm scan cursor={cursor} target=0x{target?.Handle.ToInt64():X} " +
+                $"class={target?.ClassName}");
+
+            if (target is not null && WindowCandidates.IsBrowserLikeWindow(target.Handle))
+            {
+                SetForegroundWindow(target.Handle);
+                await Task.Delay(300);
+
+                // 先跑一次 IAccessible 激活，Chrome 才会真正构建网页无障碍树。
+                using (var activation = new MsaaElementProbe())
+                {
+                    await activation.ProbeAsync(
+                        target.Handle,
+                        cursor,
+                        TimeSpan.FromMilliseconds(1200),
+                        null,
+                        target.Title);
+                }
+
+                await Task.Delay(250);
+
+                var probe = new UiElementProbe();
+                var warmed = await probe.PrewarmAsync(
+                    target.Handle, TimeSpan.FromMilliseconds(1500));
+
+                SelectorTrace.Write($"prewarm result={warmed}");
+
+                if (warmed)
+                    prewarmedProbe = probe;
+                else
+                    probe.Dispose();
+            }
+        }
+        catch
+        {
+            // 预建失败就走普通探测
+        }
+
         var capture = new CaptureWindow
         {
+            ElementProbe = prewarmedProbe,
             OcrRunner = RunCaptureOcrAsync,
             CopyText = CopyTextToClipboard,
             FreezeOnOpen = true,
@@ -656,6 +707,9 @@ public partial class App : Application
 
         await WaitForClosedAsync(capture);
         Log.Info($"截图窗口已关闭：{MemoryText()}");
+
+        // 预建的 UIA 会话只在本次截图里用；关窗后立刻还给系统
+        prewarmedProbe?.Dispose();
 
         // 记住这次的标注样式和尺寸单位，下次截图直接沿用
         SaveCapturePreferences(capture);
@@ -1256,4 +1310,8 @@ public partial class App : Application
         window.Closed += (_, _) => completion.TrySetResult(true);
         return completion.Task;
     }
+
+    /// <summary>预建 UIA 树前把目标浏览器窗口提到前台，Chromium 才会构建网页无障碍树。</summary>
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hwnd);
 }

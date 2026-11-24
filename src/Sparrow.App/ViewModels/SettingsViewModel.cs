@@ -168,9 +168,9 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
     public IReadOnlyList<SettingsChoiceOption> CaptureElementApiOptions { get; } =
     [
-        new("auto", "自动（UIA 优先，MSAA 兜底）"),
+        new("auto", "自动（UI Automation，推荐）"),
         new("uia", "仅 UI Automation"),
-        new("msaa", "仅 MSAA")
+        new("msaa", "仅 MSAA（旧应用）")
     ];
 
     partial void OnSelectedCaptureElementApiChanged(SettingsChoiceOption value)

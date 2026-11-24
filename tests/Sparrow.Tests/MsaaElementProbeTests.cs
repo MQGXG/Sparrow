@@ -15,12 +15,12 @@ public sealed class MsaaElementProbeTests
     {
         using var probe = new MsaaElementProbe();
 
-        var candidate = await probe.ProbeAsync(
+        var result = await probe.ProbeAsync(
             IntPtr.Zero,
             new PixelPoint(10, 10),
             TimeSpan.FromMilliseconds(300));
 
-        candidate.ShouldBeNull();
+        result.Path.ShouldBeEmpty();
     }
 
     [Fact]
@@ -29,11 +29,11 @@ public sealed class MsaaElementProbeTests
         var probe = new MsaaElementProbe();
         probe.Dispose();
 
-        var candidate = await probe.ProbeAsync(
+        var result = await probe.ProbeAsync(
             new IntPtr(0x1234),
             new PixelPoint(10, 10),
             TimeSpan.FromMilliseconds(100));
 
-        candidate.ShouldBeNull();
+        result.Path.ShouldBeEmpty();
     }
 }

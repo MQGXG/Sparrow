@@ -43,4 +43,64 @@ public sealed class WindowCandidatesTests
 
         WindowCandidates.Next([front], new PixelPoint(200, 200), null).ShouldBeNull();
     }
+
+    [Fact]
+    public void 跨屏普通窗口_取交集并集()
+    {
+        var monitors = new[]
+        {
+            new PixelRect(-1920, 0, 1920, 1080),
+            new PixelRect(0, 0, 2560, 1440)
+        };
+        var window = new PixelRect(-100, 20, 200, 120);
+
+        var rects = WindowCandidates.SelectionRects(window, desktop: false, monitors);
+
+        rects.ShouldBe([window]);
+    }
+
+    [Fact]
+    public void 桌面宿主_按显示器拆分()
+    {
+        var monitors = new[]
+        {
+            new PixelRect(-1920, 0, 1920, 1080),
+            new PixelRect(0, 0, 2560, 1440)
+        };
+        var desktop = new PixelRect(-1920, 0, 4480, 1440);
+
+        var rects = WindowCandidates.SelectionRects(desktop, desktop: true, monitors);
+
+        rects.ShouldBe(monitors);
+    }
+
+    [Fact]
+    public void 窗口部分在屏外_裁剪到显示器()
+    {
+        var monitors = new[] { new PixelRect(0, 0, 1000, 800) };
+        var window = new PixelRect(900, 100, 300, 200);
+
+        var rects = WindowCandidates.SelectionRects(window, desktop: false, monitors);
+
+        rects.ShouldBe([new PixelRect(900, 100, 100, 200)]);
+    }
+
+    [Fact]
+    public void 完全不与显示器相交_没有候选()
+    {
+        var monitors = new[] { new PixelRect(0, 0, 1000, 800) };
+
+        WindowCandidates.SelectionRects(
+                new PixelRect(2000, 2000, 100, 100), desktop: false, monitors)
+            .ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void 同一窗口拆到不同屏_视为不同候选()
+    {
+        var left = Candidate(1, "桌面", new PixelRect(0, 0, 100, 100));
+        var right = Candidate(1, "桌面", new PixelRect(100, 0, 100, 100));
+
+        left.ShouldNotBe(right);
+    }
 }

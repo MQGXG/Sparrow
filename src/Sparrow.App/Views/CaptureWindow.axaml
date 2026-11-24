@@ -667,7 +667,7 @@
                    Text="拖拽框选"
                    Foreground="{StaticResource TextPrimaryBrush}" />
         <TextBlock FontSize="11.5"
-                   Text=" · 单击选窗口 · I 取色 · Esc 取消"
+                   Text=" · 单击选中 · 滚轮切层 · Tab 整窗/元素 · I 取色 · Esc 取消"
                    Foreground="{StaticResource TextSecondaryBrush}" />
       </StackPanel>
     </Border>

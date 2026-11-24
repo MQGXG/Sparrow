@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
 using Avalonia;
 using Interop.UIAutomationClient;
 
@@ -10,15 +11,45 @@ namespace Sparrow.App.Services;
 public sealed record UiElementCandidate(
     PixelRect Bounds,
     string Title,
-    string ControlType);
+    string ControlType)
+{
+    public bool Contains(PixelPoint point) =>
+        point.X >= Bounds.X && point.X < Bounds.X + Bounds.Width &&
+        point.Y >= Bounds.Y && point.Y < Bounds.Y + Bounds.Height;
+}
+
+/// <summary>一次探测为什么停下；和 Snow Shot 的 StopReason 对齐。</summary>
+public enum UiElementStopReason
+{
+    Complete,
+    BudgetExhausted,
+    DecodingPending,
+    ProviderTimeout,
+    ProviderFailure,
+    Cancelled,
+    TraversalLimit
+}
 
 /// <summary>
-/// 一次探测的结果。Completed=false 表示「预算用完、还没走到底」，
-/// 调用方可以在光标停住后用更长的预算再细化一次。
+/// 一次探测的结果。Path 是「深 → 浅」的命中路径，末项一定是窗口矩形；
+/// 只有窗口一项表示没拿到更细的元素。
 /// </summary>
-public readonly record struct UiElementProbeResult(
-    UiElementCandidate? Candidate,
-    bool Completed);
+public sealed record UiElementProbeResult(
+    IReadOnlyList<UiElementCandidate> Path,
+    UiElementStopReason Reason)
+{
+    public static UiElementProbeResult Empty { get; } = new([], UiElementStopReason.Complete);
+
+    public bool HasPath => Path.Count > 0;
+
+    /// <summary>路径最深的一层；没有路径时为 null。</summary>
+    public UiElementCandidate? Deepest => Path.Count > 0 ? Path[0] : null;
+
+    /// <summary>预算/解码/超时都可以用更长预算再细化一次。</summary>
+    public bool CanRefine => Reason is UiElementStopReason.BudgetExhausted
+        or UiElementStopReason.DecodingPending
+        or UiElementStopReason.ProviderTimeout;
+}
 
 /// <summary>
 /// 按窗口句柄探测光标下的 UI Automation 控件。
@@ -37,7 +68,14 @@ public readonly record struct UiElementProbeResult(
 public sealed class UiElementProbe : IDisposable
 {
     private const int MaxSteps = 80;
-    private const int MaxChildrenPerNode = 600;
+
+    /// <summary>
+    /// 单层最多解码多少个子节点。网页长列表 / 大表格常常超过 600 个兄弟，
+    /// 截断会让光标下的元素永远命中不到，这是「有时准有时不准」的主要来源。
+    /// 这里只做异常保护，正常情况由预算和 MaxNodesPerWindow 约束。
+    /// </summary>
+    private const int MaxChildrenPerNode = 65536;
+
     private const int MaxRectangles = 100;
     private const int MaxChildWindows = 10;
 
@@ -45,10 +83,13 @@ public sealed class UiElementProbe : IDisposable
     private const int LinearChildLimit = 16;
 
     /// <summary>单个窗口最多保留多少懒展开节点，防止异常大树把内存撑爆。</summary>
-    private const int MaxNodesPerWindow = 12000;
+    private const int MaxNodesPerWindow = 30000;
 
-    /// <summary>单次跨进程调用最多等多久（毫秒）。实际值按剩余预算动态收紧。</summary>
-    private const int CallLimitMilliseconds = 400;
+    /// <summary>悬停单次跨进程调用的上限；和 snow-shot 的 foreground 预算一致。</summary>
+    private const int ForegroundCallLimitMilliseconds = 168;
+
+    /// <summary>细化单次跨进程调用的上限；snow-shot 给到 500ms，大页面才走得完。</summary>
+    private const int RefinementCallLimitMilliseconds = 500;
 
     /// <summary>悬停探测的预算：和 snow-shot 一致，170ms 内必须给出结果。</summary>
     public static readonly TimeSpan ForegroundBudget = TimeSpan.FromMilliseconds(170);
@@ -56,19 +97,26 @@ public sealed class UiElementProbe : IDisposable
     /// <summary>光标停住后的细化预算：和 snow-shot 的 1.5s 对齐，复杂窗口也够走完。</summary>
     public static readonly TimeSpan RefinementBudget = TimeSpan.FromMilliseconds(1500);
 
-    /// <summary>遍历途中发布粗框的间隔，让框先出来再收紧。</summary>
-    private const int PublicationIntervalMilliseconds = 40;
+    /// <summary>遍历途中发布粗框的间隔（snow-shot 的 refinement 是 32ms）。</summary>
+    private const int PublicationIntervalMilliseconds = 32;
 
     /// <summary>容器节点连续拿到几次空子树后放弃（多半是应用还没建好树）。</summary>
-    private const int MaxEmptyExpansions = 5;
+    private const int MaxEmptyExpansions = 8;
+
+    private static readonly Guid IidIAccessible =
+        new("618736E0-3C3D-11CF-810C-00AA00389B71");
+
+    private const uint ObjIdClient = 0xFFFFFFFC;
 
     private readonly BlockingCollection<Action> _queue = new();
     private readonly Thread _worker;
     private readonly Dictionary<IntPtr, Node> _trees = [];
-    private readonly Dictionary<IntPtr, List<IntPtr>> _childWindows = [];
+    private readonly Dictionary<IntPtr, List<FlatElement>> _flatTrees = [];
+    private readonly HashSet<IntPtr> _accessibilityPinged = [];
 
     private IUIAutomation2? _automation;
     private IUIAutomationCacheRequest? _request;
+    private IUIAutomationCacheRequest? _rawRequest;
     private int _nodeCount;
     private volatile bool _disposed;
 
@@ -94,21 +142,25 @@ public sealed class UiElementProbe : IDisposable
         IntPtr hwnd,
         PixelPoint point,
         TimeSpan? budget = null,
-        IProgress<UiElementCandidate>? preview = null,
-        Func<bool>? stillWanted = null)
+        IProgress<IReadOnlyList<UiElementCandidate>>? preview = null,
+        Func<bool>? stillWanted = null,
+        string? windowTitle = null,
+        bool refreshTree = false,
+        bool rawView = false)
     {
         if (_disposed)
-            return Task.FromResult(new UiElementProbeResult(null, true));
+            return Task.FromResult(UiElementProbeResult.Empty);
 
         var gate = stillWanted ?? AlwaysWanted;
         var completion = new TaskCompletionSource<UiElementProbeResult>(
             TaskCreationOptions.RunContinuationsAsynchronously);
+        var request = rawView ? _rawRequest ?? _request : _request;
 
         try
         {
             _queue.Add(() =>
             {
-                var result = new UiElementProbeResult(null, true);
+                var result = UiElementProbeResult.Empty;
 
                 try
                 {
@@ -118,9 +170,10 @@ public sealed class UiElementProbe : IDisposable
                         var state = new ProbeState(
                             Stopwatch.StartNew(),
                             budget ?? ForegroundBudget,
-                            preview);
+                            preview,
+                            request);
 
-                        result = Probe(hwnd, point, gate, state);
+                        result = Probe(hwnd, point, gate, state, windowTitle, refreshTree);
                     }
                 }
                 catch
@@ -128,25 +181,192 @@ public sealed class UiElementProbe : IDisposable
                     // 目标应用没有 UIA 树、COM 失败、窗口已关闭等：一律退回窗口级
                 }
 
+                // 只记录粗结果/失败，避免每次鼠标移动刷屏；具体路径用 tools/SelectorProbe 看
+                if (result.Path.Count <= 1 || result.Reason != UiElementStopReason.Complete)
+                {
+                    Log($"uia hwnd=0x{hwnd.ToInt64():X} " +
+                        $"path=[{DescribePath(result.Path)}] reason={result.Reason}");
+                }
+
+                SelectorTrace.Write(
+                    $"uia hwnd=0x{hwnd.ToInt64():X} budget={(budget ?? ForegroundBudget).TotalMilliseconds:0} " +
+                    $"path=[{DescribePath(result.Path)}] reason={result.Reason}");
+
                 completion.TrySetResult(result);
             });
         }
         catch (InvalidOperationException)
         {
-            completion.TrySetResult(new UiElementProbeResult(null, true));
+            completion.TrySetResult(UiElementProbeResult.Empty);
+        }
+
+        return completion.Task;
+    }
+
+    /// <summary>
+    /// 在遮罩显示之前预建整棵 UIA 树。Chrome 被遮罩覆盖后会丢掉网页无障碍树，
+    /// 之后再查只剩分组/文档；因此浏览器窗口必须先在无遮挡时建好树。
+    /// </summary>
+    public Task<bool> PrewarmAsync(IntPtr hwnd, TimeSpan budget)
+    {
+        if (_disposed)
+            return Task.FromResult(false);
+
+        var completion = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        try
+        {
+            _queue.Add(() =>
+            {
+                try
+                {
+                    var state = new ProbeState(
+                        Stopwatch.StartNew(), budget, null, _request);
+
+                    if (!_trees.TryGetValue(hwnd, out var root))
+                    {
+                        EvictOtherTrees(hwnd);
+                        PingRenderChildren(hwnd);
+                        root = BuildRoot(hwnd, state.Remaining, state.CallLimit, state.Request);
+
+                        if (root is null)
+                        {
+                            completion.TrySetResult(false);
+                            return;
+                        }
+
+                        _trees[hwnd] = root;
+                    }
+
+                    // 一次 Descendants 批量请求，明确要求完整后代树。
+                    // Chrome 收到这个请求后才会构建网页无障碍。
+                    try
+                    {
+                        if (_automation is not null && state.Request is not null)
+                        {
+                            var all = root.Element.FindAllBuildCache(
+                                TreeScope.TreeScope_Descendants,
+                                _automation.ControlViewCondition,
+                                state.Request);
+
+                            if (all is not null)
+                            {
+                                SelectorTrace.Write($"prewarm descendants={all.Length}");
+
+                                var flat = new List<FlatElement>(all.Length);
+
+                                for (var index = 0; index < all.Length; index++)
+                                {
+                                    var element = all.GetElement(index);
+
+                                    if (element is null)
+                                        continue;
+
+                                    var rect = element.CachedBoundingRectangle;
+
+                                    if (rect.right <= rect.left || rect.bottom <= rect.top)
+                                    {
+                                        try
+                                        {
+                                            rect = element.CurrentBoundingRectangle;
+                                        }
+                                        catch
+                                        {
+                                            continue;
+                                        }
+                                    }
+                                    var bounds = Intersect(
+                                        rect.left, rect.top, rect.right, rect.bottom, root.Bounds);
+
+                                    if (bounds.Width < 2 || bounds.Height < 2)
+                                        continue;
+
+                                    flat.Add(new FlatElement(
+                                        bounds, element.CachedControlType, element));
+                                }
+
+                                Marshal.FinalReleaseComObject(all);
+
+                                if (flat.Count > 0)
+                                {
+                                    _flatTrees[hwnd] = flat;
+                                    SelectorTrace.Write(
+                                        $"prewarm flat={flat.Count} hwnd=0x{hwnd.ToInt64():X}");
+
+                                    completion.TrySetResult(true);
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception error)
+                    {
+                        SelectorTrace.Write($"prewarm descendants failed=0x{error.HResult:X}");
+                    }
+
+                    var pending = new Queue<Node>();
+                    pending.Enqueue(root);
+
+                    while (pending.Count > 0
+                           && !state.Expired
+                           && _nodeCount < MaxNodesPerWindow)
+                    {
+                        var node = pending.Dequeue();
+                        TryExpand(node, state);
+
+                        if (node.Children is null)
+                            continue;
+
+                        foreach (var child in node.Children)
+                            pending.Enqueue(child);
+                    }
+
+                    SelectorTrace.Write(
+                        $"prewarm hwnd=0x{hwnd.ToInt64():X} nodes={_nodeCount} " +
+                        $"elapsed={state.Remaining.TotalMilliseconds:0}ms-left");
+
+                    completion.TrySetResult(true);
+                }
+                catch
+                {
+                    completion.TrySetResult(false);
+                }
+            });
+        }
+        catch (InvalidOperationException)
+        {
+            completion.TrySetResult(false);
         }
 
         return completion.Task;
     }
 
     /// <summary>一次探测的预算、计时和「粗框」发布节流。</summary>
-    private sealed class ProbeState(Stopwatch watch, TimeSpan budget, IProgress<UiElementCandidate>? preview)
+    private sealed class ProbeState(
+        Stopwatch watch,
+        TimeSpan budget,
+        IProgress<IReadOnlyList<UiElementCandidate>>? preview,
+        IUIAutomationCacheRequest? request)
     {
+        public IUIAutomationCacheRequest? Request { get; } = request;
+
         public TimeSpan Remaining => budget - watch.Elapsed;
 
         public bool Expired => Remaining <= TimeSpan.Zero;
 
-        public IProgress<UiElementCandidate>? Preview { get; } = preview;
+        public IProgress<IReadOnlyList<UiElementCandidate>>? Preview { get; } = preview;
+
+        /// <summary>
+        /// 单次跨进程调用的上限。snow-shot 的 foreground 是 168ms、refinement 是 500ms；
+        /// 细化用更宽的调用上限，大型浏览器树才不会每次都卡在 400ms。
+        /// </summary>
+        public TimeSpan CallLimit { get; } = budget >= RefinementBudget
+            ? TimeSpan.FromMilliseconds(RefinementCallLimitMilliseconds)
+            : TimeSpan.FromMilliseconds(ForegroundCallLimitMilliseconds);
+
+        /// <summary>只有细化才为重试超时多付一次调用；前景不允许拖到两倍预算。</summary>
+        public bool CanRetryTimeout { get; } = budget >= RefinementBudget;
 
         public TimeSpan LastPublished { get; set; }
 
@@ -161,15 +381,15 @@ public sealed class UiElementProbe : IDisposable
                 return;
             }
 
-            var candidate = Pick(current, root, resolveName: false, preview: true);
-            if (candidate is null)
+            var path = BuildPath(current, root, windowTitle: null, resolveName: false);
+            if (path.Count == 0)
                 return;
 
             LastPublished = watch.Elapsed;
 
             try
             {
-                Preview.Report(candidate);
+                Preview.Report(path);
             }
             catch
             {
@@ -179,6 +399,20 @@ public sealed class UiElementProbe : IDisposable
     }
 
     private static readonly Func<bool> AlwaysWanted = static () => true;
+
+    /// <summary>调试器附加或显式开启时，把探测路径写到 VS 输出窗口，方便定位「为什么只到文档」。</summary>
+    private static readonly bool DiagnosticsEnabled = Debugger.IsAttached
+        || Environment.GetEnvironmentVariable("SPARROW_SELECTOR_DIAGNOSTICS") == "1";
+
+    private static void Log(string message)
+    {
+        if (DiagnosticsEnabled)
+            Debug.WriteLine($"[Sparrow.Selector] {message}");
+    }
+
+    private static string DescribePath(IReadOnlyList<UiElementCandidate> path) =>
+        string.Join(" > ", path.Select(candidate =>
+            $"{candidate.ControlType}:{candidate.Bounds.Width}x{candidate.Bounds.Height}"));
 
     /// <summary>
     /// 提前丢掉缓存的控件树，保留 UIA 的 COM 对象（下次探测不用重新初始化）。
@@ -208,8 +442,15 @@ public sealed class UiElementProbe : IDisposable
         foreach (var root in _trees.Values)
             ReleaseTree(root);
 
+        foreach (var flat in _flatTrees.Values)
+        {
+            foreach (var element in flat)
+                ReleaseCom(element.Element);
+        }
+
         _trees.Clear();
-        _childWindows.Clear();
+        _flatTrees.Clear();
+        _accessibilityPinged.Clear();
         _nodeCount = 0;
     }
 
@@ -256,22 +497,31 @@ public sealed class UiElementProbe : IDisposable
     private void Initialize()
     {
         var automation = (IUIAutomation2)new CUIAutomation8Class();
-        automation.ConnectionTimeout = (uint)CallLimitMilliseconds;
-        automation.TransactionTimeout = (uint)CallLimitMilliseconds;
+        automation.ConnectionTimeout = (uint)ForegroundCallLimitMilliseconds;
+        automation.TransactionTimeout = (uint)ForegroundCallLimitMilliseconds;
 
+        var request = CreateRequest(automation, automation.ControlViewCondition);
+        var rawRequest = CreateRequest(automation, automation.RawViewCondition);
+
+        _automation = automation;
+        _request = request;
+        _rawRequest = rawRequest;
+    }
+
+    private static IUIAutomationCacheRequest CreateRequest(
+        IUIAutomation2 automation,
+        IUIAutomationCondition condition)
+    {
         var request = automation.CreateCacheRequest();
         request.TreeScope = TreeScope.TreeScope_Element | TreeScope.TreeScope_Children;
-        // ControlView 会去掉纯布局的中间层；Chromium 那种冗余容器交给结构回溯处理
-        request.TreeFilter = automation.ControlViewCondition;
+        request.TreeFilter = condition;
         request.AutomationElementMode = AutomationElementMode.AutomationElementMode_Full;
         request.AddProperty(UIA_PropertyIds.UIA_BoundingRectanglePropertyId);
         request.AddProperty(UIA_PropertyIds.UIA_IsOffscreenPropertyId);
         request.AddProperty(UIA_PropertyIds.UIA_ControlTypePropertyId);
         // 故意不缓存 Name：Chromium 上每个节点的名字都可能触发跨进程文本提取，
         // 是首屏探测最大的开销。只对最终选中的节点按需取一次。
-
-        _automation = automation;
-        _request = request;
+        return request;
     }
 
     private void Release()
@@ -289,6 +539,19 @@ public sealed class UiElementProbe : IDisposable
             }
 
             _request = null;
+        }
+
+        if (_rawRequest is not null)
+        {
+            try
+            {
+                Marshal.FinalReleaseComObject(_rawRequest);
+            }
+            catch
+            {
+            }
+
+            _rawRequest = null;
         }
 
         if (_automation is not null)
@@ -309,35 +572,189 @@ public sealed class UiElementProbe : IDisposable
         IntPtr hwnd,
         PixelPoint point,
         Func<bool> stillWanted,
-        ProbeState state)
+        ProbeState state,
+        string? windowTitle,
+        bool refreshTree)
     {
-        if (_request is null)
-            return new UiElementProbeResult(null, true);
+        if (state.Request is null)
+            return UiElementProbeResult.Empty;
 
-        var outcome = ProbeWindow(hwnd, point, stillWanted, state);
-        if (outcome.Candidate is not null || !outcome.Completed)
-            return outcome;
-
-        // UWP/WinUI 的顶层是 ApplicationFrameWindow，UIA 树里只有窗框；
-        // 真正的内容在 Windows.UI.Core.CoreWindow 这类子窗口里
-        foreach (var child in ChildWindowsAt(hwnd, point))
+        // 预建过扁平树：完全本地命中，不再依赖被遮罩影响的应用 UIA。
+        if (_flatTrees.TryGetValue(hwnd, out var flat)
+            && _trees.TryGetValue(hwnd, out var cachedRoot))
         {
-            if (!stillWanted() || state.Expired)
-                return new UiElementProbeResult(null, false);
-
-            outcome = ProbeWindow(child, point, stillWanted, state);
-            if (outcome.Candidate is not null || !outcome.Completed)
-                return outcome;
+            var flatResult = FlatProbe(flat, cachedRoot.Bounds, point, windowTitle);
+            SelectorTrace.Write(
+                $"flat hit hwnd=0x{hwnd.ToInt64():X} point={point.X},{point.Y} " +
+                $"flat={flat.Count} root={cachedRoot.Bounds} -> {DescribePath(flatResult.Path)}");
+            return flatResult;
         }
 
-        return new UiElementProbeResult(null, true);
+        // 细化阶段重建控件树：浏览器的懒建树/空树结果不能跨阶段复用，
+        // 否则前景拿到的空树会一直挡住后面的链接/按钮。
+        if (refreshTree)
+            ReleaseCachedTrees();
+
+        var outcome = ProbeWindow(hwnd, point, stillWanted, state, windowTitle);
+
+        SelectorTrace.Write(
+            $"probe hwnd=0x{hwnd.ToInt64():X} top=[{DescribePath(outcome.Path)}] " +
+            $"reason={outcome.Reason} expired={state.Expired} coarse={IsCoarseUiaPath(outcome)}");
+
+        // 顶层 UIA 只给到窗口/文档/窗格时，继续尝试包含光标的子窗口：
+        // Chrome/Edge 的网页 UIA 树挂在 Chrome_RenderWidgetHostHWND 上，
+        // 只查顶层窗口永远只能拿到 Document。即使顶层还有预算没走完，
+        // 只要路径是粗层且还有剩余预算，也先试子窗口。
+        if (!IsCoarseUiaPath(outcome) || state.Expired)
+        {
+            SelectorTrace.Write($"probe skip-child expired={state.Expired} coarse={IsCoarseUiaPath(outcome)}");
+            return outcome;
+        }
+
+        var topBounds = outcome.Path.Count > 0 ? outcome.Path[^1].Bounds : default;
+        var best = outcome;
+        var children = ChildWindowsAt(hwnd, point);
+        SelectorTrace.Write($"probe children={children.Count}");
+
+        foreach (var child in children)
+        {
+            if (!stillWanted())
+                return new UiElementProbeResult([], UiElementStopReason.Cancelled);
+
+            if (state.Expired)
+            {
+                SelectorTrace.Write("probe child skipped expired");
+                return best;
+            }
+
+            var childOutcome = ProbeWindow(child, point, stillWanted, state, windowTitle);
+
+            SelectorTrace.Write(
+                $"probe child=0x{child.ToInt64():X} path=[{DescribePath(childOutcome.Path)}] " +
+                $"reason={childOutcome.Reason} better={IsBetterPath(childOutcome, best)}");
+
+            if (!IsBetterPath(childOutcome, best))
+                continue;
+
+            best = AppendTopWindow(childOutcome, topBounds, windowTitle);
+
+            // 子窗口还有预算可以继续细化：交给调用方用更长预算再来一次
+            if (childOutcome.CanRefine)
+                return best;
+
+            if (!IsCoarseUiaPath(childOutcome))
+                break;
+        }
+
+        return best;
+    }
+
+    private static bool IsCoarseUiaPath(UiElementProbeResult result)
+    {
+        if (result.Path.Count <= 1)
+            return true;
+
+        return result.Path[0].ControlType is "文档" or "窗格" or "分组" or "窗口" or "应用";
+    }
+
+    /// <summary>在预建扁平树里做包含命中，返回深 → 浅路径。</summary>
+    private static UiElementProbeResult FlatProbe(
+        List<FlatElement> flat,
+        PixelRect windowBounds,
+        PixelPoint point,
+        string? windowTitle)
+    {
+        var containing = flat
+            .Where(element => Contains(element.Bounds, point))
+            .OrderBy(element => (long)element.Bounds.Width * element.Bounds.Height)
+            .ToList();
+
+        var path = new List<UiElementCandidate>(containing.Count + 1);
+
+        foreach (var element in containing)
+        {
+            if (path.Count > 0 && !ContainsRect(element.Bounds, path[^1].Bounds))
+                continue;
+
+            if (path.Count > 0 && path[^1].Bounds.Equals(element.Bounds))
+                continue;
+
+            var kind = ControlTypeName(element.ControlType);
+            var title = path.Count == 0
+                ? SafeName(element.Element) ?? kind
+                : kind;
+
+            path.Add(new UiElementCandidate(element.Bounds, title, kind));
+        }
+
+        if (path.Count == 0 || !path[^1].Bounds.Equals(windowBounds))
+        {
+            path.Add(new UiElementCandidate(
+                windowBounds,
+                string.IsNullOrWhiteSpace(windowTitle) ? "窗口" : windowTitle,
+                "窗口"));
+        }
+
+        return new UiElementProbeResult(path, UiElementStopReason.Complete);
+    }
+
+    private static bool ContainsRect(PixelRect outer, PixelRect inner) =>
+        inner.X >= outer.X &&
+        inner.Y >= outer.Y &&
+        inner.X + inner.Width <= outer.X + outer.Width &&
+        inner.Y + inner.Height <= outer.Y + outer.Height;
+
+    private static bool IsBetterPath(UiElementProbeResult candidate, UiElementProbeResult current)
+    {
+        if (candidate.Path.Count == 0)
+            return false;
+
+        if (current.Path.Count == 0)
+            return true;
+
+        if (candidate.Path.Count > current.Path.Count)
+            return true;
+
+        return PathArea(candidate) < PathArea(current);
+    }
+
+    private static long PathArea(UiElementProbeResult result)
+    {
+        if (result.Path.Count == 0)
+            return long.MaxValue;
+
+        var deepest = result.Path[0].Bounds;
+        return (long)deepest.Width * deepest.Height;
+    }
+
+    private static UiElementProbeResult AppendTopWindow(
+        UiElementProbeResult result,
+        PixelRect topBounds,
+        string? windowTitle)
+    {
+        if (topBounds.Width <= 0 || topBounds.Height <= 0)
+            return result;
+
+        if (result.Path.Count > 0 && result.Path[^1].Bounds.Equals(topBounds))
+            return result;
+
+        var path = new List<UiElementCandidate>(result.Path)
+        {
+            new(
+                topBounds,
+                string.IsNullOrWhiteSpace(windowTitle) ? "窗口" : windowTitle,
+                "窗口")
+        };
+
+        return new UiElementProbeResult(path, result.Reason);
     }
 
     private UiElementProbeResult ProbeWindow(
         IntPtr hwnd,
         PixelPoint point,
         Func<bool> stillWanted,
-        ProbeState state)
+        ProbeState state,
+        string? windowTitle)
     {
         if (!_trees.TryGetValue(hwnd, out var root))
         {
@@ -345,15 +762,22 @@ public sealed class UiElementProbe : IDisposable
             // 跨窗口累积会把工作集推到几百 MB
             EvictOtherTrees(hwnd);
 
-            root = BuildRoot(hwnd, state.Remaining);
+            root = BuildRoot(hwnd, state.Remaining, state.CallLimit, state.Request);
             if (root is null)
-                return new UiElementProbeResult(null, !state.Expired);
+            {
+                return new UiElementProbeResult(
+                    [],
+                    state.Expired ? UiElementStopReason.BudgetExhausted : UiElementStopReason.ProviderFailure);
+            }
 
             _trees[hwnd] = root;
+            SelectorTrace.Write(
+                $"window hwnd=0x{hwnd.ToInt64():X} root={ControlTypeName(root.ControlType)} " +
+                $"{root.Bounds.X},{root.Bounds.Y} {root.Bounds.Width}x{root.Bounds.Height}");
         }
 
         if (!Contains(root.Bounds, point))
-            return new UiElementProbeResult(null, true);
+            return new UiElementProbeResult([], UiElementStopReason.Complete);
 
         var current = root;
 
@@ -361,30 +785,42 @@ public sealed class UiElementProbe : IDisposable
         {
             // 长时间遍历期间鼠标可能已经移开，及时收手
             if (!stillWanted())
-                return new UiElementProbeResult(null, true);
+                return new UiElementProbeResult([], UiElementStopReason.Cancelled);
 
-            // 预算到点：把已经走到的最深节点先交出去，调用方可以再细化
+            // 预算到点：把已经走到的最深路径先交出去，调用方可以再细化
             if (state.Expired)
             {
                 return new UiElementProbeResult(
-                    Pick(current, root, resolveName: false, preview: true), false);
+                    BuildPath(current, root, windowTitle, resolveName: false),
+                    UiElementStopReason.BudgetExhausted);
             }
 
-            var expanded = TryExpand(current, state);
+            var outcome = TryExpand(current, state);
 
-            // 超时 / 空树在本次探测内重试一次；和 snow-shot 的 refinement retry 一致
-            if (!expanded && !state.RetryUsed && !current.ExpandFailed && !state.Expired)
+            // 超时只在细化阶段重试（snow-shot 的 retry_timeout 只在 refinement 打开）；
+            // 空树（Chromium 懒建）前景也允许重试一次，避免整窗停留太久。
+            var retryable = outcome switch
+            {
+                ExpandOutcome.ProviderTimeout => state.CanRetryTimeout,
+                ExpandOutcome.DecodingPending => true,
+                _ => false
+            };
+
+            if (retryable
+                && !state.RetryUsed
+                && !current.ExpandFailed
+                && !state.Expired)
             {
                 state.RetryUsed = true;
-                expanded = TryExpand(current, state);
+                outcome = TryExpand(current, state);
             }
 
-            if (!expanded)
+            if (outcome is not ExpandOutcome.Expanded)
             {
+                var path = BuildPath(current, root, windowTitle, resolveName: true);
+
                 // 可重试的失败（预算/超时/空树）留给细化；彻底失败就收手
-                return new UiElementProbeResult(
-                    Pick(current, root, resolveName: true, preview: false),
-                    current.ExpandFailed);
+                return new UiElementProbeResult(path, ToStopReason(outcome));
             }
 
             var child = HitTest(current, point);
@@ -397,7 +833,8 @@ public sealed class UiElementProbe : IDisposable
                 if (alternative is null)
                 {
                     return new UiElementProbeResult(
-                        Pick(current, root, resolveName: true, preview: false), true);
+                        BuildPath(current, root, windowTitle, resolveName: true),
+                        UiElementStopReason.Complete);
                 }
 
                 current = alternative;
@@ -409,8 +846,19 @@ public sealed class UiElementProbe : IDisposable
         }
 
         return new UiElementProbeResult(
-            Pick(current, root, resolveName: true, preview: false), true);
+            BuildPath(current, root, windowTitle, resolveName: true),
+            UiElementStopReason.TraversalLimit);
     }
+
+    private static UiElementStopReason ToStopReason(ExpandOutcome outcome) => outcome switch
+    {
+        ExpandOutcome.BudgetExhausted => UiElementStopReason.BudgetExhausted,
+        ExpandOutcome.DecodingPending => UiElementStopReason.DecodingPending,
+        ExpandOutcome.ProviderTimeout => UiElementStopReason.ProviderTimeout,
+        ExpandOutcome.ProviderFailure => UiElementStopReason.ProviderFailure,
+        ExpandOutcome.TraversalLimit => UiElementStopReason.TraversalLimit,
+        _ => UiElementStopReason.Complete
+    };
 
     /// <summary>释放除当前窗口以外的控件树（每个窗口的树可能上千个元素）。</summary>
     private void EvictOtherTrees(IntPtr keep)
@@ -427,7 +875,6 @@ public sealed class UiElementProbe : IDisposable
         }
 
         _trees.Clear();
-        _childWindows.Clear();
 
         if (keepTree is not null)
             _trees[keep] = keepTree;
@@ -496,15 +943,33 @@ public sealed class UiElementProbe : IDisposable
     }
 
     /// <summary>包含光标的子窗口，面积小的（更深的）排前面。</summary>
+    private void PingRenderChildren(IntPtr hwnd)
+    {
+        EnumChildWindows(hwnd, (child, _) =>
+        {
+            var className = GetClassName(child);
+
+            if (IsRenderHostClass(className) && _accessibilityPinged.Add(child))
+                PingAccessibility(child);
+
+            return true;
+        }, IntPtr.Zero);
+    }
+
     private List<IntPtr> ChildWindowsAt(IntPtr hwnd, PixelPoint point)
     {
-        if (!_childWindows.TryGetValue(hwnd, out var children))
-        {
-            children = EnumerateChildWindows(hwnd);
-            _childWindows[hwnd] = children;
-        }
-
+        // 每次重新枚举：Chrome 的渲染子窗口会在无障碍树初始化时重建句柄，
+        // 缓存一次空结果会让整个截图都拿不到网页元素。
+        var children = EnumerateChildWindows(hwnd);
         var result = new List<IntPtr>(children.Count);
+
+        // Chrome 的网页无障碍需要一次 IAccessible 查询才会真正建树。
+        // 先 ping 渲染子窗口，再走 UIA，否则树里只有分组/文档。
+        foreach (var child in children)
+        {
+            if (IsRenderHostClass(GetClassName(child)) && _accessibilityPinged.Add(child))
+                PingAccessibility(child);
+        }
 
         foreach (var child in children)
         {
@@ -513,6 +978,7 @@ public sealed class UiElementProbe : IDisposable
         }
 
         result.Sort((left, right) => WindowArea(left).CompareTo(WindowArea(right)));
+        SelectorTrace.Write($"children hwnd=0x{hwnd.ToInt64():X} total={children.Count} at-point={result.Count}");
         return result.Count > MaxChildWindows ? result.GetRange(0, MaxChildWindows) : result;
     }
 
@@ -522,14 +988,39 @@ public sealed class UiElementProbe : IDisposable
 
         EnumChildWindows(hwnd, (child, _) =>
         {
-            if (IsWindowVisible(child) && WindowArea(child) > 0)
-                children.Add(child);
+            if (WindowArea(child) <= 0)
+                return true;
 
+            // 正常情况下只取可见子窗口；Chrome 的渲染宿主在树初始化瞬间
+            // 可能短暂不可见，按类名兜底，不能把网页内容漏掉。
+            var visible = IsWindowVisible(child);
+            var className = GetClassName(child);
+
+            if (!visible && !IsRenderHostClass(className))
+                return true;
+
+            children.Add(child);
+            SelectorTrace.Write(
+                $"child-enum 0x{child.ToInt64():X} visible={visible} class={className} " +
+                $"{WindowRectText(child)}");
             return true;
         }, IntPtr.Zero);
 
         return children;
     }
+
+    private static bool IsRenderHostClass(string? className) =>
+        className is not null
+        && (className.Contains("RenderWidget", StringComparison.OrdinalIgnoreCase)
+            || className.Contains("Chrome_RenderWidgetHost", StringComparison.OrdinalIgnoreCase)
+            || className.Contains("Internet Explorer_Server", StringComparison.OrdinalIgnoreCase)
+            || className.Contains("Mozilla", StringComparison.OrdinalIgnoreCase)
+            || className.Contains("WebView", StringComparison.OrdinalIgnoreCase));
+
+    private static string WindowRectText(IntPtr hwnd) =>
+        GetWindowRect(hwnd, out var rect)
+            ? $"{rect.Left},{rect.Top} {rect.Right - rect.Left}x{rect.Bottom - rect.Top}"
+            : "no-rect";
 
     private static long WindowArea(IntPtr hwnd) =>
         GetWindowRect(hwnd, out var rect)
@@ -541,17 +1032,32 @@ public sealed class UiElementProbe : IDisposable
         point.X >= rect.Left && point.X < rect.Right &&
         point.Y >= rect.Top && point.Y < rect.Bottom;
 
-    private Node? BuildRoot(IntPtr hwnd, TimeSpan remaining)
+    private Node? BuildRoot(
+        IntPtr hwnd,
+        TimeSpan remaining,
+        TimeSpan callLimit,
+        IUIAutomationCacheRequest? request)
     {
-        if (_automation is null || _request is null)
+        if (_automation is null || request is null)
             return null;
 
-        ApplyTimeouts(remaining);
+        ApplyTimeouts(remaining, callLimit);
 
         try
         {
-            var element = _automation.ElementFromHandleBuildCache(hwnd, _request);
-            return element is null ? null : CreateNode(element, parent: null);
+            var element = _automation.ElementFromHandleBuildCache(hwnd, request);
+            if (element is null)
+                return null;
+
+            // 根节点的矩形就是整次探测的裁剪边界：子节点超出窗口的部分直接裁掉
+            var rect = element.CachedBoundingRectangle;
+            var clip = new PixelRect(
+                rect.left,
+                rect.top,
+                rect.right - rect.left,
+                rect.bottom - rect.top);
+
+            return CreateNode(element, parent: null, clip);
         }
         catch
         {
@@ -561,15 +1067,16 @@ public sealed class UiElementProbe : IDisposable
 
     /// <summary>
     /// 每次跨进程调用前把 UIA 超时收在剩余预算内：
-    /// 单次调用最多 400ms，绝不把整次探测拖到卡住。
+    /// 前景最多 168ms、细化最多 500ms，绝不把整次探测拖到卡住。
     /// </summary>
-    private void ApplyTimeouts(TimeSpan remaining)
+    private void ApplyTimeouts(TimeSpan remaining, TimeSpan callLimit)
     {
         if (_automation is null)
             return;
 
+        var limit = Math.Max(1, (int)Math.Ceiling(callLimit.TotalMilliseconds));
         var milliseconds = (uint)Math.Clamp(
-            remaining.TotalMilliseconds, 1, CallLimitMilliseconds);
+            remaining.TotalMilliseconds, 1, limit);
 
         try
         {
@@ -582,32 +1089,42 @@ public sealed class UiElementProbe : IDisposable
         }
     }
 
+    private enum ExpandOutcome
+    {
+        Expanded,
+        BudgetExhausted,
+        DecodingPending,
+        ProviderTimeout,
+        ProviderFailure,
+        TraversalLimit
+    }
+
     /// <summary>取回这一层子节点（带缓存属性），每个节点一辈子只展开一次。</summary>
-    private bool TryExpand(Node node, ProbeState state)
+    private ExpandOutcome TryExpand(Node node, ProbeState state)
     {
         if (node.Children is not null)
-            return true;
+            return ExpandOutcome.Expanded;
 
-        if (node.ExpandFailed || node.Element is null || _request is null)
-            return false;
+        if (node.ExpandFailed || node.Element is null || state.Request is null)
+            return ExpandOutcome.ProviderFailure;
 
         // 预算已经用完：这次先不调跨进程，留给细化
         if (state.Expired)
-            return false;
+            return ExpandOutcome.BudgetExhausted;
 
         // 异常大树到上限就不再往下展开，宁可退回窗口级也不撑爆内存
         if (_nodeCount >= MaxNodesPerWindow)
-            return false;
+            return ExpandOutcome.TraversalLimit;
 
         try
         {
             // 第一次展开：把整批子节点数组缓存下来，等会儿逐个解码
             if (node.PendingChildren is null)
             {
-                ApplyTimeouts(state.Remaining);
+                ApplyTimeouts(state.Remaining, state.CallLimit);
 
                 // 一次调用同时刷新本节点缓存并带回子节点集合
-                var updated = node.Element.BuildUpdatedCache(_request);
+                var updated = node.Element.BuildUpdatedCache(state.Request);
                 node.PendingChildren = updated.GetCachedChildren();
                 node.PendingIndex = 0;
                 node.PendingEntries.Clear();
@@ -621,7 +1138,7 @@ public sealed class UiElementProbe : IDisposable
             while (node.PendingIndex < count)
             {
                 if (state.Expired)
-                    return false;
+                    return ExpandOutcome.BudgetExhausted;
 
                 if (_nodeCount >= MaxNodesPerWindow)
                     break;
@@ -632,7 +1149,7 @@ public sealed class UiElementProbe : IDisposable
                 if (element is null)
                     continue;
 
-                var child = CreateNode(element, node);
+                var child = CreateNode(element, node, node.Clip);
                 if (child is not null)
                     node.PendingEntries.Add(child);
             }
@@ -655,14 +1172,17 @@ public sealed class UiElementProbe : IDisposable
                 node.Children = null;
 
                 if (++node.EmptyExpansions >= MaxEmptyExpansions)
+                {
                     node.ExpandFailed = true;
+                    return ExpandOutcome.ProviderFailure;
+                }
 
-                return false;
+                return ExpandOutcome.DecodingPending;
             }
 
-            return true;
+            return ExpandOutcome.Expanded;
         }
-        catch
+        catch (Exception error)
         {
             // 偶发超时/应用忙可以在下一次探测重试；连续失败才放弃这个分支
             node.Failures++;
@@ -670,31 +1190,48 @@ public sealed class UiElementProbe : IDisposable
             if (node.Failures >= 2)
                 node.ExpandFailed = true;
 
-            return false;
+            return IsTimeout(error)
+                ? ExpandOutcome.ProviderTimeout
+                : ExpandOutcome.ProviderFailure;
         }
     }
 
-    private Node? CreateNode(IUIAutomationElement element, Node? parent)
+    /// <summary>UIA 的超时通常以 COMException 返回；Win32 超时也一并认。</summary>
+    private static bool IsTimeout(Exception error) =>
+        error is COMException com &&
+        com.HResult is unchecked((int)0x80131505)
+            or unchecked((int)0x8001010A)
+            or unchecked((int)0x800705B4);
+
+    private Node? CreateNode(IUIAutomationElement element, Node? parent, PixelRect clip)
     {
         if (element.CachedIsOffscreen != 0)
             return null;
 
         var rect = element.CachedBoundingRectangle;
-        var width = rect.right - rect.left;
-        var height = rect.bottom - rect.top;
+        var bounds = Intersect(rect.left, rect.top, rect.right, rect.bottom, clip);
 
-        if (width < 2 || height < 2)
+        // 整窗、窗框外、小于 2px 的都不算独立控件
+        if (bounds.Width < 2 || bounds.Height < 2)
             return null;
 
         var controlType = element.CachedControlType;
 
         _nodeCount++;
 
-        return new Node(
-            new PixelRect(rect.left, rect.top, width, height),
-            controlType,
-            element,
-            parent);
+        return new Node(bounds, controlType, element, parent, clip);
+    }
+
+    private static PixelRect Intersect(int left, int top, int right, int bottom, PixelRect clip)
+    {
+        left = Math.Max(left, clip.X);
+        top = Math.Max(top, clip.Y);
+        right = Math.Min(right, clip.X + clip.Width);
+        bottom = Math.Min(bottom, clip.Y + clip.Height);
+
+        return right <= left || bottom <= top
+            ? default
+            : new PixelRect(left, top, right - left, bottom - top);
     }
 
     /// <summary>
@@ -761,56 +1298,70 @@ public sealed class UiElementProbe : IDisposable
     }
 
     /// <summary>
-    /// 从最深处往上找「值得框」的节点。
-    /// <paramref name="preview"/> 为 true 时连结构容器也直接返回——粗框阶段要让框
-    /// 每下一层就收紧一次，不能等到非结构控件才出框（VS 这类窗口前几层全是 Pane）。
-    /// 最终结果才跳过结构容器，并最多为两个结构节点读名字。
+    /// 从最深处往上收集完整命中路径（深 → 浅），末项补窗口矩形。
+    ///
+    /// 和 Snow Shot 的 <c>WindowTree::path</c> 一致：
+    /// - 与窗口同尺寸、与更深一层同矩形的节点跳过；
+    /// - 结构容器也保留（VS/Chromium 前几层全是 Pane），但只给最深两个查名字；
+    /// - 最终结果不会因为“最深节点接近整窗”就整条路径丢弃，用户仍可逐层选。
     /// </summary>
-    private static UiElementCandidate? Pick(
+    private static List<UiElementCandidate> BuildPath(
         Node current,
         Node root,
-        bool resolveName,
-        bool preview)
+        string? windowTitle,
+        bool resolveName)
     {
-        var windowArea = Math.Max(1L, (long)root.Bounds.Width * root.Bounds.Height);
-        var visited = 0;
+        var nodes = new List<Node>(8);
         var structuralChecked = 0;
 
         for (var node = current; node is not null && !ReferenceEquals(node, root); node = node.Parent)
         {
-            if (++visited > MaxRectangles)
+            if (nodes.Count >= MaxRectangles - 1)
                 break;
 
+            // 与窗口完全同尺寸的节点就是窗口本身；略小（文档/窗格）仍保留，
+            // 用户可以在路径里选到这一层。
             if (node.Bounds.Equals(root.Bounds))
                 continue;
 
-            var area = (long)node.Bounds.Width * node.Bounds.Height;
-            if (area >= windowArea * 95 / 100)
-                return null;
+            if (nodes.Count > 0 && nodes[^1].Bounds.Equals(node.Bounds))
+                continue;
 
-            var kind = ControlTypeName(node.ControlType);
-
-            if (!node.Structural)
-            {
-                return new UiElementCandidate(
-                    node.Bounds,
-                    resolveName ? SafeName(node.Element) ?? kind : kind,
-                    kind);
-            }
-
-            if (preview)
-                return new UiElementCandidate(node.Bounds, kind, kind);
-
-            // 结构容器只给最深的一个查名字；再往上通常是整块窗格，不值得跨进程
-            if (resolveName && structuralChecked++ < 1)
-            {
-                var name = SafeName(node.Element);
-                if (name is not null)
-                    return new UiElementCandidate(node.Bounds, name, kind);
-            }
+            nodes.Add(node);
         }
 
-        return null;
+        var path = new List<UiElementCandidate>(nodes.Count + 1);
+        var namedControls = 0;
+
+        foreach (var node in nodes)
+        {
+            var kind = ControlTypeName(node.ControlType);
+            var title = kind;
+
+            if (resolveName)
+            {
+                if (!node.Structural)
+                {
+                    // 只为最深的一个具体控件查名字；每条路径最多 3 次跨进程取名字
+                    if (namedControls++ == 0)
+                        title = SafeName(node.Element) ?? kind;
+                }
+                else if (structuralChecked++ < 2)
+                {
+                    // 结构容器只给最深的两个查名字，再往上通常是整块窗格
+                    title = SafeName(node.Element) ?? kind;
+                }
+            }
+
+            path.Add(new UiElementCandidate(node.Bounds, title, kind));
+        }
+
+        path.Add(new UiElementCandidate(
+            root.Bounds,
+            string.IsNullOrWhiteSpace(windowTitle) ? "窗口" : windowTitle,
+            "窗口"));
+
+        return path;
     }
 
     private static bool Contains(PixelRect bounds, PixelPoint point) =>
@@ -819,14 +1370,14 @@ public sealed class UiElementProbe : IDisposable
 
     private static bool IsStructural(int controlType) =>
         controlType is UIA_ControlTypeIds.UIA_PaneControlTypeId
-            or UIA_ControlTypeIds.UIA_GroupControlTypeId
-            or UIA_ControlTypeIds.UIA_CustomControlTypeId;
+            or UIA_ControlTypeIds.UIA_GroupControlTypeId;
 
     /// <summary>可能装子控件的容器类型：空子树先当「树还没建好」处理。</summary>
     private static bool IsContainer(int controlType) =>
         IsStructural(controlType)
         || controlType is UIA_ControlTypeIds.UIA_WindowControlTypeId
             or UIA_ControlTypeIds.UIA_DocumentControlTypeId
+            or UIA_ControlTypeIds.UIA_CustomControlTypeId
             or UIA_ControlTypeIds.UIA_ToolBarControlTypeId
             or UIA_ControlTypeIds.UIA_MenuControlTypeId
             or UIA_ControlTypeIds.UIA_ListControlTypeId
@@ -944,17 +1495,34 @@ public sealed class UiElementProbe : IDisposable
         }
     }
 
+    /// <summary>预建时缓存的扁平 UIA 元素；遮罩打开后只在这里做包含命中。</summary>
+    private sealed class FlatElement(
+        PixelRect bounds,
+        int controlType,
+        IUIAutomationElement element)
+    {
+        public PixelRect Bounds { get; } = bounds;
+        public int ControlType { get; } = controlType;
+        public IUIAutomationElement Element { get; } = element;
+        public bool Structural => IsStructural(ControlType);
+    }
+
     /// <summary>懒展开的一层控件节点。</summary>
     private sealed class Node(
         PixelRect bounds,
         int controlType,
         IUIAutomationElement element,
-        Node? parent)
+        Node? parent,
+        PixelRect clip)
     {
         public PixelRect Bounds { get; } = bounds;
         public int ControlType { get; } = controlType;
         public IUIAutomationElement Element { get; } = element;
         public Node? Parent { get; } = parent;
+
+        /// <summary>整次探测的裁剪边界（root 的窗口矩形）；子节点继承。</summary>
+        public PixelRect Clip { get; } = clip;
+
         public List<Node>? Children { get; set; }
         public ChildIndex? Index { get; set; }
         public bool ExpandFailed { get; set; }
@@ -991,4 +1559,57 @@ public sealed class UiElementProbe : IDisposable
 
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr hwnd, StringBuilder name, int maxCount);
+
+    private static string? GetClassName(IntPtr hwnd)
+    {
+        var buffer = new StringBuilder(256);
+        return GetClassName(hwnd, buffer, buffer.Capacity) > 0 ? buffer.ToString() : null;
+    }
+
+    /// <summary>
+    /// 对渲染子窗口做一次 IAccessible 查询。Chrome/Edge 收到这个请求后才会
+    /// 真正构建网页无障碍树；否则 UIA 的 ControlView 只有分组/文档。
+    /// </summary>
+    private static void PingAccessibility(IntPtr hwnd)
+    {
+        object? accessible = null;
+
+        try
+        {
+            var iid = IidIAccessible;
+            var hr = AccessibleObjectFromWindow(hwnd, ObjIdClient, ref iid, out accessible);
+
+            if (hr != 0 || accessible is null)
+                return;
+
+            SelectorTrace.Write($"accessibility ping 0x{hwnd.ToInt64():X}");
+        }
+        catch
+        {
+            // 目标不支持 IAccessible：忽略
+        }
+        finally
+        {
+            if (accessible is not null && Marshal.IsComObject(accessible))
+            {
+                try
+                {
+                    Marshal.FinalReleaseComObject(accessible);
+                }
+                catch
+                {
+                }
+            }
+        }
+    }
+
+    [DllImport("oleacc.dll")]
+    private static extern int AccessibleObjectFromWindow(
+        IntPtr hwnd,
+        uint objectId,
+        ref Guid riid,
+        [MarshalAs(UnmanagedType.Interface)] out object? accessible);
 }
