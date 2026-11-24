@@ -61,6 +61,17 @@
   </Window.Resources>
 
   <Window.Styles>
+    <!--
+      tooltip 延迟拉长：默认 400ms 太短，点按钮 / 展开弹层时 tooltip 会弹出来挡住点击。
+      展开工具组时还会额外把触发按钮的 tooltip 临时摘掉（见 ShowToolGroupPopover）。
+    -->
+    <Style Selector="Button">
+      <Setter Property="ToolTip.ShowDelay" Value="1400" />
+    </Style>
+    <Style Selector="ToggleButton">
+      <Setter Property="ToolTip.ShowDelay" Value="1400" />
+    </Style>
+
     <!-- 标注工具按钮：选中时琥珀描边 + 淡琥珀底 -->
     <Style Selector="Button.tool">
       <Setter Property="Background" Value="Transparent" />
@@ -474,17 +485,16 @@
                Stroke="{StaticResource AccentBrush}"
                StrokeThickness="2" />
 
-    <!-- 文字工具的就地输入框：提交后转成图元 -->
+    <!-- 文字工具的就地输入：不显示输入框，只留闪烁的光标，和画布上的文字一样 -->
     <TextBox x:Name="TextNoteBox"
              IsVisible="False"
-             MinWidth="120"
+             MinWidth="2"
              MaxWidth="420"
              FontSize="16"
              Foreground="#E5A44C"
-             Background="#CC101316"
-             BorderBrush="#E5A44C"
-             BorderThickness="1"
-             Padding="4,2"
+             Background="Transparent"
+             BorderThickness="0"
+             Padding="0"
              KeyDown="OnTextNoteKeyDown"
              LostFocus="OnTextNoteLostFocus" />
 
@@ -1289,6 +1299,56 @@
                 </MenuFlyout>
               </Button.Flyout>
             </Button>
+
+            <TextBlock Classes="prop-label" Text="组合" />
+            <Button x:Name="NumberComboButton" Classes="prop" Content="仅序号">
+              <Button.Flyout>
+                <MenuFlyout Placement="Top">
+                  <MenuItem Header="仅序号" Tag="Plain" Click="OnNumberComboMenu" />
+                  <MenuItem Header="引导线" Tag="Leader" Click="OnNumberComboMenu" />
+                  <MenuItem Header="箭头" Tag="Arrow" Click="OnNumberComboMenu" />
+                  <MenuItem Header="文本标签" Tag="Text" Click="OnNumberComboMenu" />
+                  <MenuItem Header="虚线框" Tag="DashedBox" Click="OnNumberComboMenu" />
+                  <MenuItem Header="高亮区域" Tag="Highlight" Click="OnNumberComboMenu" />
+                  <MenuItem Header="放大说明" Tag="Magnify" Click="OnNumberComboMenu" />
+                </MenuFlyout>
+              </Button.Flyout>
+            </Button>
+
+            <!-- 文本标签组合的说明文字 -->
+            <StackPanel x:Name="NumberTextGroup" Orientation="Horizontal" Spacing="4" IsVisible="False">
+              <TextBlock Classes="prop-label" Text="说明" />
+              <TextBox x:Name="NumberTextBox" Width="120" Height="26" FontSize="11"
+                       PlaceholderText="说明文字"
+                       TextChanged="OnNumberTextChanged"
+                       KeyDown="OnNumberTextBoxKeyDown"
+                       LostFocus="OnNumberTextBoxLostFocus" />
+              <Button x:Name="NumberTextSizeButton" Classes="prop" Content="16 px">
+                <Button.Flyout>
+                  <MenuFlyout Placement="Top">
+                    <MenuItem Header="12 px" Click="OnNumberTextSize12Menu" />
+                    <MenuItem Header="14 px" Click="OnNumberTextSize14Menu" />
+                    <MenuItem Header="16 px" Click="OnNumberTextSize16Menu" />
+                    <MenuItem Header="20 px" Click="OnNumberTextSize20Menu" />
+                    <MenuItem Header="24 px" Click="OnNumberTextSize24Menu" />
+                  </MenuFlyout>
+                </Button.Flyout>
+              </Button>
+            </StackPanel>
+
+            <!-- 放大说明组合的倍率 -->
+            <StackPanel x:Name="NumberZoomGroup" Orientation="Horizontal" Spacing="4" IsVisible="False">
+              <TextBlock Classes="prop-label" Text="倍率" />
+              <Button x:Name="NumberZoomButton" Classes="prop" Content="2.5×">
+                <Button.Flyout>
+                  <MenuFlyout Placement="Top">
+                    <MenuItem Header="2×" Click="OnNumberZoom2Menu" />
+                    <MenuItem Header="3×" Click="OnNumberZoom3Menu" />
+                    <MenuItem Header="4×" Click="OnNumberZoom4Menu" />
+                  </MenuFlyout>
+                </Button.Flyout>
+              </Button>
+            </StackPanel>
           </StackPanel>
 
           <StackPanel x:Name="MosaicGroup" Orientation="Horizontal" Spacing="4">
@@ -1411,46 +1471,37 @@
         </Grid>
 
         <!-- 线型与笔触：和颜色共用同一个调色板（参考 snow-shot），形状/直线/画笔都从这里改 -->
-        <StackPanel x:Name="DashGroup" Spacing="4">
-          <StackPanel Orientation="Horizontal" Spacing="4">
-            <TextBlock Classes="prop-label" Text="线型" VerticalAlignment="Center" Width="28" />
-            <Button x:Name="DashSolidButton" Classes="prop seg"
-                    Click="OnDashSolidMenu" ToolTip.Tip="实线描边">
-              <Border Classes="seg-line" Width="16" Height="2" />
-            </Button>
-            <Button x:Name="DashDashButton" Classes="prop seg"
-                    Click="OnDashDashMenu" ToolTip.Tip="虚线描边">
-              <StackPanel Orientation="Horizontal" Spacing="2">
-                <Border Classes="seg-line" Width="4" Height="2" />
-                <Border Classes="seg-line" Width="4" Height="2" />
-                <Border Classes="seg-line" Width="4" Height="2" />
-              </StackPanel>
-            </Button>
-            <Button x:Name="DashDotButton" Classes="prop seg"
-                    Click="OnDashDotMenu" ToolTip.Tip="点线描边">
-              <StackPanel Orientation="Horizontal" Spacing="2">
-                <Border Classes="seg-line" Width="2" Height="2" CornerRadius="1" />
-                <Border Classes="seg-line" Width="2" Height="2" CornerRadius="1" />
-                <Border Classes="seg-line" Width="2" Height="2" CornerRadius="1" />
-              </StackPanel>
-            </Button>
-          </StackPanel>
-
-          <StackPanel Orientation="Horizontal" Spacing="4">
-            <TextBlock Classes="prop-label" Text="笔触" VerticalAlignment="Center" Width="28" />
-            <Button x:Name="StyleNeatButton" Classes="prop seg"
-                    Click="OnStyleNeatMenu" ToolTip.Tip="规整：直尺描边">
-              <Border Classes="seg-line" Width="16" Height="2" CornerRadius="1" />
-            </Button>
-            <Button x:Name="StyleSketchButton" Classes="prop seg"
-                    Click="OnStyleSketchMenu" ToolTip.Tip="手绘：轻微抖动">
-              <Path Data="M1 9 C4.5 3 7.5 3 11 9 C13 12.5 15 12.5 17 9" />
-            </Button>
-            <Button x:Name="StyleRoughButton" Classes="prop seg"
-                    Click="OnStyleRoughMenu" ToolTip.Tip="涂鸦：双线粗手绘">
-              <Path Data="M1 9 C3 4 5 11 7.5 7 C10 3 12 10 14 7 C15.5 5 16.5 7 17 9" />
-            </Button>
-          </StackPanel>
+        <!-- 描边：线型与笔触统一成一行，五个选项互斥 -->
+        <StackPanel x:Name="DashGroup" Orientation="Horizontal" Spacing="4">
+          <TextBlock Classes="prop-label" Text="描边" VerticalAlignment="Center" Width="28" />
+          <Button x:Name="DashSolidButton" Classes="prop seg"
+                  Click="OnDashSolidMenu" ToolTip.Tip="实线">
+            <Border Classes="seg-line" Width="16" Height="2" />
+          </Button>
+          <Button x:Name="DashDashButton" Classes="prop seg"
+                  Click="OnDashDashMenu" ToolTip.Tip="虚线">
+            <StackPanel Orientation="Horizontal" Spacing="2">
+              <Border Classes="seg-line" Width="4" Height="2" />
+              <Border Classes="seg-line" Width="4" Height="2" />
+              <Border Classes="seg-line" Width="4" Height="2" />
+            </StackPanel>
+          </Button>
+          <Button x:Name="DashDotButton" Classes="prop seg"
+                  Click="OnDashDotMenu" ToolTip.Tip="点线">
+            <StackPanel Orientation="Horizontal" Spacing="2">
+              <Border Classes="seg-line" Width="2" Height="2" CornerRadius="1" />
+              <Border Classes="seg-line" Width="2" Height="2" CornerRadius="1" />
+              <Border Classes="seg-line" Width="2" Height="2" CornerRadius="1" />
+            </StackPanel>
+          </Button>
+          <Button x:Name="StyleSketchButton" Classes="prop seg"
+                  Click="OnStyleSketchMenu" ToolTip.Tip="手绘：轻微抖动">
+            <Path Data="M1 9 C4.5 3 7.5 3 11 9 C13 12.5 15 12.5 17 9" />
+          </Button>
+          <Button x:Name="StyleRoughButton" Classes="prop seg"
+                  Click="OnStyleRoughMenu" ToolTip.Tip="涂鸦：双线粗手绘">
+            <Path Data="M1 9 C3 4 5 11 7.5 7 C10 3 12 10 14 7 C15.5 5 16.5 7 17 9" />
+          </Button>
         </StackPanel>
 
         <Border x:Name="SvArea" Height="110" CornerRadius="6" ClipToBounds="True"
@@ -1475,8 +1526,9 @@
                 </LinearGradientBrush>
               </Border.Background>
             </Border>
-            <Ellipse x:Name="SvCursor" Width="12" Height="12" StrokeThickness="2"
-                     Stroke="#FFFFFFFF" IsHitTestVisible="False" />
+            <Ellipse x:Name="SvCursor" Width="12" Height="12"
+                     HorizontalAlignment="Left" VerticalAlignment="Top"
+                     Stroke="#FFFFFFFF" StrokeThickness="2" IsHitTestVisible="False" />
           </Panel>
         </Border>
 

@@ -205,6 +205,31 @@ public sealed record PenAnnotation(
 public sealed record MosaicAnnotation(Rect Rect, int Cell, bool Blur) : IAnnotation;
 
 /// <summary>文字：Origin 是左下角基线起点（和 Skia 的 DrawText 对齐）。</summary>
+/// <summary>序号组合：徽章旁边还要不要带一块「说明区」（参考 LumaShot 的 NumberCombo）。</summary>
+public enum NumberCombo
+{
+    /// <summary>仅序号</summary>
+    Plain,
+
+    /// <summary>引导线：badge → 目标的 4 点折线</summary>
+    Leader,
+
+    /// <summary>箭头：从 badge 指向目标</summary>
+    Arrow,
+
+    /// <summary>文本标签：badge 旁挂一段说明文字</summary>
+    Text,
+
+    /// <summary>虚线框：浅底 + 虚线描边</summary>
+    DashedBox,
+
+    /// <summary>高亮区域：半透明底，无边</summary>
+    Highlight,
+
+    /// <summary>放大说明：badge 连到放大镜</summary>
+    Magnify
+}
+
 /// <summary>序号徽章外形（参考 LumaShot 的 NumberShape）。</summary>
 public enum NumberShape
 {
@@ -269,7 +294,13 @@ public sealed record NumberAnnotation(
     double Size,
     NumberFormat Format = NumberFormat.Arabic,
     string? Label = null,
-    NumberShape Shape = NumberShape.SolidCircle) : IAnnotation;
+    NumberShape Shape = NumberShape.SolidCircle,
+    NumberCombo Combo = NumberCombo.Plain,
+    Point? Target = null,
+    Rect? Detail = null,
+    string? Text = null,
+    double TextSize = 16,
+    double Zoom = 2.5) : IAnnotation;
 
 /// <summary>箭头两翼的几何；单独抽出来便于测试。</summary>
 public static class ArrowGeometry
@@ -477,6 +508,45 @@ public static class AnnotationStyler
     public static IAnnotation WithNumberShape(IAnnotation note, NumberShape shape) => note switch
     {
         NumberAnnotation n => n with { Shape = shape },
+        _ => note
+    };
+
+    public static IAnnotation WithNumberCombo(IAnnotation note, NumberCombo combo) => note switch
+    {
+        NumberAnnotation n => n with
+        {
+            Combo = combo,
+            // 换组合时清掉旧详情区，让它按新的目标点重新推导
+            Detail = combo == NumberCombo.Plain ? null : n.Detail
+        },
+        _ => note
+    };
+
+    public static IAnnotation WithNumberText(IAnnotation note, string? text) => note switch
+    {
+        NumberAnnotation n => n with
+        {
+            Text = string.IsNullOrWhiteSpace(text) ? null : text.Trim()
+        },
+        _ => note
+    };
+
+    public static IAnnotation WithNumberTextSize(IAnnotation note, double size) => note switch
+    {
+        NumberAnnotation n => n with { TextSize = size },
+        _ => note
+    };
+
+    public static IAnnotation WithNumberZoom(IAnnotation note, double zoom) => note switch
+    {
+        NumberAnnotation n => n with { Zoom = zoom },
+        _ => note
+    };
+
+    /// <summary>拖动组合的目标点：清掉显式详情区，让它重新按目标推导。</summary>
+    public static IAnnotation WithNumberTarget(IAnnotation note, Point target) => note switch
+    {
+        NumberAnnotation n => n with { Target = target, Detail = null },
         _ => note
     };
 
@@ -720,12 +790,90 @@ internal static class NumberGeometry
         return new Rect(center.X - width / 2, center.Y - height / 2, width, height);
     }
 
-    /// <summary>选中/缩放用的外接框，按实际文字宽度算。</summary>
+    /// <summary>选中/缩放用的外接框；只有自定义标签才按文字撑宽，自动数字保持正圆/正方。</summary>
     public static Rect Bounds(NumberAnnotation note)
     {
+        if (string.IsNullOrWhiteSpace(note.Label))
+            return BadgeBounds(note.Center, note.Size, note.Shape);
+
         var text = NumberText.Format(note.Number, note.Format, note.Label);
         using var font = AnnotationText.CreateFont(note.Size * 0.55);
         return BadgeBounds(note.Center, note.Size, note.Shape, font.MeasureText(text));
+    }
+
+    /// <summary>组合的目标点：没设时按 badge 右下推导。</summary>
+    public static Point TargetOf(NumberAnnotation note)
+    {
+        if (note.Target is { } target)
+            return target;
+
+        var badge = Bounds(note);
+        return new Point(badge.Right + note.Size * 3, badge.Bottom + note.Size * 1.5);
+    }
+
+    /// <summary>
+    /// 引导线 4 点：badge 边缘 → 近端肘点 → 远端肘点 → 目标（和 LumaShot 一致）。
+    /// 第一段水平、第二段斜向、第三段到目标。
+    /// </summary>
+    public static IReadOnlyList<Point> LeaderPoints(NumberAnnotation note)
+    {
+        var badge = Bounds(note);
+        var center = badge.Center;
+        var target = TargetOf(note);
+        var direction = target.X >= center.X ? 1 : -1;
+
+        var start = new Point(
+            center.X + direction * (badge.Width / 2 + note.Size * 0.15),
+            center.Y);
+
+        var span = target.X - start.X;
+
+        return
+        [
+            start,
+            new Point(start.X + span * 0.3, start.Y),
+            new Point(start.X + span * 0.5, target.Y),
+            target
+        ];
+    }
+
+    /// <summary>
+    /// 组合详情区：拖过/缩放后用显式几何；否则按 badge 中心 → 目标点推导，
+    /// 没给目标点就往右下撑一块（和 LumaShot 的 NumberDetailBounds 一致）。
+    /// </summary>
+    public static Rect DetailBounds(NumberAnnotation note)
+    {
+        if (note.Detail is { } detail)
+            return detail;
+
+        var badge = Bounds(note);
+        var target = TargetOf(note);
+
+        // 文本标签：贴在 badge 左/右，宽度至少 4×size；高度按文字大小撑开
+        if (note.Combo == NumberCombo.Text)
+        {
+            var gap = note.Size * 0.2;
+            var width = Math.Max(Math.Abs(target.X - badge.Center.X), note.Size * 4);
+            var boxLeft = target.X >= badge.Center.X
+                ? badge.Right + gap
+                : badge.Left - gap - width;
+            var height = Math.Max(note.Size * 1.5, note.TextSize * 1.8);
+            return new Rect(boxLeft, badge.Top, width, height);
+        }
+
+        // 放大说明：以目标点为圆心的一块镜片
+        if (note.Combo == NumberCombo.Magnify)
+        {
+            var radius = note.Size * 1.25;
+            return new Rect(target.X - radius, target.Y - radius, radius * 2, radius * 2);
+        }
+
+        var left = Math.Min(badge.Center.X, target.X);
+        var right = Math.Max(badge.Center.X, target.X);
+        var top = Math.Min(badge.Center.Y, target.Y);
+        var bottom = Math.Max(badge.Center.Y, target.Y);
+
+        return new Rect(left, top, Math.Max(right - left, 1), Math.Max(bottom - top, 1));
     }
 
     /// <summary>多边形外形的顶点；圆 / 方 / 胶囊 / 定位针返回 null（它们有各自的画法）。</summary>

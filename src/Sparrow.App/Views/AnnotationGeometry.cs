@@ -112,7 +112,9 @@ internal static class AnnotationGeometry
             NumberAnnotation number => number with
             {
                 Center = Map(number.Center),
-                Size = Math.Clamp(number.Size * Math.Min(scaleX, scaleY), 8, 200)
+                Size = Math.Clamp(number.Size * Math.Min(scaleX, scaleY), 8, 200),
+                Target = number.Target is { } target ? Map(target) : null,
+                Detail = number.Detail is { } detail ? MapRect(detail) : null
             },
             TextAnnotation text => text with
             {

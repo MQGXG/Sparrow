@@ -70,7 +70,10 @@ public partial class CaptureWindow : Window
         NoteResize,
 
         /// <summary>拖动旋转手柄。</summary>
-        NoteRotate
+        NoteRotate,
+
+        /// <summary>拖动序号组合的目标点。</summary>
+        NumberTarget
     }
 
     private enum ResizeHandle
@@ -298,6 +301,9 @@ public partial class CaptureWindow : Window
     private double _numberSize = NumberSize;
     private NumberFormat _numberFormat = NumberFormat.Arabic;
     private NumberShape _numberShape = NumberShape.SolidCircle;
+    private NumberCombo _numberCombo = NumberCombo.Plain;
+    private double _numberTextSize = 16;
+    private double _numberZoom = 2.5;
 
     private int _nextNumber = 1;
     private Point _textOrigin;
@@ -805,7 +811,6 @@ public partial class CaptureWindow : Window
         _ocrCancellation?.Dispose();
         _ocrCancellation = null;
         _groupShowTimer?.Stop();
-        _groupHideTimer?.Stop();
 
         var releasedBytes = (_frozenPixels?.Length ?? 0)
             + (long)_frozenWidth * _frozenHeight * 4;
@@ -986,12 +991,10 @@ public partial class CaptureWindow : Window
         // 点空白处收起工具组选项条；点选项条本身要放过去，否则按钮在按下时就没了
         if (ToolGroupPopover.IsVisible)
         {
-            var insidePopover =
-                ToolGroupPopover.TranslatePoint(new Point(0, 0), this) is { } popoverOrigin
-                && new Rect(popoverOrigin, ToolGroupPopover.Bounds.Size).Contains(point);
-
-            if (insidePopover)
+            if (_toolGroupPopoverRect.Contains(point))
+            {
                 return;
+            }
 
             HideToolGroupPopover();
         }
@@ -1077,6 +1080,17 @@ public partial class CaptureWindow : Window
                 return;
             }
 
+            // 序号组合的目标点把手优先于普通标注拖动
+            if (HitNumberTargetHandle(point))
+            {
+                _mode = DragMode.NumberTarget;
+                _draggingNote = _selectedNote;
+                _noteDragOriginal = _notes.Items[_selectedNote];
+                _noteDragMoved = false;
+                e.Handled = true;
+                return;
+            }
+
             var noteHandle = HitNoteHandle(point);
             if (noteHandle != ResizeHandle.None)
             {
@@ -1088,6 +1102,16 @@ public partial class CaptureWindow : Window
             var hit = HitNote(point);
             if (hit >= 0)
             {
+                // 双击序号说明：就地编辑文字
+                if (e.ClickCount == 2
+                    && _notes.Items[hit] is NumberAnnotation { Combo: NumberCombo.Text }
+                    && EditNoteText(hit))
+                {
+                    SelectNote(hit);
+                    e.Handled = true;
+                    return;
+                }
+
                 SelectNote(hit);
                 _draggingNote = hit;
                 _noteDragOriginal = _notes.Items[hit];
@@ -1160,6 +1184,18 @@ public partial class CaptureWindow : Window
     {
         var point = e.GetPosition(this);
         _lastPointerPoint = point;
+
+        // 工具组选项条：指针在「触发按钮 + 选项条」并集里就取消收起；
+        // 离开只安排一次延迟复核，到点再按当前光标判断（对齐 snow-shot 的 finishHoverClose）。
+        if (ToolGroupPopover.IsVisible && _activeGroup is not null)
+        {
+            var hoverArea = _toolGroupPopoverRect.Union(_toolGroupTriggerRect).Inflate(10);
+
+            if (hoverArea.Contains(point))
+                _groupCloseTimer?.Stop();
+            else
+                ScheduleCloseToolGroupPopover();
+        }
 
         // 取色模式：光标处只更新探针，不做别的
         if (_colorSampling)
@@ -1257,6 +1293,11 @@ public partial class CaptureWindow : Window
                 Magnifier.IsVisible = false;
                 e.Handled = true;
                 return;
+            case DragMode.NumberTarget:
+                ApplyNumberTarget(point);
+                Magnifier.IsVisible = false;
+                e.Handled = true;
+                return;
         }
 
         Magnifier.IsVisible = false;
@@ -1321,6 +1362,27 @@ public partial class CaptureWindow : Window
             _noteDragOriginal = null;
             _noteDragMoved = false;
             RebuildNotePreview();
+            e.Handled = true;
+            return;
+        }
+
+        // 序号组合的目标点拖完：整条标注已经跟着重新推导
+        if (_mode == DragMode.NumberTarget)
+        {
+            if (_noteDragMoved
+                && _draggingNote >= 0
+                && _noteDragOriginal is { } targetOriginal
+                && _draggingNote < _notes.Items.Count)
+            {
+                _notes.RecordReplace(_draggingNote, targetOriginal, _notes.Items[_draggingNote]);
+            }
+
+            _mode = DragMode.None;
+            _draggingNote = -1;
+            _noteDragOriginal = null;
+            _noteDragMoved = false;
+            RebuildNotePreview();
+            UpdateNoteHandles();
             e.Handled = true;
             return;
         }
@@ -3161,8 +3223,17 @@ public partial class CaptureWindow : Window
             }
         };
 
-        var width = SvArea.Bounds.Width > 1 ? SvArea.Bounds.Width : 192;
-        var height = SvArea.Bounds.Height > 1 ? SvArea.Bounds.Height : 110;
+        // 面板刚显示时 Bounds 还是 0：等布局完成再摆一次，否则光标会先落在兜底坐标上
+        if (SvArea.Bounds.Width <= 1 || SvArea.Bounds.Height <= 1)
+        {
+            if (CustomColorPanel.IsVisible)
+                Dispatcher.UIThread.Post(RenderColorPicker, DispatcherPriority.Loaded);
+
+            return;
+        }
+
+        var width = SvArea.Bounds.Width;
+        var height = SvArea.Bounds.Height;
 
         SvCursor.Margin = new Thickness(
             _pickerSaturation * width - 6,
@@ -3381,24 +3452,33 @@ public partial class CaptureWindow : Window
         UpdateStyleButtons();
     }
 
-    private void OnDashSolidMenu(object? sender, RoutedEventArgs e) => SetNoteDash(LineDash.Solid);
-    private void OnDashDashMenu(object? sender, RoutedEventArgs e) => SetNoteDash(LineDash.Dash);
-    private void OnDashDotMenu(object? sender, RoutedEventArgs e) => SetNoteDash(LineDash.Dot);
-    private void OnStyleNeatMenu(object? sender, RoutedEventArgs e) => SetNoteStyle(LineStyle.Neat);
-    private void OnStyleSketchMenu(object? sender, RoutedEventArgs e) => SetNoteStyle(LineStyle.Sketch);
-    private void OnStyleRoughMenu(object? sender, RoutedEventArgs e) => SetNoteStyle(LineStyle.Rough);
+    private void OnDashSolidMenu(object? sender, RoutedEventArgs e)
+        => SetLineStroke(LineDash.Solid, LineStyle.Neat);
 
-    private void SetNoteDash(LineDash dash)
+    private void OnDashDashMenu(object? sender, RoutedEventArgs e)
+        => SetLineStroke(LineDash.Dash, LineStyle.Neat);
+
+    private void OnDashDotMenu(object? sender, RoutedEventArgs e)
+        => SetLineStroke(LineDash.Dot, LineStyle.Neat);
+
+    private void OnStyleSketchMenu(object? sender, RoutedEventArgs e)
+        => SetLineStroke(LineDash.Solid, LineStyle.Sketch);
+
+    private void OnStyleRoughMenu(object? sender, RoutedEventArgs e)
+        => SetLineStroke(LineDash.Solid, LineStyle.Rough);
+
+    /// <summary>
+    /// 描边样式：线型和笔触是同一件事，统一成一个选项。
+    /// 同时写回「下次新建」的默认值和当前标注（没选中时跟随刚画的那条）。
+    /// </summary>
+    internal void SetLineStroke(LineDash dash, LineStyle style)
     {
         _noteDash = dash;
-        ApplyNoteStyle(note => AnnotationStyler.WithDash(note, dash));
-        UpdateStyleButtons();
-    }
-
-    private void SetNoteStyle(LineStyle style)
-    {
         _noteStyle = style;
-        ApplyNoteStyle(note => AnnotationStyler.WithLineStyle(note, style));
+
+        ApplyNoteStyle(note => AnnotationStyler.WithLineStyle(
+            AnnotationStyler.WithDash(note, dash), style));
+
         UpdateStyleButtons();
     }
 
@@ -3711,6 +3791,86 @@ public partial class CaptureWindow : Window
         _ => "实心圆"
     };
 
+    private void OnNumberComboMenu(object? sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Tag: string tag }
+            && Enum.TryParse<NumberCombo>(tag, out var combo))
+        {
+            SetNumberCombo(combo);
+        }
+    }
+
+    internal void SetNumberCombo(NumberCombo combo)
+    {
+        _numberCombo = combo;
+        ApplyNoteStyle(note => AnnotationStyler.WithNumberCombo(note, combo));
+        UpdateStyleButtons();
+    }
+
+    /// <summary>文本标签组合的说明文字：留空显示占位「说明」。</summary>
+    private void OnNumberTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (_updatingStyleControls)
+            return;
+
+        CommitNumberText();
+    }
+
+    private void OnNumberTextBoxKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+            return;
+
+        CommitNumberText();
+        e.Handled = true;
+    }
+
+    private void OnNumberTextBoxLostFocus(object? sender, RoutedEventArgs e)
+    {
+        if (!_updatingStyleControls)
+            CommitNumberText();
+    }
+
+    internal void CommitNumberText()
+    {
+        ApplyNoteStyle(note => AnnotationStyler.WithNumberText(note, NumberTextBox.Text));
+    }
+
+    private void OnNumberTextSize12Menu(object? sender, RoutedEventArgs e) => SetNumberTextSize(12);
+    private void OnNumberTextSize14Menu(object? sender, RoutedEventArgs e) => SetNumberTextSize(14);
+    private void OnNumberTextSize16Menu(object? sender, RoutedEventArgs e) => SetNumberTextSize(16);
+    private void OnNumberTextSize20Menu(object? sender, RoutedEventArgs e) => SetNumberTextSize(20);
+    private void OnNumberTextSize24Menu(object? sender, RoutedEventArgs e) => SetNumberTextSize(24);
+
+    internal void SetNumberTextSize(double size)
+    {
+        _numberTextSize = size;
+        ApplyNoteStyle(note => AnnotationStyler.WithNumberTextSize(note, size));
+        UpdateStyleButtons();
+    }
+
+    private void OnNumberZoom2Menu(object? sender, RoutedEventArgs e) => SetNumberZoom(2);
+    private void OnNumberZoom3Menu(object? sender, RoutedEventArgs e) => SetNumberZoom(3);
+    private void OnNumberZoom4Menu(object? sender, RoutedEventArgs e) => SetNumberZoom(4);
+
+    internal void SetNumberZoom(double zoom)
+    {
+        _numberZoom = zoom;
+        ApplyNoteStyle(note => AnnotationStyler.WithNumberZoom(note, zoom));
+        UpdateStyleButtons();
+    }
+
+    private static string NumberComboLabel(NumberCombo combo) => combo switch
+    {
+        NumberCombo.Leader => "引导线",
+        NumberCombo.Arrow => "箭头",
+        NumberCombo.Text => "文本标签",
+        NumberCombo.DashedBox => "虚线框",
+        NumberCombo.Highlight => "高亮区域",
+        NumberCombo.Magnify => "放大说明",
+        _ => "仅序号"
+    };
+
     /// <summary>序号框显示的值：选中的序号，否则下一个自动号。</summary>
     private int EffectiveNumber =>
         _selectedNote >= 0 && _selectedNote < _notes.Items.Count
@@ -3846,19 +4006,35 @@ public partial class CaptureWindow : Window
     }
 
     /// <summary>
-    /// 样式修改落地：有选中标注时改这条标注（离散修改进撤销栈），否则只改新建默认值。
-    /// 参考 snow-shot 的样式栏：直接编辑选中图形。
+    /// 样式修改落地：优先改选中的标注；没选中时跟随「当前工具最近画的那条」，
+    /// 所以画完立刻换外形/颜色/线型会马上生效；都没有才只改新建默认值（调用方负责）。
     /// </summary>
     private void ApplyNoteStyle(Func<IAnnotation, IAnnotation> transform, bool history = true)
     {
-        if (_selectedNote < 0 || _selectedNote >= _notes.Items.Count)
+        var index = _selectedNote;
+
+        if (index < 0)
+        {
+            var tool = ActiveStyleTool;
+
+            for (var candidate = _notes.Items.Count - 1; candidate >= 0; candidate--)
+            {
+                if (AnnotationStyler.ToolOf(_notes.Items[candidate]) == tool)
+                {
+                    index = candidate;
+                    break;
+                }
+            }
+        }
+
+        if (index < 0 || index >= _notes.Items.Count)
             return;
 
-        var updated = transform(_notes.Items[_selectedNote]);
+        var updated = transform(_notes.Items[index]);
         if (history)
-            _notes.ReplaceWithHistory(_selectedNote, updated);
+            _notes.ReplaceWithHistory(index, updated);
         else
-            _notes.Replace(_selectedNote, updated);
+            _notes.Replace(index, updated);
 
         RebuildNotePreview();
     }
@@ -3893,12 +4069,14 @@ public partial class CaptureWindow : Window
         SetSelected(Width4Button, _noteWidth >= 3.5 && _noteWidth < 6);
         SetSelected(Width8Button, _noteWidth >= 6 && _noteWidth < 10);
         SetSelected(Width12Button, _noteWidth >= 10);
-        SetSelected(DashSolidButton, _noteDash == LineDash.Solid);
-        SetSelected(DashDashButton, _noteDash == LineDash.Dash);
-        SetSelected(DashDotButton, _noteDash == LineDash.Dot);
-        SetSelected(StyleNeatButton, _noteStyle == LineStyle.Neat);
-        SetSelected(StyleSketchButton, _noteStyle == LineStyle.Sketch);
-        SetSelected(StyleRoughButton, _noteStyle == LineStyle.Rough);
+        // 描边五个选项互斥：线型 + 笔触的组合对应其中一个
+        SetSelected(DashSolidButton, _noteDash == LineDash.Solid && _noteStyle == LineStyle.Neat);
+        SetSelected(DashDashButton, _noteDash == LineDash.Dash && _noteStyle == LineStyle.Neat);
+        SetSelected(DashDotButton, _noteDash == LineDash.Dot && _noteStyle == LineStyle.Neat);
+        SetSelected(StyleSketchButton,
+            _noteDash == LineDash.Solid && _noteStyle == LineStyle.Sketch);
+        SetSelected(StyleRoughButton,
+            _noteDash == LineDash.Solid && _noteStyle == LineStyle.Rough);
         UpdateFillButtons();
 
         var opacity = active switch
@@ -3936,6 +4114,19 @@ public partial class CaptureWindow : Window
         NumberSizeMenuButton.Content = $"{_numberSize:0} px";
         NumberFormatButton.Content = NumberFormatLabel(_numberFormat);
         NumberShapeButton.Content = NumberShapeLabel(_numberShape);
+        NumberComboButton.Content = NumberComboLabel(_numberCombo);
+        NumberTextGroup.IsVisible = _numberCombo == NumberCombo.Text;
+        NumberZoomGroup.IsVisible = _numberCombo == NumberCombo.Magnify;
+        NumberTextSizeButton.Content = $"{_numberTextSize:0} px";
+        NumberZoomButton.Content = $"{_numberZoom:0.#}×";
+
+        if (!NumberTextBox.IsFocused)
+        {
+            var numberNote = _selectedNote >= 0 && _selectedNote < _notes.Items.Count
+                ? _notes.Items[_selectedNote] as NumberAnnotation
+                : null;
+            NumberTextBox.Text = numberNote?.Text ?? string.Empty;
+        }
         RefreshNumberInputs();
 
         if (!WatermarkBox.IsFocused)
@@ -4091,6 +4282,9 @@ public partial class CaptureWindow : Window
                 _numberSize = n.Size;
                 _numberFormat = n.Format;
                 _numberShape = n.Shape;
+                _numberCombo = n.Combo;
+                _numberTextSize = n.TextSize;
+                _numberZoom = n.Zoom;
                 break;
 
             case WatermarkAnnotation w:
@@ -4478,8 +4672,41 @@ public partial class CaptureWindow : Window
                     halfWidth = Math.Max(halfWidth, textWidth / 2 + number.Size * 0.45);
                 }
 
-                return Math.Abs(point.X - number.Center.X) <= halfWidth + slop
-                    && Math.Abs(point.Y - number.Center.Y) <= halfHeight + slop;
+                if (Math.Abs(point.X - number.Center.X) <= halfWidth + slop
+                    && Math.Abs(point.Y - number.Center.Y) <= halfHeight + slop)
+                {
+                    return true;
+                }
+
+                // 详情区 / 引导线 / 箭头点进去也是选中整条，拖动整体平移
+                switch (number.Combo)
+                {
+                    case NumberCombo.DashedBox:
+                    case NumberCombo.Highlight:
+                        return NumberGeometry.DetailBounds(number).Contains(point);
+
+                    case NumberCombo.Leader:
+                    {
+                        var points = NumberGeometry.LeaderPoints(number);
+
+                        for (var index = 1; index < points.Count; index++)
+                        {
+                            if (DistanceToSegment(point, points[index - 1], points[index]) <= slop)
+                                return true;
+                        }
+
+                        return false;
+                    }
+
+                    case NumberCombo.Arrow:
+                        return DistanceToSegment(
+                            point,
+                            NumberGeometry.Bounds(number).Center,
+                            NumberGeometry.TargetOf(number)) <= slop;
+
+                    default:
+                        return false;
+                }
             }
 
             default:
@@ -4556,6 +4783,38 @@ public partial class CaptureWindow : Window
     }
 
     /// <summary>选中标注的 8 个缩放点；文字不显示。</summary>
+    /// <summary>命中序号组合的目标点把手（局部坐标）。</summary>
+    private bool HitNumberTargetHandle(Point point)
+    {
+        if (_selectedNote < 0 || _selectedNote >= _notes.Items.Count)
+            return false;
+
+        if (_notes.Items[_selectedNote] is not NumberAnnotation { Combo: not NumberCombo.Plain } number)
+            return false;
+
+        var local = new Point(point.X - _selection.X, point.Y - _selection.Y);
+        return Distance(local, NumberGeometry.TargetOf(number)) <= 7;
+    }
+
+    /// <summary>拖动目标点：清掉显式详情区，让引导线/箭头/框跟着重新推导。</summary>
+    private void ApplyNumberTarget(Point point)
+    {
+        if (_selectedNote < 0 || _selectedNote >= _notes.Items.Count)
+            return;
+
+        var local = new Point(
+            Math.Clamp(point.X - _selection.X, 0, _selection.Width),
+            Math.Clamp(point.Y - _selection.Y, 0, _selection.Height));
+
+        _notes.Replace(
+            _selectedNote,
+            AnnotationStyler.WithNumberTarget(_notes.Items[_selectedNote], local));
+
+        _noteDragMoved = true;
+        RebuildNotePreview();
+        UpdateNoteHandles();
+    }
+
     private void UpdateNoteHandles()
     {
         NoteHandleLayer.Children.Clear();
@@ -4624,6 +4883,24 @@ public partial class CaptureWindow : Window
             NoteHandleLayer.Children.Add(knob);
         }
 
+        // 序号组合的目标点：一个可拖的实心把手
+        if (note is NumberAnnotation { Combo: not NumberCombo.Plain } numberNote)
+        {
+            var target = NumberGeometry.TargetOf(numberNote);
+            var targetDot = new Ellipse
+            {
+                Width = 9,
+                Height = 9,
+                Fill = new SolidColorBrush(Color.Parse("#FFE5A44C")),
+                Stroke = Brushes.White,
+                StrokeThickness = 1,
+                IsHitTestVisible = false
+            };
+            Canvas.SetLeft(targetDot, target.X - 4.5);
+            Canvas.SetTop(targetDot, target.Y - 4.5);
+            NoteHandleLayer.Children.Add(targetDot);
+        }
+
         NoteHandleLayer.IsVisible = true;
     }
 
@@ -4690,7 +4967,21 @@ public partial class CaptureWindow : Window
             }
 
             case NumberAnnotation number:
-                return NumberGeometry.Bounds(number);
+            {
+                var badge = NumberGeometry.Bounds(number);
+
+                return number.Combo switch
+                {
+                    NumberCombo.DashedBox or NumberCombo.Highlight
+                        => badge.Union(NumberGeometry.DetailBounds(number)),
+
+                    // 引导线 / 箭头：把目标点也包进选择框
+                    NumberCombo.Leader or NumberCombo.Arrow
+                        => badge.Union(TargetRect(NumberGeometry.TargetOf(number))),
+
+                    _ => badge
+                };
+            }
 
             default:
                 return default;
@@ -4843,10 +5134,19 @@ public partial class CaptureWindow : Window
     }
 
     private readonly List<ToolGroup> _toolGroups = new();
-    private DispatcherTimer? _groupHideTimer;
     private DispatcherTimer? _groupShowTimer;
+    private DispatcherTimer? _groupCloseTimer;
     private ToolGroup? _pendingGroup;
     private ToolGroup? _activeGroup;
+
+    /// <summary>选项条展开期间被临时摘掉的触发按钮 tooltip。</summary>
+    private object? _suppressedTriggerTip;
+
+    /// <summary>当前选项条在窗口里的矩形；命中判断用它，不依赖布局是否已经跑过。</summary>
+    private Rect _toolGroupPopoverRect;
+
+    /// <summary>选项条对应的触发按钮矩形（窗口坐标），用于"离开就收起"的位置判断。</summary>
+    private Rect _toolGroupTriggerRect;
     private int _groupShowDelayMs = 120;
     private ToolbarLayout _layout = ToolbarLayout.Default();
 
@@ -4924,11 +5224,9 @@ public partial class CaptureWindow : Window
                 ForceTool(group.Members[group.EntryIndex]);
             };
             group.Trigger.PointerEntered += (_, _) => ScheduleShowToolGroupPopover(group);
-            group.Trigger.PointerExited += (_, _) =>
-            {
-                CancelPendingToolGroupPopover();
-                ScheduleHideToolGroupPopover();
-            };
+
+            // 离开触发按钮只取消"待展开"；是否收起交给 PointerMoved 的位置判断
+            group.Trigger.PointerExited += (_, _) => CancelPendingToolGroupPopover();
             group.Trigger.KeyDown += (_, e) =>
             {
                 if (e.Key != Key.Down)
@@ -4945,12 +5243,7 @@ public partial class CaptureWindow : Window
             };
         }
 
-        ToolGroupPopover.PointerEntered += (_, _) =>
-        {
-            _groupHideTimer?.Stop();
-            CancelPendingToolGroupPopover();
-        };
-        ToolGroupPopover.PointerExited += (_, _) => ScheduleHideToolGroupPopover();
+        ToolGroupPopover.PointerEntered += (_, _) => CancelPendingToolGroupPopover();
         ToolGroupPopover.KeyDown += (_, e) =>
         {
             if (e.Key != Key.Escape)
@@ -4970,7 +5263,6 @@ public partial class CaptureWindow : Window
 
     private void ScheduleShowToolGroupPopover(ToolGroup group)
     {
-        _groupHideTimer?.Stop();
         _groupShowTimer?.Stop();
         _pendingGroup = group;
 
@@ -5185,10 +5477,17 @@ public partial class CaptureWindow : Window
     /// <summary>展开某个工具的选项条，摆在触发按钮正上方。</summary>
     private void ShowToolGroupPopover(ToolGroup group)
     {
-        _groupHideTimer?.Stop();
         _groupShowTimer?.Stop();
         _pendingGroup = null;
+
+        // 同一组已经展开：不要重建子元素，否则会把正在按下的按钮换掉，点击丢失
+        if (ToolGroupPopover.IsVisible && ReferenceEquals(_activeGroup, group))
+            return;
+
         _activeGroup = group;
+
+        // 触发按钮的 tooltip 会弹在选项条上面挡住点击，展开期间先摘掉
+        SuppressTriggerToolTip(group.Trigger);
         ToolGroupOptions.Children.Clear();
 
         // 反序：入口在最左（参考 stackPresentation 把 popoverItemIds 反了过来）
@@ -5225,34 +5524,75 @@ public partial class CaptureWindow : Window
         var left = Math.Clamp(origin.X, 8, Math.Max(8, Width - width - 8));
         var top = Math.Max(8, origin.Y - height - 6);
 
+        var triggerSize = group.Trigger.Bounds.Size;
+        _toolGroupTriggerRect = new Rect(
+            origin,
+            triggerSize.Width > 0 && triggerSize.Height > 0 ? triggerSize : new Size(32, 32));
+
         Canvas.SetLeft(ToolGroupPopover, left);
         Canvas.SetTop(ToolGroupPopover, top);
+        _toolGroupPopoverRect = new Rect(left, top, width, height);
     }
 
-    private void ScheduleHideToolGroupPopover()
+    /// <summary>
+    /// 离开悬停区后延迟收起：到点再按当前光标复核一次，
+    /// 指针其实已经进到选项条里就不收（对齐 snow-shot 的 finishHoverClose(recheck)）。
+    /// </summary>
+    private void ScheduleCloseToolGroupPopover()
     {
-        if (_groupHideTimer is null)
+        if (_groupCloseTimer is null)
         {
-            _groupHideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
-            _groupHideTimer.Tick += (_, _) =>
-            {
-                _groupHideTimer!.Stop();
-                HideToolGroupPopover();
-            };
+            _groupCloseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
+            _groupCloseTimer.Tick += OnGroupCloseTimerTick;
         }
 
-        _groupHideTimer.Stop();
-        _groupHideTimer.Start();
+        _groupCloseTimer.Stop();
+        _groupCloseTimer.Start();
+    }
+
+    private void OnGroupCloseTimerTick(object? sender, EventArgs e)
+    {
+        _groupCloseTimer?.Stop();
+
+        if (!ToolGroupPopover.IsVisible || _activeGroup is null)
+            return;
+
+        var hoverArea = _toolGroupPopoverRect.Union(_toolGroupTriggerRect).Inflate(10);
+
+        if (!hoverArea.Contains(_lastPointerPoint))
+            HideToolGroupPopover();
     }
 
     private void HideToolGroupPopover()
     {
-        _groupHideTimer?.Stop();
         _groupShowTimer?.Stop();
+        _groupCloseTimer?.Stop();
         _pendingGroup = null;
+
+        if (_activeGroup is { } group)
+            RestoreTriggerToolTip(group.Trigger);
+
         _activeGroup = null;
         ToolGroupPopover.IsVisible = false;
+        _toolGroupPopoverRect = default;
+        _toolGroupTriggerRect = default;
         ToolGroupOptions.Children.Clear();
+    }
+
+    /// <summary>展开选项条期间摘掉触发按钮的 tooltip，避免它弹在选项条上吃掉点击。</summary>
+    private void SuppressTriggerToolTip(Button trigger)
+    {
+        _suppressedTriggerTip = ToolTip.GetTip(trigger);
+        ToolTip.SetIsOpen(trigger, false);
+        ToolTip.SetTip(trigger, null);
+    }
+
+    private void RestoreTriggerToolTip(Button trigger)
+    {
+        if (_suppressedTriggerTip is not null)
+            ToolTip.SetTip(trigger, _suppressedTriggerTip);
+
+        _suppressedTriggerTip = null;
     }
 
     private void ApplyToolIcon(Path icon, AnnotationTool tool)
@@ -5494,12 +5834,15 @@ public partial class CaptureWindow : Window
                 return true;
 
             case AnnotationTool.Number:
-                MarkNoteMutation();
-                _notes.Add(new NumberAnnotation(
-                    _annotationStart, _nextNumber++, _noteColor.ToUInt32(), _numberSize,
-                    Format: _numberFormat));
-                RebuildNotePreview();
-                UpdateToolButtons();
+                // 按下先放 badge，拖出去的目标点在松手时定稿
+                _pendingAnnotation = new NumberAnnotation(
+                    _annotationStart, _nextNumber, _noteColor.ToUInt32(), _numberSize,
+                    Format: _numberFormat,
+                    Shape: _numberShape,
+                    Combo: _numberCombo,
+                    Target: _annotationStart,
+                    TextSize: _numberTextSize,
+                    Zoom: _numberZoom);
                 return true;
 
             default:
@@ -5563,6 +5906,7 @@ public partial class CaptureWindow : Window
                 Tail = AnnotationGeometry.BubbleTail(
                     NormalizeRect(_annotationStart, current), _annotationStart)
             },
+            NumberAnnotation number => number with { Target = current },
             PenAnnotation pen when _penPoints is not null => AddPenPoint(pen, current),
             _ => _pendingAnnotation
         };
@@ -5579,6 +5923,9 @@ public partial class CaptureWindow : Window
         Math.Min(a.Y, b.Y),
         Math.Abs(a.X - b.X),
         Math.Abs(a.Y - b.Y));
+
+    /// <summary>目标点的 1×1 包围盒，用来把目标点并进选择框。</summary>
+    private static Rect TargetRect(Point target) => new(target.X, target.Y, 1, 1);
 
     private void CommitPendingAnnotation()
     {
@@ -5603,6 +5950,20 @@ public partial class CaptureWindow : Window
             };
         }
 
+        // 序号：单击也要保留；没拖出目标点时给个默认偏移，并在提交时取号
+        if (annotation is NumberAnnotation number)
+        {
+            var target = number.Target ?? number.Center;
+
+            if (Distance(target, number.Center) < 4)
+            {
+                var badge = NumberGeometry.BadgeBounds(number.Center, number.Size, number.Shape);
+                target = new Point(badge.Right + number.Size * 3, badge.Bottom + number.Size * 1.5);
+            }
+
+            annotation = number with { Target = target, Number = _nextNumber++ };
+        }
+
         // 点一下没拖动：当误触丢掉，不进撤销栈
         var keep = annotation switch
         {
@@ -5617,6 +5978,7 @@ public partial class CaptureWindow : Window
             DistanceAnnotation distance => Distance(distance.From, distance.To) >= 6,
             BracketAnnotation bracket => bracket.Rect.Width >= 8 && bracket.Rect.Height >= 8,
             SpeechBubbleAnnotation bubble => bubble.Rect.Width >= 8 && bubble.Rect.Height >= 8,
+            NumberAnnotation => true,
             _ => false
         };
 
@@ -5624,6 +5986,14 @@ public partial class CaptureWindow : Window
         {
             _notes.Add(annotation);
             MarkNoteMutation();
+
+            // 文本标签组合：画完直接进入说明文字编辑（和 LumaShot 一致）
+            if (annotation is NumberAnnotation { Combo: NumberCombo.Text })
+            {
+                var index = _notes.Items.Count - 1;
+                SelectNote(index);
+                EditNoteText(index);
+            }
         }
 
         RebuildNotePreview();
@@ -5853,6 +6223,13 @@ public partial class CaptureWindow : Window
     {
         var start = NoteLayer.Children.Count;
 
+        // 手绘 / 涂鸦：预览层也用同一套抖动几何，画的时候就能看到（之前只有导出才手绘）
+        if (TryAddSketchPreview(item))
+        {
+            ApplyPreviewRotation(item, start);
+            return;
+        }
+
         switch (item)
         {
             case ShapeAnnotation { Diamond: true } shape:
@@ -6064,21 +6441,30 @@ public partial class CaptureWindow : Window
 
             case NumberAnnotation number:
                 var badgeLabel = NumberText.Format(number.Number, number.Format, number.Label);
+                var hasBadgeLabel = !string.IsNullOrWhiteSpace(number.Label);
                 var badgeFontSize = number.Size * 0.55;
                 var badgeEstimate = EstimateTextWidth(badgeLabel, badgeFontSize);
+
+                // 只有自定义标签才按文字撑宽，自动数字保持正圆/正方
                 var badgeBounds = NumberGeometry.BadgeBounds(
-                    number.Center, number.Size, number.Shape, badgeEstimate);
+                    number.Center, number.Size, number.Shape,
+                    hasBadgeLabel ? badgeEstimate : 0);
 
                 // 文字按徽章短边收敛，和导出端同一条规则
                 var badgeLimit = Math.Min(badgeBounds.Width, badgeBounds.Height) * 0.8;
                 if (badgeEstimate > badgeLimit && badgeEstimate > 0)
                 {
                     badgeFontSize *= badgeLimit / badgeEstimate;
-                    badgeEstimate = EstimateTextWidth(badgeLabel, badgeFontSize);
-                    badgeBounds = NumberGeometry.BadgeBounds(
-                        number.Center, number.Size, number.Shape, badgeEstimate);
+
+                    if (hasBadgeLabel)
+                    {
+                        badgeEstimate = EstimateTextWidth(badgeLabel, badgeFontSize);
+                        badgeBounds = NumberGeometry.BadgeBounds(
+                            number.Center, number.Size, number.Shape, badgeEstimate);
+                    }
                 }
 
+                AddNumberDetailPreview(number);
                 AddNumberBadgePreview(number, badgeBounds);
 
                 var badgeAnchor = NumberGeometry.TextAnchor(badgeBounds, number.Shape);
@@ -6100,6 +6486,12 @@ public partial class CaptureWindow : Window
                 break;
         }
 
+        ApplyPreviewRotation(item, start);
+    }
+
+    /// <summary>整条标注按中心旋转：把本次新增的子元素装进一个旋转 Canvas。</summary>
+    private void ApplyPreviewRotation(IAnnotation item, int start)
+    {
         var rotation = AnnotationGeometry.RotationOf(item);
         if (Math.Abs(rotation) > 0.01 && NoteLayer.Children.Count > start)
         {
@@ -6129,6 +6521,271 @@ public partial class CaptureWindow : Window
         }
     }
 
+    /// <summary>预览用的描边规格：轮廓顶点 + 是否闭合 + 短边 + 线宽颜色。</summary>
+    private readonly record struct SketchSpec(
+        LineStyle Style,
+        IReadOnlyList<Point[]>? Contours,
+        bool Closed,
+        double ShortSide,
+        double Width,
+        uint Color,
+        double Opacity);
+
+    /// <summary>
+    /// 手绘 / 涂鸦的实时预览：用和导出相同的抖动算法生成路径，
+    /// 这样画的时候就能看到效果，而不是只有导出的 PNG 才是手绘。
+    /// </summary>
+    private bool TryAddSketchPreview(IAnnotation item)
+    {
+        var spec = SketchOf(item);
+
+        if (spec.Style == LineStyle.Neat || spec.Contours is null)
+            return false;
+
+        var geometry = BuildSketchGeometry(spec.Contours, spec.Closed, spec.Style, spec.ShortSide);
+
+        // 形状先铺填充，再描手绘边
+        if (item is ShapeAnnotation shape && shape.Fill is ShapeFill.Soft or ShapeFill.Solid)
+        {
+            NoteLayer.Children.Add(new Avalonia.Controls.Shapes.Path
+            {
+                Data = geometry,
+                Fill = new SolidColorBrush(
+                    Color.FromUInt32(AnnotationStyle.FillColor(shape.Color, shape.FillColor)),
+                    AnnotationStyle.FillAlpha(shape.Fill, shape.Opacity)),
+                IsHitTestVisible = false
+            });
+        }
+
+        NoteLayer.Children.Add(new Avalonia.Controls.Shapes.Path
+        {
+            Data = geometry,
+            Stroke = new SolidColorBrush(Color.FromUInt32(spec.Color), spec.Opacity),
+            StrokeThickness = Math.Max(1, spec.Width),
+            StrokeLineCap = PenLineCap.Round,
+            StrokeJoin = PenLineJoin.Round,
+            IsHitTestVisible = false
+        });
+
+        // 箭头头部保持实心三角，和导出一致
+        if (item is ArrowAnnotation arrow)
+        {
+            var (left, right) = ArrowGeometry.Head(
+                arrow.From, arrow.To, Math.Max(8, arrow.Width * 3.5));
+
+            NoteLayer.Children.Add(new Polygon
+            {
+                Points = new List<Point> { arrow.To, left, right },
+                Fill = new SolidColorBrush(Color.FromUInt32(arrow.Color), arrow.Opacity),
+                IsHitTestVisible = false
+            });
+        }
+
+        return true;
+    }
+
+    private static SketchSpec SketchOf(IAnnotation item) => item switch
+    {
+        ShapeAnnotation shape => new SketchSpec(
+            shape.Style, [ShapeContours(shape)], true,
+            Math.Min(shape.Rect.Width, shape.Rect.Height),
+            shape.Width, shape.Color, shape.Opacity),
+
+        ArrowAnnotation arrow => new SketchSpec(
+            arrow.Style, [new[] { arrow.From, arrow.To }], false,
+            Distance(arrow.From, arrow.To), arrow.Width, arrow.Color, arrow.Opacity),
+
+        LineAnnotation line => new SketchSpec(
+            line.Style, [new[] { line.From, line.To }], false,
+            Distance(line.From, line.To), line.Width, line.Color, line.Opacity),
+
+        DistanceAnnotation distance => new SketchSpec(
+            distance.Style, [new[] { distance.From, distance.To }], false,
+            Distance(distance.From, distance.To),
+            distance.Width, distance.Color, distance.Opacity),
+
+        BracketAnnotation bracket => new SketchSpec(
+            bracket.Style, [AnnotationGeometry.BracketPoints(bracket)], false,
+            Math.Min(bracket.Rect.Width, bracket.Rect.Height),
+            bracket.Width, bracket.Color, bracket.Opacity),
+
+        PenAnnotation pen => new SketchSpec(
+            pen.Style, [pen.Points.ToArray()], false, PenShortSide(pen.Points),
+            pen.Width, pen.Color, pen.Opacity),
+
+        _ => new SketchSpec(LineStyle.Neat, null, false, 0, 0, 0, 1)
+    };
+
+    /// <summary>形状轮廓顶点：和导出用的 BuildShapeOutline 一一对应。</summary>
+    private static Point[] ShapeContours(ShapeAnnotation shape)
+    {
+        var rect = shape.Rect;
+
+        if (shape.Diamond)
+        {
+            return
+            [
+                new Point(rect.Center.X, rect.Top),
+                new Point(rect.Right, rect.Center.Y),
+                new Point(rect.Center.X, rect.Bottom),
+                new Point(rect.Left, rect.Center.Y)
+            ];
+        }
+
+        if (shape.Ellipse)
+            return EllipsePoints(rect, 40);
+
+        var radius = Math.Clamp(shape.Radius, 0, Math.Min(rect.Width, rect.Height) / 2);
+
+        if (radius > 0)
+            return RoundedRectPoints(rect, radius, 6);
+
+        return
+        [
+            new Point(rect.Left, rect.Top),
+            new Point(rect.Right, rect.Top),
+            new Point(rect.Right, rect.Bottom),
+            new Point(rect.Left, rect.Bottom)
+        ];
+    }
+
+    private static Point[] EllipsePoints(Rect rect, int count)
+    {
+        var points = new Point[count];
+
+        for (var index = 0; index < count; index++)
+        {
+            var angle = Math.PI * 2 * index / count;
+            points[index] = new Point(
+                rect.Center.X + rect.Width / 2 * Math.Cos(angle),
+                rect.Center.Y + rect.Height / 2 * Math.Sin(angle));
+        }
+
+        return points;
+    }
+
+    private static Point[] RoundedRectPoints(Rect rect, double radius, int arcSegments)
+    {
+        var points = new List<Point>();
+        var right = rect.Right - radius;
+        var bottom = rect.Bottom - radius;
+        var left = rect.Left + radius;
+        var top = rect.Top + radius;
+
+        points.Add(new Point(left, rect.Top));
+        points.Add(new Point(right, rect.Top));
+        AddArc(points, right, top, radius, -Math.PI / 2, 0, arcSegments);
+        points.Add(new Point(rect.Right, bottom));
+        AddArc(points, right, bottom, radius, 0, Math.PI / 2, arcSegments);
+        points.Add(new Point(left, rect.Bottom));
+        AddArc(points, left, bottom, radius, Math.PI / 2, Math.PI, arcSegments);
+        points.Add(new Point(rect.Left, top));
+        AddArc(points, left, top, radius, Math.PI, Math.PI * 1.5, arcSegments);
+
+        return points.ToArray();
+    }
+
+    private static void AddArc(List<Point> points, double centerX, double centerY, double radius,
+        double from, double to, int segments)
+    {
+        for (var index = 1; index <= segments; index++)
+        {
+            var angle = from + (to - from) * index / segments;
+            points.Add(new Point(
+                centerX + radius * Math.Cos(angle),
+                centerY + radius * Math.Sin(angle)));
+        }
+    }
+
+    private static double PenShortSide(IReadOnlyList<Point> points)
+    {
+        if (points.Count == 0)
+            return 0;
+
+        var minX = points[0].X;
+        var maxX = minX;
+        var minY = points[0].Y;
+        var maxY = minY;
+
+        foreach (var point in points)
+        {
+            minX = Math.Min(minX, point.X);
+            maxX = Math.Max(maxX, point.X);
+            minY = Math.Min(minY, point.Y);
+            maxY = Math.Max(maxY, point.Y);
+        }
+
+        return Math.Min(maxX - minX, maxY - minY);
+    }
+
+    /// <summary>和导出端同一套抖动：每条原始边一段三次贝塞尔，涂鸦画两遍。</summary>
+    private static StreamGeometry BuildSketchGeometry(
+        IReadOnlyList<Point[]> contours, bool closed, LineStyle style, double shortSide)
+    {
+        var geometry = new StreamGeometry();
+        using var context = geometry.Open();
+
+        var amplitude = (float)Math.Min(
+            style == LineStyle.Rough ? 4 : 2, Math.Max(0.5, shortSide * 0.1));
+        var seed = style == LineStyle.Rough ? 0x5EED1234u : 0xA17C0DEu;
+        var passes = style == LineStyle.Rough ? 2 : 1;
+
+        for (var pass = 0; pass < passes; pass++)
+        {
+            var passAmplitude = amplitude * (pass == 0 ? 1f : 0.5f);
+            var segment = 0;
+
+            foreach (var contour in contours)
+            {
+                if (contour.Length < 2)
+                    continue;
+
+                context.BeginFigure(contour[0], false);
+
+                var count = contour.Length;
+                var segments = closed ? count : count - 1;
+
+                for (var index = 0; index < segments; index++)
+                {
+                    var start = contour[index];
+                    var end = contour[(index + 1) % count];
+                    var (c1, c2) = SketchControls(
+                        start, end, seed, passAmplitude, pass == 0, segment++);
+
+                    context.CubicBezierTo(c1, c2, end);
+                }
+
+                context.EndFigure(closed);
+            }
+        }
+
+        return geometry;
+    }
+
+    private static (Point C1, Point C2) SketchControls(
+        Point start, Point end, uint seed, float amplitude, bool firstPass, int segment)
+    {
+        var dx = end.X - start.X;
+        var dy = end.Y - start.Y;
+        var span = Math.Sqrt(dx * dx + dy * dy);
+
+        if (span <= 0.0001)
+            return (start, start);
+
+        var nx = -dy / span;
+        var ny = dx / span;
+
+        var bendSample = AnnotationRenderer.Sample(seed ^ 0x632be59Bu, segment * 8 + 5);
+        var bend = Math.Sign(bendSample) * (0.88 + 0.04 * Math.Abs(bendSample)) * (firstPass ? 1 : -1);
+
+        var jitter1 = amplitude * (bend + 0.06 * AnnotationRenderer.Sample(seed, segment * 8 + 1));
+        var jitter2 = amplitude * (bend + 0.06 * AnnotationRenderer.Sample(seed, segment * 8 + 2));
+
+        return (
+            new Point(start.X + dx * 0.28 + nx * jitter1, start.Y + dy * 0.28 + ny * jitter1),
+            new Point(start.X + dx * 0.71 + nx * jitter2, start.Y + dy * 0.71 + ny * jitter2));
+    }
+
     // ---------- 文字输入 ----------
 
     private void ShowTextEditor(Point origin)
@@ -6140,6 +6797,7 @@ public partial class CaptureWindow : Window
         TextNoteBox.FontSize = _noteFontSize;
         TextNoteBox.FontWeight = _noteBold ? FontWeight.Bold : FontWeight.Normal;
         TextNoteBox.Foreground = new SolidColorBrush(_noteColor);
+        TextNoteBox.CaretBrush = new SolidColorBrush(_noteColor);
         Canvas.SetLeft(TextNoteBox, _selection.X + origin.X);
         Canvas.SetTop(TextNoteBox, _selection.Y + origin.Y);
         TextNoteBox.IsVisible = true;
@@ -6170,6 +6828,16 @@ public partial class CaptureWindow : Window
                 bubble.FontSize,
                 Color.FromUInt32(bubble.Color),
                 false),
+            NumberAnnotation { Combo: NumberCombo.Text } number => (
+                new Point(
+                    Math.Clamp(NumberGeometry.DetailBounds(number).X + 6, 0,
+                        Math.Max(0, _selection.Width - 120)),
+                    Math.Clamp(NumberGeometry.DetailBounds(number).Y + 3, 0,
+                        Math.Max(0, _selection.Height - 40))),
+                number.Text ?? string.Empty,
+                number.TextSize,
+                Colors.White,
+                false),
             _ => (default(Point), string.Empty, 0d, default(Color), false)
         };
 
@@ -6183,6 +6851,7 @@ public partial class CaptureWindow : Window
         TextNoteBox.FontSize = fontSize;
         TextNoteBox.FontWeight = bold ? FontWeight.Bold : FontWeight.Normal;
         TextNoteBox.Foreground = new SolidColorBrush(color);
+        TextNoteBox.CaretBrush = new SolidColorBrush(color);
         Canvas.SetLeft(TextNoteBox, _selection.X + origin.X);
         Canvas.SetTop(TextNoteBox, _selection.Y + origin.Y);
         TextNoteBox.IsVisible = true;
@@ -6219,6 +6888,8 @@ public partial class CaptureWindow : Window
                     WatermarkAnnotation watermark when text.Length > 0 => watermark with { Text = text },
                     WatermarkAnnotation watermark => watermark,
                     SpeechBubbleAnnotation bubble => bubble with { Text = text },
+                    NumberAnnotation number when number.Combo == NumberCombo.Text
+                        => number with { Text = text.Length > 0 ? text : null },
                     _ => null
                 };
 
@@ -6562,6 +7233,169 @@ public partial class CaptureWindow : Window
             default:
                 AddShape(new Ellipse(), bounds, fill, 0);
                 break;
+        }
+    }
+
+    /// <summary>组合详情区预览：引导线折线 / 箭头 / 虚线框 / 高亮底。</summary>
+    private void AddNumberDetailPreview(NumberAnnotation number)
+    {
+        switch (number.Combo)
+        {
+            case NumberCombo.Leader:
+            {
+                var points = NumberGeometry.LeaderPoints(number);
+                var brush = new SolidColorBrush(Color.FromUInt32(number.Color));
+
+                NoteLayer.Children.Add(new Polyline
+                {
+                    Points = points.ToList(),
+                    Stroke = brush,
+                    StrokeThickness = 1.5,
+                    StrokeDashArray = [6, 4],
+                    IsHitTestVisible = false
+                });
+
+                var dot = new Ellipse
+                {
+                    Width = 6,
+                    Height = 6,
+                    Fill = brush,
+                    IsHitTestVisible = false
+                };
+                Canvas.SetLeft(dot, points[^1].X - 3);
+                Canvas.SetTop(dot, points[^1].Y - 3);
+                NoteLayer.Children.Add(dot);
+                break;
+            }
+
+            case NumberCombo.Arrow:
+            {
+                var badge = NumberGeometry.Bounds(number);
+                var center = badge.Center;
+                var target = NumberGeometry.TargetOf(number);
+                var dx = target.X - center.X;
+                var dy = target.Y - center.Y;
+                var length = Math.Sqrt(dx * dx + dy * dy);
+
+                if (length < number.Size * 0.5)
+                    break;
+
+                var start = new Point(
+                    center.X + dx / length * (badge.Width / 2 + 2),
+                    center.Y + dy / length * (badge.Height / 2 + 2));
+
+                var brush = new SolidColorBrush(Color.FromUInt32(number.Color));
+                AddPreviewLine(brush, start, target, 2);
+
+                var (left, right) = ArrowGeometry.Head(start, target, 8);
+                AddPreviewLine(brush, target, left, 2);
+                AddPreviewLine(brush, target, right, 2);
+                break;
+            }
+
+            case NumberCombo.Text:
+            {
+                var detail = NumberGeometry.DetailBounds(number);
+                if (detail.Width < 4 || detail.Height < 4)
+                    break;
+
+                var placeholder = string.IsNullOrWhiteSpace(number.Text);
+
+                var box = new Border
+                {
+                    Width = detail.Width,
+                    Height = detail.Height,
+                    CornerRadius = new CornerRadius(
+                        Math.Min(number.Size * 0.2, Math.Min(detail.Width, detail.Height) / 2)),
+                    Background = new SolidColorBrush(Color.FromUInt32(number.Color), 0.9),
+                    Child = new TextBlock
+                    {
+                        Text = placeholder ? "说明" : number.Text,
+                        FontSize = number.TextSize,
+                        Foreground = new SolidColorBrush(Colors.White, placeholder ? 0.66 : 1),
+                        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                        TextTrimming = TextTrimming.CharacterEllipsis
+                    },
+                    IsHitTestVisible = false
+                };
+
+                Canvas.SetLeft(box, detail.X);
+                Canvas.SetTop(box, detail.Y);
+                NoteLayer.Children.Add(box);
+                break;
+            }
+
+            case NumberCombo.Magnify:
+            {
+                var detail = NumberGeometry.DetailBounds(number);
+                if (detail.Width < 6 || detail.Height < 6)
+                    break;
+
+                var badge = NumberGeometry.Bounds(number);
+                var brush = new SolidColorBrush(Color.FromUInt32(number.Color));
+
+                AddPreviewLine(brush, badge.Center, detail.Center, 1.5);
+
+                var lens = new Ellipse
+                {
+                    Width = detail.Width,
+                    Height = detail.Height,
+                    Stroke = brush,
+                    StrokeThickness = 2,
+                    Fill = new SolidColorBrush(Colors.Black, 0.25),
+                    IsHitTestVisible = false
+                };
+                Canvas.SetLeft(lens, detail.X);
+                Canvas.SetTop(lens, detail.Y);
+                NoteLayer.Children.Add(lens);
+
+                var zoomLabel = new TextBlock
+                {
+                    Text = $"{number.Zoom:0.#}×",
+                    FontSize = 12,
+                    Foreground = new SolidColorBrush(Colors.White),
+                    Width = detail.Width,
+                    TextAlignment = TextAlignment.Center,
+                    IsHitTestVisible = false
+                };
+                Canvas.SetLeft(zoomLabel, detail.X);
+                Canvas.SetTop(zoomLabel, detail.Center.Y - 8);
+                NoteLayer.Children.Add(zoomLabel);
+                break;
+            }
+
+            case NumberCombo.DashedBox:
+            case NumberCombo.Highlight:
+            {
+                var detail = NumberGeometry.DetailBounds(number);
+                if (detail.Width < 4 || detail.Height < 4)
+                    break;
+
+                var color = Color.FromUInt32(number.Color);
+                var dashed = number.Combo == NumberCombo.DashedBox;
+                var radius = Math.Min(number.Size * 0.2, Math.Min(detail.Width, detail.Height) / 2);
+
+                var box = new Rectangle
+                {
+                    Width = detail.Width,
+                    Height = detail.Height,
+                    RadiusX = radius,
+                    RadiusY = radius,
+                    Fill = new SolidColorBrush(color, dashed ? 0.08 : 0.18),
+                    Stroke = dashed ? new SolidColorBrush(color, 0.6) : null,
+                    StrokeThickness = 1,
+                    IsHitTestVisible = false
+                };
+
+                if (dashed)
+                    box.StrokeDashArray = [6, 4];
+
+                Canvas.SetLeft(box, detail.X);
+                Canvas.SetTop(box, detail.Y);
+                NoteLayer.Children.Add(box);
+                break;
+            }
         }
     }
 
