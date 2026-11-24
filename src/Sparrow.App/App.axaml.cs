@@ -628,35 +628,80 @@ public partial class App : Application
             var candidates = WindowCandidates.Enumerate(IntPtr.Zero);
             var target = WindowCandidates.Pick(candidates, cursor);
 
-            SelectorTrace.Write(
-                $"prewarm scan cursor={cursor} target=0x{target?.Handle.ToInt64():X} " +
-                $"class={target?.ClassName}");
+            // 预建目标不能只看「最上层」：从 VS 按 F5 后再触发时，最上层往往是 VS，
+            // 但浏览器仍在光标下方可见。只预建最上层会漏掉浏览器；遮罩盖住后
+            // Chromium 关闭网页无障碍树，就只剩窗格可选。
+            var browserTargets = new List<WindowCandidate>();
 
             if (target is not null && WindowCandidates.IsBrowserLikeWindow(target.Handle))
-            {
-                SetForegroundWindow(target.Handle);
-                await Task.Delay(300);
+                browserTargets.Add(target);
 
-                // 先跑一次 IAccessible 激活，Chrome 才会真正构建网页无障碍树。
-                using (var activation = new MsaaElementProbe())
+            foreach (var candidate in candidates)
+            {
+                if (browserTargets.Count >= 2)
+                    break;
+
+                if (!candidate.Contains(cursor)
+                    || !WindowCandidates.IsBrowserLikeWindow(candidate.Handle)
+                    || browserTargets.Exists(item => item.Handle == candidate.Handle))
                 {
-                    await activation.ProbeAsync(
-                        target.Handle,
-                        cursor,
-                        TimeSpan.FromMilliseconds(1200),
-                        null,
-                        target.Title);
+                    continue;
                 }
 
-                await Task.Delay(250);
+                browserTargets.Add(candidate);
+            }
 
+            SelectorTrace.Write(
+                $"prewarm scan cursor={cursor} target=0x{target?.Handle.ToInt64():X} " +
+                $"class={target?.ClassName} " +
+                $"browsers=[{string.Join(",", browserTargets.Select(item => $"0x{item.Handle.ToInt64():X}"))}]");
+
+            if (browserTargets.Count > 0)
+            {
                 var probe = new UiElementProbe();
-                var warmed = await probe.PrewarmAsync(
-                    target.Handle, TimeSpan.FromMilliseconds(1500));
+                var warmedAny = false;
 
-                SelectorTrace.Write($"prewarm result={warmed}");
+                foreach (var browser in browserTargets)
+                {
+                    // 只把光标下最上层的浏览器提到前台；其余保持原状，避免抢焦点/闪烁。
+                    if (browser.Handle == target?.Handle)
+                    {
+                        SetForegroundWindow(browser.Handle);
+                        await Task.Delay(300);
+                    }
 
-                if (warmed)
+                    // 用它自己的中心点做 IAccessible 激活，点不在窗口内时 Chromium 不会建树。
+                    var inside = new PixelPoint(
+                        browser.Bounds.X + browser.Bounds.Width / 2,
+                        browser.Bounds.Y + browser.Bounds.Height / 2);
+
+                    using (var activation = new MsaaElementProbe())
+                    {
+                        await activation.ProbeAsync(
+                            browser.Handle,
+                            inside,
+                            TimeSpan.FromMilliseconds(1200),
+                            null,
+                            null);
+                    }
+
+                    await Task.Delay(250);
+
+                    var warmed = await probe.PrewarmAsync(
+                        browser.Handle, TimeSpan.FromMilliseconds(1500));
+
+                    SelectorTrace.Write(
+                        $"prewarm result hwnd=0x{browser.Handle.ToInt64():X} ok={warmed}");
+
+                    // selector.log 会被下一次截图覆盖，这里把关键结果留在持久的 sparrow-*.log。
+                    Log.Info(
+                        $"预建 UIA 树：hwnd=0x{browser.Handle.ToInt64():X} " +
+                        $"class={browser.ClassName} ok={warmed} debugger={Debugger.IsAttached}");
+
+                    warmedAny |= warmed;
+                }
+
+                if (warmedAny)
                     prewarmedProbe = probe;
                 else
                     probe.Dispose();

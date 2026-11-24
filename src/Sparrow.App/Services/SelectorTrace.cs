@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 
 namespace Sparrow.App.Services;
@@ -9,17 +10,44 @@ namespace Sparrow.App.Services;
 public static class SelectorTrace
 {
     private static readonly object Gate = new();
-    private static readonly string FilePath = Path.Combine(
+
+    /// <summary>
+    /// 选区诊断只在调试时开启：附加调试器或显式设置 SPARROW_SELECTOR_DIAGNOSTICS=1。
+    /// 正常运行时完全不写盘，避免每次鼠标移动都产生文件 I/O。
+    /// </summary>
+    private static readonly bool Enabled = Debugger.IsAttached
+        || Environment.GetEnvironmentVariable("SPARROW_SELECTOR_DIAGNOSTICS") == "1";
+
+    private static readonly string DirectoryPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Sparrow",
-        "selector.log");
+        "Sparrow");
+    private static readonly string FilePath = Path.Combine(DirectoryPath, "selector.log");
+    private static readonly string PreviousPath = Path.Combine(DirectoryPath, "selector.prev.log");
 
     public static void Reset()
     {
+        if (!Enabled)
+            return;
+
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-            File.WriteAllText(FilePath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} reset{Environment.NewLine}");
+            System.IO.Directory.CreateDirectory(DirectoryPath);
+
+            // 上一次截图的日志先归档：否则下一次 Reset 会把现场覆盖掉，问题发生时已经无从查证。
+            if (File.Exists(FilePath))
+            {
+                try
+                {
+                    File.Copy(FilePath, PreviousPath, overwrite: true);
+                }
+                catch
+                {
+                    // 归档失败不影响本次日志
+                }
+            }
+
+            File.WriteAllText(FilePath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} reset " +
+                                        $"debugger={Debugger.IsAttached} build={BuildFlavor}{Environment.NewLine}");
         }
         catch
         {
@@ -29,6 +57,9 @@ public static class SelectorTrace
 
     public static void Write(string message)
     {
+        if (!Enabled)
+            return;
+
         try
         {
             lock (Gate)
@@ -39,4 +70,10 @@ public static class SelectorTrace
             // 诊断日志失败不影响截图
         }
     }
+
+#if DEBUG
+    private const string BuildFlavor = "DEBUG";
+#else
+    private const string BuildFlavor = "RELEASE";
+#endif
 }

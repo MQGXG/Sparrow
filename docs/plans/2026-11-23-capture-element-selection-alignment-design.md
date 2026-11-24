@@ -193,16 +193,32 @@ dotnet run --project tools/SelectorProbe -c Debug -- <Edge 进程 Id>
 
 截图入口 `App.CaptureAndRecognize`：
 
-1. 按光标取窗口（`WindowCandidates`），只对浏览器类窗口预建；
-2. `SetForegroundWindow` 提到前台，`await Task.Delay(300)`；
-3. 用 `MsaaElementProbe` 跑一次 IAccessible 激活（1200ms 预算）——Chromium 收到
-   IAccessible 请求才真正构建网页无障碍树；
+1. 收集预建目标：光标下**所有**浏览器类窗口（不只最上层），最多 2 个。
+   只看最上层会漏掉浏览器——从 VS 按 F5 后再触发时，最上层往往是 VS/任务栏，
+   而浏览器仍在光标下方可见；
+2. 光标下最上层的那个浏览器 `SetForegroundWindow` 提到前台，`await Task.Delay(300)`；
+   其余保持在原位置，避免抢焦点/闪烁；
+3. 对每个目标用 `MsaaElementProbe` 跑一次 IAccessible 激活（1200ms 预算）——
+   Chromium 收到 IAccessible 请求才真正构建网页无障碍树；
 4. `await Task.Delay(250)`；
 5. `UiElementProbe.PrewarmAsync(hwnd, 1500ms)` 建快照（`_flatTrees`）；
-6. 预建成功才把实例交给 `CaptureWindow.ElementProbe`，失败则丢弃并退回逐层实时探测。
+6. 任一个预建成功才把实例交给 `CaptureWindow.ElementProbe`，全部失败则丢弃并退回逐层实时探测。
+
+`PrewarmAsync` 的两个约束：
+
+- Descendants 批量请求使用 **2s 专用超时 + 重试一次**（调试器附加 / 页面首次建树较慢）；
+- 没建出扁平树时返回 **false**，不能假报成功，否则宿主会设置 `UsePrewarmedTree=true`，
+  连带跳过 IAccessible 激活、`refreshTree` 和细化兜底。
+
+`_flatTrees` 存 `FlatTree(elements, bounds)`，窗口矩形和元素一起保存：
+预建第二个浏览器时 `EvictOtherTrees` 会清掉第一个的 `_trees`，扁平树不能依赖它。
 
 `CaptureWindow` 的兜底：没有预建树时，浏览器窗口**首次探测前**先做一次 IAccessible
 激活并等待 120ms（`_accessibilityActivated` 去重），再用常规路径探测。
+
+诊断开关：`SelectorTrace` 默认关闭，只在附加调试器或
+`SPARROW_SELECTOR_DIAGNOSTICS=1` 时写 `selector.log`（每次截图归档上一份到
+`selector.prev.log`）。每窗口的预建结果另写一行到持久运行日志，便于现场排查。
 
 ### 坐标一致性
 

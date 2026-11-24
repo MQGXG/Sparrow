@@ -91,6 +91,12 @@ public sealed class UiElementProbe : IDisposable
     /// <summary>细化单次跨进程调用的上限；snow-shot 给到 500ms，大页面才走得完。</summary>
     private const int RefinementCallLimitMilliseconds = 500;
 
+    /// <summary>
+    /// 预建 UIA 树时 Descendants 批量请求的调用上限。这是遮罩显示前的一次性成本，
+    /// 调试器附加 / 页面首次建树时可能超过前景的 168ms 上限，需要单独放宽并重试。
+    /// </summary>
+    private const int PrewarmCallLimitMilliseconds = 2000;
+
     /// <summary>悬停探测的预算：和 snow-shot 一致，170ms 内必须给出结果。</summary>
     public static readonly TimeSpan ForegroundBudget = TimeSpan.FromMilliseconds(170);
 
@@ -111,7 +117,7 @@ public sealed class UiElementProbe : IDisposable
     private readonly BlockingCollection<Action> _queue = new();
     private readonly Thread _worker;
     private readonly Dictionary<IntPtr, Node> _trees = [];
-    private readonly Dictionary<IntPtr, List<FlatElement>> _flatTrees = [];
+    private readonly Dictionary<IntPtr, FlatTree> _flatTrees = [];
     private readonly HashSet<IntPtr> _accessibilityPinged = [];
 
     private IUIAutomation2? _automation;
@@ -245,10 +251,7 @@ public sealed class UiElementProbe : IDisposable
                     {
                         if (_automation is not null && state.Request is not null)
                         {
-                            var all = root.Element.FindAllBuildCache(
-                                TreeScope.TreeScope_Descendants,
-                                _automation.ControlViewCondition,
-                                state.Request);
+                            var all = FindDescendantsWithRetry(root.Element, state);
 
                             if (all is not null)
                             {
@@ -290,7 +293,7 @@ public sealed class UiElementProbe : IDisposable
 
                                 if (flat.Count > 0)
                                 {
-                                    _flatTrees[hwnd] = flat;
+                                    _flatTrees[hwnd] = new FlatTree(flat, root.Bounds);
                                     SelectorTrace.Write(
                                         $"prewarm flat={flat.Count} hwnd=0x{hwnd.ToInt64():X}");
 
@@ -323,10 +326,12 @@ public sealed class UiElementProbe : IDisposable
                     }
 
                     SelectorTrace.Write(
-                        $"prewarm hwnd=0x{hwnd.ToInt64():X} nodes={_nodeCount} " +
+                        $"prewarm no-flat hwnd=0x{hwnd.ToInt64():X} nodes={_nodeCount} " +
                         $"elapsed={state.Remaining.TotalMilliseconds:0}ms-left");
 
-                    completion.TrySetResult(true);
+                    // 没建出扁平树就无法在遮罩期命中行级元素。
+                    // 不能返回 true，否则宿主会以为预建成功、跳过实时细化。
+                    completion.TrySetResult(false);
                 }
                 catch
                 {
@@ -340,6 +345,51 @@ public sealed class UiElementProbe : IDisposable
         }
 
         return completion.Task;
+    }
+
+    /// <summary>
+    /// 预建的 Descendants 批量请求：给 2s 专用超时并重试一次。
+    /// 调试器附加或页面首次建树较慢时，第一次常会超过前景调用上限而超时；
+    /// 直接吞掉异常会得到「预建成功但没有扁平树」，遮罩期只能选到窗格。
+    /// </summary>
+    private IUIAutomationElementArray? FindDescendantsWithRetry(
+        IUIAutomationElement root, ProbeState state)
+    {
+        var automation = _automation;
+
+        if (automation is null || state.Request is null)
+            return null;
+
+        try
+        {
+            automation.ConnectionTimeout = PrewarmCallLimitMilliseconds;
+            automation.TransactionTimeout = PrewarmCallLimitMilliseconds;
+        }
+        catch
+        {
+            // 设置超时失败仍按当前值尝试
+        }
+
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            try
+            {
+                return root.FindAllBuildCache(
+                    TreeScope.TreeScope_Descendants,
+                    automation.ControlViewCondition,
+                    state.Request);
+            }
+            catch (Exception error)
+            {
+                SelectorTrace.Write(
+                    $"prewarm descendants failed attempt={attempt} hresult=0x{error.HResult:X}");
+
+                if (attempt == 0)
+                    Thread.Sleep(120);
+            }
+        }
+
+        return null;
     }
 
     /// <summary>一次探测的预算、计时和「粗框」发布节流。</summary>
@@ -436,15 +486,16 @@ public sealed class UiElementProbe : IDisposable
 
     private void ReleaseCachedTrees()
     {
-        if (_trees.Count == 0)
+        // 扁平树与 _trees 已解耦：_trees 为空时也可能还有扁平元素需要释放。
+        if (_trees.Count == 0 && _flatTrees.Count == 0)
             return;
 
         foreach (var root in _trees.Values)
             ReleaseTree(root);
 
-        foreach (var flat in _flatTrees.Values)
+        foreach (var flatTree in _flatTrees.Values)
         {
-            foreach (var element in flat)
+            foreach (var element in flatTree.Elements)
                 ReleaseCom(element.Element);
         }
 
@@ -580,13 +631,13 @@ public sealed class UiElementProbe : IDisposable
             return UiElementProbeResult.Empty;
 
         // 预建过扁平树：完全本地命中，不再依赖被遮罩影响的应用 UIA。
-        if (_flatTrees.TryGetValue(hwnd, out var flat)
-            && _trees.TryGetValue(hwnd, out var cachedRoot))
+        // 窗口矩形和扁平元素存在一起，避免多个浏览器预建时被 EvictOtherTrees 误伤。
+        if (_flatTrees.TryGetValue(hwnd, out var flatTree))
         {
-            var flatResult = FlatProbe(flat, cachedRoot.Bounds, point, windowTitle);
+            var flatResult = FlatProbe(flatTree.Elements, flatTree.Bounds, point, windowTitle);
             SelectorTrace.Write(
                 $"flat hit hwnd=0x{hwnd.ToInt64():X} point={point.X},{point.Y} " +
-                $"flat={flat.Count} root={cachedRoot.Bounds} -> {DescribePath(flatResult.Path)}");
+                $"flat={flatTree.Elements.Count} root={flatTree.Bounds} -> {DescribePath(flatResult.Path)}");
             return flatResult;
         }
 
@@ -1505,6 +1556,16 @@ public sealed class UiElementProbe : IDisposable
         public int ControlType { get; } = controlType;
         public IUIAutomationElement Element { get; } = element;
         public bool Structural => IsStructural(ControlType);
+    }
+
+    /// <summary>
+    /// 一个窗口的预建结果：扁平元素 + 窗口矩形。
+    /// 窗口矩形和元素存在一起，多浏览器预建时不会因为树缓存被回收而失效。
+    /// </summary>
+    private sealed class FlatTree(List<FlatElement> elements, PixelRect bounds)
+    {
+        public List<FlatElement> Elements { get; } = elements;
+        public PixelRect Bounds { get; } = bounds;
     }
 
     /// <summary>懒展开的一层控件节点。</summary>
