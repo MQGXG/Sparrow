@@ -30,154 +30,177 @@ public partial class CaptureWindow
         // 截图窗口没有文本输入，按物理键还原即可，不需要放行给输入法。
         var key = e.Key == Key.ImeProcessed ? MapPhysicalKey(e.PhysicalKey) : e.Key;
 
-        // 焦点停在输入框（尺寸 / 文字）时，按键交给输入框，
-        // 否则在尺寸框里输入数字会被当成切换工具
-        if (FocusManager?.GetFocusedElement() is TextBox)
+        if (!ShouldHandleGlobalKey(e, key))
         {
             base.OnKeyDown(e);
             return;
         }
 
-        // 焦点在按钮上时，Enter / Space 交给按钮自己触发，避免被全局快捷键抢走
-        if (FocusManager?.GetFocusedElement() is Button
-            && key is Key.Enter or Key.Space)
+        if (HandleNudgeKey(e, key)
+            || HandleColorKey(e, key)
+            || HandleHistoryKey(e, key)
+            || HandleViewKey(e, key)
+            || HandleToolKey(e, key)
+            || HandleActionKey(e, key))
         {
-            base.OnKeyDown(e);
-            return;
-        }
-
-        // 焦点在滑块上时，方向键交给滑块
-        if (FocusManager?.GetFocusedElement() is Slider
-            && key is Key.Left or Key.Right or Key.Up or Key.Down)
-        {
-            base.OnKeyDown(e);
-            return;
-        }
-
-        // 方向键微调选区：1px；Shift + 方向键 10px
-        if (_hasSelection
-            && e.KeyModifiers is KeyModifiers.None or KeyModifiers.Shift
-            && key is Key.Left or Key.Right or Key.Up or Key.Down)
-        {
-            var step = e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? 10 : 1;
-            var dx = key switch
-            {
-                Key.Left => -step,
-                Key.Right => step,
-                _ => 0
-            };
-            var dy = key switch
-            {
-                Key.Up => -step,
-                Key.Down => step,
-                _ => 0
-            };
-
-            NudgeSelection(dx, dy);
             e.Handled = true;
             return;
         }
 
-        // I：取色；取色中 Shift+I：切换格式（HEX / RGB / HSL）
-        if (key == Key.I && _colorSampling && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        base.OnKeyDown(e);
+    }
+
+    /// <summary>焦点在文本 / 按钮 / 滑块上时，把按键让给控件自己。</summary>
+    private bool ShouldHandleGlobalKey(KeyEventArgs e, Key key)
+    {
+        var focused = FocusManager?.GetFocusedElement();
+
+        if (focused is TextBox)
+            return false;
+
+        if (focused is Button && key is Key.Enter or Key.Space)
+            return false;
+
+        if (focused is Slider && key is Key.Left or Key.Right or Key.Up or Key.Down)
+            return false;
+
+        return true;
+    }
+
+    /// <summary>方向键微调选区：1px；Shift + 方向键 10px。</summary>
+    private bool HandleNudgeKey(KeyEventArgs e, Key key)
+    {
+        if (!_hasSelection
+            || e.KeyModifiers is not (KeyModifiers.None or KeyModifiers.Shift)
+            || key is not (Key.Left or Key.Right or Key.Up or Key.Down))
+            return false;
+
+        var step = e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? 10 : 1;
+        var dx = key switch
+        {
+            Key.Left => -step,
+            Key.Right => step,
+            _ => 0
+        };
+        var dy = key switch
+        {
+            Key.Up => -step,
+            Key.Down => step,
+            _ => 0
+        };
+
+        NudgeSelection(dx, dy);
+        return true;
+    }
+
+    /// <summary>I：取色；取色中 Shift+I：切换格式（HEX / RGB / HSL）。</summary>
+    private bool HandleColorKey(KeyEventArgs e, Key key)
+    {
+        if (key != Key.I)
+            return false;
+
+        if (_colorSampling && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {
             _colorFormat = (_colorFormat + 1) % 3;
             UpdateColorProbe(_lastPointerPoint);
-            e.Handled = true;
-            return;
+            return true;
         }
 
-        if (key == Key.I && e.KeyModifiers == KeyModifiers.None)
+        if (e.KeyModifiers == KeyModifiers.None)
         {
             ToggleColorSampling();
-            e.Handled = true;
-            return;
+            return true;
         }
 
-        // Ctrl+Shift+Z / Ctrl+Y：重做；Ctrl+Z：撤销
-        if (key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        return false;
+    }
+
+    /// <summary>撤销 / 重做 / 删除选中标注。</summary>
+    private bool HandleHistoryKey(KeyEventArgs e, Key key)
+    {
+        if (key == Key.Z
+            && e.KeyModifiers.HasFlag(KeyModifiers.Control)
+            && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {
             RedoAnnotation();
-            e.Handled = true;
-            return;
+            return true;
         }
 
         if (key == Key.Y && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
             RedoAnnotation();
-            e.Handled = true;
-            return;
+            return true;
         }
 
-        // Delete / Backspace：删掉当前选中的那条标注
         if (key is Key.Delete or Key.Back && _selectedNote >= 0)
         {
             DeleteSelectedNote();
-            e.Handled = true;
-            return;
+            return true;
         }
 
         if (key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
             UndoAnnotation();
-            e.Handled = true;
-            return;
+            return true;
         }
 
-        // 数字键 1 回到指针；2..9 切标注工具（和按钮提示一致）
-        if (e.KeyModifiers == KeyModifiers.None && _hasSelection && (key is Key.D1 or Key.NumPad1))
-        {
-            _tool = AnnotationTool.None;
-            UpdateToolButtons();
-            e.Handled = true;
-            return;
-        }
+        return false;
+    }
 
-        if (e.KeyModifiers == KeyModifiers.None && TryMapToolKey(key, out var tool)
-            && _hasSelection)
-        {
-            SetTool(tool);
-            e.Handled = true;
-            return;
-        }
-
-        // Tab：整窗 ↔ 子元素；Ctrl+Tab：在光标下重叠的窗口之间循环
+    /// <summary>Tab 切换识别层级、B 切换识别框、Esc 取消。</summary>
+    private bool HandleViewKey(KeyEventArgs e, Key key)
+    {
         if (key == Key.Tab && HandleTabKey(e.KeyModifiers.HasFlag(KeyModifiers.Control)))
-        {
-            e.Handled = true;
-            return;
-        }
+            return true;
 
-        // B：切换识别框显示方式（全部 / 悬停 / 关闭）
         if (key == Key.B && OcrLayer.IsVisible)
         {
             CycleOcrBoxMode();
-            e.Handled = true;
-            return;
+            return true;
+        }
+
+        return key == Key.Escape && HandleEscape();
+    }
+
+    /// <summary>标注工具热键：数字、字母映射、Shift+B 括号、Shift+G 角度。</summary>
+    private bool HandleToolKey(KeyEventArgs e, Key key)
+    {
+        if (!_hasSelection)
+            return false;
+
+        if (e.KeyModifiers == KeyModifiers.None && key is Key.D1 or Key.NumPad1)
+        {
+            _tool = AnnotationTool.None;
+            UpdateToolButtons();
+            return true;
+        }
+
+        if (e.KeyModifiers == KeyModifiers.None && TryMapToolKey(key, out var tool))
+        {
+            SetTool(tool);
+            return true;
         }
 
         // Shift+B：括号；`[` 在部分键盘布局下取不到，留一个别名
-        if (key == Key.B && e.KeyModifiers == KeyModifiers.Shift && _hasSelection)
+        if (key == Key.B && e.KeyModifiers == KeyModifiers.Shift)
         {
             SetTool(AnnotationTool.Bracket);
-            e.Handled = true;
-            return;
+            return true;
         }
 
         // Shift+G：角度；G 单独留给滚动截图
-        if (key == Key.G && e.KeyModifiers == KeyModifiers.Shift && _hasSelection)
+        if (key == Key.G && e.KeyModifiers == KeyModifiers.Shift)
         {
             SetTool(AnnotationTool.Angle);
-            e.Handled = true;
-            return;
+            return true;
         }
 
-        if (key == Key.Escape && HandleEscape())
-        {
-            e.Handled = true;
-            return;
-        }
+        return false;
+    }
 
+    /// <summary>动作栏快捷键：复制文本、识别、保存/贴图等。</summary>
+    private bool HandleActionKey(KeyEventArgs e, Key key)
+    {
         // 有识别结果时，Ctrl+C 复制全文；单击 C 仍然是复制图片
         if (ActionBar.IsVisible
             && OcrLayer.IsVisible
@@ -185,8 +208,7 @@ public partial class CaptureWindow
             && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
             CopyAllText();
-            e.Handled = true;
-            return;
+            return true;
         }
 
         // 注入了 OCR runner 时，Enter/R 在窗口内就地识别
@@ -197,8 +219,7 @@ public partial class CaptureWindow
             else
                 _ = RunOcrAsync();
 
-            e.Handled = true;
-            return;
+            return true;
         }
 
         // 动作栏出现后，整条流程都可以只用键盘完成
@@ -215,13 +236,11 @@ public partial class CaptureWindow
                 _ = ActAsync(action);
             }
 
-            e.Handled = true;
-            return;
+            return true;
         }
 
-        base.OnKeyDown(e);
+        return false;
     }
-
     private static Key MapPhysicalKey(PhysicalKey physicalKey) => physicalKey switch
     {
         PhysicalKey.Enter => Key.Enter,
@@ -434,9 +453,9 @@ public partial class CaptureWindow
         var s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
 
         double h;
-        if (max == r)
+        if (r >= g && r >= b)
             h = (g - b) / d + (g < b ? 6 : 0);
-        else if (max == g)
+        else if (g >= b)
             h = (b - r) / d + 2;
         else
             h = (r - g) / d + 4;
