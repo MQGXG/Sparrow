@@ -584,6 +584,9 @@
                      FontSize="10"
                      Foreground="{StaticResource TextMutedBrush}"
                      Text="0, 0" />
+          <TextBlock FontSize="9"
+                     Foreground="{StaticResource TextMutedBrush}"
+                     Text="点击复制 · Shift+I 切格式" />
         </StackPanel>
       </StackPanel>
     </Border>

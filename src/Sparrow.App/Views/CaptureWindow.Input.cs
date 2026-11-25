@@ -276,6 +276,19 @@ public partial class CaptureWindow
         _colorSampling = true;
         _colorFormat = 0;
         Cursor = CrossCursor;
+
+        // 用当前真实光标位置初始化：刚打开窗口还没收到 PointerMoved 时，
+        // _lastPointerPoint 仍是 (0,0)，取色器会停在左上角被提示条挡住。
+        var screenCursor = WindowCandidates.GetCursorPosition();
+        var scale = _scaling > 0 ? _scaling : 1;
+        var cursor = new Point(
+            (screenCursor.X - Position.X) / scale,
+            (screenCursor.Y - Position.Y) / scale);
+
+        if (cursor.X < 0 || cursor.Y < 0 || cursor.X > Width || cursor.Y > Height)
+            cursor = new Point(Width / 2, Height / 2);
+
+        _lastPointerPoint = cursor;
         UpdateColorProbe(_lastPointerPoint);
     }
 
@@ -298,7 +311,12 @@ public partial class CaptureWindow
 
         if (SampleColorAt(point) is not { } color)
         {
-            ColorProbe.IsVisible = false;
+            // 冻结帧还没准备好：先给反馈，避免按 I 后像没反应
+            ProbeSwatch.Background = Brushes.Transparent;
+            ProbeValue.Text = "准备中…";
+            ProbePosition.Text = $"{point.X:0}, {point.Y:0}";
+            ColorProbe.IsVisible = true;
+            PositionColorProbe(point);
             return;
         }
 
@@ -309,7 +327,12 @@ public partial class CaptureWindow
 
         // 取色时也显示像素放大镜，和 snow-shot 一样边看网格边取色
         UpdateMagnifier(point);
+        PositionColorProbe(point);
+    }
 
+    /// <summary>把取色卡片摆到放大镜下方；没有放大镜时贴在光标右下。</summary>
+    private void PositionColorProbe(Point point)
+    {
         ColorProbe.Measure(Size.Infinity);
         var size = ColorProbe.DesiredSize;
         var (left, top) = Magnifier.IsVisible
