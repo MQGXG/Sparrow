@@ -124,7 +124,8 @@ public sealed partial class CaptureWindowTests
 
         window.OcrLayer.IsVisible.ShouldBeTrue();
         window.OcrLayer.Children.Count.ShouldBe(2);
-        window.CopyAllButton.IsVisible.ShouldBeTrue();
+        window.OcrTextBar.IsVisible.ShouldBeTrue();
+        window.CopyImageButton.IsVisible.ShouldBeTrue();
         window.OcrStatus.Text.ShouldNotBeNull().ShouldContain("2 行");
 
         window.Close();

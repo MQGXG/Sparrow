@@ -31,6 +31,20 @@ public partial class CaptureWindow
     /// 选中行按阅读顺序合并（先按 Y 聚行，行内按 X 排）。
     /// </summary>
     internal void CopyOcrText()    {
+        // 译文视图下复制当前看到的译文（和 snow-shot「复制可见内容」一致）
+        if (_translatedPng is not null && !_showOriginalView && !_compareView)
+        {
+            var translation = ExtractTranslatedText(_ocrText);
+
+            if (!string.IsNullOrWhiteSpace(translation))
+            {
+                var translated = FormatOcrText(translation);
+                CopyText?.Invoke(translated);
+                OcrStatus.Text = $"已复制译文 · {translated.Length} 字";
+                return;
+            }
+        }
+
         if (_selectedOcrBoxes.Count > 0)
         {
             var text = MergeOcrText(_selectedOcrBoxes.Select(box => (
@@ -503,14 +517,27 @@ public partial class CaptureWindow
 
         var count = _selectedOcrBoxes.Count;
         ToolTip.SetTip(
-            CopyAllButton,
-            count > 0 ? $"复制选中的 {count} 行（Ctrl+C）" : "复制全部识别文字（Ctrl+C）");
+            CopyImageButton,
+            count > 0 ? $"复制选中的 {count} 行（Ctrl+C）" : "复制识别文字（Ctrl+C）");
     }
 
     private static string Shorten(string text) =>
         text.Length <= 18 ? text : text[..18] + "…";
 
-    private async void OnCopyImageClick(object? sender, RoutedEventArgs e) => await ActAsync(CaptureAction.CopyImage);
+    /// <summary>
+    /// 主条唯一的复制入口：识别后复制当前可见文本（选区 / 译文 / 全文），
+    /// 否则完成并复制图片——不需要用户判断该点哪个复制。
+    /// </summary>
+    private async void OnCopyImageClick(object? sender, RoutedEventArgs e)
+    {
+        if (_ocrActionsAvailable)
+        {
+            CopyOcrText();
+            return;
+        }
+
+        await ActAsync(CaptureAction.CopyImage);
+    }
 
     private async void OnSaveClick(object? sender, RoutedEventArgs e) => await ActAsync(CaptureAction.Save);
 

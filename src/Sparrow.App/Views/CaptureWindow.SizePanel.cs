@@ -498,8 +498,8 @@ public partial class CaptureWindow
         MoreButton.IsVisible = compact;
 
         // 二级压缩：收起 OCR 辅助动作和状态文字；翻译是主功能，保留
+        OcrTextBar.IsVisible = _ocrActionsAvailable && _toolbarDensity < 2;
         TranslateButton.IsVisible = _translateAvailable;
-        CopyAllButton.IsVisible = _ocrActionsAvailable && _toolbarDensity < 2;
         OcrBoxButton.IsVisible = _ocrActionsAvailable && _toolbarDensity < 2;
 
         if (_toolbarDensity >= 2)

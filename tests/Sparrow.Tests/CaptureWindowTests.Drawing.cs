@@ -71,23 +71,16 @@ public sealed partial class CaptureWindowTests
         window.ConfigureTranslateTargets([("中文", "中文"), ("English", "英语")]);
 
         window.TranslateButton.IsVisible.ShouldBeTrue();
+        window.TranslateTargetButton.IsVisible.ShouldBeTrue();
+        window.TranslateTargetButton.Content.ShouldBe("中文");
 
-        var menu = window.TranslateButton.Flyout.ShouldBeOfType<MenuFlyout>();
-
-        // 语言项仍在第一层；引擎 / 复制格式 / 标点收进二级菜单
+        var menu = window.TranslateTargetButton.Flyout.ShouldBeOfType<MenuFlyout>();
         menu.Items.OfType<MenuItem>().Count(item => item.Header is "中文" or "英语").ShouldBe(2);
 
-        var headers = menu.Items.OfType<MenuItem>()
-            .Select(item => item.Header as string)
-            .ToArray();
-
-        headers.ShouldContain(header => header!.StartsWith("翻译引擎"));
-        headers.ShouldContain(header => header!.StartsWith("复制格式"));
-        headers.ShouldContain(header => header!.StartsWith("标点"));
-
-        // 没有语言声明时整个按钮隐藏，避免点了没反应
+        // 没有语言声明时整个翻译入口隐藏，避免点了没反应
         window.ConfigureTranslateTargets([]);
         window.TranslateButton.IsVisible.ShouldBeFalse();
+        window.TranslateTargetButton.IsVisible.ShouldBeFalse();
     }
 
     [AvaloniaFact]

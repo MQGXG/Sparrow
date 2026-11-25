@@ -869,15 +869,6 @@
                   ToolTip.Tip="识别选区文字（Enter / R）">
             <Path Data="{StaticResource IconScan}" />
           </Button>
-          <Button x:Name="TranslateButton"
-                  Classes="tool"
-                  IsVisible="False"
-                  ToolTip.Tip="识别并翻译（点击选目标语言）">
-            <Path Data="{StaticResource IconTranslate}" StrokeThickness="1.143" />
-            <Button.Flyout>
-              <MenuFlyout Placement="TopEdgeAlignedRight" />
-            </Button.Flyout>
-          </Button>
           <Button x:Name="SaveButton"
                   Classes="tool" Click="OnSaveClick" ToolTip.Tip="保存为 PNG（S）">
             <Path Data="{StaticResource IconSave}" StrokeThickness="1.161" />
@@ -893,20 +884,6 @@
           <Button x:Name="CornerRadiusButton" Classes="tool"
                   Click="OnCornerRadiusClick" ToolTip.Tip="导出时四角切圆角">
             <Path Data="{StaticResource IconCornerRadius}" StrokeThickness="1.125" />
-          </Button>
-          <Button x:Name="CopyAllButton"
-                  Classes="tool"
-                  IsVisible="False"
-                  Click="OnCopyAllClick"
-                  ToolTip.Tip="复制全部识别文字（Ctrl+C）">
-            <Path Data="{StaticResource IconCopy}" StrokeThickness="1.125" />
-          </Button>
-          <Button x:Name="OcrBoxButton"
-                  Classes="tool"
-                  IsVisible="False"
-                  Click="OnOcrBoxModeClick"
-                  ToolTip.Tip="识别框：全部 / 悬停 / 关闭（B）">
-            <Path Data="{StaticResource IconOcrFrame}" />
           </Button>
           <Button x:Name="MoreButton"
                   Classes="tool"
@@ -937,6 +914,60 @@
                   Click="OnCopyImageClick"
                   ToolTip.Tip="完成并复制图片（C）">
             <Path Data="{StaticResource IconCheck}" StrokeThickness="1.053" />
+          </Button>
+        </StackPanel>
+      </Border>
+
+      <!-- OCR / 翻译结果条：识别后出现；格式/标点/语言/引擎都收在这一排（参考 snow-shot） -->
+      <Border x:Name="OcrTextBar" Classes="capture-bar" HorizontalAlignment="Center" IsVisible="False">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Focusable="False" x:Name="OcrBoxButton" Classes="prop"
+                  Click="OnOcrBoxModeClick" ToolTip.Tip="识别框：全部 / 悬停 / 关闭（B）">
+            <Path Data="{StaticResource IconOcrFrame}"
+                  Width="14" Height="14" Stretch="Uniform"
+                  Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="1.2" />
+          </Button>
+          <Button Focusable="False" x:Name="TranslateButton" Classes="prop"
+                  IsVisible="False"
+                  Click="OnTranslateToggle" ToolTip.Tip="翻译 / 显示原文">
+            <Path Data="{StaticResource IconTranslate}"
+                  Width="14" Height="14" Stretch="Uniform"
+                  Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="1.2" />
+          </Button>
+          <Border Classes="prop-sep" />
+
+          <Button Focusable="False" x:Name="FormatButton" Classes="prop" Content="格式"
+                  ToolTip.Tip="复制格式">
+            <Button.Flyout>
+              <MenuFlyout Placement="TopEdgeAlignedLeft" />
+            </Button.Flyout>
+          </Button>
+          <Button Focusable="False" x:Name="PunctuationButton" Classes="prop" Content="标点"
+                  ToolTip.Tip="标点处理">
+            <Button.Flyout>
+              <MenuFlyout Placement="TopEdgeAlignedLeft" />
+            </Button.Flyout>
+          </Button>
+          <Button Focusable="False" x:Name="TranslateTargetButton" Classes="prop" Content="目标语言"
+                  ToolTip.Tip="翻译目标语言">
+            <Button.Flyout>
+              <MenuFlyout Placement="TopEdgeAlignedLeft" />
+            </Button.Flyout>
+          </Button>
+          <Button Focusable="False" x:Name="EngineButton" Classes="prop" Content="引擎"
+                  IsVisible="False" ToolTip.Tip="翻译引擎">
+            <Button.Flyout>
+              <MenuFlyout Placement="TopEdgeAlignedLeft" />
+            </Button.Flyout>
+          </Button>
+
+          <Border Classes="prop-sep" />
+
+          <Button Focusable="False" x:Name="OcrRefreshButton" Classes="prop"
+                  Click="OnRecognizeClick" ToolTip.Tip="重新识别（R）">
+            <Path Data="{StaticResource IconScan}"
+                  Width="14" Height="14" Stretch="Uniform"
+                  Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="1.2" />
           </Button>
         </StackPanel>
       </Border>

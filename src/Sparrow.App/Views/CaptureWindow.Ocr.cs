@@ -26,7 +26,25 @@ public partial class CaptureWindow
 {
     private async void OnRecognizeClick(object? sender, RoutedEventArgs e) => await ActAsync(CaptureAction.Recognize);
 
-    private void OnCopyAllClick(object? sender, RoutedEventArgs e) => CopyAllText();
+    /// <summary>
+    /// OCR 结果条的翻译开关：已有译文时在原图/译文之间切换，
+    /// 否则按当前目标语言走一次识别 + 翻译（参考 snow-shot 的单按钮语义）。
+    /// </summary>
+    private async void OnTranslateToggle(object? sender, RoutedEventArgs e)
+    {
+        if (_translatedPng is not null)
+        {
+            OnShowOriginalClick(sender, e);
+            return;
+        }
+
+        if (!_translateAvailable || string.IsNullOrEmpty(_translateTargetSelection))
+            return;
+
+        await RunTranslateAsync(_translateTargetSelection);
+    }
+
+    /// <summary>识别结果条已取代主条上的复制按钮，快捷键仍走 CopyAllText。</summary>
 
     /// <summary>
     /// 动作触发时才截图：选区在松手后还可以移动/拉伸，
@@ -287,6 +305,7 @@ public partial class CaptureWindow
         }
 
         ToolTip.SetTip(RecognizeButton, "重新识别选区文字（Enter / R）");
+        ToolTip.SetTip(CopyImageButton, "复制识别文字（Ctrl+C）");
         _ocrActionsAvailable = true;
         OcrStatus.IsVisible = true;
         InvalidateToolbarMetrics();
@@ -543,6 +562,7 @@ public partial class CaptureWindow
 
     private void ShowOcrError(string message)
     {
+        OcrTextBar.IsVisible = true;
         OcrStatus.IsVisible = true;
         OcrStatus.Text = message;
     }
@@ -568,11 +588,12 @@ public partial class CaptureWindow
         _hoveredOcrBox = null;
         OcrLayer.IsVisible = false;
         _ocrActionsAvailable = false;
-        CopyAllButton.IsVisible = false;
         OcrBoxButton.IsVisible = false;
+        OcrTextBar.IsVisible = false;
         OcrStatus.IsVisible = false;
         InvalidateToolbarMetrics();
         ToolTip.SetTip(RecognizeButton, "识别选区文字（Enter / R）");
+        ToolTip.SetTip(CopyImageButton, "完成并复制图片（C）");
         _ocrText = null;
         UpdateHandles();
     }

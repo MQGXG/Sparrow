@@ -42,7 +42,6 @@ public partial class CaptureWindow
         ActionBar.IsVisible = false;
         HandleLayer.IsVisible = false;
         OcrStatus.IsVisible = false;
-        CopyAllButton.IsVisible = false;
         OcrBoxButton.IsVisible = false;
         _ocrActionsAvailable = false;
         HintBar.IsVisible = false;
