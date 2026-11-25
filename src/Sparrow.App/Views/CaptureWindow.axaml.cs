@@ -472,6 +472,10 @@ public partial class CaptureWindow : Window
         BuildRecentColors();
         BuildPresetColors();
         BuildOcrTextMenus();
+
+        // 取色卡片与放大镜要压在工具条之上，避免被主条/属性栏盖住
+        ColorProbe.SetValue(Panel.ZIndexProperty, 101);
+        Magnifier.SetValue(Panel.ZIndexProperty, 100);
     }
 
     /// <summary>显示前是否先冻结整屏；测试/无桌面场景由调用方关掉。</summary>

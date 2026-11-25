@@ -454,10 +454,16 @@ public partial class CaptureWindow
         UpdateCursor(_lastPointerPoint);
     }
 
-    /// <summary>有选区、光标在选区内时自动显示取色器；不需要先按 I 进入。</summary>
+    /// <summary>有选区（或当前识别到的控件区域）时自动显示取色器，不需要先按 I。</summary>
     private void UpdateAutoColorProbe(Point point)
     {
-        if (!_colorSampling || !_hasSelection || !_selection.Contains(point))
+        var inArea = _hasSelection && _selection.Contains(point);
+
+        // 自动识别控件 / 窗口：还没有选区时，按当前候选高亮区域取色
+        if (!inArea && !_hasSelection && _currentCandidate is { } candidate)
+            inArea = ToDip(candidate.Bounds).Contains(point);
+
+        if (!_colorSampling || !inArea)
         {
             ColorProbe.IsVisible = false;
             return;
@@ -472,6 +478,7 @@ public partial class CaptureWindow
         if (SampleColorAt(point) is not { } color)
         {
             // 冻结帧还没准备好：先给反馈，避免看起来没反应
+            ProbeSwatch.Background = Brushes.Transparent;
             ProbeValue.Text = "准备中…";
             ProbePosition.Text = $"{point.X:0}, {point.Y:0}";
             ColorProbe.IsVisible = true;
@@ -479,6 +486,7 @@ public partial class CaptureWindow
             return;
         }
 
+        ProbeSwatch.Background = new SolidColorBrush(color);
         ProbeValue.Text = FormatColor(color, _colorFormat);
         ProbePosition.Text = $"{point.X:0}, {point.Y:0}";
         ColorProbe.IsVisible = true;

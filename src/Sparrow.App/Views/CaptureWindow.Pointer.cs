@@ -264,9 +264,6 @@ public partial class CaptureWindow
                 ScheduleCloseToolGroupPopover();
         }
 
-        // 取色器跟随：有选区且光标在选区内时实时预览颜色
-        UpdateAutoColorProbe(point);
-
         // 橡皮擦拖动：连续擦掉指针下的标注
         if (_erasing)
         {
@@ -318,6 +315,7 @@ public partial class CaptureWindow
             HideCandidate();
         }
 
+        UpdateAutoColorProbe(point);
         UpdateCrosshair(point);
 
         switch (_mode)

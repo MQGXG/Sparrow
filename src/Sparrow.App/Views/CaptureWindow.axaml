@@ -595,6 +595,11 @@
                     CornerRadius="2" />
           </Panel>
         </Border>
+        <!-- 当前颜色条：除了色值文本，再给一个直观的色块 -->
+        <Border x:Name="ProbeSwatch"
+                Height="6"
+                CornerRadius="3"
+                Background="#FF000000" />
         <TextBlock x:Name="ProbePosition"
                    FontSize="10"
                    HorizontalAlignment="Center"
