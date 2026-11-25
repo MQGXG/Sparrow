@@ -62,7 +62,9 @@ internal static class RecordingProbe
                 ? TimeSpan.FromSeconds(maxSeconds)
                 : null,
             // probe 可选录音频：SPARROW_RECORD_AUDIO=1
-            SystemAudio = Environment.GetEnvironmentVariable("SPARROW_RECORD_AUDIO") == "1"
+            SystemAudio = Environment.GetEnvironmentVariable("SPARROW_RECORD_AUDIO") == "1",
+            // probe 可选摄像头：SPARROW_RECORD_CAMERA=1
+            Camera = Environment.GetEnvironmentVariable("SPARROW_RECORD_CAMERA") == "1"
         };
 
         return RecordingSession.TryStart(options, out error);

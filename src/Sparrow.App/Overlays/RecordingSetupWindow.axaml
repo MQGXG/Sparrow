@@ -238,7 +238,7 @@
                   Content="摄像头"
                   IsEnabled="False"
                   Opacity="0.45"
-                  ToolTip.Tip="画中画需要摄像头设备；检测到设备后会启用" />
+                  ToolTip.Tip="画中画会合成进录制视频；录制中可拖动预览、拖右下角自由缩放" />
       </StackPanel>
 
       <StackPanel Orientation="Horizontal"

@@ -40,6 +40,9 @@ public sealed record AppSettings
     /// <summary>录屏编码器：auto / h264_qsv / h264_nvenc / h264_amf / h264_mf / libx264。</summary>
     public string RecordEncoder { get; init; } = "auto";
 
+    /// <summary>录屏时是否默认开启摄像头画中画。</summary>
+    public bool RecordCamera { get; init; }
+
     /// <summary>剪贴板快取面板是否置顶（标题行的图钉）。</summary>
     public bool ClipboardPanelTopmost { get; init; }
 

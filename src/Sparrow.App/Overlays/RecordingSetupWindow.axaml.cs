@@ -41,7 +41,8 @@ public sealed record RecordingSetup(
     uint CursorColor = 0xFFFFD640,
     byte CursorOpacity = 210,
     bool CursorShadow = false,
-    string Encoder = "auto")
+    string Encoder = "auto",
+    bool Camera = false)
 {
     public static RecordingSetup Default { get; } =
         new(RecordingMode.Fullscreen, 23, 30, true);
@@ -63,7 +64,7 @@ public partial class RecordingSetupWindow : Window
     {
     }
 
-    public RecordingSetupWindow(string? savedEncoder)
+    public RecordingSetupWindow(string? savedEncoder, bool cameraEnabled = false)
     {
         InitializeComponent();
 
@@ -71,6 +72,8 @@ public partial class RecordingSetupWindow : Window
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Sparrow",
             "recordings");
+
+        CameraCheck.IsChecked = cameraEnabled;
 
         _ = DetectCameraAsync();
         _ = LoadEncodersAsync(savedEncoder);
@@ -294,6 +297,7 @@ public partial class RecordingSetupWindow : Window
         var microphone = supportsAudio && Microphone.IsChecked == true;
 
         var encoder = (EncoderBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "auto";
+        var camera = CameraCheck.IsEnabled && CameraCheck.IsChecked == true;
 
         Finished?.Invoke(new RecordingSetup(
             mode,
@@ -316,7 +320,8 @@ public partial class RecordingSetupWindow : Window
             cursorColor,
             cursorOpacity,
             cursorShadow,
-            encoder));
+            encoder,
+            camera));
 
         Close();
     }

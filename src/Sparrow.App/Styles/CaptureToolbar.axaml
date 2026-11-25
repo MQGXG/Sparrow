@@ -1,0 +1,376 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+      tooltip 延迟拉长：默认 400ms 太短，点按钮 / 展开弹层时 tooltip 会弹出来挡住点击。
+      展开工具组时还会额外把触发按钮的 tooltip 临时摘掉（见 ShowToolGroupPopover）。
+    -->
+    <Style Selector="Button">
+      <Setter Property="ToolTip.ShowDelay" Value="1400" />
+    </Style>
+    <Style Selector="ToggleButton">
+      <Setter Property="ToolTip.ShowDelay" Value="1400" />
+    </Style>
+
+    <!-- 标注工具按钮：选中时琥珀描边 + 淡琥珀底 -->
+    <Style Selector="Button.tool">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.tool.selected">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <!-- 选中态实心：Fluent 的 pointerover 会把背景刷回浅灰，这里压住 -->
+    <Style Selector="Button.tool.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentHoverBrush}" />
+    </Style>
+
+    <!-- 键盘焦点：白色描边，和琥珀选中态区分 -->
+    <Style Selector="Button.tool:focus-visible">
+      <Setter Property="BorderBrush" Value="#FFFFFFFF" />
+      <Setter Property="BorderThickness" Value="1.5" />
+    </Style>
+    <Style Selector="Button.swatch:focus-visible">
+      <Setter Property="BorderBrush" Value="#FFFFFFFF" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="Button.prop:focus-visible">
+      <Setter Property="BorderBrush" Value="#FFFFFFFF" />
+    </Style>
+
+    <!-- 颜色色块：小圆点，选中加琥珀描边 -->
+    <Style Selector="Button.swatch">
+      <Setter Property="Width" Value="18" />
+      <Setter Property="Height" Value="18" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="#66000000" />
+    </Style>
+    <Style Selector="Button.swatch.selected">
+      <Setter Property="BorderBrush" Value="#FFFFFFFF" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+
+    <!-- 工具栏按钮：32×32 图标按钮，参考 snow-shot 的 kButtonSize -->
+    <Style Selector="Button.tool">
+      <Setter Property="Width" Value="32" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+
+    <!-- 不可用的动作（比如没有可重做的）不抢注意力：只淡出，不再画底色 -->
+    <Style Selector="Button.tool:disabled">
+      <Setter Property="Opacity" Value="0.3" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+
+    <!-- 选区工具条的输入框：无边框，悬停/获焦时才亮底，看起来像可编辑的读数 -->
+    <Style Selector="TextBox.sel-input">
+      <Setter Property="Width" Value="42" />
+      <Setter Property="Height" Value="20" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="2,0" />
+      <Setter Property="FontFamily" Value="{DynamicResource MonoFont}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="TextAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="Foreground" Value="#F2F6FC" />
+      <Setter Property="CaretBrush" Value="#F2F6FC" />
+    </Style>
+    <Style Selector="TextBox.sel-input:pointerover /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="#33FFFFFF" />
+    </Style>
+    <Style Selector="TextBox.sel-input:focus /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="#33FFFFFF" />
+    </Style>
+
+    <!-- 单位切换：px ↔ DIP -->
+    <Style Selector="Button.sel-unit">
+      <Setter Property="Height" Value="20" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Padding" Value="3,0" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="#B8C2CE" />
+    </Style>
+    <Style Selector="Button.sel-unit:pointerover">
+      <Setter Property="Background" Value="#33FFFFFF" />
+      <Setter Property="Foreground" Value="#F2F6FC" />
+    </Style>
+
+    <!-- 锁定宽高比 -->
+    <Style Selector="ToggleButton.sel-lock">
+      <Setter Property="Width" Value="22" />
+      <Setter Property="Height" Value="20" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <!-- Fluent 的 ToggleButton 勾选时会把内容层刷成实心强调色，这里改回半透明白 -->
+    <Style Selector="ToggleButton.sel-lock /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="ToggleButton.sel-lock:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#33FFFFFF" />
+    </Style>
+    <Style Selector="ToggleButton.sel-lock:checked /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#33FFFFFF" />
+      <Setter Property="BorderBrush" Value="#66FFFFFF" />
+    </Style>
+    <Style Selector="ToggleButton.sel-lock:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#40FFFFFF" />
+      <Setter Property="BorderBrush" Value="#66FFFFFF" />
+    </Style>
+    <Style Selector="ToggleButton.sel-lock Path">
+      <Setter Property="Stroke" Value="#B8C2CE" />
+      <Setter Property="StrokeThickness" Value="1.5" />
+      <Setter Property="StrokeLineCap" Value="Round" />
+      <Setter Property="StrokeJoin" Value="Round" />
+      <Setter Property="Stretch" Value="Uniform" />
+      <Setter Property="Width" Value="12" />
+      <Setter Property="Height" Value="12" />
+    </Style>
+    <Style Selector="ToggleButton.sel-lock:checked Path">
+      <Setter Property="Stroke" Value="#FFFFFF" />
+    </Style>
+
+    <!-- 选区工具条的其余零件 -->
+    <Style Selector="TextBlock.sel-comma">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Margin" Value="1,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="#B8C2CE" />
+    </Style>
+    <Style Selector="TextBlock.sel-label">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="Margin" Value="4,0,2,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="#B8C2CE" />
+    </Style>
+    <Style Selector="Button.sel-ratio">
+      <Setter Property="Height" Value="20" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Padding" Value="5,0" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="#F2F6FC" />
+    </Style>
+    <Style Selector="Button.sel-ratio:pointerover">
+      <Setter Property="Background" Value="#33FFFFFF" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+    </Style>
+    <Style Selector="Border.sel-sep">
+      <Setter Property="Width" Value="1" />
+      <Setter Property="Height" Value="12" />
+      <Setter Property="Margin" Value="6,0" />
+      <Setter Property="Background" Value="#40FFFFFF" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.tool.small">
+      <Setter Property="Width" Value="26" />
+      <Setter Property="Height" Value="26" />
+    </Style>
+    <!--
+      图标 20：参考实现是 24/32（75%），Sparrow 原来 18/32（56%），视觉上偏空。
+      线宽基准 1.2 = 1.5 × 16/20：几何自然宽度 16 栅格缩到 20px 时正好 1.5px。
+      其余图标在各自 Path 上写了 StrokeThickness = 1.5 × 自然宽度 / 20，
+      渲染出来的线宽仍然统一是 1.5px。改了几何要重新量自然宽度并同步这个值。
+    -->
+    <Style Selector="Button.tool Path">
+      <Setter Property="Stroke" Value="{DynamicResource TextSecondaryBrush}" />
+      <Setter Property="StrokeThickness" Value="1.2" />
+      <Setter Property="StrokeLineCap" Value="Round" />
+      <Setter Property="StrokeJoin" Value="Round" />
+      <Setter Property="Stretch" Value="Uniform" />
+      <Setter Property="Width" Value="20" />
+      <Setter Property="Height" Value="20" />
+    </Style>
+    <Style Selector="Button.tool.selected Path">
+      <Setter Property="Stroke" Value="{DynamicResource AccentOnBrush}" />
+    </Style>
+
+    <!-- 线宽按钮：三个大小不一的实心圆点，比数字更直观 -->
+    <Style Selector="Button.tool Ellipse">
+      <Setter Property="Fill" Value="{DynamicResource TextSecondaryBrush}" />
+    </Style>
+    <Style Selector="Button.tool.selected Ellipse">
+      <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
+    <!-- 主操作（识别）：整条工具条上唯一的琥珀实心按钮 -->
+    <Style Selector="Button.tool.primary">
+      <Setter Property="Background" Value="{DynamicResource AccentGradientBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="Button.tool.primary Path">
+      <Setter Property="Stroke" Value="{DynamicResource AccentOnBrush}" />
+      <!-- 线宽不再单独加粗：统一走基准 1.33 + 各图标补偿，缩放后都是 1.5px -->
+    </Style>
+    <Style Selector="Button.tool.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentGradientHoverBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentHoverBrush}" />
+    </Style>
+
+    <!-- 分组按钮右下角的小三角：提示这个按钮还带着选项 -->
+    <Style Selector="Button.tool Path.group-caret">
+      <Setter Property="Stretch" Value="None" />
+      <Setter Property="Width" Value="5" />
+      <Setter Property="Height" Value="4" />
+      <Setter Property="Stroke" Value="Transparent" />
+      <Setter Property="Fill" Value="{DynamicResource TextMutedBrush}" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="VerticalAlignment" Value="Bottom" />
+      <Setter Property="Margin" Value="0,0,2,2" />
+    </Style>
+    <Style Selector="Button.tool.selected Path.group-caret">
+      <Setter Property="Fill" Value="{DynamicResource AccentOnBrush}" />
+    </Style>
+
+    <!-- 工具组悬停弹出：水平选项条（参考 snow-shot 的 option popover） -->
+    <Style Selector="Border.tool-popover">
+      <Setter Property="Background" Value="{DynamicResource OverlayBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource LineStrongBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="4" />
+      <Setter Property="BoxShadow" Value="0 8 20 0 #99000000" />
+    </Style>
+    <Style Selector="Border.tool-separator">
+      <Setter Property="Width" Value="1" />
+      <Setter Property="Height" Value="16" />
+      <Setter Property="Margin" Value="4,0" />
+      <Setter Property="Background" Value="{DynamicResource LineStrongBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- 浮层卡片：主工具条和属性栏各一张，参考 LumaShot 的两段式布局 -->
+    <Style Selector="Border.capture-bar">
+      <Setter Property="Background" Value="{DynamicResource OverlayBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource LineStrongBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="6" />
+      <Setter Property="BoxShadow" Value="0 8 24 0 #99000000" />
+    </Style>
+
+    <!-- 属性条的组间分隔线：跟着组一起隐藏 -->
+    <Style Selector="Border.prop-sep">
+      <Setter Property="Width" Value="1" />
+      <Setter Property="Height" Value="18" />
+      <Setter Property="Margin" Value="0,0,4,0" />
+      <Setter Property="Background" Value="{DynamicResource LineStrongBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- 属性栏：左边说明文字 + 右边控件 -->
+    <Style Selector="TextBlock.prop-label">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.prop-value">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="MinWidth" Value="42" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.prop">
+      <Setter Property="Height" Value="26" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Padding" Value="8,2" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+    <Style Selector="Button.prop.selected">
+      <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
+    <!-- 分段按钮：并排的枚举选项，选中态用实心强调色（参考的 style bar 做法） -->
+    <Style Selector="Button.prop.seg">
+      <Setter Property="MinWidth" Value="26" />
+      <Setter Property="Padding" Value="5,0" />
+      <Setter Property="FontSize" Value="11" />
+    </Style>
+    <Style Selector="Button.prop.seg.selected">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentOnBrush}" />
+    </Style>
+    <!-- 用图标的分段按钮（形状切换）：图标 14，线宽 1.4，选中跟随强调色 -->
+    <Style Selector="Button.prop.seg Path">
+      <Setter Property="Width" Value="14" />
+      <Setter Property="Height" Value="14" />
+      <Setter Property="Stretch" Value="Uniform" />
+      <Setter Property="Stroke" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="StrokeThickness" Value="1.4" />
+      <Setter Property="StrokeLineCap" Value="Round" />
+      <Setter Property="StrokeJoin" Value="Round" />
+    </Style>
+    <Style Selector="Button.prop.seg.selected Path">
+      <Setter Property="Stroke" Value="{DynamicResource AccentOnBrush}" />
+    </Style>
+    <!-- 带色块预览的分段按钮：选中时用琥珀描边，不能铺实心底，否则预览被盖住 -->
+    <Style Selector="Button.prop.seg.swatch-seg.selected">
+      <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <!-- 线型预览：实线 / 三段虚线 / 三点 -->
+    <Style Selector="Border.seg-line">
+      <Setter Property="Background" Value="{DynamicResource TextSecondaryBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.prop.seg.selected Border.seg-line">
+      <Setter Property="Background" Value="{DynamicResource AccentOnBrush}" />
+    </Style>
+    <!-- 填充预览：空心 / 半透明 / 实心 -->
+    <Style Selector="Border.seg-swatch">
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Border.seg-swatch.soft">
+      <Setter Property="Background" Value="#66E5A44C" />
+    </Style>
+    <Style Selector="Border.seg-swatch.solid">
+      <Setter Property="Background" Value="#E5A44C" />
+    </Style>
+    <Style Selector="Slider.prop">
+      <Setter Property="Width" Value="88" />
+      <Setter Property="Height" Value="20" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Background" Value="#33FFFFFF" />
+    </Style>
+    <Style Selector="Slider.prop /template/ Thumb">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderBrush" Value="#CCFFFFFF" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Slider.prop /template/ Thumb:pointerover">
+      <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+    </Style>
+</Styles>

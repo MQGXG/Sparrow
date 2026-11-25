@@ -369,15 +369,29 @@ public partial class CaptureWindow
 
     private void OnToolbarDragPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+        var properties = e.GetCurrentPoint(null).Properties;
+
+        if (properties.IsRightButtonPressed)
         {
             ShowToolLayoutMenu();
             e.Handled = true;
             return;
         }
 
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        if (!properties.IsLeftButtonPressed)
             return;
+
+        // 录制中工具条在独立窗口里：改为移动 Canvas.Left/Top，窗口本身不动。
+        if (_recording is not null && _toolbarWindow is not null)
+        {
+            ToolGroupPopover.IsVisible = false;
+            RecognitionPopover.IsVisible = false;
+            CustomColorPanel.IsVisible = false;
+            _toolbarManual = true;
+            _toolbarWindow.BeginToolbarDrag(e);
+            e.Handled = true;
+            return;
+        }
 
         _draggingToolbar = true;
         _toolbarManual = true;

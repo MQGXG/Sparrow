@@ -79,6 +79,18 @@ internal sealed record RecordingOptions
     /// <summary>录制麦克风。</summary>
     public bool Microphone { get; init; }
 
+    /// <summary>是否合成摄像头画中画。</summary>
+    public bool Camera { get; init; }
+
+    /// <summary>摄像头画面是否水平镜像（自拍视角）。</summary>
+    public bool CameraMirror { get; init; } = true;
+
+    /// <summary>宿主预先创建的摄像头采集器（录制前预览复用）；null 时按需创建。</summary>
+    public CameraCapture? CameraSource { get; init; }
+
+    /// <summary>录制前预览选定的屏幕矩形（物理像素）；null 用默认右下角。</summary>
+    public PixelRect? CameraScreenRect { get; init; }
+
     /// <summary>
     /// 按分辨率给一个保守的 H.264 码率：1080p30 ≈ 7.5Mbps。
     /// 上限 40Mbps 是为了 4K 屏幕不至于糊，下限 2Mbps 是保证小区域也能看清文字。

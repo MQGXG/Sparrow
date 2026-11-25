@@ -363,10 +363,14 @@ public partial class App : Application
         else if (desktop.Args?.Contains("--record") == true)
         {
             // 开发/自动化入口：跳过设置面板，直接全屏录制并显示控制条。
-            Avalonia.Threading.Dispatcher.UIThread.Post(
-                () => _ = StartRecordingCoreAsync(
-                    WgcCapture.GetPrimaryMonitorBounds(),
-                    RecordingSetup.Default));
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                var setup = Environment.GetEnvironmentVariable("SPARROW_RECORD_CAMERA") == "1"
+                    ? DefaultRecordingSetup with { Camera = true }
+                    : DefaultRecordingSetup;
+
+                _ = StartRecordingCoreAsync(WgcCapture.GetPrimaryMonitorBounds(), setup);
+            });
         }
         else if (desktop.Args?.Contains("--capture") == true)
         {
@@ -397,7 +401,7 @@ public partial class App : Application
             Avalonia.Threading.Dispatcher.UIThread.Post(
                 () => _ = StartRecordingCoreAsync(
                     new PixelRect(200, 200, 1000, 700),
-                    RecordingSetup.Default));
+                    DefaultRecordingSetup));
         }
         else if (isFirstRun)
         {

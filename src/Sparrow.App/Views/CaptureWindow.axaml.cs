@@ -863,16 +863,21 @@ public partial class CaptureWindow : Window
         // 录制中按 Esc / 关窗：视为取消，丢弃录制并提示。
         if (_recording is not null)
         {
+            CloseRecordingOverlays();
             _recording.StateChanged -= OnRecordingStateChanged;
             _recording.Abandon();
             _recording = null;
             RecordingFinished?.Invoke(null, null, false);
         }
+        else
+        {
+            CloseRecordingOverlays();
+        }
 
         _regionOverlay?.Close();
         _regionOverlay = null;
 
-        RemoveHitTestHook();
+        EndRecordingInputRegion();
 
         _probeGeneration++;
         _uiProbe?.Dispose();

@@ -158,7 +158,19 @@ public partial class App
             }
 
             _activeCaptureWindow = capture;
-            var setup = _pendingRecordingSetup ?? RecordingSetup.Default;
+            var setup = _pendingRecordingSetup ?? DefaultRecordingSetup;
+
+            if (Environment.GetEnvironmentVariable("SPARROW_RECORD_CAMERA") == "1")
+                setup = setup with { Camera = true };
+
+            if (int.TryParse(
+                    Environment.GetEnvironmentVariable("SPARROW_RECORD_MAX"),
+                    out var maxSeconds)
+                && maxSeconds > 0)
+            {
+                setup = setup with { MaxDurationSeconds = maxSeconds };
+            }
+
             _pendingRecordingSetup = null;
             return CreateRecordingSessionAsync(region, IntPtr.Zero, setup);
         };
@@ -208,7 +220,13 @@ public partial class App
 
         // 开发/自动化：SPARROW_CAPTURE_RECORD=1 时直接用固定区域开始录制。
         if (Environment.GetEnvironmentVariable("SPARROW_CAPTURE_RECORD") == "1")
-            capture.StartRecordingNow(new PixelRect(200, 200, 800, 600));
+        {
+            var region = ParseAutomationRegion(
+                Environment.GetEnvironmentVariable("SPARROW_CAPTURE_RECORD_REGION"))
+                ?? new PixelRect(200, 200, 800, 600);
+
+            capture.StartRecordingNow(region);
+        }
 
         // 窗口先出来再读语言列表：首次会顺手加载插件，别让它卡在显示之前
         capture.ConfigureTranslateTargets(TranslateTargets());
@@ -305,6 +323,28 @@ public partial class App
         {
             Log.Warn($"保存截图样式失败：{ex.Message}");
         }
+    }
+
+    /// <summary>开发/自动化：解析 "x,y,w,h" 区域。</summary>
+    private static PixelRect? ParseAutomationRegion(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        var parts = text.Split(',');
+
+        if (parts.Length == 4
+            && int.TryParse(parts[0], out var x)
+            && int.TryParse(parts[1], out var y)
+            && int.TryParse(parts[2], out var width)
+            && int.TryParse(parts[3], out var height)
+            && width > 0
+            && height > 0)
+        {
+            return new PixelRect(x, y, width, height);
+        }
+
+        return null;
     }
 
     private static uint ParseNoteColor(string? value) =>

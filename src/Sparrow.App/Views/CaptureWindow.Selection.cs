@@ -373,6 +373,13 @@ public partial class CaptureWindow
 
     private void UpdateSelectionVisuals()
     {
+        // 录制/启动录制期间选区是锁定的：任何路径都不应该再把选区框、手柄和读数显示出来。
+        if (_recording is not null || _startingRecording)
+        {
+            HideSelectionLayer();
+            return;
+        }
+
         var visible = _selection.Width > 0 && _selection.Height > 0;
         var radius = SelectionRadius();
 

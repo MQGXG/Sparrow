@@ -427,7 +427,7 @@ public partial class CaptureWindow
         const double width = 3 * 32 + 2 * 2 + 10;
         const double height = 32 + 10;
 
-        var origin = MoreRecognitionButton.TranslatePoint(new Point(0, 0), this) ?? new Point(0, 0);
+        var origin = MoreRecognitionButton.TranslatePoint(new Point(0, 0), ToolbarCoordinateRoot) ?? new Point(0, 0);
         var left = Math.Clamp(origin.X, 8, Math.Max(8, Width - width - 8));
         var top = Math.Max(8, origin.Y - height - 6);
 
@@ -500,7 +500,7 @@ public partial class CaptureWindow
         var width = group.Members.Length * 32 + (group.Members.Length - 1) * 2 + 10;
         var height = 32 + 10;
 
-        var origin = group.Trigger.TranslatePoint(new Point(0, 0), this) ?? new Point(0, 0);
+        var origin = group.Trigger.TranslatePoint(new Point(0, 0), ToolbarCoordinateRoot) ?? new Point(0, 0);
         // 与触发按钮左对齐：比居中更稳定，也不会因为按钮宽度取不到而左右跳
         var left = Math.Clamp(origin.X, 8, Math.Max(8, Width - width - 8));
         var top = Math.Max(8, origin.Y - height - 6);

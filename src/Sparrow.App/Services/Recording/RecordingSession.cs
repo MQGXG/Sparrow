@@ -1,3 +1,4 @@
+using Avalonia;
 using System.Diagnostics;
 
 namespace Sparrow.App.Services.Recording;
@@ -29,6 +30,10 @@ internal sealed class RecordingSession : IDisposable
     private readonly WavWriter? _wav;
     private readonly CursorHighlighter? _highlighter;
     private readonly WatermarkRenderer? _watermark;
+    private readonly CameraCapture? _camera;
+    private readonly object _cameraGate = new();
+    private PixelRect _cameraScreenRect;
+    private PixelRect _cameraLocalRect;
     private readonly string _videoPath;
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _worker;
@@ -36,6 +41,7 @@ internal sealed class RecordingSession : IDisposable
     private int _disposed;
     private volatile bool _paused;
     private volatile bool _resumeReset;
+    private volatile bool _abandoned;
 
     /// <summary>状态变化通知。在后台线程触发，UI 订阅方需要自己切回 UI 线程。</summary>
     public event Action<RecordingState, string?>? StateChanged;
@@ -61,6 +67,41 @@ internal sealed class RecordingSession : IDisposable
     /// <summary>本次是否在录麦克风（控制条显示用）。</summary>
     public bool HasMicrophone => _options.Microphone;
 
+    /// <summary>本次是否启用了摄像头画中画。</summary>
+    public CameraCapture? Camera => _camera;
+
+    /// <summary>摄像头画面是否水平镜像（预览和合成保持一致）。</summary>
+    public bool CameraMirror => _options.CameraMirror;
+
+    /// <summary>录制区域在屏幕上的物理矩形（摄像头坐标换算用）。</summary>
+    public PixelRect ScreenRect => _source.ScreenRect;
+
+    /// <summary>摄像头预览的初始屏幕矩形（物理像素）。</summary>
+    public PixelRect InitialCameraScreenRect { get; }
+
+    /// <summary>摄像头预览当前所在的屏幕矩形（物理像素）。</summary>
+    public PixelRect CameraScreenRect
+    {
+        get
+        {
+            lock (_cameraGate)
+                return _cameraScreenRect;
+        }
+    }
+
+    /// <summary>预览窗口移动/缩放后调用；只保留与录制区域相交的部分用于合成。</summary>
+    public void SetCameraScreenRect(PixelRect screenRect)
+    {
+        if (screenRect.Width <= 0 || screenRect.Height <= 0)
+            return;
+
+        lock (_cameraGate)
+        {
+            _cameraScreenRect = screenRect;
+            _cameraLocalRect = MapCameraToLocal(screenRect);
+        }
+    }
+
     private long _framesWritten;
 
     private RecordingSession(
@@ -71,6 +112,7 @@ internal sealed class RecordingSession : IDisposable
         WavWriter? wav,
         CursorHighlighter? highlighter,
         WatermarkRenderer? watermark,
+        CameraCapture? camera,
         string videoPath)
     {
         _options = options;
@@ -80,7 +122,15 @@ internal sealed class RecordingSession : IDisposable
         _wav = wav;
         _highlighter = highlighter;
         _watermark = watermark;
+        _camera = camera;
         _videoPath = videoPath;
+
+        InitialCameraScreenRect = options.CameraScreenRect is { Width: > 0, Height: > 0 } provided
+            ? provided
+            : CameraPlacement.DefaultScreenRect(CameraRegion());
+        _cameraScreenRect = InitialCameraScreenRect;
+        _cameraLocalRect = MapCameraToLocal(InitialCameraScreenRect);
+
         _worker = Task.Run(Run);
     }
 
@@ -160,6 +210,14 @@ internal sealed class RecordingSession : IDisposable
             }
         }
 
+        CameraCapture? camera = null;
+
+        if (options.Camera)
+        {
+            camera = options.CameraSource ?? CameraCapture.Create();
+            camera.Start();
+        }
+
         return new RecordingSession(
             options,
             source,
@@ -176,6 +234,7 @@ internal sealed class RecordingSession : IDisposable
             options.Watermark is { IsEmpty: false } watermark
                 ? new WatermarkRenderer(watermark)
                 : null,
+            camera,
             videoPath);
     }
 
@@ -202,7 +261,11 @@ internal sealed class RecordingSession : IDisposable
         SetState(RecordingState.Recording, null);
     }
 
-    /// <summary>停止录制并返回文件路径；失败返回 null（原因通过 StateChanged 给出）。</summary>
+    /// <summary>
+    /// 停止录制并返回文件路径；失败返回 null（原因通过 StateChanged 给出）。
+    /// 收尾（ffmpeg 关闭、合并音频、改名）在录制线程内完成，
+    /// 因此 Completed 状态一出现，输出文件就已经可用。
+    /// </summary>
     public async Task<string?> StopAsync()
     {
         if (State is RecordingState.Completed)
@@ -211,12 +274,15 @@ internal sealed class RecordingSession : IDisposable
         if (State is RecordingState.Faulted)
             return null;
 
-        SetState(RecordingState.Stopping, null);
+        if (State is not RecordingState.Stopping)
+            SetState(RecordingState.Stopping, null);
 
         try
         {
             await _cts.CancelAsync().ConfigureAwait(false);
-            await _worker.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+            // GIF/APNG 转换和音频合并可能比普通停止慢；收尾在 worker 内完成。
+            await _worker.WaitAsync(TimeSpan.FromMinutes(3)).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
@@ -224,19 +290,10 @@ internal sealed class RecordingSession : IDisposable
             return null;
         }
 
-        if (State != RecordingState.Completed)
+        if (State is RecordingState.Faulted)
             return null;
 
-        try
-        {
-            await Task.Run(FinalizeOutput).ConfigureAwait(false);
-            return _options.OutputPath;
-        }
-        catch (Exception ex)
-        {
-            SetState(RecordingState.Faulted, ex.Message);
-            return null;
-        }
+        return State is RecordingState.Completed ? _options.OutputPath : null;
     }
 
     /// <summary>
@@ -245,6 +302,9 @@ internal sealed class RecordingSession : IDisposable
     /// </summary>
     private void FinalizeOutput()
     {
+        if (_abandoned)
+            return;
+
         var audioPath = _options.OutputPath + ".wav";
 
         try
@@ -306,6 +366,36 @@ internal sealed class RecordingSession : IDisposable
         {
             // ffmpeg 可能还没完全释放文件句柄，下次启动时再清。
         }
+    }
+
+    /// <summary>录制区域：优先用实际抓屏矩形，窗口录制拿不到时退回参数/主屏。</summary>
+    private PixelRect CameraRegion()
+    {
+        var region = _source.ScreenRect;
+
+        if (region.Width > 0 && region.Height > 0)
+            return region;
+
+        if (_options.Region.Width > 0 && _options.Region.Height > 0)
+            return _options.Region;
+
+        return WgcCapture.GetPrimaryMonitorBounds();
+    }
+
+    /// <summary>默认画中画放在右下角，约为录制高度的 1/4，保持 16:9。</summary>
+    /// <summary>屏幕物理矩形 → 录制画面内的局部矩形，超出区域的部分裁掉。</summary>
+    private PixelRect MapCameraToLocal(PixelRect screenRect)
+    {
+        var region = CameraRegion();
+        var left = Math.Max(screenRect.X, region.X);
+        var top = Math.Max(screenRect.Y, region.Y);
+        var right = Math.Min(screenRect.Right, region.Right);
+        var bottom = Math.Min(screenRect.Bottom, region.Bottom);
+
+        if (right <= left || bottom <= top)
+            return default;
+
+        return new PixelRect(left - region.X, top - region.Y, right - left, bottom - top);
     }
 
     private void Run()
@@ -374,6 +464,8 @@ internal sealed class RecordingSession : IDisposable
                         _source.ScreenRect,
                         now);
 
+                    DrawCamera(lastPixels);
+
                     _encoder.WriteFrame(lastPixels);
 
                     if (audioSamples is not null)
@@ -395,7 +487,22 @@ internal sealed class RecordingSession : IDisposable
                 }
             }
 
+            // 取消（Abandon）不再做任何收尾，临时文件由 Abandon 删除。
+            if (_abandoned)
+                return;
+
             _encoder.Complete();
+            _wav?.Complete();
+
+            // 先落盘再发 Completed：UI 收到完成时文件已经是最终文件。
+            FinalizeOutput();
+
+            if (_abandoned)
+            {
+                TryDelete(_options.OutputPath);
+                return;
+            }
+
             SetState(RecordingState.Completed, null);
         }
         catch (Exception ex)
@@ -413,6 +520,27 @@ internal sealed class RecordingSession : IDisposable
                 // WAV 收尾失败不影响已完成的视频。
             }
         }
+    }
+
+    private void DrawCamera(byte[] pixels)
+    {
+        if (_camera is null)
+            return;
+
+        PixelRect local;
+
+        lock (_cameraGate)
+            local = _cameraLocalRect;
+
+        if (local.Width <= 0 || local.Height <= 0)
+            return;
+
+        _camera.Draw(
+            pixels,
+            _source.Width,
+            _source.Height,
+            local,
+            _options.CameraMirror);
     }
 
     private void SetState(RecordingState state, string? error)
@@ -440,6 +568,7 @@ internal sealed class RecordingSession : IDisposable
 
         try
         {
+            _abandoned = true;
             _cts.Cancel();
             _worker.Wait(TimeSpan.FromSeconds(3));
         }
@@ -452,11 +581,13 @@ internal sealed class RecordingSession : IDisposable
         _audio?.Dispose();
         _wav?.Dispose();
         _watermark?.Dispose();
+        _camera?.Dispose();
         _source.Dispose();
         _cts.Dispose();
 
         TryDelete(_videoPath);
         TryDelete(_options.OutputPath + ".wav");
+        TryDelete(_options.OutputPath);
     }
 
     public void Dispose()
@@ -483,6 +614,7 @@ internal sealed class RecordingSession : IDisposable
         _audio?.Dispose();
         _wav?.Dispose();
         _watermark?.Dispose();
+        _camera?.Dispose();
         _source.Dispose();
         _cts.Dispose();
 

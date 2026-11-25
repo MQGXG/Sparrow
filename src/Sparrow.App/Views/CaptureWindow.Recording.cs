@@ -1,4 +1,5 @@
 // CaptureWindow 分部类：录制控制并入主工具条，选区层由穿透红框负责。
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -10,14 +11,17 @@ namespace Sparrow.App.Views;
 
 public partial class CaptureWindow
 {
-    private const uint WmNcHitTest = 0x0084;
-    private const int HtTransparent = -1;
+    private const int RgnOr = 2;
 
     private RecordingSession? _recording;
     private RecordingRegionOverlay? _regionOverlay;
+    private RecordingToolbarWindow? _toolbarWindow;
     private DispatcherTimer? _recordTimer;
-    private Win32Properties.CustomWndProcHookCallback? _hitTestHook;
+    private List<PixelRect> _recordingRegion = [];
+    private IntPtr _recordingRegionHandle;
     private bool _copyOnStop;
+    private bool _stopping;
+    private bool _startingRecording;
 
     /// <summary>由宿主注入：用选区创建录制会话；返回 null 表示启动失败。</summary>
     internal Func<PixelRect, Task<RecordingSession?>>? RecordingSessionStarter { get; set; }
@@ -60,10 +64,34 @@ public partial class CaptureWindow
         if (_recording is not null || RecordingSessionStarter is null)
             return;
 
-        var session = await RecordingSessionStarter(SelectionRect);
+        var toolbarWasVisible = ActionBar.IsVisible;
+
+        // 先隐藏选区/候选/读数，再启动 WGC；否则录制的第一段会把截图遮罩录进去。
+        _startingRecording = true;
+        HideSelectionLayer();
+        ActionBar.IsVisible = false;
+
+        RecordingSession? session;
+
+        try
+        {
+            session = await RecordingSessionStarter(SelectionRect);
+        }
+        catch
+        {
+            _startingRecording = false;
+            ActionBar.IsVisible = toolbarWasVisible;
+            UpdateSelectionVisuals();
+            throw;
+        }
 
         if (session is null)
+        {
+            _startingRecording = false;
+            ActionBar.IsVisible = toolbarWasVisible;
+            UpdateSelectionVisuals();
             return;
+        }
 
         _recording = session;
         session.StateChanged += OnRecordingStateChanged;
@@ -89,24 +117,37 @@ public partial class CaptureWindow
         TranslateActionButton.IsVisible = false;
         MoreRecognitionButton.IsVisible = false;
 
-        // 控制组让工具条变宽：录制期间工具条必须在选区之外，否则会被录进视频。
+        // 现在才恢复工具条：先完成布局定位，再搬到排除捕获的独立窗口。
+        ActionBar.IsVisible = true;
         PlaceToolbarOutsideSelection();
 
+        // UpdateToolButtons 等路径可能重新显示过选区/读数，再压一次。
         HideSelectionLayer();
 
         // 标注画布保留：录制中画笔/矩形/箭头等标注实时显示，并会被录进视频。
         NoteLayer.IsVisible = true;
 
-        // 安装 WM_NCHITTEST 钩子：选区外返回 HTTRANSPARENT，点击落到下层窗口。
-        InstallHitTestHook();
+        // 摄像头预览先显示，工具条窗口后显示，保证工具条在预览之上。
+        ShowCameraPreview();
+        MoveToolbarToExcludedWindow();
+
+        // 窗口区域裁剪：选区外不属于窗口，鼠标直接落到下层应用（跨进程有效）。
+        // 原来的 WM_NCHITTEST→HTTRANSPARENT 只对同线程窗口有效，会吞掉整个桌面的点击。
+        LayoutUpdated += OnRecordingLayoutUpdated;
 
         _regionOverlay = new RecordingRegionOverlay(SelectionRect);
         _regionOverlay.Show();
 
         _recordTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
         _recordTimer.Tick += (_, _) =>
+        {
             RecordElapsed.Text = _recording?.Elapsed.ToString(@"hh\:mm\:ss") ?? "00:00:00";
+            UpdateRecordingInputRegion();
+        };
         _recordTimer.Start();
+
+        UpdateRecordingInputRegion();
+        _startingRecording = false;
 
         await Task.Yield();
 
@@ -118,8 +159,10 @@ public partial class CaptureWindow
 
     private async Task StopRecordingAsync()
     {
-        if (_recording is null)
+        if (_recording is null || _stopping)
             return;
+
+        _stopping = true;
 
         RecordButton.IsEnabled = false;
         PauseRecordButton.IsEnabled = false;
@@ -130,10 +173,13 @@ public partial class CaptureWindow
         _copyOnStop = false;
         var copied = path is not null && copy && RecordingClipboard.CopyFile(path);
 
+        CloseRecordingOverlays();
+
         _recording.StateChanged -= OnRecordingStateChanged;
         _recording.Dispose();
         _recording = null;
         _recordTimer?.Stop();
+        EndRecordingInputRegion();
 
         _regionOverlay?.Close();
         _regionOverlay = null;
@@ -162,10 +208,13 @@ public partial class CaptureWindow
     {        if (_recording is null)
             return;
 
+        CloseRecordingOverlays();
+
         _recording.StateChanged -= OnRecordingStateChanged;
         _recording.Abandon();
         _recording = null;
         _recordTimer?.Stop();
+        EndRecordingInputRegion();
 
         _regionOverlay?.Close();
         _regionOverlay = null;
@@ -207,6 +256,10 @@ public partial class CaptureWindow
     {
         if (error is not null)
             App.Log.Error($"[record] {error}");
+
+        // 到时长上限/失败时自动收尾，避免录制条一直停在那里。
+        if (state is RecordingState.Completed or RecordingState.Faulted)
+            Dispatcher.UIThread.Post(() => _ = StopRecordingAsync());
     }
 
     /// <summary>录制中隐藏所有选区/遮罩层，只保留主工具条和标注层。</summary>
@@ -254,8 +307,9 @@ public partial class CaptureWindow
         if (!ToolbarRect(size).Intersects(_selection))
             return;
 
-        // 选区几乎占满屏幕，工具条无处可放；这种情况只能让它进视频（标注也在同一窗口）。
-        App.Log.Warn("[record] 工具条与选区重叠且无空位");
+        // 选区几乎占满屏幕，工具条没有空位可放。
+        // 工具条在独立的排除窗口里，压在选区上也不会进视频，只是会挡住一点画面。
+        App.Log.Info("[record] 工具条与选区重叠（工具条窗口已排除捕获）");
     }
 
     private Rect ToolbarRect(Size size)
@@ -272,73 +326,177 @@ public partial class CaptureWindow
 
     // ==== 录制中的点击穿透 ====
 
+    /// <summary>工具条浮层定位的坐标基准：录制中工具条已经搬到独立窗口。</summary>
+    private Visual ToolbarCoordinateRoot => _toolbarWindow?.Canvas ?? (Visual)this;
+
+    /// <summary>录制中把预览的布局目标切到当前会话；窗口本身已在创建会话时显示。</summary>
+    private void ShowCameraPreview()
+    {
+        if (_recording?.Camera is not null)
+            CameraPreviewHost.Attach(_recording);
+    }
+
     /// <summary>
-    /// 安装窗口过程钩子：录制中只有工具条、以及选中标注工具后的选区内部接收点击，
-    /// 其余区域返回 HTTRANSPARENT，鼠标落到下层应用，电脑可以正常操作。
+    /// 把工具条及其浮层搬到独立的、已排除捕获的窗口。
+    /// 这样即使工具条压在选区上，也只会出现在用户屏幕上，不会进视频。
     /// </summary>
-    private void InstallHitTestHook()
+    private void MoveToolbarToExcludedWindow()
     {
-        if (_hitTestHook is not null)
+        if (_toolbarWindow is not null)
             return;
 
-        _hitTestHook = OnHitTest;
-        Win32Properties.AddWndProcHookCallback(this, _hitTestHook);
+        var controls = new Control[] { ActionBar, ToolGroupPopover, RecognitionPopover, CustomColorPanel };
+
+        foreach (var control in controls)
+            Root.Children.Remove(control);
+
+        _toolbarWindow = new RecordingToolbarWindow(
+            controls,
+            _origin,
+            _scaling,
+            Width,
+            Height);
+
+        _toolbarWindow.Show();
     }
 
-    private void RemoveHitTestHook()
+    private void CloseRecordingOverlays()
     {
-        if (_hitTestHook is null)
+        CameraPreviewHost.Close();
+
+        if (_toolbarWindow is not null)
+        {
+            _toolbarWindow.Close();
+            _toolbarWindow = null;
+        }
+    }
+
+    private void OnRecordingLayoutUpdated(object? sender, EventArgs e) =>
+        UpdateRecordingInputRegion();
+
+    /// <summary>
+    /// 用窗口区域裁剪做穿透：区域外的像素不属于本窗口，鼠标会直接落到桌面其他程序。
+    /// WM_NCHITTEST→HTTRANSPARENT 只对同线程窗口有效，跨进程点击会被整块全屏窗口吞掉。
+    ///
+    /// 保留可交互的部分：工具条、可见的弹出面板，以及需要绘制/显示标注的选区。
+    /// 其余桌面区域不参与命中测试，录制时电脑可以正常操作。
+    /// </summary>
+    private void UpdateRecordingInputRegion()
+    {
+        if (_recording is null)
             return;
 
-        Win32Properties.RemoveWndProcHookCallback(this, _hitTestHook);
-        _hitTestHook = null;
+        var hwnd = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        if (hwnd == IntPtr.Zero)
+            return;
+
+        var scale = _scaling > 0 ? _scaling : 1.0;
+        var rects = new List<PixelRect>();
+
+        void Add(Control control)
+        {
+            if (!control.IsVisible)
+                return;
+
+            if (control.TranslatePoint(new Point(0, 0), this) is not { } origin)
+                return;
+
+            var size = control.Bounds.Size;
+            if (size.Width <= 0 || size.Height <= 0)
+                return;
+
+            var rect = ToWindowPixels(new Rect(origin, size), scale);
+            if (rect.Width > 0 && rect.Height > 0)
+                rects.Add(rect);
+        }
+
+        // 工具条通常已经在独立的排除窗口里；只有迁移失败/未迁移时才留在本窗口。
+        if (_toolbarWindow is null)
+        {
+            Add(ActionBar);
+            Add(ToolGroupPopover);
+            Add(RecognitionPopover);
+            Add(CustomColorPanel);
+        }
+
+        // 选了标注工具时要能画；已有标注时也必须保留选区，
+        // 否则窗口区域裁剪会把已经画好的标注一起裁掉（屏幕上和视频里都会消失）。
+        if (_hasSelection && (_tool != AnnotationTool.None || _notes.Items.Count > 0))
+            rects.Add(ToWindowPixels(_selection, scale));
+
+        // 布局每帧都可能触发：区域没变就不要反复 SetWindowRgn。
+        if (hwnd == _recordingRegionHandle
+            && rects.Count == _recordingRegion.Count
+            && rects.SequenceEqual(_recordingRegion))
+            return;
+
+        var region = CreateRectRgn(0, 0, 0, 0);
+
+        foreach (var rect in rects)
+        {
+            var piece = CreateRectRgn(rect.X, rect.Y, rect.Right, rect.Bottom);
+            CombineRgn(region, region, piece, RgnOr);
+            DeleteObject(piece);
+        }
+
+        // 成功后 region 归系统所有，不能再 DeleteObject。
+        if (SetWindowRgn(hwnd, region, true) == 0)
+        {
+            DeleteObject(region);
+            _recordingRegion = [];
+            _recordingRegionHandle = IntPtr.Zero;
+            return;
+        }
+
+        _recordingRegion = rects;
+        _recordingRegionHandle = hwnd;
     }
 
-    private IntPtr OnHitTest(
-        IntPtr hWnd,
-        uint msg,
-        IntPtr wParam,
-        IntPtr lParam,
-        ref bool handled)
+    /// <summary>DIP → 窗口客户区物理像素，并夹到窗口范围内。</summary>
+    private PixelRect ToWindowPixels(Rect rect, double scale)
     {
-        if (msg != WmNcHitTest || _recording is null)
-            return IntPtr.Zero;
+        var maxRight = _virtualWidth > 0 ? _virtualWidth : (int)Math.Ceiling(rect.Right * scale);
+        var maxBottom = _virtualHeight > 0 ? _virtualHeight : (int)Math.Ceiling(rect.Bottom * scale);
 
-        var value = lParam.ToInt64();
-        var screenX = (short)(value & 0xFFFF);
-        var screenY = (short)((value >> 16) & 0xFFFF);
+        var left = Math.Clamp((int)Math.Floor(rect.X * scale), 0, maxRight);
+        var top = Math.Clamp((int)Math.Floor(rect.Y * scale), 0, maxBottom);
+        var right = Math.Clamp((int)Math.Ceiling(rect.Right * scale), left, maxRight);
+        var bottom = Math.Clamp((int)Math.Ceiling(rect.Bottom * scale), top, maxBottom);
 
-        // 无边框窗口的客户区原点就是窗口位置；换算成窗口内 DIP 坐标。
-        var scale = RenderScaling <= 0 ? 1.0 : RenderScaling;
-        var point = new Point(
-            (screenX - Position.X) / scale,
-            (screenY - Position.Y) / scale);
-
-        if (IsRecordingInteractiveAt(point))
-            return IntPtr.Zero;
-
-        handled = true;
-        return new IntPtr(HtTransparent);
+        return new PixelRect(left, top, right - left, bottom - top);
     }
 
-    private bool IsRecordingInteractiveAt(Point point)
+    /// <summary>停止/取消录制：解除布局监听并恢复完整窗口区域。</summary>
+    private void EndRecordingInputRegion()
     {
-        // 工具条本身（含属性行、工具组选项条）要能点。
-        if (IsPointInActionBar(point))
-            return true;
+        LayoutUpdated -= OnRecordingLayoutUpdated;
+        _recordingRegion = [];
+        _recordingRegionHandle = IntPtr.Zero;
 
-        if (ToolGroupPopover.IsVisible && IsPointInControl(ToolGroupPopover, point))
-            return true;
+        var hwnd = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        if (hwnd == IntPtr.Zero)
+            return;
 
-        if (CustomColorPanel.IsVisible && IsPointInCustomColorPanel(point))
-            return true;
-
-        // 选了标注工具：选区内部交给画布，选区外仍然穿透。
-        return _tool != AnnotationTool.None && _selection.Contains(point);
+        // IntPtr.Zero = 取消裁剪；系统会释放上一次的 region。
+        SetWindowRgn(hwnd, IntPtr.Zero, true);
     }
 
     /// <summary>录制中是否允许在这一点开始/继续标注。</summary>
     private bool CanAnnotateDuringRecording(Point point) =>
         _recording is null
         || (_tool != AnnotationTool.None && _selection.Contains(point));
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateRectRgn(int left, int top, int right, int bottom);
+
+    [DllImport("gdi32.dll")]
+    private static extern int CombineRgn(IntPtr dest, IntPtr source1, IntPtr source2, int mode);
+
+    [DllImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DeleteObject(IntPtr handle);
+
+    [DllImport("user32.dll")]
+    private static extern int SetWindowRgn(IntPtr hwnd, IntPtr region, bool redraw);
 }
+

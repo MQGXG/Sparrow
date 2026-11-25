@@ -663,7 +663,15 @@ public partial class CaptureWindow
     /// 默认放在选区上方；顶到屏幕边缘时放到下方。
     /// </summary>
     private void UpdateSizeBadge(Rect rect)
-    {        if (rect.Width < 1 || rect.Height < 1)
+    {
+        // 录制/启动录制期间隐藏读数，避免出现在视频里。
+        if (_recording is not null || _startingRecording)
+        {
+            SizeBadge.IsVisible = false;
+            return;
+        }
+
+        if (rect.Width < 1 || rect.Height < 1)
         {
             SizeBadge.IsVisible = false;
             return;

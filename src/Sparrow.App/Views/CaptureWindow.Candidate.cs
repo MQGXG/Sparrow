@@ -180,6 +180,10 @@ public partial class CaptureWindow
 
     private void ShowCandidateVisual(PixelRect bounds, string title, string? kind)
     {
+        // 录制/starts 阶段不再显示候选框：它会被 WGC 录进视频。
+        if (_recording is not null || _startingRecording)
+            return;
+
         var x = (bounds.X - _origin.X) / _scaling;
         var y = (bounds.Y - _origin.Y) / _scaling;
         var width = bounds.Width / _scaling;

@@ -19,6 +19,10 @@ public partial class App
     /// <summary>当前区域录制的截图窗口（控制条在它里面）。</summary>
     private CaptureWindow? _activeCaptureWindow;
 
+    /// <summary>未经过设置面板时的默认参数（沿用上次的编码器/摄像头开关）。</summary>
+    private RecordingSetup DefaultRecordingSetup =>
+        RecordingSetup.Default with { Camera = _appSettings.RecordCamera };
+
     /// <summary>热键入口：未录制时打开设置面板，录制中则停止并保存（一次热键闭环）。</summary>
     internal void ToggleScreenRecording()
     {
@@ -46,14 +50,14 @@ public partial class App
             return;
         }
 
-        var panel = new RecordingSetupWindow(_appSettings.RecordEncoder);
+        var panel = new RecordingSetupWindow(_appSettings.RecordEncoder, _appSettings.RecordCamera);
 
         panel.Finished += setup =>
         {
             if (setup is null)
                 return;
 
-            PersistRecordingEncoder(setup.Encoder);
+            PersistRecordingPreferences(setup);
 
             if (setup.Mode == RecordingMode.Region)
             {
@@ -75,14 +79,19 @@ public partial class App
         panel.Show();
     }
 
-    /// <summary>把用户选的编码器写回 settings.json；下次打开面板继续用。</summary>
-    private void PersistRecordingEncoder(string? encoder)
+    /// <summary>把用户选的编码器/摄像头开关写回 settings.json；下次打开面板继续用。</summary>
+    private void PersistRecordingPreferences(RecordingSetup setup)
     {
-        if (string.IsNullOrWhiteSpace(encoder)
-            || string.Equals(_appSettings.RecordEncoder, encoder, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(_appSettings.RecordEncoder, setup.Encoder, StringComparison.OrdinalIgnoreCase)
+            && _appSettings.RecordCamera == setup.Camera)
             return;
 
-        _appSettings = _appSettings with { RecordEncoder = encoder };
+        _appSettings = _appSettings with
+        {
+            RecordEncoder = setup.Encoder,
+            RecordCamera = setup.Camera
+        };
+
         _settingsStore?.Save(_appSettings);
     }
 
@@ -101,7 +110,7 @@ public partial class App
 
         if (region is not null)
         {
-            var setup = _pendingRecordingSetup ?? RecordingSetup.Default;
+            var setup = _pendingRecordingSetup ?? DefaultRecordingSetup;
             _pendingRecordingSetup = null;
             _ = StartRecordingCoreAsync(region.Value, setup);
             return;
@@ -161,11 +170,16 @@ public partial class App
         bar.Finished += (path, copied) =>
         {
             _recordingBar = null;
+            CameraPreviewHost.Close();
             session.Dispose();
 
             if (path is null)
             {
-                _toasts?.Show("已取消录制。");
+                _toasts?.Show(
+                    session.LastError is { Length: > 0 } error
+                        ? $"录制失败：{error}"
+                        : "已取消录制。",
+                    TimeSpan.FromSeconds(8));
                 return;
             }
 
@@ -201,97 +215,167 @@ public partial class App
         IntPtr window,
         RecordingSetup setup)
     {
-        // 首次录制（或刚克隆仓库）没有 ffmpeg：先下载，避免“点开始才发现编码器缺失”。
-        if (FfmpegLocator.Find() is null)
-        {
-            var setupWindow = new FfmpegSetupWindow();
-            setupWindow.Show();
-            var ffmpeg = await setupWindow.Result;
+        CameraCapture? camera = null;
+        var cameraRect = default(PixelRect);
 
-            if (ffmpeg is null)
+        var cameraRegion = region.Width > 0 && region.Height > 0
+            ? region
+            : WgcCapture.GetPrimaryMonitorBounds();
+
+        try
+        {
+            // 摄像头在录制前就显示出来，用户可以先调整位置/大小。
+            if (setup.Camera)
             {
-                _toasts?.Show(
-                    string.IsNullOrWhiteSpace(setupWindow.Error)
-                        ? "已取消下载录制编码器。"
-                        : $"FFmpeg 下载失败：{setupWindow.Error}。可手动放到 tools/ffmpeg/。",
-                    TimeSpan.FromSeconds(8));
+                try
+                {
+                    camera = CameraCapture.Create();
+                    camera.Start();
+
+                    CameraPreviewHost.Show(
+                        camera,
+                        cameraRegion,
+                        default,
+                        mirror: true,
+                        rect => cameraRect = rect);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn($"[record] 摄像头预览启动失败：{ex.Message}");
+                    camera?.Dispose();
+                    camera = null;
+                }
+            }
+
+            // 首次录制（或刚克隆仓库）没有 ffmpeg：先下载，避免“点开始才发现编码器缺失”。
+            if (FfmpegLocator.Find() is null)
+            {
+                var setupWindow = new FfmpegSetupWindow();
+                setupWindow.Show();
+                var ffmpeg = await setupWindow.Result;
+
+                if (ffmpeg is null)
+                {
+                    _toasts?.Show(
+                        string.IsNullOrWhiteSpace(setupWindow.Error)
+                            ? "已取消下载录制编码器。"
+                            : $"FFmpeg 下载失败：{setupWindow.Error}。可手动放到 tools/ffmpeg/。",
+                        TimeSpan.FromSeconds(8));
+                    return null;
+                }
+            }
+
+            // 正常交互先让用户调整摄像头；自动化入口用 NO_PROMPT 跳过，避免卡住。
+            var skipCameraPrompt =
+                Environment.GetEnvironmentVariable("SPARROW_RECORD_NO_PROMPT") == "1";
+
+            if (camera is not null && !skipCameraPrompt)
+            {
+                var prompt = new CameraSetupPromptWindow(cameraRegion);
+                prompt.Show();
+                var startRecording = await prompt.Result;
+                prompt.Close();
+
+                if (!startRecording)
+                {
+                    _toasts?.Show("已取消录制。");
+                    return null;
+                }
+            }
+
+            var countdownSeconds = setup.CountdownSeconds;
+
+            if (countdownSeconds > 0)
+            {
+                var countdown = new CountdownWindow(countdownSeconds);
+                countdown.Show();
+
+                if (!await countdown.Result)
+                {
+                    _toasts?.Show("已取消录制。");
+                    return null;
+                }
+            }
+
+            var directory = string.IsNullOrWhiteSpace(setup.OutputDirectory)
+                ? Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Sparrow",
+                    "recordings")
+                : setup.OutputDirectory;
+
+            var baseName = string.IsNullOrWhiteSpace(setup.BaseName) ? "Sparrow" : setup.BaseName;
+            var extension = setup.Format switch
+            {
+                "gif" => ".gif",
+                "apng" => ".apng",
+                "mkv" => ".mkv",
+                "mov" => ".mov",
+                _ => ".mp4"
+            };
+
+            var outputPath = Path.Combine(
+                directory,
+                $"{baseName}-{DateTime.Now:yyyyMMdd-HHmmss}{extension}");
+
+            var options = new RecordingOptions
+            {
+                Region = region,
+                WindowHandle = window,
+                OutputPath = outputPath,
+                FramesPerSecond = setup.FramesPerSecond,
+                Crf = setup.Crf,
+                Preset = setup.Preset,
+                Encoder = setup.Encoder,
+                CountdownSeconds = setup.CountdownSeconds,
+                MaxDuration = setup.MaxDurationSeconds > 0
+                    ? TimeSpan.FromSeconds(setup.MaxDurationSeconds)
+                    : null,
+                IncludeCursor = setup.IncludeCursor,
+                SystemAudio = setup.SystemAudio,
+                Microphone = setup.Microphone,
+                Camera = setup.Camera,
+                CameraSource = camera,
+                CameraScreenRect = cameraRect.Width > 0 && cameraRect.Height > 0
+                    ? cameraRect
+                    : null,
+                Format = setup.Format,
+                GifFps = setup.GifFps,
+                GifWidth = setup.GifWidth,
+                Watermark = setup.Watermark,
+                GopSeconds = setup.GopSeconds,
+                CursorRadius = setup.CursorRadius,
+                CursorColor = setup.CursorColor,
+                CursorOpacity = setup.CursorOpacity,
+                CursorShadow = setup.CursorShadow
+            };
+
+            var session = RecordingSession.TryStart(options, out var error);
+
+            if (session is null)
+            {
+                _toasts?.Show(error ?? "无法开始屏幕录制。", TimeSpan.FromSeconds(6));
+                Log.Error($"[record] {error}");
                 return null;
             }
+
+            // 采集器所有权转给会话；预览窗口继续复用同一份采集。
+            camera = null;
+            CameraPreviewHost.Attach(session);
+
+            Log.Info(
+                $"[record] 开始录制：{outputPath}" +
+                $"（{setup.FramesPerSecond}fps，CRF {setup.Crf}，编码器 {session.EncoderName}）");
+            return session;
         }
-
-        if (setup.CountdownSeconds > 0)
+        finally
         {
-            var countdown = new CountdownWindow(setup.CountdownSeconds);
-            countdown.Show();
-
-            if (!await countdown.Result)
+            if (camera is not null)
             {
-                _toasts?.Show("已取消录制。");
-                return null;
+                CameraPreviewHost.Close();
+                camera.Dispose();
             }
         }
-
-        var directory = string.IsNullOrWhiteSpace(setup.OutputDirectory)
-            ? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Sparrow",
-                "recordings")
-            : setup.OutputDirectory;
-
-        var baseName = string.IsNullOrWhiteSpace(setup.BaseName) ? "Sparrow" : setup.BaseName;
-        var extension = setup.Format switch
-        {
-            "gif" => ".gif",
-            "apng" => ".apng",
-            "mkv" => ".mkv",
-            "mov" => ".mov",
-            _ => ".mp4"
-        };
-
-        var outputPath = Path.Combine(
-            directory,
-            $"{baseName}-{DateTime.Now:yyyyMMdd-HHmmss}{extension}");
-
-        var options = new RecordingOptions
-        {
-            Region = region,
-            WindowHandle = window,
-            OutputPath = outputPath,
-            FramesPerSecond = setup.FramesPerSecond,
-            Crf = setup.Crf,
-            Preset = setup.Preset,
-            Encoder = setup.Encoder,
-            CountdownSeconds = setup.CountdownSeconds,
-            MaxDuration = setup.MaxDurationSeconds > 0
-                ? TimeSpan.FromSeconds(setup.MaxDurationSeconds)
-                : null,
-            IncludeCursor = setup.IncludeCursor,
-            SystemAudio = setup.SystemAudio,
-            Microphone = setup.Microphone,
-            Format = setup.Format,
-            GifFps = setup.GifFps,
-            GifWidth = setup.GifWidth,
-            Watermark = setup.Watermark,
-            GopSeconds = setup.GopSeconds,
-            CursorRadius = setup.CursorRadius,
-            CursorColor = setup.CursorColor,
-            CursorOpacity = setup.CursorOpacity,
-            CursorShadow = setup.CursorShadow
-        };
-
-        var session = RecordingSession.TryStart(options, out var error);
-
-        if (session is null)
-        {
-            _toasts?.Show(error ?? "无法开始屏幕录制。", TimeSpan.FromSeconds(6));
-            Log.Error($"[record] {error}");
-            return null;
-        }
-
-        Log.Info(
-            $"[record] 开始录制：{outputPath}" +
-            $"（{setup.FramesPerSecond}fps，CRF {setup.Crf}，编码器 {session.EncoderName}）");
-        return session;
     }
 
     /// <summary>
