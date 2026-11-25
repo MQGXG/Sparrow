@@ -915,6 +915,19 @@
                   ToolTip.Tip="更多识别：文本 / 表格">
             <Path Data="{StaticResource IconTable}" StrokeThickness="1.1" />
           </Button>
+          <!-- 转换：直接放到主条，和 snow-shot 一样常用动作不藏进弹层 -->
+          <Button x:Name="ConvertMarkdownButton"
+                  Classes="tool"
+                  Click="OnConvertMarkdownClick"
+                  ToolTip.Tip="转换为 Markdown（表格）">
+            <Path Data="{StaticResource IconMarkdown}" StrokeThickness="1.1" />
+          </Button>
+          <Button x:Name="ConvertHtmlButton"
+                  Classes="tool"
+                  Click="OnConvertHtmlClick"
+                  ToolTip.Tip="转换为 HTML（表格）">
+            <Path Data="{StaticResource IconHtml}" StrokeThickness="1.1" />
+          </Button>
           <Button x:Name="SaveButton"
                   Classes="tool" Click="OnSaveClick" ToolTip.Tip="保存为 PNG（S）">
             <Path Data="{StaticResource IconSave}" StrokeThickness="1.161" />
