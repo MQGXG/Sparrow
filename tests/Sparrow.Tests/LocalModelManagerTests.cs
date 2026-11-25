@@ -44,17 +44,13 @@ public sealed class LocalModelManagerTests
     }
 
     [Fact]
-    public async Task 没有下载源的模型直接返回空()
+    public void TranslateGemma_配置了国内优先的下载源()
     {
-        var root = Path.Combine(Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
-        var manager = new LocalModelManager(new NullLog(), root);
+        var manager = new LocalModelManager(new NullLog(), Path.GetTempPath());
+        var model = manager.All.Single(item => item.Id == "translategemma-4b");
 
-        // TranslateGemma 目前没配下载源，不能让调用方卡在下载里
-        var path = await manager.EnsureAsync(
-            "translategemma-4b",
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        path.ShouldBeNull();
+        model.DownloadUrls.ShouldNotBeEmpty();
+        model.DownloadUrls[0].ShouldStartWith("https://modelscope.cn/");
     }
 
     [Fact]
@@ -117,9 +113,12 @@ public sealed class LocalModelManagerTests
         manager.SourcesFor("hy-mt-1.8b")
             .ShouldBe(manager.All.Single(m => m.Id == "hy-mt-1.8b").DownloadUrls);
 
-        // 没有下载源的模型给空列表，不是抛异常
-        manager.SourcesFor("translategemma-4b").ShouldBeEmpty();
+        // 未知模型给空列表，不是抛异常
         manager.SourcesFor("no-such-model").ShouldBeEmpty();
+
+        // TranslateGemma 现在也有内置源（ModelScope 在前）
+        manager.SourcesFor("translategemma-4b")
+            .ShouldBe(manager.All.Single(m => m.Id == "translategemma-4b").DownloadUrls);
     }
 
     [Fact]
@@ -157,10 +156,10 @@ public sealed class LocalModelManagerTests
         notDownloaded.IsInstalled.ShouldBeFalse();
         notDownloaded.ShowDownload.ShouldBeTrue();
 
-        // TranslateGemma 还没配下载源：下载按钮不能出现，状态要说明原因
-        var noSource = viewModel.LocalModels.Single(item => item.Info.Id == "translategemma-4b");
-        noSource.ShowDownload.ShouldBeFalse();
-        noSource.StateText.ShouldBe("暂未配置下载源");
+        // TranslateGemma 已有下载源：和其他模型一样显示下载按钮
+        var gemma = viewModel.LocalModels.Single(item => item.Info.Id == "translategemma-4b");
+        gemma.ShowDownload.ShouldBeTrue();
+        gemma.StateText.ShouldBe("未下载");
     }
 
     [Fact]

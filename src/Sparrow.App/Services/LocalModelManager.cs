@@ -64,12 +64,15 @@ public sealed class LocalModelManager : ILocalModels
             "translategemma-4b",
             "TranslateGemma · 4B",
             "55 种语言，小语种覆盖更广",
-            2_300_000_000,
+            2_489_909_312,
             8,
             "Gemma 使用条款",
-            // 官方未提供稳定的 GGUF 直链；留空时设置页会提示「暂未配置下载源」，
-            // 用户仍可在设置里填自己的镜像地址
-            [])
+            [
+                // ModelScope 在前（国内直连），HuggingFace 兜底。
+                // 同一份 Q4_K_M（bullerwins 量化，42ailab 镜像）。
+                "https://modelscope.cn/models/42ailab/TranslateGemma-4B-GGUF/resolve/master/translategemma-4b-it-Q4_K_M.gguf",
+                "https://huggingface.co/42ailab/TranslateGemma-4B-GGUF/resolve/main/translategemma-4b-it-Q4_K_M.gguf"
+            ])
     ];
 
     public bool IsInstalled(string modelId) => File.Exists(PathFor(modelId));
