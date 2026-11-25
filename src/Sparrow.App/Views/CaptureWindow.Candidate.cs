@@ -294,12 +294,6 @@ public partial class CaptureWindow
     /// <summary>Esc 的逐级退出逻辑；键盘钩子和正常 OnKeyDown 共用。</summary>
     private bool HandleEscape()
     {
-        if (_colorSampling)
-        {
-            ExitColorSampling();
-            return true;
-        }
-
         if (_angleDraft.IsActive || _anglePhase != AnglePhase.None)
         {
             CancelAngleDraft();
@@ -335,7 +329,6 @@ public partial class CaptureWindow
     {
         if (_hasSelection
             || OcrLayer.IsVisible
-            || _colorSampling
             || _mode != DragMode.None
             || _elementSelection.Target != ElementSelectionTarget.WindowSubElement
             || !_elementSelection.HasSelection)

@@ -304,22 +304,7 @@ public sealed partial class CaptureWindowTests
     }
 
     [AvaloniaFact]
-    public void 取色_按I进入_Esc退出()
-    {
-        var window = CreateWithSelection();
-
-        window.ColorSampling.ShouldBeFalse();
-        window.KeyPress(Key.I, RawInputModifiers.None, PhysicalKey.I, null);
-        window.ColorSampling.ShouldBeTrue();
-
-        window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
-        window.ColorSampling.ShouldBeFalse();
-
-        window.Close();
-    }
-
-    [AvaloniaFact]
-    public void 取色_卡片跟随鼠标显示像素网格()
+    public void 取色器_有选区时自动显示_选区外隐藏()
     {
         var window = new CaptureWindow();
         window.Width = 240;
@@ -327,12 +312,37 @@ public sealed partial class CaptureWindowTests
         window.Show();
         window.SetFrozenPixelsForTest(new byte[240 * 160 * 4], 240, 160);
 
-        window.ToggleColorSampling();
-        window.MouseMove(new Point(60, 50));
+        window.MouseDown(new Point(20, 20), MouseButton.Left);
+        window.MouseMove(new Point(200, 120));
+        window.MouseUp(new Point(200, 120), MouseButton.Left);
 
+        // 选区内移动：取色器自动出现，不需要按 I
+        window.MouseMove(new Point(100, 80));
         window.ColorSampling.ShouldBeTrue();
         window.ColorProbe.IsVisible.ShouldBeTrue();
-        // 取色用独立方形卡片，不再叠圆形放大镜
+
+        // 选区外移动：隐藏
+        window.MouseMove(new Point(5, 5));
+        window.ColorProbe.IsVisible.ShouldBeFalse();
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void 取色器_卡片跟随鼠标显示像素网格()
+    {
+        var window = new CaptureWindow();
+        window.Width = 240;
+        window.Height = 160;
+        window.Show();
+        window.SetFrozenPixelsForTest(new byte[240 * 160 * 4], 240, 160);
+
+        window.MouseDown(new Point(20, 20), MouseButton.Left);
+        window.MouseMove(new Point(200, 120));
+        window.MouseUp(new Point(200, 120), MouseButton.Left);
+
+        window.MouseMove(new Point(60, 50));
+        window.ColorProbe.IsVisible.ShouldBeTrue();
         window.Magnifier.IsVisible.ShouldBeFalse();
 
         // 卡片里的像素预览随光标平移，取色跟手
@@ -340,15 +350,7 @@ public sealed partial class CaptureWindowTests
         window.MouseMove(new Point(140, 90));
 
         Canvas.GetLeft(window.ProbePreviewImage).ShouldNotBe(before);
-
-        // 点击复制后退出取色，取色器不再跟随鼠标
-        window.MouseDown(new Point(140, 90), MouseButton.Left);
-        window.MouseUp(new Point(140, 90), MouseButton.Left);
-        window.ColorSampling.ShouldBeFalse();
-        window.ColorProbe.IsVisible.ShouldBeFalse();
-
-        window.ExitColorSampling();
-        window.ColorProbe.IsVisible.ShouldBeFalse();
+        window.ColorProbe.IsVisible.ShouldBeTrue();
 
         window.Close();
     }

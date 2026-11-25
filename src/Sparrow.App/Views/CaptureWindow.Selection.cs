@@ -799,13 +799,6 @@ public partial class CaptureWindow
             return;
         }
 
-        // 取色是最外层：先退出取色，再谈别的
-        if (_colorSampling)
-        {
-            ExitColorSampling();
-            return;
-        }
-
         if (CustomColorPanel.IsVisible)
         {
             CustomColorPanel.IsVisible = false;

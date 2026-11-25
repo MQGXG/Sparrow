@@ -374,7 +374,7 @@ public partial class CaptureWindow : Window
     private double _cornerRadius;
 
     /// <summary>取色模式：光标处显示色值，点击复制并写回标注颜色。</summary>
-    private bool _colorSampling;
+    private bool _colorSampling = true;
 
     /// <summary>取色格式：0 = HEX，1 = RGB，2 = HSL（Shift+I 循环）。</summary>
     private int _colorFormat;

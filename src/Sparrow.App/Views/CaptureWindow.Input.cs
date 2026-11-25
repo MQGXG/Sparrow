@@ -30,6 +30,17 @@ public partial class CaptureWindow
             Key == key && Modifiers == modifiers;
     }
 
+    /// <summary>宿主注入的截图窗口快捷键（空字符串 = 禁用）。</summary>
+    internal readonly record struct CaptureShortcutConfig(
+        string? Recognize,
+        string? Translate,
+        string? Copy,
+        string? Save,
+        string? Pin,
+        string? Scroll,
+        string? Color,
+        string? OcrBox);
+
     private CaptureShortcut? _recognizeShortcut = ParseShortcut("R");
     private CaptureShortcut? _translateShortcut = ParseShortcut("T");
     private CaptureShortcut? _copyShortcut = ParseShortcut("C");
@@ -40,24 +51,16 @@ public partial class CaptureWindow
     private CaptureShortcut? _ocrBoxShortcut = ParseShortcut("B");
 
     /// <summary>宿主注入截图窗口内的动作键；空字符串表示禁用该快捷键。</summary>
-    internal void ConfigureCaptureShortcuts(
-        string? recognize,
-        string? translate,
-        string? copy,
-        string? save,
-        string? pin,
-        string? scroll,
-        string? color,
-        string? ocrBox)
+    internal void ConfigureCaptureShortcuts(CaptureShortcutConfig config)
     {
-        _recognizeShortcut = ParseShortcut(recognize);
-        _translateShortcut = ParseShortcut(translate);
-        _copyShortcut = ParseShortcut(copy);
-        _saveShortcut = ParseShortcut(save);
-        _pinShortcut = ParseShortcut(pin);
-        _scrollShortcut = ParseShortcut(scroll);
-        _colorShortcut = ParseShortcut(color);
-        _ocrBoxShortcut = ParseShortcut(ocrBox);
+        _recognizeShortcut = ParseShortcut(config.Recognize);
+        _translateShortcut = ParseShortcut(config.Translate);
+        _copyShortcut = ParseShortcut(config.Copy);
+        _saveShortcut = ParseShortcut(config.Save);
+        _pinShortcut = ParseShortcut(config.Pin);
+        _scrollShortcut = ParseShortcut(config.Scroll);
+        _colorShortcut = ParseShortcut(config.Color);
+        _ocrBoxShortcut = ParseShortcut(config.OcrBox);
         UpdateCaptureShortcutTips();
     }
 
@@ -173,7 +176,7 @@ public partial class CaptureWindow
     /// <summary>I：取色；取色中 Shift+I：切换格式（HEX / RGB / HSL）。</summary>
     private bool HandleColorKey(KeyEventArgs e, Key key)
     {
-        // 取色中 Shift+I 仍用于切换颜色格式
+        // Shift+I：切换颜色格式（HEX / RGB / HSL）
         if (_colorSampling && key == Key.I && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {
             _colorFormat = (_colorFormat + 1) % 3;
@@ -184,7 +187,8 @@ public partial class CaptureWindow
         if (_colorShortcut?.Matches(key, e.KeyModifiers) != true)
             return false;
 
-        ToggleColorSampling();
+        // 取色器常驻跟随，按 I 直接复制当前颜色
+        CommitColorSample();
         return true;
     }
 
@@ -450,18 +454,24 @@ public partial class CaptureWindow
         UpdateCursor(_lastPointerPoint);
     }
 
-    /// <summary>把光标处的颜色和坐标写进取色卡片，并跟着光标摆位。</summary>
-    private void UpdateColorProbe(Point point)
+    /// <summary>有选区、光标在选区内时自动显示取色器；不需要先按 I 进入。</summary>
+    private void UpdateAutoColorProbe(Point point)
     {
-        if (!_colorSampling)
+        if (!_colorSampling || !_hasSelection || !_selection.Contains(point))
         {
             ColorProbe.IsVisible = false;
             return;
         }
 
+        UpdateColorProbe(point);
+    }
+
+    /// <summary>把光标处的颜色和坐标写进取色卡片，并跟着光标摆位。</summary>
+    private void UpdateColorProbe(Point point)
+    {
         if (SampleColorAt(point) is not { } color)
         {
-            // 冻结帧还没准备好：先给反馈，避免按 I 后像没反应
+            // 冻结帧还没准备好：先给反馈，避免看起来没反应
             ProbeValue.Text = "准备中…";
             ProbePosition.Text = $"{point.X:0}, {point.Y:0}";
             ColorProbe.IsVisible = true;
@@ -509,7 +519,7 @@ public partial class CaptureWindow
         Canvas.SetTop(ColorProbe, top);
     }
 
-    /// <summary>点一下复制当前颜色并退出取色，回到选区操作。</summary>
+    /// <summary>复制当前光标颜色；取色器本身常驻，不需要进入/退出模式。</summary>
     private void CommitColorSample()
     {
         if (SampleColorAt(_lastPointerPoint) is { } color)
@@ -517,9 +527,8 @@ public partial class CaptureWindow
             CopyText?.Invoke(FormatColor(color, _colorFormat));
             _noteColor = color;
             UpdateStyleButtons();
+            ProbeValue.Text = $"{FormatColor(color, _colorFormat)} 已复制";
         }
-
-        ExitColorSampling();
     }
 
     /// <summary>

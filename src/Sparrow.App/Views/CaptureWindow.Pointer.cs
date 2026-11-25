@@ -71,13 +71,7 @@ public partial class CaptureWindow
             HideToolGroupPopover();
         }
 
-        // 取色模式：左键取样并退出，不参与框选
-        if (_colorSampling)
-        {
-            CommitColorSample();
-            e.Handled = true;
-            return;
-        }
+        // 取色器是常驻预览，不拦截点击；点击画布仍然走选区 / 标注操作
 
         // 角度：两次拖拽；草稿存在时第二段优先于边框拉伸
         if (_tool == AnnotationTool.Angle && _hasSelection && _selection.Contains(point))
@@ -270,13 +264,8 @@ public partial class CaptureWindow
                 ScheduleCloseToolGroupPopover();
         }
 
-        // 取色模式：光标处只更新探针，不做别的
-        if (_colorSampling)
-        {
-            UpdateColorProbe(point);
-            e.Handled = true;
-            return;
-        }
+        // 取色器跟随：有选区且光标在选区内时实时预览颜色
+        UpdateAutoColorProbe(point);
 
         // 橡皮擦拖动：连续擦掉指针下的标注
         if (_erasing)
