@@ -609,7 +609,7 @@
         <TextBlock FontSize="9"
                    HorizontalAlignment="Center"
                    Foreground="{StaticResource TextMutedBrush}"
-                   Text="点击复制 · Shift+I 格式 · Esc 退出" />
+                   Text="按 I 复制 · Shift+I 格式" />
       </StackPanel>
     </Border>
 
