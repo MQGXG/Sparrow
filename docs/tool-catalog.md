@@ -73,6 +73,11 @@ Tool : InputShape × Params → OutputShape
 
 **例外的只有一种**：一个插件声明多个工具（`plugin.json` 的 `tools` 数组有多项）。目前每个插件都只声明一个工具；OCR 的单张 / 多张已经合并成同一个 `sparrow.ocr.image`。
 
+**不进本表的一类**：**会话型采集**（目前只有屏幕录制）。它没有「一次调用」的输入/输出签名，
+属于宿主运行时，与截图、滚动拼接同级，既不出现在工具矩阵里，也不作为插件分发。
+判定依据见 [`plugin-model.md`](plugin-model.md#为什么屏幕录制不是插件2026-11-25-结论)；
+录制产物的后处理（转 GIF / 压缩 / 裁剪 / 抽帧）仍然是插件。
+
 插件机制细节见 [`plugin-model.md`](plugin-model.md)。
 
 ---
@@ -214,6 +219,28 @@ Tool : InputShape × Params → OutputShape
 |---|---|---|---|:--:|:--:|---|
 | `sparrow.window.pin` | 窗口置顶 | Nothing | Text | M2 | ✅ 完成 | DeskPins 式：全屏拾取（图钉光标、右键/Esc 取消、穿透宿主面板）+ 标题栏图钉（点击取消，退出恢复）；拾取与图钉走宿主通用 `IWindowOverlay` |
 
+### 3.11 会话型采集（宿主能力，不是工具）
+
+> **本节不进工具矩阵。** 它没有「一次调用」的签名，属于宿主运行时；
+> 与截图、滚动拼接同级，不推导插件 ID、不出现插件目录。
+> 判定依据见 [`plugin-model.md`](plugin-model.md#为什么屏幕录制不是插件2026-11-25-结论)。
+
+| 能力 | 入口 | 产物 | 阶段 | 状态 | 备注 |
+|---|---|---|---|:--:|---|
+| 屏幕录制 | `Ctrl+Alt+R` → 选区 → 倒计时 | MP4 文件（FileSet） | P2 | ⬜ | 会话：开始 / 暂停 / 停止；控制条、停止热键、流式落盘在宿主；H.264 硬编可放独立 worker |
+
+### 3.12 视频后处理（插件）
+
+> 录制结束后产物以 `FileSetInput` 进入这些工具：一次调用、纯计算、可并发、可卸载，符合插件契约。
+> 它们与录制本身解耦——没有录制功能也能对本地视频文件使用（拖入文件即可）。
+
+| ID | 名称 | 输入 | 输出 | 阶段 | 状态 | 备注 |
+|---|---|---|---|:--:|:--:|---|
+| `sparrow.video.toGif` | 视频转 GIF | Files | Files | P2 | ⬜ | 需 ffmpeg worker；可调帧率 / 尺寸 / 循环 |
+| `sparrow.video.compress` | 视频压缩 | Files | Files | P2 | ⬜ | 码率 / 分辨率 / 编码格式 |
+| `sparrow.video.trim` | 视频裁剪 | Files | Files | P2 | ⬜ | 起止时间点；建议后续加片段预览 |
+| `sparrow.video.frames` | 抽帧 | Files | Files | P2 | ⬜ | 按间隔或指定时间点导出 PNG |
+
 ---
 
 ## 四、集合的缺口分析
@@ -226,6 +253,7 @@ Tool : InputShape × Params → OutputShape
 | `RichText` 输入无人使用 | 剪贴板历史只存纯文本，是有意的简化；RichText 等真实需求出现再做 |
 | `Table` 只有输出没有输入 | 「表格」整理模式先以 Tab 分隔文本垫上；等 Table 输入工具达到 2 个再抽象 |
 | `Files` 输入侧工具偏少 | 文件域是 P1 洼地，但优先级低于 SVG（SVG 是产品起源） |
+| 视频没有输入/输出形态 | 录制本身不做工具（宿主会话）；录制产物走 `Files`，所以视频后处理插件不需要新形态，正好补 `Files` 域 |
 | `Selection` 平台差异大 | 只有 Windows 能稳定拿前台选区；macOS 需要辅助功能授权 |
 
 ### 4.1 接力链（已验证会成立的组合）

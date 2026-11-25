@@ -1,6 +1,7 @@
 # Sparrow 插件与内置功能清单
 
 > 核对时间：2026-11-19
+> 补充判定：2026-11-25（屏幕录制归类）
 > 判定依据：`docs/plugin-model.md` 第十二节
 
 ## 判定口径
@@ -32,6 +33,7 @@
 |---|---|---|---|
 | 输入采集 | 截图、冻结帧、区域/窗口/控件识别 | `CaptureWindow` 1440 行、`UiElementProbe` 653、`WindowCandidates`、`ScreenCapture` 271 | 产生 `ImageInput`，是工具的输入源 |
 | 输入采集 | 滚动截图与拼接 | `ScrollCaptureService`、`ScrollStitcher` | 同上 |
+| 输入采集 | **屏幕录制会话（P2 规划）** | 待建（复用 `WgcCapture`；编码器独立 worker） | 会话型采集：开始/停止、控制条、流式落盘、停止热键都在宿主 |
 | 输入采集 | 剪贴板监听、文本/图片/文件读取 | `ClipboardMonitor` 467、`Win32Clipboard` 377 | 系统信号 → `IToolInput` |
 | 输入采集 | 文件拖入与按次授权 | `ScopedFileAccess`、`ToolContext.Files` | 安全边界必须在宿主 |
 | 数据与界面 | 剪贴板历史（SQLite、收藏、标签、分类、时间分叠、来源筛选、缩略图） | `ClipboardHistoryStore` 1238、`ClipboardHistoryViewModel` 660 | 需要宿主数据读写 + 富 UI |
@@ -50,6 +52,7 @@
 |---|---|---|
 | `sparrow.plugin.clipboard-history` | **已删除**（2026-11-19） | 曾为插件，后升级为工作区页，目录残留已清 |
 | `window-pin` | 插件，但依赖宿主覆盖能力 | 遮挡/图钉在宿主，插件只做置顶逻辑，是最薄的一个 |
+| 屏幕录制 | **宿主能力，不是插件**（P2 规划） | 会话型 + 流式写盘 + 控制条，五条硬约束见 `plugin-model.md`；录制后的转 GIF/压缩/裁剪才是插件 |
 | OCR worker | 插件私有子进程 | 宿主不知道 worker 存在，符合边界 |
 | 插件源码 | 全部只引用 `Sparrow.Plugin.Sdk` | 无一个引用 `Sparrow.App` |
 

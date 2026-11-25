@@ -366,6 +366,10 @@ dir /s src\Sparrow.App\bin\Debug\net10.0\plugins\Sparrow.Plugin.Sdk.dll
 
 目前只有 OCR 符合（Paddle 78MB + OpenCV 38MB，且无 arm64）。
 
+> 规划中的屏幕录制编码器属于同一类「重原生」，但它不是插件：录制会话在宿主
+> （见 [`plugin-model.md`](plugin-model.md#为什么屏幕录制不是插件2026-11-25-结论)），
+> 只有编码这一步可以拆到 worker。不要为了做录屏而发明一个"录屏插件"。
+
 **注意**：拆进程的是**重活**，不是插件本身。OCR 插件仍然是普通插件，它只是把识别委托给 `Sparrow.Ocr.Host` 子进程。
 
 不要因为「感觉会很慢」就提前拆进程——进程间传图的成本（4K 截图 25MB，序列化+拷贝 ≈ 100ms+）比想象中高。
