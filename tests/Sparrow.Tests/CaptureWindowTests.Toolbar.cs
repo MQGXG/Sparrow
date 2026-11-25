@@ -341,10 +341,11 @@ public sealed partial class CaptureWindowTests
 
         Canvas.GetLeft(window.ProbePreviewImage).ShouldNotBe(before);
 
-        // 点击复制后仍留在取色模式，可以继续取别的颜色
+        // 点击复制后退出取色，取色器不再跟随鼠标
         window.MouseDown(new Point(140, 90), MouseButton.Left);
         window.MouseUp(new Point(140, 90), MouseButton.Left);
-        window.ColorSampling.ShouldBeTrue();
+        window.ColorSampling.ShouldBeFalse();
+        window.ColorProbe.IsVisible.ShouldBeFalse();
 
         window.ExitColorSampling();
         window.ColorProbe.IsVisible.ShouldBeFalse();

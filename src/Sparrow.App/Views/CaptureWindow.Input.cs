@@ -509,7 +509,7 @@ public partial class CaptureWindow
         Canvas.SetTop(ColorProbe, top);
     }
 
-    /// <summary>点一下复制当前颜色；保持取色模式，可以继续移动取别的颜色。</summary>
+    /// <summary>点一下复制当前颜色并退出取色，回到选区操作。</summary>
     private void CommitColorSample()
     {
         if (SampleColorAt(_lastPointerPoint) is { } color)
@@ -517,8 +517,9 @@ public partial class CaptureWindow
             CopyText?.Invoke(FormatColor(color, _colorFormat));
             _noteColor = color;
             UpdateStyleButtons();
-            ProbeValue.Text = $"{FormatColor(color, _colorFormat)} 已复制";
         }
+
+        ExitColorSampling();
     }
 
     /// <summary>
