@@ -58,7 +58,10 @@
                   SelectedIndex="0"
                   HorizontalAlignment="Stretch">
           <ComboBoxItem>MP4</ComboBoxItem>
+          <ComboBoxItem>MKV</ComboBoxItem>
+          <ComboBoxItem>MOV</ComboBoxItem>
           <ComboBoxItem>GIF</ComboBoxItem>
+          <ComboBoxItem>APNG</ComboBoxItem>
         </ComboBox>
 
         <TextBlock Grid.Row="0" Grid.Column="2" Classes="caption" Text="质量" />
@@ -90,9 +93,9 @@
                   IsChecked="True" />
       </Grid>
 
-      <!-- 编码级别 / 延时 / 录制时长 / GOP -->
+      <!-- 编码级别 / 编码器 / 延时 / 录制时长 / GOP -->
       <Grid ColumnDefinitions="Auto,150,Auto,150,Auto,140"
-            RowDefinitions="Auto,Auto"
+            RowDefinitions="Auto,Auto,Auto"
             ColumnSpacing="10"
             RowSpacing="10">
         <TextBlock Grid.Row="0" Grid.Column="0" Classes="caption" Text="编码级别" />
@@ -129,6 +132,16 @@
                  x:Name="GopBox"
                  Text="0"
                  PlaceholderText="0 = 默认" />
+
+        <TextBlock Grid.Row="2" Grid.Column="0" Classes="caption" Text="编码器" />
+        <ComboBox Grid.Row="2" Grid.Column="1"
+                  x:Name="EncoderBox"
+                  SelectedIndex="0"
+                  HorizontalAlignment="Stretch" />
+        <TextBlock Grid.Row="2" Grid.Column="2"
+                   Grid.ColumnSpan="4"
+                   Classes="caption"
+                   Text="自动按显卡选硬编（QSV/NVENC/AMF/MF），不可用时回退 x264" />
       </Grid>
 
       <!-- 光标高亮参数 -->
@@ -184,7 +197,7 @@
             ColumnSpacing="10"
             RowSpacing="10">
 
-        <TextBlock Grid.Row="0" Grid.Column="0" Classes="caption" Text="GIF 帧率" />
+        <TextBlock Grid.Row="0" Grid.Column="0" Classes="caption" Text="动画帧率" />
         <ComboBox Grid.Row="0" Grid.Column="1"
                   x:Name="GifFpsBox"
                   SelectedIndex="1"
@@ -194,7 +207,7 @@
           <ComboBoxItem>20 帧/秒</ComboBoxItem>
         </ComboBox>
 
-        <TextBlock Grid.Row="0" Grid.Column="2" Classes="caption" Text="GIF 尺寸" />
+        <TextBlock Grid.Row="0" Grid.Column="2" Classes="caption" Text="动画尺寸" />
         <ComboBox Grid.Row="0" Grid.Column="3"
                   x:Name="GifWidthBox"
                   SelectedIndex="1"

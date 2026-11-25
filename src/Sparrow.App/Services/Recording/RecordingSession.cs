@@ -52,6 +52,9 @@ internal sealed class RecordingSession : IDisposable
 
     public string OutputPath => _options.OutputPath;
 
+    /// <summary>实际使用的视频编码器（h264_qsv / h264_nvenc / h264_amf / h264_mf / libx264）。</summary>
+    public string EncoderName => _encoder.EncoderName;
+
     /// <summary>本次是否在录系统声音（控制条显示用）。</summary>
     public bool HasSystemAudio => _options.SystemAudio;
 
@@ -113,8 +116,10 @@ internal sealed class RecordingSession : IDisposable
         if (source is null)
             return null;
 
-        // 视频先写临时文件；有音频时等停止再合并成最终 MP4。
-        var videoPath = options.OutputPath + ".video.mp4";
+        // 视频先写临时文件；有音频时等停止再合并成最终文件。
+        // 容器跟输出格式走：MKV/MOV 让 ffmpeg 按扩展名选封装器。
+        var container = options.Format is "mkv" or "mov" ? options.Format : "mp4";
+        var videoPath = options.OutputPath + ".video." + container;
 
         var encoder = FfmpegEncoder.TryCreate(
             videoPath,
@@ -124,6 +129,7 @@ internal sealed class RecordingSession : IDisposable
             options.Crf,
             options.Preset,
             options.GopSeconds,
+            options.Encoder,
             out var encoderError);
 
         if (encoder is null)
@@ -243,9 +249,20 @@ internal sealed class RecordingSession : IDisposable
 
         try
         {
-            if (_options.Gif)
+            if (_options.Format == "gif")
             {
                 FfmpegEncoder.ToGif(
+                    _videoPath,
+                    _options.OutputPath,
+                    _options.GifFps,
+                    _options.GifWidth);
+
+                return;
+            }
+
+            if (_options.Format == "apng")
+            {
+                FfmpegEncoder.ToApng(
                     _videoPath,
                     _options.OutputPath,
                     _options.GifFps,

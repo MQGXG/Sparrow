@@ -52,7 +52,7 @@ internal static class RecordingProbe
             WindowHandle = window,
             OutputPath = path,
             FramesPerSecond = 30,
-            Gif = gif,
+            Format = gif ? "gif" : "mp4",
             GifFps = 15,
             GifWidth = 720,
             Watermark = BuildProbeWatermark(),

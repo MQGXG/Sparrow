@@ -28,14 +28,20 @@ internal sealed record RecordingOptions
     /// <summary>ffmpeg 编码 preset：ultrafast / superfast / veryfast / faster / medium。</summary>
     public string Preset { get; init; } = "veryfast";
 
+    /// <summary>
+    /// 视频编码器：auto（按显卡自动挑）或具体名字
+    /// h264_qsv / h264_nvenc / h264_amf / h264_mf / libx264。
+    /// </summary>
+    public string Encoder { get; init; } = "auto";
+
     /// <summary>开始前的倒计时秒数；0 表示立即开始。</summary>
     public int CountdownSeconds { get; init; }
 
     /// <summary>录制时长上限；null 或 0 表示不限。</summary>
     public TimeSpan? MaxDuration { get; init; }
 
-    /// <summary>true = 录制后转 GIF（忽略音频）；false = MP4。</summary>
-    public bool Gif { get; init; }
+    /// <summary>输出格式：mp4 / mkv / mov（视频）或 gif / apng（无声图片动画）。</summary>
+    public string Format { get; init; } = "mp4";
 
     /// <summary>GIF 帧率（10/15/20）。</summary>
     public int GifFps { get; init; } = 15;

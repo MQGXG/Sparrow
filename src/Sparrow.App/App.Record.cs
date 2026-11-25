@@ -46,12 +46,14 @@ public partial class App
             return;
         }
 
-        var panel = new RecordingSetupWindow();
+        var panel = new RecordingSetupWindow(_appSettings.RecordEncoder);
 
         panel.Finished += setup =>
         {
             if (setup is null)
                 return;
+
+            PersistRecordingEncoder(setup.Encoder);
 
             if (setup.Mode == RecordingMode.Region)
             {
@@ -71,6 +73,17 @@ public partial class App
         };
 
         panel.Show();
+    }
+
+    /// <summary>把用户选的编码器写回 settings.json；下次打开面板继续用。</summary>
+    private void PersistRecordingEncoder(string? encoder)
+    {
+        if (string.IsNullOrWhiteSpace(encoder)
+            || string.Equals(_appSettings.RecordEncoder, encoder, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        _appSettings = _appSettings with { RecordEncoder = encoder };
+        _settingsStore?.Save(_appSettings);
     }
 
     /// <summary>
@@ -226,7 +239,14 @@ public partial class App
             : setup.OutputDirectory;
 
         var baseName = string.IsNullOrWhiteSpace(setup.BaseName) ? "Sparrow" : setup.BaseName;
-        var extension = setup.Gif ? ".gif" : ".mp4";
+        var extension = setup.Format switch
+        {
+            "gif" => ".gif",
+            "apng" => ".apng",
+            "mkv" => ".mkv",
+            "mov" => ".mov",
+            _ => ".mp4"
+        };
 
         var outputPath = Path.Combine(
             directory,
@@ -240,6 +260,7 @@ public partial class App
             FramesPerSecond = setup.FramesPerSecond,
             Crf = setup.Crf,
             Preset = setup.Preset,
+            Encoder = setup.Encoder,
             CountdownSeconds = setup.CountdownSeconds,
             MaxDuration = setup.MaxDurationSeconds > 0
                 ? TimeSpan.FromSeconds(setup.MaxDurationSeconds)
@@ -247,7 +268,7 @@ public partial class App
             IncludeCursor = setup.IncludeCursor,
             SystemAudio = setup.SystemAudio,
             Microphone = setup.Microphone,
-            Gif = setup.Gif,
+            Format = setup.Format,
             GifFps = setup.GifFps,
             GifWidth = setup.GifWidth,
             Watermark = setup.Watermark,
@@ -267,7 +288,9 @@ public partial class App
             return null;
         }
 
-        Log.Info($"[record] 开始录制：{outputPath}（{setup.FramesPerSecond}fps，CRF {setup.Crf}）");
+        Log.Info(
+            $"[record] 开始录制：{outputPath}" +
+            $"（{setup.FramesPerSecond}fps，CRF {setup.Crf}，编码器 {session.EncoderName}）");
         return session;
     }
 

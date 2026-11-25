@@ -37,6 +37,9 @@ public sealed record AppSettings
     /// <summary>屏幕录制开始/停止热键，格式 "Ctrl+Alt+Shift+R"。</summary>
     public string RecordHotkey { get; init; } = "Ctrl+Alt+Shift+R";
 
+    /// <summary>录屏编码器：auto / h264_qsv / h264_nvenc / h264_amf / h264_mf / libx264。</summary>
+    public string RecordEncoder { get; init; } = "auto";
+
     /// <summary>剪贴板快取面板是否置顶（标题行的图钉）。</summary>
     public bool ClipboardPanelTopmost { get; init; }
 

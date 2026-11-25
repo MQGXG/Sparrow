@@ -27,7 +27,7 @@ public sealed record RecordingSetup(
     bool IncludeCursor,
     bool SystemAudio = false,
     bool Microphone = false,
-    bool Gif = false,
+    string Format = "mp4",
     int GifFps = 15,
     int GifWidth = 720,
     WatermarkLayout? Watermark = null,
@@ -40,7 +40,8 @@ public sealed record RecordingSetup(
     int CursorRadius = 22,
     uint CursorColor = 0xFFFFD640,
     byte CursorOpacity = 210,
-    bool CursorShadow = false)
+    bool CursorShadow = false,
+    string Encoder = "auto")
 {
     public static RecordingSetup Default { get; } =
         new(RecordingMode.Fullscreen, 23, 30, true);
@@ -58,6 +59,11 @@ public partial class RecordingSetupWindow : Window
     private WatermarkLayout? _watermark;
 
     public RecordingSetupWindow()
+        : this(null)
+    {
+    }
+
+    public RecordingSetupWindow(string? savedEncoder)
     {
         InitializeComponent();
 
@@ -67,6 +73,69 @@ public partial class RecordingSetupWindow : Window
             "recordings");
 
         _ = DetectCameraAsync();
+        _ = LoadEncodersAsync(savedEncoder);
+    }
+
+    /// <summary>
+    /// 填充编码器下拉：自动 + 本机可用的硬编 + 软件编码。
+    /// 探测放在后台线程，面板先显示“自动”，避免打开时卡住。
+    /// </summary>
+    private async Task LoadEncodersAsync(string? savedEncoder)
+    {
+        EncoderBox.Items.Clear();
+        EncoderBox.Items.Add(new ComboBoxItem { Content = "自动（推荐）", Tag = "auto" });
+        EncoderBox.SelectedIndex = 0;
+
+        var ffmpeg = FfmpegLocator.Find();
+
+        if (ffmpeg is null)
+            return;
+
+        IReadOnlyDictionary<string, bool> availability;
+
+        try
+        {
+            availability = await Task.Run(() => VideoEncoderSelector.GetAvailability(ffmpeg));
+        }
+        catch
+        {
+            return;
+        }
+
+        var options = new (string Name, string Label)[]
+        {
+            ("h264_qsv", "硬件 · Intel QSV"),
+            ("h264_nvenc", "硬件 · NVIDIA NVENC"),
+            ("h264_amf", "硬件 · AMD AMF"),
+            ("h264_mf", "硬件 · Media Foundation"),
+            ("libx264", "软件 · x264")
+        };
+
+        foreach (var (name, label) in options)
+        {
+            var available = availability.TryGetValue(name, out var value) && value;
+
+            EncoderBox.Items.Add(new ComboBoxItem
+            {
+                Content = available ? label : $"{label}（不可用）",
+                Tag = name,
+                IsEnabled = available
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(savedEncoder) || savedEncoder == "auto")
+            return;
+
+        for (var index = 0; index < EncoderBox.Items.Count; index++)
+        {
+            if (EncoderBox.Items[index] is ComboBoxItem item
+                && item.IsEnabled
+                && string.Equals(item.Tag as string, savedEncoder, StringComparison.OrdinalIgnoreCase))
+            {
+                EncoderBox.SelectedIndex = index;
+                return;
+            }
+        }
     }
 
     private async void OnPickOutputDirectory(object? sender, RoutedEventArgs e)
@@ -191,7 +260,18 @@ public partial class RecordingSetupWindow : Window
 
         var fps = FpsBox.SelectedIndex == 1 ? 60 : 30;
         var cursor = CursorCheck.IsChecked == true;
-        var gif = FormatBox.SelectedIndex == 1;
+
+        var format = FormatBox.SelectedIndex switch
+        {
+            1 => "mkv",
+            2 => "mov",
+            3 => "gif",
+            4 => "apng",
+            _ => "mp4"
+        };
+
+        // GIF / APNG 是无声动画，勾了音频也不采。
+        var supportsAudio = format is "mp4" or "mkv" or "mov";
 
         var gifFps = GifFpsBox.SelectedIndex switch
         {
@@ -210,8 +290,10 @@ public partial class RecordingSetupWindow : Window
         var watermark = _watermark;
 
         // GIF 没有音轨，勾了也不采。
-        var systemAudio = !gif && SystemAudio.IsChecked == true;
-        var microphone = !gif && Microphone.IsChecked == true;
+        var systemAudio = supportsAudio && SystemAudio.IsChecked == true;
+        var microphone = supportsAudio && Microphone.IsChecked == true;
+
+        var encoder = (EncoderBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "auto";
 
         Finished?.Invoke(new RecordingSetup(
             mode,
@@ -220,7 +302,7 @@ public partial class RecordingSetupWindow : Window
             cursor,
             systemAudio,
             microphone,
-            gif,
+            format,
             gifFps,
             gifWidth,
             watermark,
@@ -233,7 +315,8 @@ public partial class RecordingSetupWindow : Window
             cursorRadius,
             cursorColor,
             cursorOpacity,
-            cursorShadow));
+            cursorShadow,
+            encoder));
 
         Close();
     }
@@ -262,6 +345,8 @@ public partial class RecordingSetupWindow : Window
         GifFpsBox.SelectedIndex = 1;
         GifWidthBox.SelectedIndex = 1;
         BaseNameBox.Text = "Sparrow";
+
+        EncoderBox.SelectedIndex = 0;
 
         SystemAudio.IsChecked = false;
         Microphone.IsChecked = false;

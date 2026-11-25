@@ -20,12 +20,16 @@ internal sealed class FfmpegEncoder : IDisposable
     private bool _completed;
     private bool _disposed;
 
-    private FfmpegEncoder(Process process, string path)
+    private FfmpegEncoder(Process process, string path, string encoderName)
     {
         _process = process;
         _input = process.StandardInput.BaseStream;
         _path = path;
+        EncoderName = encoderName;
     }
+
+    /// <summary>实际使用的编码器（h264_qsv / h264_nvenc / h264_amf / h264_mf / libx264）。</summary>
+    public string EncoderName { get; }
 
     /// <summary>创建编码器；ffmpeg 缺失或启动失败返回 null。</summary>
     public static FfmpegEncoder? TryCreate(
@@ -36,6 +40,7 @@ internal sealed class FfmpegEncoder : IDisposable
         int crf,
         string preset,
         int gopSeconds,
+        string? preferredEncoder,
         out string? error)
     {
         error = null;
@@ -53,18 +58,50 @@ internal sealed class FfmpegEncoder : IDisposable
             : "veryfast";
 
         // -g 是关键帧间隔帧数：秒数 × 帧率。
-        var gop = gopSeconds > 0
-            ? $" -g {Math.Max(1, framesPerSecond * gopSeconds)}"
-            : "";
+        var gopFrames = gopSeconds > 0
+            ? Math.Max(1, framesPerSecond * gopSeconds)
+            : 0;
 
-        var arguments =
-            "-hide_banner -loglevel error " +
-            $"-f rawvideo -pix_fmt bgra -s {width}x{height} -r {framesPerSecond} -i pipe:0 " +
-            $"-c:v libx264 -preset {safePreset} -crf {crf}{gop} " +
-            "-pix_fmt yuv420p " +
-            // 分片 MP4：进程被强杀时已经写入的分片仍可播放（普通 MP4 会丢 moov）。
-            "-movflags +frag_keyframe+empty_moov+default_base_moof -y " +
-            $"\"{path}\"";
+        // 首选用户指定或按显卡挑硬编（已试编确认），失败再降级软编。
+        var choice = VideoEncoderSelector.Resolve(ffmpeg, preferredEncoder);
+
+        var encoder = Start(
+            ffmpeg, choice, path, width, height, framesPerSecond, crf, safePreset, gopFrames,
+            out var startError);
+
+        if (encoder is null && choice.Kind != VideoEncoderKind.Software)
+        {
+            encoder = Start(
+                ffmpeg,
+                new VideoEncoderChoice("libx264", VideoEncoderKind.Software),
+                path, width, height, framesPerSecond, crf, safePreset, gopFrames,
+                out startError);
+        }
+
+        if (encoder is null)
+        {
+            error = startError ?? "无法启动视频编码。";
+            return null;
+        }
+
+        return encoder;
+    }
+
+    private static FfmpegEncoder? Start(
+        string ffmpeg,
+        VideoEncoderChoice choice,
+        string path,
+        int width,
+        int height,
+        int framesPerSecond,
+        int crf,
+        string preset,
+        int gopFrames,
+        out string? error)
+    {
+        error = null;
+        var arguments = BuildArguments(
+            choice, path, width, height, framesPerSecond, crf, preset, gopFrames);
 
         try
         {
@@ -86,7 +123,7 @@ internal sealed class FfmpegEncoder : IDisposable
                 return null;
             }
 
-            return new FfmpegEncoder(process, path);
+            return new FfmpegEncoder(process, path, choice.Name);
         }
         catch (Exception ex)
         {
@@ -94,6 +131,59 @@ internal sealed class FfmpegEncoder : IDisposable
             return null;
         }
     }
+
+    /// <summary>
+    /// 不同硬编的质量/码率参数不通用：nvenc 用 -cq，qsv 用 -global_quality，
+    /// amf 用 qp，mf 只支持固定码率。
+    /// </summary>
+    private static string BuildArguments(
+        VideoEncoderChoice choice,
+        string path,
+        int width,
+        int height,
+        int framesPerSecond,
+        int crf,
+        string preset,
+        int gopFrames)
+    {
+        var gop = gopFrames > 0 ? $" -g {gopFrames}" : "";
+
+        var encoder = choice.Kind switch
+        {
+            VideoEncoderKind.Nvenc =>
+                $"-c:v h264_nvenc -preset p5 -rc vbr -cq {crf}{gop} -pix_fmt nv12",
+            VideoEncoderKind.Qsv =>
+                $"-c:v h264_qsv -preset veryfast -global_quality {crf}{gop} -pix_fmt nv12",
+            VideoEncoderKind.Amf =>
+                $"-c:v h264_amf -quality balanced -rc cqp " +
+                $"-qp_i {crf} -qp_p {crf} -qp_b {crf}{gop} -pix_fmt nv12",
+            VideoEncoderKind.MediaFoundation =>
+                $"-c:v h264_mf -b:v {EstimateBitrate(width, height, framesPerSecond)}k" +
+                $"{gop} -pix_fmt nv12",
+            _ =>
+                $"-c:v libx264 -preset {preset} -crf {crf}{gop} -pix_fmt yuv420p"
+        };
+
+        return
+            "-hide_banner -loglevel error " +
+            $"-f rawvideo -pix_fmt bgra -s {width}x{height} -r {framesPerSecond} -i pipe:0 " +
+            encoder + " " +
+            // 分片 MP4：进程被强杀时已经写入的分片仍可播放（普通 MP4 会丢 moov）。
+            // MKV 天生流式写入，不认识 -movflags。
+            (IsMp4Family(path)
+                ? "-movflags +frag_keyframe+empty_moov+default_base_moof "
+                : "") +
+            "-y " +
+            $"\"{path}\"";
+    }
+
+    private static bool IsMp4Family(string path) =>
+        path.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".mov", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>MF 编码器只吃固定码率：按像素率估一个接近 CRF 23 的值（kbps）。</summary>
+    private static int EstimateBitrate(int width, int height, int framesPerSecond) =>
+        Math.Max(2_500, (int)(width * (long)height * framesPerSecond * 0.1 / 1000));
 
     /// <summary>写一帧 BGRA（top-down，stride = width * 4）。</summary>
     public void WriteFrame(byte[] bgraTopDown)
@@ -268,6 +358,40 @@ internal sealed class FfmpegEncoder : IDisposable
 
         if (process.ExitCode != 0)
             throw new InvalidOperationException($"生成 GIF 失败：{error.Trim()}");
+    }
+
+    /// <summary>把录好的视频转成 APNG（无损动画）；和 GIF 共用帧率/尺寸限制，避免 4K 文件过大。</summary>
+    public static void ToApng(string videoPath, string outputPath, int fps, int width)
+    {
+        var ffmpeg = FindFfmpeg()
+                     ?? throw new InvalidOperationException("未找到 ffmpeg.exe。");
+
+        var filter = $"fps={fps},scale='min({width},iw)':-1:flags=lanczos";
+
+        var arguments =
+            "-hide_banner -loglevel error " +
+            $"-i \"{videoPath}\" " +
+            $"-vf \"{filter}\" " +
+            "-c:v apng -plays 0 -y " +
+            $"\"{outputPath}\"";
+
+        using var process = Process.Start(new ProcessStartInfo(ffmpeg, arguments)
+        {
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        }) ?? throw new InvalidOperationException("无法启动 ffmpeg APNG 转换进程。");
+
+        var error = process.StandardError.ReadToEnd();
+
+        if (!process.WaitForExit(120_000))
+        {
+            process.Kill(entireProcessTree: true);
+            throw new InvalidOperationException("生成 APNG 超时。");
+        }
+
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException($"生成 APNG 失败：{error.Trim()}");
     }
 
     /// <summary>优先用随包分发的 ffmpeg，其次首次下载的本地目录，最后 PATH。</summary>
