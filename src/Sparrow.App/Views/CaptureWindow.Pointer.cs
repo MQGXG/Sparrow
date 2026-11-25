@@ -202,11 +202,16 @@ public partial class CaptureWindow
         if (IsPointInControl(OcrMarkMenu, point))
             return;
 
-        // 第一次点击先清掉识别结果，不直接开始拉新框
+        // 点空白先取消文本选择，保留识别结果；再点一次才退出，回到重新框选
         if (OcrLayer.IsVisible)
         {
             if (e.Source is not Rectangle)
-                ClearOcrOverlay();
+            {
+                if (HasOcrSelection())
+                    ClearOcrSelection();
+                else
+                    ClearOcrOverlay();
+            }
 
             e.Handled = true;
             return;

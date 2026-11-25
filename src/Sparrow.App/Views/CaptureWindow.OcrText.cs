@@ -322,6 +322,28 @@ public partial class CaptureWindow
         RebuildOcrSelectionVisual();
     }
 
+    /// <summary>当前是否有行选中或字符选中。</summary>
+    internal bool HasOcrSelection() =>
+        _selectedOcrBoxes.Count > 0 || _ocrSelAnchor is not null || _ocrSelFocus is not null;
+
+    /// <summary>
+    /// 点击空白只取消文本选择，保留识别结果：
+    /// 复制一部分后还能继续选别的行，不需要重新识别。
+    /// </summary>
+    internal void ClearOcrSelection()
+    {
+        if (!HasOcrSelection())
+            return;
+
+        _selectedOcrBoxes.Clear();
+        ClearOcrCharSelection();
+
+        foreach (var box in _ocrBoxes)
+            ApplyOcrBoxVisual(box, hovered: false);
+
+        UpdateOcrSelectionStatus();
+    }
+
     /// <summary>切换一条文字标记：同样类型 + 同样框再点一次就取消。</summary>
     internal void ApplyOcrMark(TextMarkKind kind)
     {

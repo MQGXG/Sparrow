@@ -131,6 +131,45 @@ public sealed partial class CaptureWindowTests
         window.Close();
     }
 
+    /// <summary>复制一部分后点空白：只取消选择，识别结果保留，不必重新识别。</summary>
+    [AvaloniaFact]
+    public void 识别后点空白_先取消选择再退出()
+    {
+        var window = new CaptureWindow();
+        window.Show();
+        window.Selection.IsVisible = true;
+        window.Selection.Width = 200;
+        window.Selection.Height = 100;
+
+        window.ShowOcrResult(new CaptureOcrResult(
+            "HELLO OCR\n第二行",
+            [
+                new OcrTextLine("HELLO OCR", 10, 20, 90, 20),
+                new OcrTextLine("第二行", 0, 60, 60, 20)
+            ]));
+
+        var firstBox = window.OcrLayer.Children
+            .OfType<Avalonia.Controls.Shapes.Rectangle>()
+            .First();
+        window.ToggleOcrBoxSelection(firstBox);
+        window.HasOcrSelection().ShouldBeTrue();
+
+        // 第一次点空白：清掉选择，识别结果还在
+        window.MouseDown(new Point(170, 90), MouseButton.Left);
+        window.MouseUp(new Point(170, 90), MouseButton.Left);
+
+        window.OcrLayer.IsVisible.ShouldBeTrue();
+        window.HasOcrSelection().ShouldBeFalse();
+
+        // 第二次点空白：才退出识别，回到重新框选
+        window.MouseDown(new Point(170, 90), MouseButton.Left);
+        window.MouseUp(new Point(170, 90), MouseButton.Left);
+
+        window.OcrLayer.IsVisible.ShouldBeFalse();
+
+        window.Close();
+    }
+
     /// <summary>识别框三档：全部显示 / 悬停隐藏 / 关闭。</summary>
     [AvaloniaFact]
     public void 识别框模式_切换后框可见性变化()
