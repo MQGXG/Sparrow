@@ -595,11 +595,6 @@
                     CornerRadius="2" />
           </Panel>
         </Border>
-        <!-- 当前颜色条：除了色值文本，再给一个直观的色块 -->
-        <Border x:Name="ProbeSwatch"
-                Height="6"
-                CornerRadius="3"
-                Background="#FF000000" />
         <TextBlock x:Name="ProbePosition"
                    FontSize="10"
                    HorizontalAlignment="Center"
@@ -611,6 +606,11 @@
                    FontFamily="{DynamicResource MonoFont}"
                    Foreground="{StaticResource TextPrimaryBrush}"
                    Text="#000000" />
+        <!-- 当前颜色条：放在色值下方，撑满卡片宽度，避免和像素预览混淆 -->
+        <Border x:Name="ProbeSwatch"
+                Height="10"
+                CornerRadius="2"
+                Background="#FF000000" />
         <TextBlock FontSize="9"
                    HorizontalAlignment="Center"
                    Foreground="{StaticResource TextMutedBrush}"
