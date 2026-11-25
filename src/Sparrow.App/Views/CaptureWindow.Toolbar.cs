@@ -455,18 +455,6 @@ public partial class CaptureWindow
         _ = RunRecognitionAsync("table-md");
     }
 
-    private void OnConvertMarkdownClick(object? sender, RoutedEventArgs e)
-    {
-        HideRecognitionPopover();
-        _ = RunRecognitionAsync("table-md");
-    }
-
-    private void OnConvertHtmlClick(object? sender, RoutedEventArgs e)
-    {
-        HideRecognitionPopover();
-        _ = RunRecognitionAsync("table-html");
-    }
-
     /// <summary>展开某个工具的选项条，摆在触发按钮正上方。</summary>
     private void ShowToolGroupPopover(ToolGroup group)
     {

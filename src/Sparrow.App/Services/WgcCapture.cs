@@ -40,6 +40,9 @@ internal static class WgcCapture
         CreateD3DDevice,
         LazyThreadSafetyMode.ExecutionAndPublication);
 
+    /// <summary>共享 D3D 设备。录制模块复用同一个设备，避免重复创建。</summary>
+    internal static IDirect3DDevice? Device => SharedDevice.Value;
+
     /// <summary>WGC 是否可用于这个系统。</summary>
     public static bool IsSupported
     {
@@ -55,6 +58,42 @@ internal static class WgcCapture
                 return false;
             }
         }
+    }
+
+    /// <summary>主显示器物理像素边界（录制默认全屏用）。</summary>
+    internal static PixelRect GetPrimaryMonitorBounds()
+    {
+        var width = GetSystemMetrics(SystemMetricCxScreen);
+        var height = GetSystemMetrics(SystemMetricCyScreen);
+
+        return width > 0 && height > 0
+            ? new PixelRect(0, 0, width, height)
+            : new PixelRect(0, 0, 1920, 1080);
+    }
+
+    /// <summary>
+    /// 找与区域交集面积最大的显示器。MVP 只录单屏：
+    /// 选区跨屏时按主屏裁剪，由调用方决定是否提示（多屏拼接见 CaptureRegion）。
+    /// </summary>
+    internal static (IntPtr Handle, PixelRect Rect)? FindMonitorFor(PixelRect region)
+    {
+        (IntPtr Handle, PixelRect Rect)? best = null;
+        var bestArea = 0L;
+
+        foreach (var monitor in IntersectingMonitors(region))
+        {
+            if (Intersect(monitor.Rect, region) is not { } overlap)
+                continue;
+
+            var area = (long)overlap.Width * overlap.Height;
+            if (area > bestArea)
+            {
+                bestArea = area;
+                best = monitor;
+            }
+        }
+
+        return best;
     }
 
     /// <summary>
@@ -239,7 +278,8 @@ internal static class WgcCapture
         }
     }
 
-    private static GraphicsCaptureItem? CreateItemForMonitor(IntPtr monitor)
+    /// <summary>为指定显示器创建 WGC 捕获项。录制模块复用它建立长会话。</summary>
+    internal static GraphicsCaptureItem? CreateItemForMonitor(IntPtr monitor)
     {
         var interop = GetItemInterop();
         if (interop is null)
@@ -251,6 +291,21 @@ internal static class WgcCapture
             return null;
 
         // FromAbi 接管这个原生引用，不要在这里 Release
+        return GraphicsCaptureItem.FromAbi(item);
+    }
+
+    /// <summary>为指定窗口创建 WGC 捕获项（窗口录制）。</summary>
+    internal static GraphicsCaptureItem? CreateItemForWindow(IntPtr window)
+    {
+        var interop = GetItemInterop();
+        if (interop is null)
+            return null;
+
+        var iid = IidGraphicsCaptureItem;
+
+        if (interop.CreateForWindow(window, ref iid, out var item) < 0 || item == IntPtr.Zero)
+            return null;
+
         return GraphicsCaptureItem.FromAbi(item);
     }
 
@@ -461,4 +516,10 @@ internal static class WgcCapture
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool EnumDisplayMonitors(
         IntPtr hdc, IntPtr clip, MonitorEnumProc callback, IntPtr data);
+
+    private const int SystemMetricCxScreen = 0;
+    private const int SystemMetricCyScreen = 1;
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
 }

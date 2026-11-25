@@ -1,0 +1,11 @@
+{
+  "id": "sparrow.plugin.video-gif",
+  "name": "视频转 GIF",
+  "version": "0.1.0",
+  "sdkVersion": "1.0",
+  "entryAssembly": "Sparrow.Plugin.Video.Gif.dll",
+  "author": "sparrow",
+  "description": "把视频转成 GIF，调色板量化，帧率与尺寸可选",
+  "capabilities": [],
+  "tools": ["sparrow.video.toGif"]
+}

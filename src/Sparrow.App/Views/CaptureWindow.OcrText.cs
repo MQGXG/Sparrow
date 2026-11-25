@@ -567,6 +567,17 @@ public partial class CaptureWindow
 
     private async void OnScrollClick(object? sender, RoutedEventArgs e) => await ActAsync(CaptureAction.Scroll);
 
+    private async void OnRecordClick(object? sender, RoutedEventArgs e)
+    {
+        if (_recording is not null)
+        {
+            await StopRecordingAsync();
+            return;
+        }
+
+        await ActAsync(CaptureAction.Record);
+    }
+
     private void OnCancelClick(object? sender, RoutedEventArgs e)
     {
         Action = CaptureAction.None;

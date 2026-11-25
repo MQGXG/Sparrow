@@ -561,8 +561,8 @@ public partial class CaptureWindow
 
         // 上方：主条最靠近选区，附属行依次向外；下方：主条在最外侧
         var order = above
-            ? new Control[] { TransRow, StyleRow, MainBar }
-            : new Control[] { MainBar, StyleRow, TransRow };
+            ? new Control[] { RecordingRow, TransRow, StyleRow, MainBar }
+            : new Control[] { MainBar, StyleRow, TransRow, RecordingRow };
 
         for (var i = 0; i < order.Length; i++)
         {

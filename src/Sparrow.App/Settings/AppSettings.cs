@@ -34,6 +34,9 @@ public sealed record AppSettings
     /// <summary>剪贴板快取面板热键，格式 "Ctrl+Alt+B"；只呼出标题行 + 列表，不带主窗框架。</summary>
     public string ClipboardPanelHotkey { get; init; } = "Ctrl+Alt+B";
 
+    /// <summary>屏幕录制开始/停止热键，格式 "Ctrl+Alt+Shift+R"。</summary>
+    public string RecordHotkey { get; init; } = "Ctrl+Alt+Shift+R";
+
     /// <summary>剪贴板快取面板是否置顶（标题行的图钉）。</summary>
     public bool ClipboardPanelTopmost { get; init; }
 

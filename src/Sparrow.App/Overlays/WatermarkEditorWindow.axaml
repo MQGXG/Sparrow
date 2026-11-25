@@ -1,0 +1,86 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Sparrow.App.Overlays.WatermarkEditorWindow"
+        Title="Sparrow Watermark"
+        WindowState="FullScreen"
+        WindowDecorations="None"
+        WindowStartupLocation="Manual"
+        ShowInTaskbar="False"
+        Topmost="True"
+        CanResize="False"
+        Background="#66000000"
+        TransparencyLevelHint="Transparent">
+
+  <Grid>
+    <Canvas x:Name="EditorCanvas">
+
+      <!-- 水印块：拖动移动，滚轮或滑块缩放 -->
+      <Border x:Name="WatermarkBlock"
+              Background="#22000000"
+              BorderBrush="#66FFFFFF"
+              BorderThickness="1"
+              CornerRadius="4"
+              Padding="8"
+              Cursor="SizeAll"
+              PointerPressed="OnBlockPressed"
+              PointerMoved="OnBlockMoved"
+              PointerReleased="OnBlockReleased"
+              DoubleTapped="OnBlockDoubleTapped"
+              PointerWheelChanged="OnBlockWheel">
+        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <Image x:Name="WatermarkImage"
+                 Height="48"
+                 Stretch="Uniform"
+                 IsVisible="False" />
+          <TextBlock x:Name="WatermarkText"
+                     Text="水印"
+                     FontSize="24"
+                     FontWeight="SemiBold"
+                     Foreground="White"
+                     VerticalAlignment="Center" />
+        </StackPanel>
+      </Border>
+    </Canvas>
+
+    <!-- 底部工具条 -->
+    <Border VerticalAlignment="Bottom"
+            HorizontalAlignment="Center"
+            Margin="0,0,0,36"
+            Background="#F21A1A1A"
+            BorderBrush="#33FFFFFF"
+            BorderThickness="1"
+            CornerRadius="12"
+            Padding="14,10"
+            BoxShadow="0 10 28 0 #88000000">
+      <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+
+        <TextBox x:Name="WatermarkTextBox"
+                 Width="190"
+                 PlaceholderText="水印文字"
+                 TextChanged="OnTextChanged" />
+
+        <Button Content="选择图片" Click="OnPickImage" Padding="12,6" />
+        <Button Content="清除图片" Click="OnClearImage" Padding="12,6" />
+
+        <TextBlock Text="大小" Foreground="#AAAAAA" VerticalAlignment="Center" />
+        <Slider x:Name="ScaleSlider"
+                Width="110"
+                Minimum="0.4"
+                Maximum="3.2"
+                Value="1"
+                ValueChanged="OnScaleChanged" />
+
+        <TextBlock Text="不透明度" Foreground="#AAAAAA" VerticalAlignment="Center" />
+        <Slider x:Name="OpacitySlider"
+                Width="100"
+                Minimum="0.1"
+                Maximum="1"
+                Value="0.85"
+                ValueChanged="OnOpacityChanged" />
+
+        <Button Content="完成" Click="OnConfirm" Padding="16,6" Background="#4C9AFF" Foreground="White" />
+        <Button Content="取消" Click="OnCancel" Padding="16,6" />
+      </StackPanel>
+    </Border>
+  </Grid>
+</Window>

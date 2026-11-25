@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Avalonia;
+using Sparrow.App.Services.Recording;
 using Velopack;
 
 namespace Sparrow.App;
@@ -20,8 +21,14 @@ internal static class Program
 
         // 单实例：M0 只做「第二个实例直接退出」。
         // 完整做法（把唤起请求转发给第一个实例）留给 M1，避免现在就引入 IPC。
+        //
+        // 录制自检（SPARROW_RECORD_PROBE）是独立进程行为：必须绕过单实例，
+        // 否则正在运行的 Sparrow 会让 probe 直接退出，什么也测不到。
+        var isRecordingProbe = !string.IsNullOrWhiteSpace(
+            Environment.GetEnvironmentVariable(RecordingProbe.EnvironmentVariable));
+
         using var mutex = new Mutex(initiallyOwned: true, @"Local\Sparrow.SingleInstance", out var isFirst);
-        if (!isFirst)
+        if (!isFirst && !isRecordingProbe)
             return 0;
 
         try

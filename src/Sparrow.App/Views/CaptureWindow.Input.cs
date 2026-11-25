@@ -478,7 +478,7 @@ public partial class CaptureWindow
         if (SampleColorAt(point) is not { } color)
         {
             // 冻结帧还没准备好：先给反馈，避免看起来没反应
-            ProbeSwatch.Background = Brushes.Transparent;
+              ProbeSwatch.Background = Brushes.Transparent;
             ProbeValue.Text = "准备中…";
             ProbePosition.Text = $"{point.X:0}, {point.Y:0}";
             ColorProbe.IsVisible = true;

@@ -1,0 +1,11 @@
+{
+  "id": "sparrow.plugin.video-frames",
+  "name": "视频抽帧",
+  "version": "0.1.0",
+  "sdkVersion": "1.0",
+  "entryAssembly": "Sparrow.Plugin.Video.Frames.dll",
+  "author": "sparrow",
+  "description": "按固定时间间隔从视频导出 PNG 帧",
+  "capabilities": [],
+  "tools": ["sparrow.video.frames"]
+}

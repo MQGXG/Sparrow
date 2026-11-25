@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>Sparrow.Plugin.Video.Gif</AssemblyName>
+    <RootNamespace>Sparrow.Plugin.Video.Gif</RootNamespace>
+    <Version>0.1.0</Version>
+    <Description>视频转 GIF：调色板量化 + 帧率/尺寸可选</Description>
+    <PluginId>sparrow.plugin.video-gif</PluginId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Sparrow.Plugin.Sdk\Sparrow.Plugin.Sdk.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

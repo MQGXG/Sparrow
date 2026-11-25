@@ -1,0 +1,11 @@
+{
+  "id": "sparrow.plugin.video-compress",
+  "name": "视频压缩",
+  "version": "0.1.0",
+  "sdkVersion": "1.0",
+  "entryAssembly": "Sparrow.Plugin.Video.Compress.dll",
+  "author": "sparrow",
+  "description": "按质量与分辨率重新编码视频，减小体积",
+  "capabilities": [],
+  "tools": ["sparrow.video.compress"]
+}

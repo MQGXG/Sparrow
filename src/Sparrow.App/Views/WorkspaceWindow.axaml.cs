@@ -189,6 +189,8 @@ public partial class WorkspaceWindow : Window
     {
         base.OnOpened(e);
 
+        // 与 Snow-shot 一致：录制中打开工作区，窗口会进入视频。
+
         // 让 Windows 标题栏跟随应用的深色主题
         WindowChrome.TryApplyDarkTitleBar(this);
     }

@@ -691,10 +691,10 @@ public partial class CaptureWindow
         _ => ArrowCursor
     };
 
-    private bool IsPointInControl(Control control, Point point)
+    private Rect RectOfControl(Control control)
     {
         if (!control.IsVisible)
-            return false;
+            return default;
 
         // 刚显示、还没跑过布局时 Bounds 是空的，用 DesiredSize 兜底
         var size = control.Bounds.Size;
@@ -702,8 +702,12 @@ public partial class CaptureWindow
             size = control.DesiredSize;
 
         return control.TranslatePoint(new Point(0, 0), this) is { } origin
-               && new Rect(origin, size).Contains(point);
+            ? new Rect(origin, size)
+            : default;
     }
+
+    private bool IsPointInControl(Control control, Point point) =>
+        RectOfControl(control).Contains(point);
 
     /// <summary>
     /// Esc / 右键用于取消“进行中的操作”：拖选区、拖标注、画一半、橡皮擦、拖工具条。

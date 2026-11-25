@@ -69,6 +69,8 @@ public partial class ClipboardPanelWindow : Window
         base.OnOpened(e);
         WindowChrome.TryApplyDarkTitleBar(this);
 
+        // 与 Snow-shot 一致：录制中打开剪贴板小窗，窗口会进入视频。
+
         // 恢复上次的置顶状态
         if (Settings.ClipboardPanelTopmost)
         {

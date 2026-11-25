@@ -1,0 +1,11 @@
+{
+  "id": "sparrow.plugin.video-trim",
+  "name": "视频裁剪",
+  "version": "0.1.0",
+  "sdkVersion": "1.0",
+  "entryAssembly": "Sparrow.Plugin.Video.Trim.dll",
+  "author": "sparrow",
+  "description": "按起止时间裁剪视频，输出一个或多个片段",
+  "capabilities": [],
+  "tools": ["sparrow.video.trim"]
+}

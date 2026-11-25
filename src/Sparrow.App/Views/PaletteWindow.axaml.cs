@@ -3,6 +3,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Sparrow.App.Services;
 using Sparrow.App.ViewModels;
 
 namespace Sparrow.App.Views;
@@ -30,6 +31,8 @@ public partial class PaletteWindow : Window
     {
         InitializeComponent();
         Deactivated += OnWindowDeactivated;
+
+        // 与 Snow-shot 一致：录制中打开命令面板，面板会进入视频。
 
         // 快捷键全部走隧道阶段：
         // Ctrl+C 会被 TextBox 的复制命令吃掉，Enter 会被 TextBox 标成已处理，

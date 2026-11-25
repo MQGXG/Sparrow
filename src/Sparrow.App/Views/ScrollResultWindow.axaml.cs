@@ -30,7 +30,11 @@ public partial class ScrollResultWindow : Window
     private bool _draggingTop;
 
     /// <summary>设计器需要的无参构造。</summary>
-    public ScrollResultWindow() => InitializeComponent();
+    public ScrollResultWindow()
+    {
+        InitializeComponent();
+        Opened += (_, _) => WindowCaptureExclusion.Exclude(this);
+    }
 
     public ScrollResultWindow(byte[] png) : this()
     {

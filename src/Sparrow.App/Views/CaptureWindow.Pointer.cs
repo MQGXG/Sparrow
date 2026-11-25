@@ -31,6 +31,10 @@ public partial class CaptureWindow
 
         var point = e.GetPosition(this);
 
+        // 录制中锁定选区：只允许在选区内用标注工具画，不能拖拽/拉伸/移动。
+        if (_recording is not null && !CanAnnotateDuringRecording(point))
+            return;
+
         // 右键逐级退出（参考 snow-shot / LumaShot 的手感）
         if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
         {
@@ -82,9 +86,9 @@ public partial class CaptureWindow
         }
 
         // 边框带优先于当前工具：画着标注时按在边框 8 内也能拉选区（参考 snow-shot），
-        // 松手后把工具恢复回去
+        // 松手后把工具恢复回去；录制中选区锁定，不走这条。
         _toolBeforeResize = null;
-        if (_tool != AnnotationTool.None && _hasSelection
+        if (_recording is null && _tool != AnnotationTool.None && _hasSelection
             && HitHandle(point) != ResizeHandle.None)
         {
             _toolBeforeResize = _tool;
@@ -252,6 +256,15 @@ public partial class CaptureWindow
         var point = e.GetPosition(this);
         _lastPointerPoint = point;
 
+        // 录制中只处理标注 / 橡皮擦 / 工具条拖动 / 工具条悬停；
+        // 选区拖拽和拉伸保持锁定，选区外的悬停逻辑也不需要跑。
+        if (_recording is not null
+            && _pendingAnnotation is null
+            && !_erasing
+            && !_draggingToolbar
+            && !IsPointInActionBar(point))
+            return;
+
         // 工具组选项条：指针在「触发按钮 + 选项条」并集里就取消收起；
         // 离开只安排一次延迟复核，到点再按当前光标判断（对齐 snow-shot 的 finishHoverClose）。
         if (ToolGroupPopover.IsVisible && _activeGroup is not null)
@@ -264,12 +277,16 @@ public partial class CaptureWindow
                 ScheduleCloseToolGroupPopover();
         }
 
-        // 更多识别选项条：点外部收起
-        if (RecognitionPopover.IsVisible
-            && !IsPointInControl(RecognitionPopover, point)
-            && !IsPointInControl(MoreRecognitionButton, point))
+        // 更多识别选项条：指针离开「按钮 + 选项条」并集才收起。
+        // 两者之间有 6px 间隙，逐像素判断会让选项条在鼠标移过去之前就消失。
+        if (RecognitionPopover.IsVisible)
         {
-            HideRecognitionPopover();
+            var hover = RectOfControl(RecognitionPopover)
+                .Union(RectOfControl(MoreRecognitionButton))
+                .Inflate(10);
+
+            if (!hover.Contains(point))
+                HideRecognitionPopover();
         }
 
         // 橡皮擦拖动：连续擦掉指针下的标注

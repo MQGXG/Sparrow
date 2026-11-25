@@ -20,6 +20,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      屏幕录制的编码器：随包分发会比 NuGet 还原更稳定。
+      ffmpeg 只在缺失时才需要手工补，仓库里不放二进制（.gitignore 忽略）。
+      必须连同 avcodec/avformat 等 DLL 一起复制：FormatFactory 构建是动态链接的。
+    -->
+    <None Include="..\..\tools\ffmpeg\**\*.*"
+          Link="tools\ffmpeg\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('..\..\tools\ffmpeg')" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Themes.Fluent" />

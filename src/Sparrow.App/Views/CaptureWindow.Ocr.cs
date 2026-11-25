@@ -76,6 +76,23 @@ public partial class CaptureWindow
         if (_selection.Width < MinSelectionSize || _selection.Height < MinSelectionSize)
             return;
 
+        // 录制不需要截图：只把选区换算成物理像素，交给宿主启动录制会话。
+        if (action == CaptureAction.Record)
+        {
+            var rect = _selection;
+            SelectionRect = new PixelRect(
+                _origin.X + (int)Math.Round(rect.X * _scaling),
+                _origin.Y + (int)Math.Round(rect.Y * _scaling),
+                (int)Math.Round(rect.Width * _scaling),
+                (int)Math.Round(rect.Height * _scaling));
+
+            Action = CaptureAction.Record;
+
+            // 不关闭窗口：录制控制并入主工具条，停止后再关闭。
+            await StartRecordingAsync();
+            return;
+        }
+
         _isActing = true;
 
         try

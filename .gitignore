@@ -99,6 +99,11 @@ appsettings.*.local.json
 *.pdiparams
 *.pdopt
 
+# 屏幕录制依赖的 ffmpeg（GPL 构建，含 avcodec/avformat 等 DLL）。
+# 不入库：先运行 scripts/fetch-ffmpeg.ps1，或让首次录制自动下载到 %LOCALAPPDATA%\Sparrow\ffmpeg。
+# 分发/替换构建前先看 THIRD-PARTY-NOTICES.md。
+tools/ffmpeg/
+
 # 例外：表格结构模型（SLANet，7.7 MB）没有 NuGet 包可依赖，
 # 随 worker 分发才能离线可用；体积可接受，直接进仓库（见 docs/ocr-engine-comparison.md）
 !plugins/sparrow.plugin.ocr/worker/models/table/inference.pdiparams

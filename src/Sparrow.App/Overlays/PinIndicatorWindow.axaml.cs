@@ -46,6 +46,7 @@ public partial class PinIndicatorWindow : Window
 
         Opened += (_, _) =>
         {
+            // 与 Snow-shot 一致：图钉会随屏幕一起被录进视频。
             Follow();
             _timer.Start();
         };

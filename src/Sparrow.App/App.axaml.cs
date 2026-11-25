@@ -9,6 +9,7 @@ using Sparrow.App.History;
 using Sparrow.App.Overlays;
 using Sparrow.App.Plugins;
 using Sparrow.App.Services;
+using Sparrow.App.Services.Recording;
 using Sparrow.App.Settings;
 using Sparrow.App.Shell;
 using Sparrow.App.ViewModels;
@@ -246,10 +247,25 @@ public partial class App : Application
             _palette,
             ShowWorkspace,
             CaptureAndRecognize,
+            () => StartScreenRecording(),
             trayEntries,
             toolId => Avalonia.Threading.Dispatcher.UIThread.Post(
                 () => _ = ExecuteToolHotkeyAsync(toolId)));
         _tray.Initialize();
+
+        // 录制热键可配置；解析失败时退回默认 Ctrl+Alt+Shift+R。
+        var recordHotkeyModifiers =
+            HotkeyService.ModControl | HotkeyService.ModAlt | HotkeyService.ModShift;
+        var recordHotkeyKey = 0x52u;
+
+        if (HotkeyText.TryParse(
+                settings.RecordHotkey,
+                out var parsedRecordModifiers,
+                out var parsedRecordKey))
+        {
+            recordHotkeyModifiers = parsedRecordModifiers;
+            recordHotkeyKey = parsedRecordKey;
+        }
 
         var hotkeyBindings = new List<HotkeyBinding>
         {
@@ -287,7 +303,14 @@ public partial class App : Application
                 panelModifiers | HotkeyService.ModNoRepeat,
                 panelKey,
                 () => Avalonia.Threading.Dispatcher.UIThread.Post(ToggleClipboardPanel),
-                "剪贴板面板")
+                "剪贴板面板"),
+
+            new(
+                0x5A5E,
+                recordHotkeyModifiers | HotkeyService.ModNoRepeat,
+                recordHotkeyKey,
+                () => Avalonia.Threading.Dispatcher.UIThread.Post(ToggleScreenRecording),
+                "屏幕录制")
         };
 
         // 工具热键：按下直接执行，不打开面板
@@ -337,6 +360,45 @@ public partial class App : Application
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(ShowWorkspace);
         }
+        else if (desktop.Args?.Contains("--record") == true)
+        {
+            // 开发/自动化入口：跳过设置面板，直接全屏录制并显示控制条。
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => _ = StartRecordingCoreAsync(
+                    WgcCapture.GetPrimaryMonitorBounds(),
+                    RecordingSetup.Default));
+        }
+        else if (desktop.Args?.Contains("--capture") == true)
+        {
+            // 开发/自动化入口：直接打开截图窗口，用于验证选区工具条。
+            Avalonia.Threading.Dispatcher.UIThread.Post(CaptureAndRecognize);
+        }
+        else if (desktop.Args?.Contains("--setup") == true)
+        {
+            // 开发/自动化入口：直接打开录制设置面板。
+            Avalonia.Threading.Dispatcher.UIThread.Post(OpenRecordingSetup);
+        }
+        else if (desktop.Args?.Contains("--watermark") == true)
+        {
+            // 开发/自动化入口：直接打开水印编辑器。
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => new WatermarkEditorWindow(
+                    Sparrow.App.Services.Recording.WatermarkLayout.Default).Show());
+        }
+        else if (desktop.Args?.Contains("--countdown") == true)
+        {
+            // 开发/自动化入口：直接显示录制倒计时。
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => new CountdownWindow(3).Show());
+        }
+        else if (desktop.Args?.Contains("--record-region") == true)
+        {
+            // 开发/自动化入口：录一个固定区域，验证控制条贴在选区附近。
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => _ = StartRecordingCoreAsync(
+                    new PixelRect(200, 200, 1000, 700),
+                    RecordingSetup.Default));
+        }
         else if (isFirstRun)
         {
             // 首次运行：应用只启动到托盘，用户会以为「没启动」。
@@ -346,6 +408,15 @@ public partial class App : Application
                 Avalonia.Threading.DispatcherPriority.Background);
             log.Info("首次运行：显示一次命令面板");
         }
+
+        // 开发期录制自检（SPARROW_RECORD_PROBE=5）：录固定时长后退出。
+        // 正常启动时环境变量不存在，这里是空操作，不产生任何副作用。
+        var probe = RecordingProbe.TryStart(out var probeSeconds, out var probeError);
+
+        if (probeError is not null)
+            log.Error($"[record-probe] {probeError}");
+        else if (probe is not null)
+            _ = RunRecordingProbeAsync(probe, probeSeconds, log);
 
         Log.Info($"启动完成：{Program.Startup.ElapsedMilliseconds} ms，托盘就绪");
 

@@ -48,6 +48,7 @@ public sealed class TrayMenuPlannerTests
         [
             TrayMenuActionKind.Palette,
             TrayMenuActionKind.Capture,
+            TrayMenuActionKind.Record,
             TrayMenuActionKind.Workspace,
             TrayMenuActionKind.Tool,
             TrayMenuActionKind.Separator,
@@ -56,7 +57,8 @@ public sealed class TrayMenuPlannerTests
 
         entries[0].Label.ShouldContain("Ctrl+Alt+S");
         entries[1].Label.ShouldContain("Ctrl+Alt+C");
-        entries[3].Label.ShouldBe("窗口置顶…    Ctrl+Alt+P");
+        entries[2].Label.ShouldContain("Ctrl+Alt+Shift+R");
+        entries[4].Label.ShouldBe("窗口置顶…    Ctrl+Alt+P");
     }
 
     [Fact]

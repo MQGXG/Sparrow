@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
+using Sparrow.App.Services;
 
 namespace Sparrow.App.Overlays;
 
@@ -54,6 +55,10 @@ public partial class WindowPickerWindow : Window
     protected override void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
+
+        // 窗口拾取遮罩不能出现在录制的视频里。
+        WindowCaptureExclusion.Exclude(this);
+
         CoverAllScreens();
 
         // 进入拾取就立刻在光标处显示图钉：否则系统光标已隐藏、用户不动鼠标会以为没反应

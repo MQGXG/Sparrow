@@ -11,7 +11,7 @@
 
 工具台上能看见的工具卡 **全部来自 `plugins/`**；宿主没有任何内置工具注册表（`ToolCatalog` 只扫目录）。
 
-## 一、插件工具（9 个）
+## 一、插件工具（13 个）
 
 | 插件目录 | 工具 ID | 显示名 | 输入 → 输出 | 依赖宿主能力 | 代码行数 |
 |---|---|---|---|---:|---:|
@@ -20,12 +20,16 @@
 | `sparrow.plugin.images-convert` | `sparrow.images.convert` | 图片格式转换 | Image → Image | 无 | 108 |
 | `sparrow.plugin.images-resize` | `sparrow.images.resize` | 图片缩放 | Image → Image | 无 | 138 |
 | `sparrow.plugin.files-hash` | `sparrow.files.hash` | 文件哈希 | Files → Table | 无 | 201 |
+| `sparrow.plugin.video-trim` | `sparrow.video.trim` | 视频裁剪 | Files → FileSet | 无（用宿主目录的 ffmpeg） | 178 |
+| `sparrow.plugin.video-compress` | `sparrow.video.compress` | 视频压缩 | Files → FileSet | 无（用宿主目录的 ffmpeg） | 206 |
+| `sparrow.plugin.video-gif` | `sparrow.video.toGif` | 视频转 GIF | Files → FileSet | 无（用宿主目录的 ffmpeg） | 148 |
+| `sparrow.plugin.video-frames` | `sparrow.video.frames` | 视频抽帧 | Files → FileSet | 无（用宿主目录的 ffmpeg） | 152 |
 | `sparrow.plugin.ocr` | `sparrow.ocr.image` | 图片文字识别 | Images → Text | `Ocr`（独立 worker，含 SLANet 表格模型）+ `Ai`/`LocalTranslation` | 1751 |
 | `sparrow.plugin.translate` | `sparrow.text.translate` | 翻译 | Text → Text | `Ai` + `LocalTranslation` | 443 |
 | `sparrow.plugin.svg-prompt` | `sparrow.svg.prompt` | 提示词生成 SVG | Text → Svg | `Ai` + `SvgRender` | 132 |
 | `sparrow.plugin.window-pin` | `sparrow.window.pin` | 窗口置顶 | None → Text | 无（用通用 `IWindowOverlay`） | 158 |
 
-合计约 3168 行（不含已删除的剪贴板历史插件）。
+合计约 3852 行（不含已删除的剪贴板历史插件）。
 
 ## 二、内置功能（不是工具）
 
@@ -33,7 +37,7 @@
 |---|---|---|---|
 | 输入采集 | 截图、冻结帧、区域/窗口/控件识别 | `CaptureWindow` 1440 行、`UiElementProbe` 653、`WindowCandidates`、`ScreenCapture` 271 | 产生 `ImageInput`，是工具的输入源 |
 | 输入采集 | 滚动截图与拼接 | `ScrollCaptureService`、`ScrollStitcher` | 同上 |
-| 输入采集 | **屏幕录制会话（P2 规划）** | 待建（复用 `WgcCapture`；编码器独立 worker） | 会话型采集：开始/停止、控制条、流式落盘、停止热键都在宿主 |
+| 输入采集 | **屏幕录制会话（MVP）** | `Services/Recording`（WGC 抓帧 + 控制条）、`Overlays/RecordingBarWindow` | 会话型采集：开始/停止、控制条、流式落盘、停止热键都在宿主 |
 | 输入采集 | 剪贴板监听、文本/图片/文件读取 | `ClipboardMonitor` 467、`Win32Clipboard` 377 | 系统信号 → `IToolInput` |
 | 输入采集 | 文件拖入与按次授权 | `ScopedFileAccess`、`ToolContext.Files` | 安全边界必须在宿主 |
 | 数据与界面 | 剪贴板历史（SQLite、收藏、标签、分类、时间分叠、来源筛选、缩略图） | `ClipboardHistoryStore` 1238、`ClipboardHistoryViewModel` 660 | 需要宿主数据读写 + 富 UI |

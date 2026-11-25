@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
+using Sparrow.App.Services;
 
 namespace Sparrow.App.Views;
 
@@ -15,7 +16,11 @@ public partial class ScrollCaptureWindow : Window
 {
     private WriteableBitmap? _preview;
 
-    public ScrollCaptureWindow() => InitializeComponent();
+    public ScrollCaptureWindow()
+    {
+        InitializeComponent();
+        Opened += (_, _) => WindowCaptureExclusion.Exclude(this);
+    }
 
     /// <summary>用户点了「完成」，保留已捕获内容。</summary>
     public event EventHandler? Finished;

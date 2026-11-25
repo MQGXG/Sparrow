@@ -1,0 +1,156 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Sparrow.App.Overlays.RecordingBarWindow"
+        Title="Sparrow Recording"
+        Width="560"
+        Height="52"
+        WindowDecorations="None"
+        WindowStartupLocation="Manual"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Topmost="True"
+        CanResize="False"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent">
+
+  <Window.Styles>
+    <Style Selector="Button.bar">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="6" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.bar:pointerover">
+      <Setter Property="Background" Value="#33FFFFFF" />
+    </Style>
+    <Style Selector="Button.bar:disabled">
+      <Setter Property="Opacity" Value="0.3" />
+    </Style>
+  </Window.Styles>
+
+  <Border Background="#E61A1A1A"
+          BorderBrush="#33FFFFFF"
+          BorderThickness="1"
+          CornerRadius="12"
+          Padding="10,5"
+          BoxShadow="0 8 24 0 #78000000">
+    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,*,Auto"
+          VerticalAlignment="Center">
+
+      <!-- 拖拽把手 -->
+      <TextBlock Grid.Column="0"
+                 Text="&#x28BF;"
+                 FontSize="15"
+                 Foreground="#777777"
+                 Margin="0,0,4,0"
+                 VerticalAlignment="Center"
+                 Cursor="SizeAll"
+                 PointerPressed="OnDragHandle" />
+
+      <!-- 红点：停止并保存 -->
+      <Button Grid.Column="1"
+              x:Name="RecordButton"
+              Classes="bar"
+              Click="OnStopClick"
+              ToolTip.Tip="停止并保存（红点）">
+        <Border x:Name="RecordGlyph"
+                Width="12"
+                Height="12"
+                CornerRadius="6"
+                Background="#FF4D4F" />
+      </Button>
+
+      <!-- 暂停 / 继续 -->
+      <Button Grid.Column="2"
+              x:Name="PauseButton"
+              Classes="bar"
+              Click="OnPauseClick"
+              ToolTip.Tip="暂停 / 继续">
+        <TextBlock x:Name="PauseGlyph"
+                   Text="&#xE769;"
+                   FontFamily="Segoe MDL2 Assets"
+                   FontSize="14"
+                   Foreground="#DDDDDD" />
+      </Button>
+
+      <!-- 计时 -->
+      <TextBlock Grid.Column="3"
+                 x:Name="ElapsedText"
+                 Text="00:00:00"
+                 FontFamily="Consolas"
+                 FontSize="13"
+                 Foreground="White"
+                 VerticalAlignment="Center"
+                 Margin="8,0,12,0" />
+
+      <!-- 麦克风 / 系统声音：面板开启时点亮 -->
+      <TextBlock x:Name="MicrophoneGlyph"
+                 Grid.Column="4"
+                 Text="&#xE720;"
+                 FontFamily="Segoe MDL2 Assets"
+                 FontSize="14"
+                 Foreground="#DDDDDD"
+                 Opacity="0.3"
+                 VerticalAlignment="Center"
+                 Margin="2,0"
+                 ToolTip.Tip="麦克风" />
+
+      <TextBlock x:Name="SystemAudioGlyph"
+                 Grid.Column="5"
+                 Text="&#xE767;"
+                 FontFamily="Segoe MDL2 Assets"
+                 FontSize="14"
+                 Foreground="#DDDDDD"
+                 Opacity="0.3"
+                 VerticalAlignment="Center"
+                 Margin="2,0,10,0"
+                 ToolTip.Tip="系统声音" />
+
+      <!-- 右侧动作：打开目录 / 取消 / 保存 -->
+      <StackPanel Grid.Column="7"
+                  Orientation="Horizontal"
+                  Spacing="2"
+                  VerticalAlignment="Center">
+
+        <Button x:Name="CopyRecordingButton"
+                Classes="bar"
+                Click="OnCopyClick"
+                ToolTip.Tip="停止并复制录屏">
+          <TextBlock Text="&#xE8C8;"
+                     FontFamily="Segoe MDL2 Assets"
+                     FontSize="14"
+                     Foreground="#DDDDDD" />
+        </Button>
+
+        <Button x:Name="OpenFolderButton"
+                Classes="bar"
+                Click="OnOpenFolderClick"
+                ToolTip.Tip="打开保存目录">
+          <TextBlock Text="&#xE838;"
+                     FontFamily="Segoe MDL2 Assets"
+                     FontSize="14"
+                     Foreground="#DDDDDD" />
+        </Button>
+
+        <Button Classes="bar"
+                Click="OnCancelClick"
+                ToolTip.Tip="取消并删除本次录制">
+          <TextBlock Text="&#xE711;"
+                     FontFamily="Segoe MDL2 Assets"
+                     FontSize="13"
+                     Foreground="#FF6B6B" />
+        </Button>
+
+        <Button Classes="bar"
+                Click="OnSaveClick"
+                ToolTip.Tip="停止并保存">
+          <TextBlock Text="&#xE74E;"
+                     FontFamily="Segoe MDL2 Assets"
+                     FontSize="14"
+                     Foreground="#7BD88F" />
+        </Button>
+      </StackPanel>
+    </Grid>
+  </Border>
+</Window>

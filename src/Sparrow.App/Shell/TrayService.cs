@@ -15,6 +15,7 @@ public sealed class TrayService
     private readonly PaletteWindow _palette;
     private readonly Action _showWorkspace;
     private readonly Action _capture;
+    private readonly Action _record;
     private readonly IReadOnlyList<TrayMenuEntry> _menuEntries;
     private readonly Action<string> _executeToolHotkey;
     private TrayIcon? _icon;
@@ -23,12 +24,14 @@ public sealed class TrayService
         PaletteWindow palette,
         Action showWorkspace,
         Action capture,
+        Action record,
         IReadOnlyList<TrayMenuEntry> menuEntries,
         Action<string> executeToolHotkey)
     {
         _palette = palette;
         _showWorkspace = showWorkspace;
         _capture = capture;
+        _record = record;
         _menuEntries = menuEntries;
         _executeToolHotkey = executeToolHotkey;
     }
@@ -51,6 +54,10 @@ public sealed class TrayService
 
                 case TrayMenuActionKind.Capture:
                     menu.Add(CreateItem(entry.Label, _capture));
+                    break;
+
+                case TrayMenuActionKind.Record:
+                    menu.Add(CreateItem(entry.Label, _record));
                     break;
 
                 case TrayMenuActionKind.Workspace:

@@ -41,6 +41,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
         _searchHotkey = settings.SearchHotkey;
         _captureHotkey = settings.CaptureHotkey;
+        _recordHotkey = settings.RecordHotkey;
         _clipboardPanelHotkey = settings.ClipboardPanelHotkey;
         _captureRecognizeKey = settings.CaptureRecognizeKey;
         _captureTranslateKey = settings.CaptureTranslateKey;
@@ -169,6 +170,9 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
     [ObservableProperty]
     private string _captureHotkey = "Ctrl+Alt+C";
+
+    [ObservableProperty]
+    private string _recordHotkey = "Ctrl+Alt+Shift+R";
 
     /// <summary>截图窗口内的动作键；空字符串表示禁用该快捷键。</summary>
     [ObservableProperty]
@@ -422,6 +426,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
     {
         if (!HotkeyText.TryParse(SearchHotkey, out var searchModifiers, out var searchKey)
             || !HotkeyText.TryParse(CaptureHotkey, out var captureModifiers, out var captureKey)
+            || !HotkeyText.TryParse(RecordHotkey, out var recordModifiers, out var recordKey)
             || !HotkeyText.TryParse(ClipboardPanelHotkey, out var panelModifiers, out var panelKey))
         {
             StatusMessage = "热键格式错误，示例：Ctrl+Alt+S";
@@ -430,6 +435,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
         var searchText = HotkeyText.Format(searchModifiers, searchKey);
         var captureText = HotkeyText.Format(captureModifiers, captureKey);
+        var recordText = HotkeyText.Format(recordModifiers, recordKey);
         var panelText = HotkeyText.Format(panelModifiers, panelKey);
 
         // 同一组合被注册两次时 RegisterHotKey 会静默失败，这里先拦下来
@@ -450,6 +456,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         {
             searchText,
             captureText,
+            recordText,
             panelText
         };
 
@@ -503,6 +510,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         {
             SearchHotkey = searchText,
             CaptureHotkey = captureText,
+            RecordHotkey = recordText,
             ClipboardPanelHotkey = panelText,
             CaptureRecognizeKey = recognizeKey,
             CaptureTranslateKey = translateKey,

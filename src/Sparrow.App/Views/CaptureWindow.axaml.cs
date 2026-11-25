@@ -32,7 +32,10 @@ public enum CaptureAction
     Pin,
 
     /// <summary>进入滚动截图；结果由 ScrollResultWindow 再选择动作。</summary>
-    Scroll
+    Scroll,
+
+    /// <summary>录制选区；不截图，只把 SelectionRect 交给宿主录制会话。</summary>
+    Record
 }
 
 /// <summary>
@@ -795,6 +798,10 @@ public partial class CaptureWindow : Window
     {
         base.OnOpened(e);
 
+        // 与 Snow-shot 一致：录制中重新截图/选区，遮罩和选区会进入视频。
+        // （如果希望录制中截图不污染视频，把下面这行加回来即可。）
+        // WindowCaptureExclusion.Exclude(this);
+
         ScreenCapture.Api = CaptureFrameApi switch
         {
             "gdi" => CaptureApi.Gdi,
@@ -853,6 +860,20 @@ public partial class CaptureWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        // 录制中按 Esc / 关窗：视为取消，丢弃录制并提示。
+        if (_recording is not null)
+        {
+            _recording.StateChanged -= OnRecordingStateChanged;
+            _recording.Abandon();
+            _recording = null;
+            RecordingFinished?.Invoke(null, null, false);
+        }
+
+        _regionOverlay?.Close();
+        _regionOverlay = null;
+
+        RemoveHitTestHook();
+
         _probeGeneration++;
         _uiProbe?.Dispose();
         _uiProbe = null;

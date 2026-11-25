@@ -8,6 +8,7 @@ public enum TrayMenuActionKind
 {
     Palette,
     Capture,
+    Record,
     Workspace,
     Exit,
     Tool,
@@ -41,6 +42,7 @@ public static class TrayMenuPlanner
             {
                 new(TrayMenuActionKind.Palette, $"搜索工具…    {searchHotkeyText}"),
                 new(TrayMenuActionKind.Capture, $"截图识别…    {captureHotkeyText}"),
+                new(TrayMenuActionKind.Record, "屏幕录制…    Ctrl+Alt+Shift+R"),
                 new(TrayMenuActionKind.Workspace, "工作区…")
             };
 
@@ -91,6 +93,14 @@ public static class TrayMenuPlanner
                         item.Label?.Trim() is { Length: > 0 } captureLabel
                             ? captureLabel
                             : $"截图识别…    {captureHotkeyText}"));
+                    break;
+
+                case "record":
+                    entries.Add(new TrayMenuEntry(
+                        TrayMenuActionKind.Record,
+                        item.Label?.Trim() is { Length: > 0 } recordLabel
+                            ? recordLabel
+                            : "屏幕录制…    Ctrl+Alt+Shift+R"));
                     break;
 
                 case "workspace":

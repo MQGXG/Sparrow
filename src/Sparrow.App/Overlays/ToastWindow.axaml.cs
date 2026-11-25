@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
+using Sparrow.App.Services;
 
 namespace Sparrow.App.Overlays;
 
@@ -38,6 +39,8 @@ public partial class ToastWindow : Window
 
     private void OnOpened(object? sender, EventArgs e)
     {
+        // 提示条也不能出现在录制的视频里。
+        WindowCaptureExclusion.Exclude(this);
         PositionTopRight();
         _timer.Start();
     }

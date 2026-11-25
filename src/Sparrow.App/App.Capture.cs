@@ -10,6 +10,7 @@ using Sparrow.App.History;
 using Sparrow.App.Overlays;
 using Sparrow.App.Plugins;
 using Sparrow.App.Services;
+using Sparrow.App.Services.Recording;
 using Sparrow.App.Settings;
 using Sparrow.App.Shell;
 using Sparrow.App.ViewModels;
@@ -146,6 +147,53 @@ public partial class App
             CaptureRestoreColors = _appSettings.CaptureRestoreColors
         };
 
+        // 区域录制：录制控制并入截图窗口主工具条（Snow-shot 行为）。
+        capture.RecordingSessionStarter = region =>
+        {
+            // 已经在录了：不允许再开第二个会话（录制中重新截图/选区时点红点会走到这里）。
+            if (_activeCaptureWindow is not null)
+            {
+                _toasts?.Show("已经在录制中。");
+                return Task.FromResult<RecordingSession?>(null);
+            }
+
+            _activeCaptureWindow = capture;
+            var setup = _pendingRecordingSetup ?? RecordingSetup.Default;
+            _pendingRecordingSetup = null;
+            return CreateRecordingSessionAsync(region, IntPtr.Zero, setup);
+        };
+
+        capture.RecordingFinished += (path, error, copied) =>
+        {
+            _activeCaptureWindow = null;
+
+            if (path is null)
+            {
+                _toasts?.Show(
+                    error is null ? "已取消录制。" : $"录制失败：{error}",
+                    TimeSpan.FromSeconds(8));
+                return;
+            }
+
+            var file = new FileInfo(path);
+            var sizeMb = file.Exists ? file.Length / 1024.0 / 1024.0 : 0;
+
+            _toasts?.Show(
+                copied
+                    ? $"录制完成并已复制到剪贴板：{file.Name}（{sizeMb:F1} MB）"
+                    : $"录制完成：{file.Name}（{sizeMb:F1} MB）",
+                TimeSpan.FromSeconds(5));
+
+            // 复制录屏时不再打断用户去资源管理器。
+            if (copied)
+                return;
+
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"")
+            {
+                UseShellExecute = true
+            });
+        };
+
         // 三槽样式模板：灌进去，关闭时读回
         for (var index = 0; index < capture.Presets.Length
              && index < _appSettings.AnnotationPresets.Count; index++)
@@ -157,6 +205,10 @@ public partial class App
             _settingsViewModel?.SetCaptureOcrBoxMode(OcrBoxModes.Format(mode));
         capture.Show();
         capture.Activate();
+
+        // 开发/自动化：SPARROW_CAPTURE_RECORD=1 时直接用固定区域开始录制。
+        if (Environment.GetEnvironmentVariable("SPARROW_CAPTURE_RECORD") == "1")
+            capture.StartRecordingNow(new PixelRect(200, 200, 800, 600));
 
         // 窗口先出来再读语言列表：首次会顺手加载插件，别让它卡在显示之前
         capture.ConfigureTranslateTargets(TranslateTargets());
@@ -181,6 +233,10 @@ public partial class App
         // 记住这次的标注样式和尺寸单位，下次截图直接沿用
         SaveCapturePreferences(capture);
 
+        // 用户取消截图或走了别的动作：丢弃暂存的录制参数，避免下次全屏误用。
+        if (capture.Action != CaptureAction.Record)
+            _pendingRecordingSetup = null;
+
         // 旧 OCR 插件只返回文本：窗口已关，直接回退到面板，避免重复识别
         if (capture.FallbackText is { Length: > 0 } fallback)
         {
@@ -188,6 +244,10 @@ public partial class App
             _paletteViewModel.CopyResult();
             return;
         }
+
+        // 录制选区：已在截图窗口内完成或取消，结果由 RecordingFinished 处理。
+        if (capture.Action == CaptureAction.Record)
+            return;
 
         if (capture.Result is not { Length: > 0 } png)
             return;

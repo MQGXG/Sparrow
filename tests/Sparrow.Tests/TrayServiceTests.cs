@@ -34,6 +34,7 @@ public sealed class TrayServiceTests
             palette,
             () => { },
             () => { },
+            () => { },
             StandardEntries(),
             _ => { });
 
@@ -57,6 +58,7 @@ public sealed class TrayServiceTests
 
         var service = new TrayService(
             palette,
+            () => { },
             () => { },
             () => { },
             entries,
