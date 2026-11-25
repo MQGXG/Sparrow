@@ -275,7 +275,6 @@ public partial class CaptureWindow
 
         _colorSampling = true;
         _colorFormat = 0;
-        Magnifier.IsVisible = false;
         Cursor = CrossCursor;
         UpdateColorProbe(_lastPointerPoint);
     }
@@ -284,6 +283,7 @@ public partial class CaptureWindow
     {
         _colorSampling = false;
         ColorProbe.IsVisible = false;
+        Magnifier.IsVisible = false;
         UpdateCursor(_lastPointerPoint);
     }
 
@@ -307,12 +307,39 @@ public partial class CaptureWindow
         ProbePosition.Text = $"{point.X:0}, {point.Y:0}";
         ColorProbe.IsVisible = true;
 
+        // 取色时也显示像素放大镜，和 snow-shot 一样边看网格边取色
+        UpdateMagnifier(point);
+
         ColorProbe.Measure(Size.Infinity);
         var size = ColorProbe.DesiredSize;
-        var left = Math.Max(4, Math.Min(point.X + 22, Width - size.Width - 4));
-        var top = Math.Max(4, Math.Min(point.Y + 24, Height - size.Height - 4));
+        var (left, top) = Magnifier.IsVisible
+            ? PlaceColorProbeUnderMagnifier(size)
+            : (Math.Max(4, Math.Min(point.X + 22, Width - size.Width - 4)),
+               Math.Max(4, Math.Min(point.Y + 24, Height - size.Height - 4)));
+
         Canvas.SetLeft(ColorProbe, left);
         Canvas.SetTop(ColorProbe, top);
+    }
+
+    /// <summary>取色卡片贴在放大镜下方；底部放不下就翻到上方。</summary>
+    private (double Left, double Top) PlaceColorProbeUnderMagnifier(Size size)
+    {
+        var left = Canvas.GetLeft(Magnifier);
+        var top = Canvas.GetTop(Magnifier);
+
+        if (double.IsNaN(left))
+            left = 4;
+
+        if (double.IsNaN(top))
+            top = 4;
+
+        var x = Math.Clamp(left, 4, Math.Max(4, Width - size.Width - 4));
+        var y = top + MagnifierSize + 6;
+
+        if (y + size.Height > Height - 4)
+            y = Math.Max(4, top - size.Height - 6);
+
+        return (x, y);
     }
 
     /// <summary>点一下：复制当前颜色、写回标注颜色，然后退出取色。</summary>
@@ -400,6 +427,7 @@ public partial class CaptureWindow
         _frozenPixels = pixels;
         _frozenWidth = width;
         _frozenHeight = height;
+        _frozenBitmap = CreateBitmap(pixels, width, height);
     }
 
     /// <summary>尺寸浮条的落点：优先选区上方，顶到边缘时放进内侧；工具条避让也用它。</summary>

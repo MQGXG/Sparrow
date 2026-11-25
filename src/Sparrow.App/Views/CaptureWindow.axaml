@@ -536,6 +536,7 @@
         <Canvas ClipToBounds="True">
           <Image x:Name="MagnifierImage"
                  Stretch="Fill"
+                 RenderOptions.BitmapInterpolationMode="None"
                  RenderTransformOrigin="0,0">
             <Image.RenderTransform>
               <ScaleTransform />

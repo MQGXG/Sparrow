@@ -319,6 +319,36 @@ public sealed partial class CaptureWindowTests
     }
 
     [AvaloniaFact]
+    public void 取色_放大镜跟随鼠标显示像素网格()
+    {
+        var window = new CaptureWindow();
+        window.Width = 240;
+        window.Height = 160;
+        window.Show();
+        window.SetFrozenPixelsForTest(new byte[240 * 160 * 4], 240, 160);
+
+        window.ToggleColorSampling();
+        window.MouseMove(new Point(60, 50));
+
+        window.ColorSampling.ShouldBeTrue();
+        window.Magnifier.IsVisible.ShouldBeTrue();
+        window.ColorProbe.IsVisible.ShouldBeTrue();
+
+        // 放大镜内部的图像随光标平移，取色跟手
+        var before = Canvas.GetLeft(window.MagnifierImage);
+        window.MouseMove(new Point(140, 90));
+
+        window.Magnifier.IsVisible.ShouldBeTrue();
+        Canvas.GetLeft(window.MagnifierImage).ShouldNotBe(before);
+
+        window.ExitColorSampling();
+        window.Magnifier.IsVisible.ShouldBeFalse();
+        window.ColorProbe.IsVisible.ShouldBeFalse();
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void 右键_逐级退出工具_选区_截图()
     {
         var window = CreateWithSelection();

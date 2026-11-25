@@ -467,7 +467,7 @@ public partial class CaptureWindow
     private void UpdateMagnifier(Point point)
     {
         var show = _frozenBitmap is not null
-            && _mode != DragMode.None
+            && (_mode != DragMode.None || _colorSampling)
             && _pendingAnnotation is null
             && !IsPointInActionBar(point);
 
@@ -477,6 +477,9 @@ public partial class CaptureWindow
             return;
         }
 
+        // 取色用更高的倍率，像素网格更清楚；拖选区保持 4 倍看整体对齐
+        var zoom = _colorSampling ? ColorPickZoom : MagnifierZoom;
+
         Magnifier.IsVisible = true;
         MagnifierImage.Source = _frozenBitmap;
         MagnifierImage.Width = Math.Max(Width, 1);
@@ -484,13 +487,13 @@ public partial class CaptureWindow
 
         if (MagnifierImage.RenderTransform is ScaleTransform scale)
         {
-            scale.ScaleX = MagnifierZoom;
-            scale.ScaleY = MagnifierZoom;
+            scale.ScaleX = zoom;
+            scale.ScaleY = zoom;
         }
 
         // 让光标位置正好落在放大镜中心
-        Canvas.SetLeft(MagnifierImage, -(point.X * MagnifierZoom) + MagnifierSize / 2);
-        Canvas.SetTop(MagnifierImage, -(point.Y * MagnifierZoom) + MagnifierSize / 2);
+        Canvas.SetLeft(MagnifierImage, -(point.X * zoom) + MagnifierSize / 2);
+        Canvas.SetTop(MagnifierImage, -(point.Y * zoom) + MagnifierSize / 2);
 
         // 依次尝试右下 / 左下 / 右上 / 左上，避开工具条和窗口边缘
         var toolbarLeft = Canvas.GetLeft(ActionBar);

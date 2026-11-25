@@ -108,6 +108,9 @@ public partial class CaptureWindow : Window
     private const double MagnifierSize = 132;
     private const double MagnifierZoom = 4;
 
+    /// <summary>取色时放大倍数更高，像素网格更清楚（参考 snow-shot 的取色器）。</summary>
+    private const double ColorPickZoom = 10;
+
     private static readonly Cursor CrossCursor = new(StandardCursorType.Cross);
     private static readonly Cursor ArrowCursor = new(StandardCursorType.Arrow);
     private static readonly Cursor MoveCursor = new(StandardCursorType.SizeAll);
