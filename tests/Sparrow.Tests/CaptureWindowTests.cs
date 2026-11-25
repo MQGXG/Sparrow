@@ -154,17 +154,21 @@ public sealed partial class CaptureWindowTests
         window.ToggleOcrBoxSelection(firstBox);
         window.HasOcrSelection().ShouldBeTrue();
 
-        // 第一次点空白：清掉选择，识别结果还在
+        // 点空白只清掉选择；识别结果始终保留，像平常选中文本一样继续操作
         window.MouseDown(new Point(170, 90), MouseButton.Left);
         window.MouseUp(new Point(170, 90), MouseButton.Left);
 
         window.OcrLayer.IsVisible.ShouldBeTrue();
         window.HasOcrSelection().ShouldBeFalse();
 
-        // 第二次点空白：才退出识别，回到重新框选
+        // 连续点空白也不会退出识别
         window.MouseDown(new Point(170, 90), MouseButton.Left);
         window.MouseUp(new Point(170, 90), MouseButton.Left);
 
+        window.OcrLayer.IsVisible.ShouldBeTrue();
+
+        // 退出识别走 Esc
+        window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
         window.OcrLayer.IsVisible.ShouldBeFalse();
 
         window.Close();
