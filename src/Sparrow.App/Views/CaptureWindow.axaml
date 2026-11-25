@@ -869,6 +869,14 @@
                   ToolTip.Tip="识别选区文字（Enter / R）">
             <Path Data="{StaticResource IconScan}" />
           </Button>
+          <!-- 翻译是一级动作：点一次就识别并出译文，不需要先点识别 -->
+          <Button x:Name="TranslateActionButton"
+                  Classes="tool"
+                  IsVisible="False"
+                  Click="OnTranslateClick"
+                  ToolTip.Tip="识别并翻译（直接出译文）">
+            <Path Data="{StaticResource IconTranslate}" StrokeThickness="1.143" />
+          </Button>
           <Button x:Name="SaveButton"
                   Classes="tool" Click="OnSaveClick" ToolTip.Tip="保存为 PNG（S）">
             <Path Data="{StaticResource IconSave}" StrokeThickness="1.161" />
@@ -948,6 +956,10 @@
               <MenuFlyout Placement="TopEdgeAlignedLeft" />
             </Button.Flyout>
           </Button>
+
+          <!-- OCR 设置与翻译设置各自成组：纯 OCR 时翻译分组整组隐藏 -->
+          <Border x:Name="TranslateOptionsSeparator" Classes="prop-sep" IsVisible="False" />
+
           <Button Focusable="False" x:Name="TranslateTargetButton" Classes="prop" Content="目标语言"
                   ToolTip.Tip="翻译目标语言">
             <Button.Flyout>

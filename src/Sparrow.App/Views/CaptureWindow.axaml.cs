@@ -640,8 +640,12 @@ public partial class CaptureWindow : Window
         }
 
         _translateAvailable = targets.Count > 0;
-        TranslateButton.IsVisible = _translateAvailable;
-        TranslateTargetButton.IsVisible = _translateAvailable;
+        TranslateActionButton.IsVisible = _translateAvailable;
+
+        // 第二排的翻译只在译文视图用于切换原文/译文；纯 OCR 时主条已有翻译入口
+        TranslateButton.IsVisible = _translateAvailable && _translatedPng is not null;
+        TranslateTargetButton.IsVisible = _translateAvailable && _translatedPng is not null;
+        TranslateOptionsSeparator.IsVisible = _translateAvailable && _translatedPng is not null;
         InvalidateToolbarMetrics();
     }
 

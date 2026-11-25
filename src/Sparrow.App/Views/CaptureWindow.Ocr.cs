@@ -27,6 +27,24 @@ public partial class CaptureWindow
     private async void OnRecognizeClick(object? sender, RoutedEventArgs e) => await ActAsync(CaptureAction.Recognize);
 
     /// <summary>
+    /// 主条「翻译」：点一次就识别并出译文，不需要先点识别、
+    /// 再到第二排点翻译开关。
+    /// </summary>
+    private async void OnTranslateClick(object? sender, RoutedEventArgs e)
+    {
+        if (!_translateAvailable)
+            return;
+
+        if (string.IsNullOrEmpty(_translateTargetSelection))
+        {
+            await ActAsync(CaptureAction.Recognize);
+            return;
+        }
+
+        await RunTranslateAsync(_translateTargetSelection);
+    }
+
+    /// <summary>
     /// OCR 结果条的翻译开关：已有译文时在原图/译文之间切换，
     /// 否则按当前目标语言走一次识别 + 翻译（参考 snow-shot 的单按钮语义）。
     /// </summary>
@@ -156,6 +174,7 @@ public partial class CaptureWindow
         _translateTarget = options?.TranslateTarget;
         RecognizeButton.IsEnabled = false;
         TranslateButton.IsEnabled = false;
+        TranslateActionButton.IsEnabled = false;
         OcrStatus.IsVisible = true;
         OcrStatus.Text = options?.TranslateTarget is { Length: > 0 } target
             ? $"正在翻译（{target}）…"
@@ -197,6 +216,7 @@ public partial class CaptureWindow
             _isRecognizing = false;
             RecognizeButton.IsEnabled = true;
             TranslateButton.IsEnabled = true;
+            TranslateActionButton.IsEnabled = true;
             _ocrCancellation?.Dispose();
             _ocrCancellation = null;
         }
@@ -368,6 +388,9 @@ public partial class CaptureWindow
             ? $"译文 · {target}"
             : "译文";
 
+        // 纯 OCR / 重新识别时收起语言与引擎下拉，只在译文视图出现
+        ApplyTranslationView();
+
         var lines = _ocrLines
             .Where(entry => !string.IsNullOrWhiteSpace(entry.Line.Translation))
             .Select(entry => new TranslatedImageRenderer.LineBox(
@@ -437,6 +460,13 @@ public partial class CaptureWindow
     private void ApplyTranslationView()
     {
         var hasTranslation = _translatedPng is not null;
+
+        // 第二排的翻译只在译文视图出现；纯 OCR 时主条已经有一级翻译入口
+        TranslateButton.IsVisible = _translateAvailable && hasTranslation;
+        TranslateTargetButton.IsVisible = _translateAvailable && hasTranslation;
+        EngineButton.IsVisible = _engineAvailable && hasTranslation;
+        TranslateOptionsSeparator.IsVisible = _translateAvailable && hasTranslation;
+
         var showingCompare = hasTranslation && _compareView && _comparePng is not null;
 
         if (!hasTranslation)
@@ -590,6 +620,10 @@ public partial class CaptureWindow
         _ocrActionsAvailable = false;
         OcrBoxButton.IsVisible = false;
         OcrTextBar.IsVisible = false;
+        TranslateButton.IsVisible = false;
+        TranslateTargetButton.IsVisible = false;
+        TranslateOptionsSeparator.IsVisible = false;
+        EngineButton.IsVisible = false;
         OcrStatus.IsVisible = false;
         InvalidateToolbarMetrics();
         ToolTip.SetTip(RecognizeButton, "识别选区文字（Enter / R）");

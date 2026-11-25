@@ -70,8 +70,10 @@ public sealed partial class CaptureWindowTests
         var window = new CaptureWindow();
         window.ConfigureTranslateTargets([("中文", "中文"), ("English", "英语")]);
 
-        window.TranslateButton.IsVisible.ShouldBeTrue();
-        window.TranslateTargetButton.IsVisible.ShouldBeTrue();
+        window.TranslateActionButton.IsVisible.ShouldBeTrue();
+        // 纯 OCR 状态不显示语言下拉和翻译开关，但默认目标已经选好
+        window.TranslateButton.IsVisible.ShouldBeFalse();
+        window.TranslateTargetButton.IsVisible.ShouldBeFalse();
         window.TranslateTargetButton.Content.ShouldBe("中文");
 
         var menu = window.TranslateTargetButton.Flyout.ShouldBeOfType<MenuFlyout>();
@@ -79,6 +81,7 @@ public sealed partial class CaptureWindowTests
 
         // 没有语言声明时整个翻译入口隐藏，避免点了没反应
         window.ConfigureTranslateTargets([]);
+        window.TranslateActionButton.IsVisible.ShouldBeFalse();
         window.TranslateButton.IsVisible.ShouldBeFalse();
         window.TranslateTargetButton.IsVisible.ShouldBeFalse();
     }
@@ -211,19 +214,19 @@ public sealed partial class CaptureWindowTests
     }
 
     [AvaloniaFact]
-    public void 二级压缩会把翻译也收起来()
+    public void 二级压缩不会藏主条翻译入口()
     {
         var window = new CaptureWindow();
         window.ConfigureTranslateTargets([("中文", "中文")]);
-        window.TranslateButton.IsVisible.ShouldBeTrue();
+        window.TranslateActionButton.IsVisible.ShouldBeTrue();
 
         window.SetToolbarDensity(2);
         window.SaveButton.IsVisible.ShouldBeFalse();
         window.MoreButton.IsVisible.ShouldBeTrue();
-        window.TranslateButton.IsVisible.ShouldBeTrue();   // 翻译是主功能，二级也不藏
+        window.TranslateActionButton.IsVisible.ShouldBeTrue();   // 翻译是主功能，二级也不藏
 
         window.SetToolbarDensity(1);
-        window.TranslateButton.IsVisible.ShouldBeTrue();
+        window.TranslateActionButton.IsVisible.ShouldBeTrue();
     }
 
     [Fact]
