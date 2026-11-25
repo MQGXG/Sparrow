@@ -42,6 +42,14 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _searchHotkey = settings.SearchHotkey;
         _captureHotkey = settings.CaptureHotkey;
         _clipboardPanelHotkey = settings.ClipboardPanelHotkey;
+        _captureRecognizeKey = settings.CaptureRecognizeKey;
+        _captureTranslateKey = settings.CaptureTranslateKey;
+        _captureCopyKey = settings.CaptureCopyKey;
+        _captureSaveKey = settings.CaptureSaveKey;
+        _capturePinKey = settings.CapturePinKey;
+        _captureScrollKey = settings.CaptureScrollKey;
+        _captureColorKey = settings.CaptureColorKey;
+        _captureOcrBoxKey = settings.CaptureOcrBoxKey;
         _selectedCaptureElementApi = CaptureElementApiOptions
             .FirstOrDefault(option => option.Key == settings.CaptureElementApi)
             ?? CaptureElementApiOptions[0];
@@ -161,6 +169,31 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
     [ObservableProperty]
     private string _captureHotkey = "Ctrl+Alt+C";
+
+    /// <summary>截图窗口内的动作键；空字符串表示禁用该快捷键。</summary>
+    [ObservableProperty]
+    private string _captureRecognizeKey = "R";
+
+    [ObservableProperty]
+    private string _captureTranslateKey = "T";
+
+    [ObservableProperty]
+    private string _captureCopyKey = "C";
+
+    [ObservableProperty]
+    private string _captureSaveKey = "S";
+
+    [ObservableProperty]
+    private string _capturePinKey = "P";
+
+    [ObservableProperty]
+    private string _captureScrollKey = "G";
+
+    [ObservableProperty]
+    private string _captureColorKey = "I";
+
+    [ObservableProperty]
+    private string _captureOcrBoxKey = "B";
 
     /// <summary>窗口元素 API：auto（UIA 优先 + MSAA 兜底）/ uia / msaa。</summary>
     [ObservableProperty]
@@ -419,6 +452,29 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
             captureText,
             panelText
         };
+
+        var recognizeKey = string.Empty;
+        var translateKey = string.Empty;
+        var copyKey = string.Empty;
+        var saveKey = string.Empty;
+        var pinKey = string.Empty;
+        var scrollKey = string.Empty;
+        var colorKey = string.Empty;
+        var ocrBoxKey = string.Empty;
+
+        if (!TryNormalizeCaptureKey(CaptureRecognizeKey, out recognizeKey)
+            || !TryNormalizeCaptureKey(CaptureTranslateKey, out translateKey)
+            || !TryNormalizeCaptureKey(CaptureCopyKey, out copyKey)
+            || !TryNormalizeCaptureKey(CaptureSaveKey, out saveKey)
+            || !TryNormalizeCaptureKey(CapturePinKey, out pinKey)
+            || !TryNormalizeCaptureKey(CaptureScrollKey, out scrollKey)
+            || !TryNormalizeCaptureKey(CaptureColorKey, out colorKey)
+            || !TryNormalizeCaptureKey(CaptureOcrBoxKey, out ocrBoxKey))
+        {
+            StatusMessage = "截图窗口快捷键格式错误，示例：R 或 Ctrl+C；留空表示禁用";
+            return;
+        }
+
         var toolHotkeys = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var row in ToolHotkeys)
@@ -448,11 +504,34 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
             SearchHotkey = searchText,
             CaptureHotkey = captureText,
             ClipboardPanelHotkey = panelText,
+            CaptureRecognizeKey = recognizeKey,
+            CaptureTranslateKey = translateKey,
+            CaptureCopyKey = copyKey,
+            CaptureSaveKey = saveKey,
+            CapturePinKey = pinKey,
+            CaptureScrollKey = scrollKey,
+            CaptureColorKey = colorKey,
+            CaptureOcrBoxKey = ocrBoxKey,
             ToolHotkeys = toolHotkeys
         };
 
         _store.Save(_settings);
-        StatusMessage = "已保存，重启应用生效";
+        StatusMessage = "已保存，截图窗口快捷键立即生效，全局热键重启后生效";
+    }
+
+    /// <summary>校验并规范化截图窗口内的动作键；空字符串 = 禁用。</summary>
+    private static bool TryNormalizeCaptureKey(string? text, out string normalized)
+    {
+        normalized = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(text))
+            return true;
+
+        if (!HotkeyText.TryParse(text, out var modifiers, out var virtualKey))
+            return false;
+
+        normalized = HotkeyText.Format(modifiers, virtualKey);
+        return true;
     }
 
     partial void OnStartWithWindowsChanged(bool value)

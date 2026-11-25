@@ -558,36 +558,58 @@
       </Panel>
     </Border>
 
-    <!-- 取色探针：跟随光标显示色值和坐标 -->
+    <!-- 取色器：方形像素预览 + 坐标 + 色值，跟随光标（参考 snow-shot 的取色窗口） -->
     <Border x:Name="ColorProbe"
             IsVisible="False"
             IsHitTestVisible="False"
             Background="{StaticResource OverlayBrush}"
             BorderBrush="{StaticResource LineStrongBrush}"
             BorderThickness="1"
-            CornerRadius="6"
-            Padding="6,4">
-      <StackPanel Orientation="Horizontal" Spacing="8">
-        <Border x:Name="ProbeSwatch"
-                Width="24"
-                Height="24"
+            CornerRadius="8"
+            Padding="8"
+            BoxShadow="0 10 24 0 #99000000">
+      <StackPanel Spacing="6">
+        <Border Width="108"
+                Height="108"
                 CornerRadius="4"
-                BorderBrush="#66FFFFFF"
-                BorderThickness="1" />
-        <StackPanel VerticalAlignment="Center" Spacing="1">
-          <TextBlock x:Name="ProbeValue"
-                     FontSize="11"
-                     FontFamily="{DynamicResource MonoFont}"
-                     Foreground="{StaticResource TextPrimaryBrush}"
-                     Text="#000000" />
-          <TextBlock x:Name="ProbePosition"
-                     FontSize="10"
-                     Foreground="{StaticResource TextMutedBrush}"
-                     Text="0, 0" />
-          <TextBlock FontSize="9"
-                     Foreground="{StaticResource TextMutedBrush}"
-                     Text="点击复制 · Shift+I 切格式" />
-        </StackPanel>
+                ClipToBounds="True"
+                Background="#FF101214">
+          <Panel ClipToBounds="True">
+            <Canvas ClipToBounds="True">
+              <Image x:Name="ProbePreviewImage"
+                     Stretch="Fill"
+                     RenderOptions.BitmapInterpolationMode="None"
+                     RenderTransformOrigin="0,0">
+                <Image.RenderTransform>
+                  <ScaleTransform />
+                </Image.RenderTransform>
+              </Image>
+            </Canvas>
+            <!-- 中心像素框：对准当前采样点 -->
+            <Border Width="16"
+                    Height="16"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    BorderBrush="#FFFFFFFF"
+                    BorderThickness="1"
+                    CornerRadius="2" />
+          </Panel>
+        </Border>
+        <TextBlock x:Name="ProbePosition"
+                   FontSize="10"
+                   HorizontalAlignment="Center"
+                   Foreground="{StaticResource TextMutedBrush}"
+                   Text="0, 0" />
+        <TextBlock x:Name="ProbeValue"
+                   FontSize="14"
+                   HorizontalAlignment="Center"
+                   FontFamily="{DynamicResource MonoFont}"
+                   Foreground="{StaticResource TextPrimaryBrush}"
+                   Text="#000000" />
+        <TextBlock FontSize="9"
+                   HorizontalAlignment="Center"
+                   Foreground="{StaticResource TextMutedBrush}"
+                   Text="点击复制 · Shift+I 格式 · Esc 退出" />
       </StackPanel>
     </Border>
 

@@ -161,6 +161,15 @@ public partial class App
         // 窗口先出来再读语言列表：首次会顺手加载插件，别让它卡在显示之前
         capture.ConfigureTranslateTargets(TranslateTargets());
         capture.ConfigureTranslateEngines(TranslateEngines());
+        capture.ConfigureCaptureShortcuts(
+            _appSettings.CaptureRecognizeKey,
+            _appSettings.CaptureTranslateKey,
+            _appSettings.CaptureCopyKey,
+            _appSettings.CaptureSaveKey,
+            _appSettings.CapturePinKey,
+            _appSettings.CaptureScrollKey,
+            _appSettings.CaptureColorKey,
+            _appSettings.CaptureOcrBoxKey);
         Log.Info($"截图窗口已显示：visible={capture.IsVisible}，title={capture.Title}，{MemoryText()}");
 
         await WaitForClosedAsync(capture);

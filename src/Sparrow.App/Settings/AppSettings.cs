@@ -21,6 +21,16 @@ public sealed record AppSettings
     /// <summary>截图识别热键，格式 "Ctrl+Alt+C"。</summary>
     public string CaptureHotkey { get; init; } = "Ctrl+Alt+C";
 
+    /// <summary>截图窗口内的动作键：单键或组合，空字符串表示禁用该快捷键。</summary>
+    public string CaptureRecognizeKey { get; init; } = "R";
+    public string CaptureTranslateKey { get; init; } = "T";
+    public string CaptureCopyKey { get; init; } = "C";
+    public string CaptureSaveKey { get; init; } = "S";
+    public string CapturePinKey { get; init; } = "P";
+    public string CaptureScrollKey { get; init; } = "G";
+    public string CaptureColorKey { get; init; } = "I";
+    public string CaptureOcrBoxKey { get; init; } = "B";
+
     /// <summary>剪贴板快取面板热键，格式 "Ctrl+Alt+B"；只呼出标题行 + 列表，不带主窗框架。</summary>
     public string ClipboardPanelHotkey { get; init; } = "Ctrl+Alt+B";
 

@@ -334,6 +334,107 @@
 
             <Border Classes="hud-line" Margin="20,0" />
 
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <!-- 截图窗口内快捷键：单键或 Ctrl+组合；留空禁用 -->
+            <StackPanel Margin="20,14,20,2" Spacing="3">
+              <TextBlock Text="截图窗口内快捷键"
+                         FontSize="13"
+                         FontWeight="SemiBold"
+                         Foreground="{StaticResource TextPrimaryBrush}" />
+              <TextBlock Text="单键或 Ctrl+组合；留空表示禁用该快捷键"
+                         FontSize="11"
+                         Foreground="{StaticResource TextMutedBrush}" />
+            </StackPanel>
+
+            <Grid ColumnDefinitions="*,Auto" Margin="20,10">
+              <TextBlock Text="识别文字" VerticalAlignment="Center"
+                         Foreground="{StaticResource TextPrimaryBrush}" />
+              <TextBox Grid.Column="1" Width="260" IsReadOnly="True" Tag="hotkey"
+                       ToolTip.Tip="点击后直接按组合键；Backspace 清空"
+                       PlaceholderText="留空禁用"
+                       Text="{Binding CaptureRecognizeKey, Mode=TwoWay}" />
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <Grid ColumnDefinitions="*,Auto" Margin="20,10">
+              <TextBlock Text="翻译（识别并出译文）" VerticalAlignment="Center"
+                         Foreground="{StaticResource TextPrimaryBrush}" />
+              <TextBox Grid.Column="1" Width="260" IsReadOnly="True" Tag="hotkey"
+                       ToolTip.Tip="点击后直接按组合键；Backspace 清空"
+                       PlaceholderText="留空禁用"
+                       Text="{Binding CaptureTranslateKey, Mode=TwoWay}" />
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <Grid ColumnDefinitions="*,Auto" Margin="20,10">
+              <TextBlock Text="复制图片" VerticalAlignment="Center"
+                         Foreground="{StaticResource TextPrimaryBrush}" />
+              <TextBox Grid.Column="1" Width="260" IsReadOnly="True" Tag="hotkey"
+                       ToolTip.Tip="点击后直接按组合键；Backspace 清空"
+                       PlaceholderText="留空禁用"
+                       Text="{Binding CaptureCopyKey, Mode=TwoWay}" />
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <Grid ColumnDefinitions="*,Auto" Margin="20,10">
+              <TextBlock Text="保存" VerticalAlignment="Center"
+                         Foreground="{StaticResource TextPrimaryBrush}" />
+              <TextBox Grid.Column="1" Width="260" IsReadOnly="True" Tag="hotkey"
+                       ToolTip.Tip="点击后直接按组合键；Backspace 清空"
+                       PlaceholderText="留空禁用"
+                       Text="{Binding CaptureSaveKey, Mode=TwoWay}" />
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <Grid ColumnDefinitions="*,Auto" Margin="20,10">
+              <TextBlock Text="固定到屏幕" VerticalAlignment="Center"
+                         Foreground="{StaticResource TextPrimaryBrush}" />
+              <TextBox Grid.Column="1" Width="260" IsReadOnly="True" Tag="hotkey"
+                       ToolTip.Tip="点击后直接按组合键；Backspace 清空"
+                       PlaceholderText="留空禁用"
+                       Text="{Binding CapturePinKey, Mode=TwoWay}" />
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <Grid ColumnDefinitions="*,Auto" Margin="20,10">
+              <TextBlock Text="滚动截图" VerticalAlignment="Center"
+                         Foreground="{StaticResource TextPrimaryBrush}" />
+              <TextBox Grid.Column="1" Width="260" IsReadOnly="True" Tag="hotkey"
+                       ToolTip.Tip="点击后直接按组合键；Backspace 清空"
+                       PlaceholderText="留空禁用"
+                       Text="{Binding CaptureScrollKey, Mode=TwoWay}" />
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <Grid ColumnDefinitions="*,Auto" Margin="20,10">
+              <TextBlock Text="取色" VerticalAlignment="Center"
+                         Foreground="{StaticResource TextPrimaryBrush}" />
+              <TextBox Grid.Column="1" Width="260" IsReadOnly="True" Tag="hotkey"
+                       ToolTip.Tip="点击后直接按组合键；Backspace 清空"
+                       PlaceholderText="留空禁用"
+                       Text="{Binding CaptureColorKey, Mode=TwoWay}" />
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <Grid ColumnDefinitions="*,Auto" Margin="20,10">
+              <TextBlock Text="识别框显示方式" VerticalAlignment="Center"
+                         Foreground="{StaticResource TextPrimaryBrush}" />
+              <TextBox Grid.Column="1" Width="260" IsReadOnly="True" Tag="hotkey"
+                       ToolTip.Tip="点击后直接按组合键；Backspace 清空"
+                       PlaceholderText="留空禁用"
+                       Text="{Binding CaptureOcrBoxKey, Mode=TwoWay}" />
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
             <Grid ColumnDefinitions="*,Auto" Margin="20,14">
               <StackPanel Spacing="3" VerticalAlignment="Center">
                 <TextBlock Text="窗口元素 API"

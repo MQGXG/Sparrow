@@ -467,7 +467,7 @@ public partial class CaptureWindow
     private void UpdateMagnifier(Point point)
     {
         var show = _frozenBitmap is not null
-            && (_mode != DragMode.None || _colorSampling)
+            && _mode != DragMode.None
             && _pendingAnnotation is null
             && !IsPointInActionBar(point);
 
@@ -477,8 +477,8 @@ public partial class CaptureWindow
             return;
         }
 
-        // 取色用更高的倍率，像素网格更清楚；拖选区保持 4 倍看整体对齐
-        var zoom = _colorSampling ? ColorPickZoom : MagnifierZoom;
+        // 拖选区时 4 倍看整体对齐；取色器有独立的 10 倍方形预览
+        var zoom = MagnifierZoom;
 
         Magnifier.IsVisible = true;
         MagnifierImage.Source = _frozenBitmap;

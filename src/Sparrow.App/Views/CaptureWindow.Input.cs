@@ -24,13 +24,90 @@ namespace Sparrow.App.Views;
 
 public partial class CaptureWindow
 {
+    private readonly record struct CaptureShortcut(Key Key, KeyModifiers Modifiers)
+    {
+        public bool Matches(Key key, KeyModifiers modifiers) =>
+            Key == key && Modifiers == modifiers;
+    }
+
+    private CaptureShortcut? _recognizeShortcut = ParseShortcut("R");
+    private CaptureShortcut? _translateShortcut = ParseShortcut("T");
+    private CaptureShortcut? _copyShortcut = ParseShortcut("C");
+    private CaptureShortcut? _saveShortcut = ParseShortcut("S");
+    private CaptureShortcut? _pinShortcut = ParseShortcut("P");
+    private CaptureShortcut? _scrollShortcut = ParseShortcut("G");
+    private CaptureShortcut? _colorShortcut = ParseShortcut("I");
+    private CaptureShortcut? _ocrBoxShortcut = ParseShortcut("B");
+
+    /// <summary>宿主注入截图窗口内的动作键；空字符串表示禁用该快捷键。</summary>
+    internal void ConfigureCaptureShortcuts(
+        string? recognize,
+        string? translate,
+        string? copy,
+        string? save,
+        string? pin,
+        string? scroll,
+        string? color,
+        string? ocrBox)
+    {
+        _recognizeShortcut = ParseShortcut(recognize);
+        _translateShortcut = ParseShortcut(translate);
+        _copyShortcut = ParseShortcut(copy);
+        _saveShortcut = ParseShortcut(save);
+        _pinShortcut = ParseShortcut(pin);
+        _scrollShortcut = ParseShortcut(scroll);
+        _colorShortcut = ParseShortcut(color);
+        _ocrBoxShortcut = ParseShortcut(ocrBox);
+        UpdateCaptureShortcutTips();
+    }
+
+    private static CaptureShortcut? ParseShortcut(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)
+            || !HotkeyText.TryParse(text, out var modifiers, out var virtualKey))
+            return null;
+
+        var key = ToKey(virtualKey);
+        return key == Key.None ? null : new CaptureShortcut(key, ToKeyModifiers(modifiers));
+    }
+
+    private static Key ToKey(uint virtualKey) =>
+        virtualKey switch
+        {
+            >= 'A' and <= 'Z' => Enum.TryParse<Key>(((char)virtualKey).ToString(), out var letter)
+                ? letter
+                : Key.None,
+            >= '0' and <= '9' => (Key)((int)Key.D0 + (int)(virtualKey - '0')),
+            _ => Key.None
+        };
+
+    /// <summary>Win32 MOD_* → Avalonia 修饰键。</summary>
+    private static KeyModifiers ToKeyModifiers(uint modifiers)
+    {
+        var result = KeyModifiers.None;
+
+        if ((modifiers & 0x0002) != 0)   // MOD_CONTROL
+            result |= KeyModifiers.Control;
+
+        if ((modifiers & 0x0001) != 0)   // MOD_ALT
+            result |= KeyModifiers.Alt;
+
+        if ((modifiers & 0x0004) != 0)   // MOD_SHIFT
+            result |= KeyModifiers.Shift;
+
+        if ((modifiers & 0x0008) != 0)   // MOD_WIN
+            result |= KeyModifiers.Meta;
+
+        return result;
+    }
+
     protected override void OnKeyDown(KeyEventArgs e)
     {
         // 中文输入法会把字母键标记成 ImeProcessed；
         // 截图窗口没有文本输入，按物理键还原即可，不需要放行给输入法。
         var key = e.Key == Key.ImeProcessed ? MapPhysicalKey(e.PhysicalKey) : e.Key;
 
-        if (!ShouldHandleGlobalKey(e, key))
+        if (!ShouldHandleGlobalKey(key))
         {
             base.OnKeyDown(e);
             return;
@@ -51,7 +128,7 @@ public partial class CaptureWindow
     }
 
     /// <summary>焦点在文本 / 按钮 / 滑块上时，把按键让给控件自己。</summary>
-    private bool ShouldHandleGlobalKey(KeyEventArgs e, Key key)
+    private bool ShouldHandleGlobalKey(Key key)
     {
         var focused = FocusManager?.GetFocusedElement();
 
@@ -96,23 +173,19 @@ public partial class CaptureWindow
     /// <summary>I：取色；取色中 Shift+I：切换格式（HEX / RGB / HSL）。</summary>
     private bool HandleColorKey(KeyEventArgs e, Key key)
     {
-        if (key != Key.I)
-            return false;
-
-        if (_colorSampling && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        // 取色中 Shift+I 仍用于切换颜色格式
+        if (_colorSampling && key == Key.I && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {
             _colorFormat = (_colorFormat + 1) % 3;
             UpdateColorProbe(_lastPointerPoint);
             return true;
         }
 
-        if (e.KeyModifiers == KeyModifiers.None)
-        {
-            ToggleColorSampling();
-            return true;
-        }
+        if (_colorShortcut?.Matches(key, e.KeyModifiers) != true)
+            return false;
 
-        return false;
+        ToggleColorSampling();
+        return true;
     }
 
     /// <summary>撤销 / 重做 / 删除选中标注。</summary>
@@ -153,7 +226,7 @@ public partial class CaptureWindow
         if (key == Key.Tab && HandleTabKey(e.KeyModifiers.HasFlag(KeyModifiers.Control)))
             return true;
 
-        if (key == Key.B && OcrLayer.IsVisible)
+        if (_ocrBoxShortcut?.Matches(key, e.KeyModifiers) == true && OcrLayer.IsVisible)
         {
             CycleOcrBoxMode();
             return true;
@@ -211,72 +284,129 @@ public partial class CaptureWindow
             return true;
         }
 
-        // 注入了 OCR runner 时，Enter/R 在窗口内就地识别
-        if (ActionBar.IsVisible && OcrRunner is not null && key is Key.Enter or Key.R)
+        if (!ActionBar.IsVisible)
+            return false;
+
+        // Enter 保留为「识别 / 复制全文」的固定键，其余动作走可配置快捷键
+        if (key == Key.Enter)
         {
-            if (key == Key.Enter && OcrLayer.IsVisible)
+            if (OcrLayer.IsVisible)
                 CopyAllText();
-            else
+            else if (OcrRunner is not null)
                 _ = RunOcrAsync();
+            else
+                RunActionShortcut(CaptureAction.Recognize);
 
             return true;
         }
 
-        // 动作栏出现后，整条流程都可以只用键盘完成
-        if (ActionBar.IsVisible && TryResolveShortcut(key, out var action))
+        if (_recognizeShortcut?.Matches(key, e.KeyModifiers) == true)
         {
-            if (OcrRunner is null)
-            {
-                // 没有就地 OCR：保持旧行为，关窗交给宿主
-                Action = action;
-                Close();
-            }
-            else
-            {
-                _ = ActAsync(action);
-            }
+            RunActionShortcut(CaptureAction.Recognize);
+            return true;
+        }
 
+        if (_translateShortcut?.Matches(key, e.KeyModifiers) == true)
+        {
+            _ = TranslateFromShortcutAsync();
+            return true;
+        }
+
+        if (_copyShortcut?.Matches(key, e.KeyModifiers) == true)
+        {
+            RunActionShortcut(CaptureAction.CopyImage);
+            return true;
+        }
+
+        if (_saveShortcut?.Matches(key, e.KeyModifiers) == true)
+        {
+            RunActionShortcut(CaptureAction.Save);
+            return true;
+        }
+
+        if (_pinShortcut?.Matches(key, e.KeyModifiers) == true)
+        {
+            RunActionShortcut(CaptureAction.Pin);
+            return true;
+        }
+
+        if (_scrollShortcut?.Matches(key, e.KeyModifiers) == true)
+        {
+            RunActionShortcut(CaptureAction.Scroll);
             return true;
         }
 
         return false;
     }
-    private static Key MapPhysicalKey(PhysicalKey physicalKey) => physicalKey switch
-    {
-        PhysicalKey.Enter => Key.Enter,
-        PhysicalKey.R => Key.R,
-        PhysicalKey.C => Key.C,
-        PhysicalKey.S => Key.S,
-        PhysicalKey.P => Key.P,
-        PhysicalKey.G => Key.G,
-        _ => Key.None
-    };
 
-    private static bool TryResolveShortcut(Key key, out CaptureAction action)
+    /// <summary>没有就地 OCR 时保持旧行为：设置动作后关窗交给宿主。</summary>
+    private void RunActionShortcut(CaptureAction action)
     {
-        switch (key)
+        if (OcrRunner is null)
         {
-            case Key.Enter:
-            case Key.R:
-                action = CaptureAction.Recognize;
-                return true;
-            case Key.C:
-                action = CaptureAction.CopyImage;
-                return true;
-            case Key.S:
-                action = CaptureAction.Save;
-                return true;
-            case Key.P:
-                action = CaptureAction.Pin;
-                return true;
-            case Key.G:
-                action = CaptureAction.Scroll;
-                return true;
-            default:
-                action = CaptureAction.None;
-                return false;
+            Action = action;
+            Close();
+            return;
         }
+
+        _ = ActAsync(action);
     }
+
+    private async Task TranslateFromShortcutAsync()
+    {
+        if (!string.IsNullOrEmpty(_translateTargetSelection))
+            await RunTranslateAsync(_translateTargetSelection);
+    }
+
+    /// <summary>把按钮提示同步成当前配置的快捷键。</summary>
+    private void UpdateCaptureShortcutTips()
+    {
+        ToolTip.SetTip(
+            RecognizeButton,
+            $"识别选区文字（{ShortcutLabel(_recognizeShortcut)} / Enter）");
+        ToolTip.SetTip(
+            TranslateActionButton,
+            $"识别并翻译（{ShortcutLabel(_translateShortcut)}）");
+        ToolTip.SetTip(
+            SaveButton,
+            $"保存为 PNG（{ShortcutLabel(_saveShortcut)}）");
+        ToolTip.SetTip(
+            PinButton,
+            $"固定到屏幕（{ShortcutLabel(_pinShortcut)}）");
+        ToolTip.SetTip(
+            ScrollButton,
+            $"滚动截图（{ShortcutLabel(_scrollShortcut)}）");
+        ToolTip.SetTip(
+            CopyImageButton,
+            $"完成并复制（{ShortcutLabel(_copyShortcut)}）");
+    }
+
+    private static string ShortcutLabel(CaptureShortcut? shortcut) =>
+        shortcut is { } value
+            ? $"{DescribeModifiers(value.Modifiers)}{value.Key}"
+            : "未设置";
+
+    private static string DescribeModifiers(KeyModifiers modifiers)
+    {
+        var parts = new List<string>();
+
+        if (modifiers.HasFlag(KeyModifiers.Control))
+            parts.Add("Ctrl");
+
+        if (modifiers.HasFlag(KeyModifiers.Alt))
+            parts.Add("Alt");
+
+        if (modifiers.HasFlag(KeyModifiers.Shift))
+            parts.Add("Shift");
+
+        if (modifiers.HasFlag(KeyModifiers.Meta))
+            parts.Add("Win");
+
+        return parts.Count == 0 ? string.Empty : string.Join("+", parts) + "+";
+    }
+    /// <summary>物理键 → 逻辑键：字母/数字键在 ImeProcessed 下仍能匹配可配置快捷键。</summary>
+    private static Key MapPhysicalKey(PhysicalKey physicalKey) =>
+        Enum.TryParse<Key>(physicalKey.ToString(), out var key) ? key : Key.None;
 
     // ---------- 截图内取色 ----------
 
@@ -294,6 +424,7 @@ public partial class CaptureWindow
 
         _colorSampling = true;
         _colorFormat = 0;
+        Magnifier.IsVisible = false;
         Cursor = CrossCursor;
 
         // 用当前真实光标位置初始化：刚打开窗口还没收到 PointerMoved 时，
@@ -319,7 +450,7 @@ public partial class CaptureWindow
         UpdateCursor(_lastPointerPoint);
     }
 
-    /// <summary>把光标处的颜色和坐标写进探针，并跟着光标摆位。</summary>
+    /// <summary>把光标处的颜色和坐标写进取色卡片，并跟着光标摆位。</summary>
     private void UpdateColorProbe(Point point)
     {
         if (!_colorSampling)
@@ -331,7 +462,6 @@ public partial class CaptureWindow
         if (SampleColorAt(point) is not { } color)
         {
             // 冻结帧还没准备好：先给反馈，避免按 I 后像没反应
-            ProbeSwatch.Background = Brushes.Transparent;
             ProbeValue.Text = "准备中…";
             ProbePosition.Text = $"{point.X:0}, {point.Y:0}";
             ColorProbe.IsVisible = true;
@@ -339,52 +469,47 @@ public partial class CaptureWindow
             return;
         }
 
-        ProbeSwatch.Background = new SolidColorBrush(color);
         ProbeValue.Text = FormatColor(color, _colorFormat);
         ProbePosition.Text = $"{point.X:0}, {point.Y:0}";
         ColorProbe.IsVisible = true;
-
-        // 取色时也显示像素放大镜，和 snow-shot 一样边看网格边取色
-        UpdateMagnifier(point);
+        UpdateProbePreview(point);
         PositionColorProbe(point);
     }
 
-    /// <summary>把取色卡片摆到放大镜下方；没有放大镜时贴在光标右下。</summary>
+    /// <summary>方形像素预览：最近邻放大，光标所在像素固定落在预览中心。</summary>
+    private void UpdateProbePreview(Point point)
+    {
+        if (_frozenBitmap is null)
+            return;
+
+        ProbePreviewImage.Source = _frozenBitmap;
+        ProbePreviewImage.Width = Math.Max(Width, 1);
+        ProbePreviewImage.Height = Math.Max(Height, 1);
+
+        if (ProbePreviewImage.RenderTransform is ScaleTransform scale)
+        {
+            scale.ScaleX = ColorPickZoom;
+            scale.ScaleY = ColorPickZoom;
+        }
+
+        // 预览区 108px；让光标像素落在 54px 中心
+        Canvas.SetLeft(ProbePreviewImage, -(point.X * ColorPickZoom) + 54);
+        Canvas.SetTop(ProbePreviewImage, -(point.Y * ColorPickZoom) + 54);
+    }
+
+    /// <summary>取色卡片贴着光标右下，靠边时钳制在窗口内。</summary>
     private void PositionColorProbe(Point point)
     {
         ColorProbe.Measure(Size.Infinity);
         var size = ColorProbe.DesiredSize;
-        var (left, top) = Magnifier.IsVisible
-            ? PlaceColorProbeUnderMagnifier(size)
-            : (Math.Max(4, Math.Min(point.X + 22, Width - size.Width - 4)),
-               Math.Max(4, Math.Min(point.Y + 24, Height - size.Height - 4)));
+        var left = Math.Clamp(point.X + 24, 4, Math.Max(4, Width - size.Width - 4));
+        var top = Math.Clamp(point.Y + 24, 4, Math.Max(4, Height - size.Height - 4));
 
         Canvas.SetLeft(ColorProbe, left);
         Canvas.SetTop(ColorProbe, top);
     }
 
-    /// <summary>取色卡片贴在放大镜下方；底部放不下就翻到上方。</summary>
-    private (double Left, double Top) PlaceColorProbeUnderMagnifier(Size size)
-    {
-        var left = Canvas.GetLeft(Magnifier);
-        var top = Canvas.GetTop(Magnifier);
-
-        if (double.IsNaN(left))
-            left = 4;
-
-        if (double.IsNaN(top))
-            top = 4;
-
-        var x = Math.Clamp(left, 4, Math.Max(4, Width - size.Width - 4));
-        var y = top + MagnifierSize + 6;
-
-        if (y + size.Height > Height - 4)
-            y = Math.Max(4, top - size.Height - 6);
-
-        return (x, y);
-    }
-
-    /// <summary>点一下：复制当前颜色、写回标注颜色，然后退出取色。</summary>
+    /// <summary>点一下复制当前颜色；保持取色模式，可以继续移动取别的颜色。</summary>
     private void CommitColorSample()
     {
         if (SampleColorAt(_lastPointerPoint) is { } color)
@@ -392,9 +517,8 @@ public partial class CaptureWindow
             CopyText?.Invoke(FormatColor(color, _colorFormat));
             _noteColor = color;
             UpdateStyleButtons();
+            ProbeValue.Text = $"{FormatColor(color, _colorFormat)} 已复制";
         }
-
-        ExitColorSampling();
     }
 
     /// <summary>

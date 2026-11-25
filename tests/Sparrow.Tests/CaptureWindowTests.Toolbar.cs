@@ -319,7 +319,7 @@ public sealed partial class CaptureWindowTests
     }
 
     [AvaloniaFact]
-    public void 取色_放大镜跟随鼠标显示像素网格()
+    public void 取色_卡片跟随鼠标显示像素网格()
     {
         var window = new CaptureWindow();
         window.Width = 240;
@@ -331,18 +331,22 @@ public sealed partial class CaptureWindowTests
         window.MouseMove(new Point(60, 50));
 
         window.ColorSampling.ShouldBeTrue();
-        window.Magnifier.IsVisible.ShouldBeTrue();
         window.ColorProbe.IsVisible.ShouldBeTrue();
+        // 取色用独立方形卡片，不再叠圆形放大镜
+        window.Magnifier.IsVisible.ShouldBeFalse();
 
-        // 放大镜内部的图像随光标平移，取色跟手
-        var before = Canvas.GetLeft(window.MagnifierImage);
+        // 卡片里的像素预览随光标平移，取色跟手
+        var before = Canvas.GetLeft(window.ProbePreviewImage);
         window.MouseMove(new Point(140, 90));
 
-        window.Magnifier.IsVisible.ShouldBeTrue();
-        Canvas.GetLeft(window.MagnifierImage).ShouldNotBe(before);
+        Canvas.GetLeft(window.ProbePreviewImage).ShouldNotBe(before);
+
+        // 点击复制后仍留在取色模式，可以继续取别的颜色
+        window.MouseDown(new Point(140, 90), MouseButton.Left);
+        window.MouseUp(new Point(140, 90), MouseButton.Left);
+        window.ColorSampling.ShouldBeTrue();
 
         window.ExitColorSampling();
-        window.Magnifier.IsVisible.ShouldBeFalse();
         window.ColorProbe.IsVisible.ShouldBeFalse();
 
         window.Close();
