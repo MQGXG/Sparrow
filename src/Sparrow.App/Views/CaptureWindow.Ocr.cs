@@ -570,8 +570,6 @@ public partial class CaptureWindow
         _ocrActionsAvailable = false;
         CopyAllButton.IsVisible = false;
         OcrBoxButton.IsVisible = false;
-        FormatButton.IsVisible = false;
-        PunctuationButton.IsVisible = false;
         OcrStatus.IsVisible = false;
         InvalidateToolbarMetrics();
         ToolTip.SetTip(RecognizeButton, "识别选区文字（Enter / R）");

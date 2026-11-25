@@ -73,7 +73,17 @@ public sealed partial class CaptureWindowTests
         window.TranslateButton.IsVisible.ShouldBeTrue();
 
         var menu = window.TranslateButton.Flyout.ShouldBeOfType<MenuFlyout>();
-        menu.Items.Count.ShouldBe(2);
+
+        // 语言项仍在第一层；引擎 / 复制格式 / 标点收进二级菜单
+        menu.Items.OfType<MenuItem>().Count(item => item.Header is "中文" or "英语").ShouldBe(2);
+
+        var headers = menu.Items.OfType<MenuItem>()
+            .Select(item => item.Header as string)
+            .ToArray();
+
+        headers.ShouldContain(header => header!.StartsWith("翻译引擎"));
+        headers.ShouldContain(header => header!.StartsWith("复制格式"));
+        headers.ShouldContain(header => header!.StartsWith("标点"));
 
         // 没有语言声明时整个按钮隐藏，避免点了没反应
         window.ConfigureTranslateTargets([]);

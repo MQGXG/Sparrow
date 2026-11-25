@@ -44,8 +44,6 @@ public partial class CaptureWindow
         OcrStatus.IsVisible = false;
         CopyAllButton.IsVisible = false;
         OcrBoxButton.IsVisible = false;
-        FormatButton.IsVisible = false;
-        PunctuationButton.IsVisible = false;
         _ocrActionsAvailable = false;
         HintBar.IsVisible = false;
         _notes.Clear();

@@ -878,33 +878,6 @@
               <MenuFlyout Placement="TopEdgeAlignedRight" />
             </Button.Flyout>
           </Button>
-          <Button x:Name="EngineButton"
-                  Classes="tool"
-                  IsVisible="False"
-                  ToolTip.Tip="翻译引擎：自动">
-            <Path Data="{StaticResource IconSparkle}" StrokeThickness="1.1" />
-            <Button.Flyout>
-              <MenuFlyout Placement="TopEdgeAlignedRight" />
-            </Button.Flyout>
-          </Button>
-          <Button x:Name="FormatButton"
-                  Classes="tool"
-                  IsVisible="False"
-                  ToolTip.Tip="格式：保留换行">
-            <TextBlock Text="Aa" FontSize="11.5" VerticalAlignment="Center" />
-            <Button.Flyout>
-              <MenuFlyout Placement="TopEdgeAlignedRight" />
-            </Button.Flyout>
-          </Button>
-          <Button x:Name="PunctuationButton"
-                  Classes="tool"
-                  IsVisible="False"
-                  ToolTip.Tip="标点：不处理">
-            <TextBlock Text="，" FontSize="15" VerticalAlignment="Center" />
-            <Button.Flyout>
-              <MenuFlyout Placement="TopEdgeAlignedRight" />
-            </Button.Flyout>
-          </Button>
           <Button x:Name="SaveButton"
                   Classes="tool" Click="OnSaveClick" ToolTip.Tip="保存为 PNG（S）">
             <Path Data="{StaticResource IconSave}" StrokeThickness="1.161" />
@@ -950,15 +923,6 @@
             </Button.Flyout>
           </Button>
 
-          <TextBlock x:Name="OcrStatus"
-                     IsVisible="False"
-                     MaxWidth="180"
-                     Margin="6,0"
-                     VerticalAlignment="Center"
-                     FontSize="11"
-                     TextTrimming="CharacterEllipsis"
-                     Foreground="{StaticResource TextSecondaryBrush}" />
-
           <Border Classes="tool-separator" />
 
           <Button x:Name="CancelButton"
@@ -976,6 +940,15 @@
           </Button>
         </StackPanel>
       </Border>
+
+      <!-- 识别 / 翻译状态：单独一行，不挤在主工具条里 -->
+      <TextBlock x:Name="OcrStatus"
+                 IsVisible="False"
+                 HorizontalAlignment="Center"
+                 MaxWidth="420"
+                 FontSize="11"
+                 TextTrimming="CharacterEllipsis"
+                 Foreground="{StaticResource TextSecondaryBrush}" />
 
       <!-- 属性栏：只显示当前工具用得上的设置；宽度随内容，居中挂在主条下方 -->
       <Border x:Name="StyleRow" Classes="capture-bar" HorizontalAlignment="Center" IsVisible="False">

@@ -215,12 +215,17 @@ public partial class CaptureWindow : Window
 
     private string _ocrPunctuation = OcrTextTransform.PunctuationNone;
 
-    /// <summary>翻译引擎：auto / ai / local:{模型Id}；截图窗口只在有多个可选时才显示按钮。</summary>
+    /// <summary>翻译引擎：auto / ai / local:{模型Id}；设置收在翻译菜单的「翻译引擎」子菜单里。</summary>
     private string _translateEngine = "auto";
 
     private string _translateEngineLabel = "自动（在线优先）";
 
-    private bool _engineAvailable;
+    /// <summary>翻译菜单里的三个设置子菜单；主条不再放独立按钮。</summary>
+    private MenuItem? _engineMenu;
+    private MenuItem? _formatMenu;
+    private MenuItem? _punctuationMenu;
+
+    private IReadOnlyList<(string Value, string Label)> _translateEngines = [];
 
     private static readonly (string Value, string Label)[] OcrFormattingOptions =
     [
@@ -580,6 +585,7 @@ public partial class CaptureWindow : Window
     /// <summary>
     /// 「翻译」按钮的语言列表（值 + 显示名），来自 OCR 工具的声明。
     /// 为空时整个按钮隐藏，避免给出一个点了没反应的入口。
+    /// 翻译引擎 / 复制格式 / 标点作为二级菜单挂在这里，主条只留识别与翻译。
     /// </summary>
     public void ConfigureTranslateTargets(IReadOnlyList<(string Value, string Label)> targets)
     {
@@ -600,28 +606,54 @@ public partial class CaptureWindow : Window
             menu.Items.Add(item);
         }
 
-        _translateAvailable = menu.Items.Count > 0;
+        // 设置项收进二级菜单：主条不再为引擎 / 格式 / 标点各占一个图标位
+        if (targets.Count > 0)
+        {
+            menu.Items.Add(new Separator());
+
+            _engineMenu = new MenuItem();
+            _formatMenu = new MenuItem();
+            _punctuationMenu = new MenuItem();
+            menu.Items.Add(_engineMenu);
+            menu.Items.Add(_formatMenu);
+            menu.Items.Add(_punctuationMenu);
+
+            ApplyTranslateEngineMenu();
+            BuildOcrTextMenus();
+        }
+        else
+        {
+            _engineMenu = null;
+            _formatMenu = null;
+            _punctuationMenu = null;
+        }
+
+        _translateAvailable = targets.Count > 0;
         TranslateButton.IsVisible = _translateAvailable && _toolbarDensity < 2;
         InvalidateToolbarMetrics();
     }
 
     /// <summary>
     /// 「翻译引擎」列表（值 + 显示名），来自宿主：在线模型 + 已下载的本地模型。
-    /// 只有一项时整个按钮隐藏，避免给出一个没得选的下拉。
+    /// 只填充翻译菜单的「翻译引擎」子菜单；没有可选项时子菜单隐藏。
     /// </summary>
     public void ConfigureTranslateEngines(IReadOnlyList<(string Value, string Label)> engines)
     {
-        if (EngineButton.Flyout is not MenuFlyout menu)
-        {
-            _engineAvailable = false;
-            EngineButton.IsVisible = false;
-            InvalidateToolbarMetrics();
+        _translateEngines = engines;
+        ApplyTranslateEngineMenu();
+        InvalidateToolbarMetrics();
+    }
+
+    /// <summary>重建「翻译引擎」子菜单；主条不再有独立按钮。</summary>
+    private void ApplyTranslateEngineMenu()
+    {
+        if (_engineMenu is null)
             return;
-        }
 
-        menu.Items.Clear();
+        _engineMenu.Items.Clear();
+        _engineMenu.IsVisible = _translateEngines.Count > 0;
 
-        foreach (var (value, label) in engines)
+        foreach (var (value, label) in _translateEngines)
         {
             var item = new MenuItem
             {
@@ -637,19 +669,14 @@ public partial class CaptureWindow : Window
                 _translateEngineLabel = label;
                 UpdateEngineTip();
 
-                foreach (var entry in menu.Items.OfType<MenuItem>())
+                foreach (var entry in _engineMenu.Items.OfType<MenuItem>())
                     entry.IsChecked = ReferenceEquals(entry, item);
             };
 
-            menu.Items.Add(item);
+            _engineMenu.Items.Add(item);
         }
 
-        _engineAvailable = menu.Items.Count > 0;
-        EngineButton.IsVisible = _engineAvailable
-            && _translateAvailable
-            && _toolbarDensity < 2;
-
-        var current = menu.Items
+        var current = _engineMenu.Items
             .OfType<MenuItem>()
             .FirstOrDefault(item => item.IsChecked);
 
@@ -657,41 +684,54 @@ public partial class CaptureWindow : Window
             _translateEngineLabel = header;
 
         UpdateEngineTip();
-        InvalidateToolbarMetrics();
     }
 
-    private void UpdateEngineTip() =>
-        ToolTip.SetTip(EngineButton, $"翻译引擎：{_translateEngineLabel}");
+    private void UpdateEngineTip()
+    {
+        if (_engineMenu is not null)
+            _engineMenu.Header = $"翻译引擎：{_translateEngineLabel}";
+    }
 
-    /// <summary>构建「格式 / 标点」下拉；它们只影响复制出去的文本。</summary>
+    /// <summary>构建「复制格式 / 标点」子菜单；它们只影响复制出去的文本。</summary>
     private void BuildOcrTextMenus()
     {
-        BuildOptionMenu(FormatButton, OcrFormattingOptions, _ocrFormatting, value =>
-        {
-            _ocrFormatting = value;
-            UpdateOcrTextOptionTips();
-        });
+        BuildOptionSubMenu(
+            _formatMenu,
+            "复制格式",
+            OcrFormattingOptions,
+            _ocrFormatting,
+            value =>
+            {
+                _ocrFormatting = value;
+                UpdateOcrTextOptionTips();
+            });
 
-        BuildOptionMenu(PunctuationButton, OcrPunctuationOptions, _ocrPunctuation, value =>
-        {
-            _ocrPunctuation = value;
-            UpdateOcrTextOptionTips();
-        });
+        BuildOptionSubMenu(
+            _punctuationMenu,
+            "标点",
+            OcrPunctuationOptions,
+            _ocrPunctuation,
+            value =>
+            {
+                _ocrPunctuation = value;
+                UpdateOcrTextOptionTips();
+            });
 
         UpdateOcrTextOptionTips();
     }
 
-    private static void BuildOptionMenu(
-        Button button,
+    private static void BuildOptionSubMenu(
+        MenuItem? menu,
+        string header,
         IReadOnlyList<(string Value, string Label)> options,
         string current,
         Action<string> apply)
     {
-        if (button.Flyout is not MenuFlyout menu)
+        if (menu is null)
             return;
 
+        menu.Header = header;
         menu.Items.Clear();
-        var group = button.Name ?? "ocr-text-option";
 
         foreach (var (value, label) in options)
         {
@@ -699,7 +739,7 @@ public partial class CaptureWindow : Window
             {
                 Header = label,
                 ToggleType = MenuItemToggleType.Radio,
-                GroupName = group,
+                GroupName = header,
                 IsChecked = value == current
             };
 
@@ -720,8 +760,11 @@ public partial class CaptureWindow : Window
         var format = OcrFormattingOptions.First(option => option.Value == _ocrFormatting).Label;
         var punctuation = OcrPunctuationOptions.First(option => option.Value == _ocrPunctuation).Label;
 
-        ToolTip.SetTip(FormatButton, $"格式：{format}");
-        ToolTip.SetTip(PunctuationButton, $"标点：{punctuation}");
+        if (_formatMenu is not null)
+            _formatMenu.Header = $"复制格式：{format}";
+
+        if (_punctuationMenu is not null)
+            _punctuationMenu.Header = $"标点：{punctuation}";
     }
 
     /// <summary>宿主注入的复制实现。窗口不直接碰剪贴板。</summary>
