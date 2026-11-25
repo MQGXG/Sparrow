@@ -264,6 +264,14 @@ public partial class CaptureWindow
                 ScheduleCloseToolGroupPopover();
         }
 
+        // 更多识别选项条：点外部收起
+        if (RecognitionPopover.IsVisible
+            && !IsPointInControl(RecognitionPopover, point)
+            && !IsPointInControl(MoreRecognitionButton, point))
+        {
+            HideRecognitionPopover();
+        }
+
         // 橡皮擦拖动：连续擦掉指针下的标注
         if (_erasing)
         {

@@ -7,7 +7,10 @@ namespace Sparrow.App.Views;
 /// <see cref="TranslateTarget"/> 为空表示只识别；非空时工具会在结果里附上译文。
 /// <see cref="Engine"/> 为空表示沿用工具参数里保存的引擎。
 /// </summary>
-public sealed record CaptureOcrOptions(string? TranslateTarget = null, string? Engine = null);
+public sealed record CaptureOcrOptions(
+    string? TranslateTarget = null,
+    string? Engine = null,
+    string? Output = null);
 
 /// <summary>
 /// 截图 OCR 的宿主结果。

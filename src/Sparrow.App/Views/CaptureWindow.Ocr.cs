@@ -195,6 +195,18 @@ public partial class CaptureWindow
             // 旧插件只返回文本：关窗，让宿主回退到面板
             if (result.IsFallback)
             {
+                // 表格 HTML / Markdown 本来就没有行框：复制结果并保持窗口可操作
+                if (options?.Output is "table-html" or "table-md")
+                {
+                    CopyText?.Invoke(result.Text);
+                    OcrTextBar.IsVisible = true;
+                    OcrStatus.IsVisible = true;
+                    OcrStatus.Text = options.Output == "table-md"
+                        ? "表格已转 Markdown，已复制"
+                        : "表格已转 HTML，已复制";
+                    return;
+                }
+
                 FallbackText = result.Text;
                 Action = CaptureAction.Recognize;
                 Close();
@@ -253,6 +265,41 @@ public partial class CaptureWindow
             Action = CaptureAction.Recognize;
 
             await RunOcrAsync(new CaptureOcrOptions(target, _translateEngine));
+        }
+        finally
+        {
+            _isActing = false;
+        }
+    }
+
+    /// <summary>
+    /// 更多识别：按输出模式跑一次识别（text / table-html / table-md）。
+    /// 和翻译一样先取当前选区图，再走同一条 OCR 链路。
+    /// </summary>
+    internal async Task RunRecognitionAsync(string output)
+    {
+        if (_isActing || _isRecognizing || !_hasSelection)
+            return;
+
+        _isActing = true;
+
+        try
+        {
+            var png = await CaptureSelectionAsync(CaptureAction.Recognize);
+            if (png is null)
+            {
+                Action = CaptureAction.None;
+                Close();
+                return;
+            }
+
+            if (!IsVisible)
+                return;
+
+            Result = await Task.Run(() => ComposeResult(png));
+            Action = CaptureAction.Recognize;
+
+            await RunOcrAsync(new CaptureOcrOptions(Output: output));
         }
         finally
         {

@@ -356,6 +356,20 @@ public sealed partial class CaptureWindowTests
     }
 
     [AvaloniaFact]
+    public void 更多识别_点击展开选项条_再点收起()
+    {
+        var window = CreateWithSelection();
+
+        window.MoreRecognitionButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.RecognitionPopover.IsVisible.ShouldBeTrue();
+
+        window.MoreRecognitionButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        window.RecognitionPopover.IsVisible.ShouldBeFalse();
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void 右键_逐级退出工具_选区_截图()
     {
         var window = CreateWithSelection();

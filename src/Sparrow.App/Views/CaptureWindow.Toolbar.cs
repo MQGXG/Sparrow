@@ -406,6 +406,55 @@ public partial class CaptureWindow
         menu.Open(ToolbarDragHandle);
     }
 
+    // ---------- 更多识别 ----------
+
+    private void OnMoreRecognitionClick(object? sender, RoutedEventArgs e)
+    {
+        if (RecognitionPopover.IsVisible)
+        {
+            HideRecognitionPopover();
+            return;
+        }
+
+        ShowRecognitionPopover();
+    }
+
+    /// <summary>更多识别选项条：摆在触发按钮正上方，和工具组弹层同一套样式。</summary>
+    private void ShowRecognitionPopover()
+    {
+        RecognitionPopover.IsVisible = true;
+
+        const double width = 3 * 32 + 2 * 2 + 10;
+        const double height = 32 + 10;
+
+        var origin = MoreRecognitionButton.TranslatePoint(new Point(0, 0), this) ?? new Point(0, 0);
+        var left = Math.Clamp(origin.X, 8, Math.Max(8, Width - width - 8));
+        var top = Math.Max(8, origin.Y - height - 6);
+
+        Canvas.SetLeft(RecognitionPopover, left);
+        Canvas.SetTop(RecognitionPopover, top);
+    }
+
+    private void HideRecognitionPopover() => RecognitionPopover.IsVisible = false;
+
+    private void OnRecognizeTextOption(object? sender, RoutedEventArgs e)
+    {
+        HideRecognitionPopover();
+        _ = RunRecognitionAsync("text");
+    }
+
+    private void OnRecognizeTableHtmlOption(object? sender, RoutedEventArgs e)
+    {
+        HideRecognitionPopover();
+        _ = RunRecognitionAsync("table-html");
+    }
+
+    private void OnRecognizeTableMarkdownOption(object? sender, RoutedEventArgs e)
+    {
+        HideRecognitionPopover();
+        _ = RunRecognitionAsync("table-md");
+    }
+
     /// <summary>展开某个工具的选项条，摆在触发按钮正上方。</summary>
     private void ShowToolGroupPopover(ToolGroup group)
     {

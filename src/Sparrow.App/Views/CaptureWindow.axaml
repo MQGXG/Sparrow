@@ -908,6 +908,13 @@
                   ToolTip.Tip="识别并翻译（直接出译文）">
             <Path Data="{StaticResource IconTranslate}" StrokeThickness="1.143" />
           </Button>
+          <!-- 更多识别：文本 / 表格 HTML / 表格 Markdown -->
+          <Button x:Name="MoreRecognitionButton"
+                  Classes="tool"
+                  Click="OnMoreRecognitionClick"
+                  ToolTip.Tip="更多识别：文本 / 表格">
+            <Path Data="{StaticResource IconTable}" StrokeThickness="1.1" />
+          </Button>
           <Button x:Name="SaveButton"
                   Classes="tool" Click="OnSaveClick" ToolTip.Tip="保存为 PNG（S）">
             <Path Data="{StaticResource IconSave}" StrokeThickness="1.161" />
@@ -1498,6 +1505,27 @@
             IsVisible="False"
             IsHitTestVisible="True">
       <StackPanel x:Name="ToolGroupOptions" Orientation="Horizontal" Spacing="2" />
+    </Border>
+
+    <!-- 更多识别：主条按钮上方的选项条（文本 / 表格 HTML / 表格 Markdown） -->
+    <Border x:Name="RecognitionPopover"
+            Classes="tool-popover"
+            IsVisible="False"
+            IsHitTestVisible="True">
+      <StackPanel Orientation="Horizontal" Spacing="2">
+        <Button x:Name="RecognizeTextOption" Classes="tool"
+                Click="OnRecognizeTextOption" ToolTip.Tip="文本识别">
+          <Path Data="{StaticResource IconScan}" />
+        </Button>
+        <Button x:Name="RecognizeTableHtmlOption" Classes="tool"
+                Click="OnRecognizeTableHtmlOption" ToolTip.Tip="表格识别 · HTML">
+          <Path Data="{StaticResource IconTable}" StrokeThickness="1.1" />
+        </Button>
+        <Button x:Name="RecognizeTableMarkdownOption" Classes="tool"
+                Click="OnRecognizeTableMarkdownOption" ToolTip.Tip="表格识别 · Markdown">
+          <Path Data="{StaticResource IconFile}" StrokeThickness="1.1" />
+        </Button>
+      </StackPanel>
     </Border>
 
     <!-- 自定义颜色：贴在属性栏上方的浮层 -->

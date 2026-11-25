@@ -95,6 +95,10 @@ public partial class App
             if (options.Engine is { Length: > 0 } engine)
                 parameters["engine"] = engine;
 
+            // 输出模式：text / table-html / table-md
+            if (options.Output is { Length: > 0 } output)
+                parameters["output"] = output;
+
             var context = new ToolContext
             {
                 Input = new ImageSetInput(
