@@ -1139,61 +1139,108 @@
           </StackPanel>
         </Border>
 
-        <!-- ============ 关于：身份卡 ============ -->
+        <!-- ============ 关于：品牌横幅 + 指标 + 更新 + 签名 ============ -->
         <Border Classes="panel" Padding="0" IsVisible="{Binding IsAboutSelected}">
           <StackPanel>
-            <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="20,18,20,16">
-              <StackPanel Orientation="Horizontal" Spacing="14">
-                <Border Width="46"
-                        Height="46"
-                        CornerRadius="2"
+
+            <!-- Hero：点阵底 + 大 Logo + 名称 + 徽章 -->
+            <Grid Height="156">
+              <Border Background="{StaticResource DotGridBrush}" IsHitTestVisible="False" />
+              <TextBlock Classes="num"
+                         Text="01 / IDENTITY"
+                         HorizontalAlignment="Right"
+                         VerticalAlignment="Top"
+                         Margin="0,16,22,0"
+                         Foreground="{StaticResource AccentBrush}"
+                         Opacity="0.75" />
+
+              <Grid ColumnDefinitions="Auto,*" Margin="24,22,24,18">
+                <Border Width="86"
+                        Height="86"
+                        CornerRadius="6"
                         Background="{StaticResource AccentSoftBrush}"
+                        BorderBrush="{StaticResource AccentBrush}"
+                        BorderThickness="1"
                         VerticalAlignment="Center">
                   <Image Source="avares://Sparrow.App/Assets/sparrow-32.png"
-                         Width="30"
-                         Height="30" />
+                         Width="58"
+                         Height="58"
+                         RenderOptions.BitmapInterpolationMode="HighQuality" />
                 </Border>
-                <StackPanel Spacing="3" VerticalAlignment="Center">
-                  <TextBlock Classes="num" Text="SPARROW // 本地工具集合" />
-                  <TextBlock Classes="title" Text="麻雀 · 工具台" />
+
+                <StackPanel Grid.Column="1" Margin="22,0,0,0" Spacing="8" VerticalAlignment="Center">
                   <TextBlock Classes="num"
-                             Text="{Binding VersionText, StringFormat='{}本地优先 // v{0}'}" />
+                             Text="// SPARROW · LOCAL-FIRST TOOLKIT"
+                             Foreground="{StaticResource AccentBrush}"
+                             LetterSpacing="1.4" />
+                  <TextBlock FontFamily="{StaticResource DisplayFont}"
+                             FontSize="27"
+                             FontWeight="Bold"
+                             Foreground="{StaticResource TextPrimaryBrush}"
+                             Text="麻雀 · 工具台" />
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Border Classes="chip">
+                      <TextBlock Classes="num"
+                                 Text="{Binding VersionText, StringFormat='{}v{0}'}" />
+                    </Border>
+                    <Border Classes="chip">
+                      <TextBlock Classes="num" Text="Windows x64 · .NET 10" />
+                    </Border>
+                    <Border Classes="chip"
+                            Background="{StaticResource AccentSoftBrush}"
+                            BorderBrush="{StaticResource AccentBrush}">
+                      <TextBlock Classes="num"
+                                 Text="本地就绪"
+                                 Foreground="{StaticResource AccentBrush}" />
+                    </Border>
+                  </StackPanel>
+                </StackPanel>
+              </Grid>
+            </Grid>
+
+            <Border Classes="hud-line" />
+
+            <!-- 指标条：工具 / 插件 / 运行模式 -->
+            <Grid ColumnDefinitions="*,*,*" Margin="24,18,24,18">
+              <StackPanel Spacing="5">
+                <TextBlock Classes="section" Text="工具总数" />
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <TextBlock Classes="stat" Text="{Binding ToolCount}" />
+                  <TextBlock Classes="num" Text="个" VerticalAlignment="Bottom" Margin="0,0,0,3" />
                 </StackPanel>
               </StackPanel>
-
-              <StackPanel Grid.Column="1" Margin="32,0,0,0" Spacing="5">
-                <TextBlock Classes="section" Text="版本" />
-                <TextBlock Classes="stat" Text="{Binding VersionText}" />
+              <StackPanel Grid.Column="1" Spacing="5">
+                <TextBlock Classes="section" Text="插件" />
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <TextBlock Classes="stat" Text="{Binding Plugins.Count}" />
+                  <TextBlock Classes="num" Text="个" VerticalAlignment="Bottom" Margin="0,0,0,3" />
+                </StackPanel>
               </StackPanel>
-
-              <StackPanel Grid.Column="2" Margin="32,0,0,0" Spacing="5">
-                <TextBlock Classes="section" Text="平台" />
-                <TextBlock FontSize="12"
-                           FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}"
-                           Text="Windows x64"
-                           VerticalAlignment="Center" />
-              </StackPanel>
-
-              <StackPanel Grid.Column="3" Margin="32,0,0,0" Spacing="5">
-                <TextBlock Classes="section" Text="状态" />
-                <TextBlock FontSize="12"
-                           FontWeight="SemiBold"
-                           Foreground="{StaticResource AccentBrush}"
-                           Text="本地就绪"
-                           VerticalAlignment="Center" />
+              <StackPanel Grid.Column="2" Spacing="5">
+                <TextBlock Classes="section" Text="运行模式" />
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                  <Ellipse Width="7" Height="7" Fill="{StaticResource AccentBrush}" VerticalAlignment="Center" />
+                  <TextBlock FontFamily="{StaticResource MonoFont}"
+                             FontSize="18"
+                             FontWeight="SemiBold"
+                             Foreground="{StaticResource AccentBrush}"
+                             Text="LOCAL" />
+                </StackPanel>
               </StackPanel>
             </Grid>
 
             <Border Classes="hud-line" />
 
             <!-- 更新：Velopack 安装版才可用 -->
-            <Grid ColumnDefinitions="*,Auto" Margin="20,14" RowDefinitions="Auto,Auto" RowSpacing="8">
+            <Grid ColumnDefinitions="*,Auto" Margin="24,16" RowDefinitions="Auto,Auto" RowSpacing="8">
               <StackPanel Spacing="3">
-                <TextBlock Text="更新"
-                           FontSize="13"
-                           FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Path Data="{StaticResource IconRefresh}" Classes="icon icon-xs" />
+                  <TextBlock Text="更新"
+                             FontSize="13"
+                             FontWeight="SemiBold"
+                             Foreground="{StaticResource TextPrimaryBrush}" />
+                </StackPanel>
                 <TextBlock Text="{Binding UpdateStatus, FallbackValue='未检查'}"
                            FontSize="11"
                            Foreground="{StaticResource TextMutedBrush}"
@@ -1206,29 +1253,55 @@
                           Spacing="8"
                           VerticalAlignment="Center">
                 <TextBox Text="{Binding UpdateFeedUrl, Mode=TwoWay}"
-                         Width="260"
-                         PlaceholderText="更新源地址，如 https://example.com/updates" />
+                         Width="280"
+                         PlaceholderText="更新源地址（https://…）" />
                 <Button Classes="accent"
-                        Content="检查更新"
                         IsEnabled="{Binding IsNotCheckingUpdate}"
-                        Click="OnCheckUpdateClick" />
+                        Click="OnCheckUpdateClick"
+                        ToolTip.Tip="检查更新">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Data="{StaticResource IconRefresh}" Classes="icon icon-xs" />
+                    <TextBlock Text="检查更新" />
+                  </StackPanel>
+                </Button>
               </StackPanel>
             </Grid>
 
             <Border Classes="hud-line" />
 
-            <Grid ColumnDefinitions="*,Auto" Margin="20,14">
-              <TextBlock Text="所有工具在本地执行，数据不出机器。Bug、建议和使用问题见应用目录下的日志。"
-                         FontSize="11"
-                         Foreground="{StaticResource TextMutedBrush}"
-                         TextWrapping="Wrap"
-                         MaxWidth="420"
-                         VerticalAlignment="Center" />
+            <!-- 签名：一句本地优先的立场 -->
+            <Border Margin="24,18"
+                    Padding="16,12"
+                    Background="{StaticResource AccentSoftBrush}"
+                    BorderBrush="{StaticResource AccentBrush}"
+                    BorderThickness="2,0,0,0"
+                    CornerRadius="4">
+              <StackPanel Spacing="5">
+                <TextBlock Classes="num"
+                           Text="// 所有工具都在本地执行"
+                           Foreground="{StaticResource AccentBrush}" />
+                <TextBlock Text="屏幕上的每个像素都留在本机：识别、翻译、录制、处理，不经过任何服务器。"
+                           FontSize="12"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+
+            <Border Classes="hud-line" />
+
+            <!-- 排查入口 -->
+            <Grid ColumnDefinitions="*,Auto" Margin="24,16">
+              <StackPanel Spacing="3" VerticalAlignment="Center">
+                <TextBlock Classes="num" Text="SUPPORT / 排查" />
+                <TextBlock Text="遇到问题时，日志里有完整的启动与执行记录。"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
               <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                 <Button Classes="ghost" Click="OnOpenLogsClick" ToolTip.Tip="打开日志目录">
                   <StackPanel Orientation="Horizontal" Spacing="6">
                     <Path Data="{StaticResource IconFile}" Classes="icon icon-xs" />
-                    <TextBlock Text="打开日志目录" />
+                    <TextBlock Text="打开日志" />
                   </StackPanel>
                 </Button>
                 <Button Click="OnOpenDataClick" ToolTip.Tip="打开数据目录">

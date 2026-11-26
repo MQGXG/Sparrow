@@ -433,6 +433,9 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
     public bool IsAboutSelected => SelectedSection == SettingsSection.About;
 
+    /// <summary>全部插件注册的工具总数（关于页指标用）。</summary>
+    public int ToolCount => Plugins.Sum(plugin => plugin.ToolCount);
+
     partial void OnSelectedSectionChanged(SettingsSection value)
     {
         OnPropertyChanged(nameof(IsPluginsSelected));
@@ -478,6 +481,8 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         // 插件列表变了（重新扫描后），工具热键行需要跟着重建；没显示过热键分段就不碰注册表
         if (_toolHotkeysLoaded)
             ReloadToolHotkeys();
+
+        OnPropertyChanged(nameof(ToolCount));
     }
 
     /// <summary>工具热键行：工具全集（注册表）按名称排序，预填已配置值。</summary>
