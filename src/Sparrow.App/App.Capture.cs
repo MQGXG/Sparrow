@@ -144,7 +144,8 @@ public partial class App
             CaptureElementApi = _appSettings.CaptureElementApi,
             CaptureFrameApi = _appSettings.CaptureApi,
             CaptureShowCursor = _appSettings.CaptureShowCursor,
-            CaptureRestoreColors = _appSettings.CaptureRestoreColors
+            CaptureRestoreColors = _appSettings.CaptureRestoreColors,
+            SelectionBorderColor = _appSettings.SelectionBorderColor
         };
 
         // 区域录制：录制控制并入截图窗口主工具条（Snow-shot 行为）。

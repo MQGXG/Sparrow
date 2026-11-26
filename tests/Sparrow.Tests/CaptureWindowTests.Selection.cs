@@ -140,7 +140,7 @@ public sealed partial class CaptureWindowTests
         window.Close();
     }
 
-    /// <summary>选区之外压暗、选区内保持原图亮度：遮罩用 Exclude 挖洞。</summary>
+    /// <summary>选区之外压暗、选区内保持原图亮度：遮罩用 EvenOdd 的 GeometryGroup 挖洞。</summary>
     [AvaloniaFact]
     public void 选区遮罩_按选区挖洞只压暗外面()
     {
@@ -151,10 +151,13 @@ public sealed partial class CaptureWindowTests
         window.MouseMove(new Point(300, 250));
         window.MouseUp(new Point(300, 250), MouseButton.Left);
 
-        var combined = window.DimLayer.Data.ShouldBeOfType<CombinedGeometry>();
-        combined.GeometryCombineMode.ShouldBe(GeometryCombineMode.Exclude);
+        // 不用 CombinedGeometry.Exclude：Avalonia 下它的 Bounds 可能算成空，
+        // Path 会整块不绘制（遮罩消失）。EvenOdd 的 GeometryGroup 稳定。
+        var group = window.DimLayer.Data.ShouldBeOfType<GeometryGroup>();
+        group.FillRule.ShouldBe(FillRule.EvenOdd);
+        group.Children.Count.ShouldBe(2);
 
-        var hole = combined.Geometry2.ShouldBeOfType<RectangleGeometry>();
+        var hole = group.Children[1].ShouldBeOfType<RectangleGeometry>();
         hole.Rect.ShouldBe(new Rect(
             Canvas.GetLeft(window.Selection),
             Canvas.GetTop(window.Selection),

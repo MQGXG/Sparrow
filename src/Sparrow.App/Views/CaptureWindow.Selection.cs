@@ -425,14 +425,20 @@ public partial class CaptureWindow
             return;
         }
 
-        DimLayer.Data = new CombinedGeometry(
-            GeometryCombineMode.Exclude,
-            new RectangleGeometry(bounds),
-            new RectangleGeometry(hole.Value)
+        // 用 EvenOdd 的 GeometryGroup 挖洞：
+        // CombinedGeometry 的 Exclude 在 Avalonia 上 Bounds 可能算成空，
+        // Path 会整块不绘制（表现为遮罩突然消失、选区内外一样亮）。
+        var radius = hole is { } h && h == _selection ? SelectionRadius() : 0;
+
+        DimLayer.Data = new GeometryGroup
+        {
+            FillRule = FillRule.EvenOdd,
+            Children =
             {
-                RadiusX = hole is { } h && h == _selection ? SelectionRadius() : 0,
-                RadiusY = hole is { } r && r == _selection ? SelectionRadius() : 0
-            });
+                new RectangleGeometry(bounds),
+                new RectangleGeometry(hole.Value) { RadiusX = radius, RadiusY = radius }
+            }
+        };
     }
 
     /// <summary>选区预览半径：不超过短边的一半。</summary>

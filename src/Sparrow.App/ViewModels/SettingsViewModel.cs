@@ -60,6 +60,10 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _captureShowCursor = settings.CaptureShowCursor;
         _captureUiInScroll = settings.CaptureUiInScroll;
         _captureRestoreColors = settings.CaptureRestoreColors;
+
+        _selectionBorderColor = SelectionBorderColorOptions
+            .FirstOrDefault(option => option.Key == settings.SelectionBorderColor)
+            ?? SelectionBorderColorOptions[0];
         _startWithWindows = startup.IsEnabled;
         _historyMaxEntries = settings.HistoryMaxEntries;
         _historyRetentionDays = settings.HistoryRetentionDays;
@@ -269,6 +273,28 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _settings = _settings with { CaptureRestoreColors = value };
         _store.Save(_settings);
         ScreenCapture.RestoreColors = value;
+    }
+
+    /// <summary>选区边框颜色；同时用于十字辅助线和悬停候选框。</summary>
+    [ObservableProperty]
+    private SettingsChoiceOption _selectionBorderColor = null!;
+
+    public IReadOnlyList<SettingsChoiceOption> SelectionBorderColorOptions { get; } =
+    [
+        new("#E5A44C", "琥珀（默认）"),
+        new("#4C9AFF", "蓝色"),
+        new("#3DD68C", "绿色"),
+        new("#FF6B6B", "红色"),
+        new("#FFFFFF", "白色"),
+        new("#22D3EE", "青色"),
+        new("#C084FC", "紫色")
+    ];
+
+    partial void OnSelectionBorderColorChanged(SettingsChoiceOption value)
+    {
+        _settings = _settings with { SelectionBorderColor = value.Key };
+        _store.Save(_settings);
+        StatusMessage = $"选区边框颜色：{value.Label}";
     }
 
     [ObservableProperty]

@@ -510,6 +510,33 @@
 
             <Grid ColumnDefinitions="*,Auto" Margin="20,14">
               <StackPanel Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="选区边框颜色"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="选区、十字辅助线和悬停候选框共用的强调色"
+                           FontSize="11"
+                           MaxWidth="520"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <ComboBox Grid.Column="1"
+                        Width="260"
+                        ItemsSource="{Binding SelectionBorderColorOptions}"
+                        SelectedItem="{Binding SelectionBorderColor, Mode=TwoWay}"
+                        HorizontalAlignment="Stretch">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:SettingsChoiceOption">
+                    <TextBlock Text="{Binding Label}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <Grid ColumnDefinitions="*,Auto" Margin="20,14">
+              <StackPanel Spacing="3" VerticalAlignment="Center">
                 <TextBlock Text="显示光标"
                            FontSize="13"
                            FontWeight="SemiBold"

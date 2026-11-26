@@ -510,6 +510,9 @@ public partial class CaptureWindow : Window
     /// <summary>普通截图是否画鼠标光标。</summary>
     public bool CaptureShowCursor { get; set; }
 
+    /// <summary>选区边框颜色（#RRGGBB）；同时用于十字辅助线和悬停候选框。</summary>
+    public string SelectionBorderColor { get; set; } = "#E5A44C";
+
     /// <summary>是否还原放大镜全屏颜色滤镜。</summary>
     public bool CaptureRestoreColors { get; set; } = true;
 
@@ -836,7 +839,23 @@ public partial class CaptureWindow : Window
 
         // 宿主在构造后注入上次的样式；这里把按钮状态同步过来
         RefreshNoteStyle();
+        ApplySelectionBorderColor();
         BuildPresetMenu();
+    }
+
+    /// <summary>设置里的选区颜色：选区边框、十字辅助线、悬停候选框统一使用。</summary>
+    private void ApplySelectionBorderColor()
+    {
+        if (!Color.TryParse(SelectionBorderColor, out var color))
+            color = Color.Parse("#E5A44C");
+
+        Selection.Stroke = new SolidColorBrush(color);
+        CandidateBox.Stroke = new SolidColorBrush(color);
+
+        // 十字线用同色半透明，避免抢过选区边框
+        var faint = new SolidColorBrush(Color.FromArgb(0x73, color.R, color.G, color.B));
+        CrosshairV.Stroke = faint;
+        CrosshairH.Stroke = faint;
     }
 
     private void RefreshNoteStyle()

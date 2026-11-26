@@ -122,6 +122,9 @@ public sealed record AppSettings
     /// <summary>截图标注颜色（#RRGGBB）。</summary>
     public string AnnotationColor { get; init; } = "#E5A44C";
 
+    /// <summary>截取选区边框颜色（#RRGGBB）；同时用于十字辅助线和候选框。</summary>
+    public string SelectionBorderColor { get; init; } = "#E5A44C";
+
     /// <summary>截图标注线宽（DIP）。</summary>
     public double AnnotationWidth { get; init; } = 3;
 
