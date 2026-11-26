@@ -1002,42 +1002,49 @@
           </Button>
           <Button x:Name="PauseRecordButton"
                   Classes="tool"
+                  Margin="2,0,0,0"
                   Click="OnPauseRecordingClick"
                   ToolTip.Tip="暂停 / 继续">
-            <TextBlock x:Name="PauseRecordGlyph"
-                       Text="&#xE769;"
-                       FontFamily="Segoe MDL2 Assets"
-                       FontSize="15"
-                       Foreground="#DDDDDD"
-                       VerticalAlignment="Center"
-                       HorizontalAlignment="Center" />
+            <Grid>
+              <Path x:Name="PauseRecordGlyph"
+                    Data="{StaticResource IconPause}" />
+              <Path x:Name="ResumeRecordGlyph"
+                    Data="{StaticResource IconResume}"
+                    IsVisible="False" />
+            </Grid>
           </Button>
-          <TextBlock x:Name="RecordElapsed"
-                     Text="00:00:00"
-                     FontFamily="Consolas"
-                     FontSize="13"
-                     Foreground="#F2F4F7"
-                     VerticalAlignment="Center"
-                     Margin="8,0,8,0" />
+          <!-- 计时：时钟图标 + 等宽读数，和独立录制条保持一致 -->
+          <StackPanel Orientation="Horizontal"
+                      Spacing="6"
+                      Margin="8,0,8,0"
+                      VerticalAlignment="Center">
+            <Path Data="{StaticResource IconClock}"
+                  Classes="icon"
+                  Width="16" Height="16" />
+            <TextBlock x:Name="RecordElapsed"
+                       Text="00:00:00"
+                       FontFamily="{DynamicResource MonoFont}"
+                       FontSize="13"
+                       Foreground="{DynamicResource TextPrimaryBrush}"
+                       VerticalAlignment="Center" />
+          </StackPanel>
           <Border Classes="tool-separator" Margin="0,0,4,0" />
-          <TextBlock x:Name="RecordMicrophoneGlyph"
-                     Text="&#xE720;"
-                     FontFamily="Segoe MDL2 Assets"
-                     FontSize="14"
-                     Foreground="#DDDDDD"
-                     Opacity="0.45"
-                     VerticalAlignment="Center"
-                     Margin="4,0,0,0"
-                     ToolTip.Tip="麦克风" />
-          <TextBlock x:Name="RecordSpeakerGlyph"
-                     Text="&#xE767;"
-                     FontFamily="Segoe MDL2 Assets"
-                     FontSize="14"
-                     Foreground="#DDDDDD"
-                     Opacity="0.45"
-                     VerticalAlignment="Center"
-                     Margin="6,0,0,0"
-                     ToolTip.Tip="系统声音" />
+          <Path x:Name="RecordMicrophoneGlyph"
+                Data="{StaticResource IconMic}"
+                Classes="icon"
+                Width="18" Height="18"
+                Margin="4,0,0,0"
+                Opacity="0.45"
+                VerticalAlignment="Center"
+                ToolTip.Tip="麦克风" />
+          <Path x:Name="RecordSpeakerGlyph"
+                Data="{StaticResource IconSpeaker}"
+                Classes="icon"
+                Width="18" Height="18"
+                Margin="6,0,0,0"
+                Opacity="0.45"
+                VerticalAlignment="Center"
+                ToolTip.Tip="系统声音" />
           <Border Classes="tool-separator" Margin="6,0,0,0" />
           <!-- 停止并复制录屏文件到剪贴板（对齐 Snow-shot 的 Copy recording） -->
           <Button x:Name="CopyRecordingButton"

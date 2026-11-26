@@ -195,9 +195,10 @@ public partial class CaptureWindow
         else if (_recording.State == RecordingState.Paused)
             _recording.Resume();
 
-        PauseRecordGlyph.Text = _recording.State == RecordingState.Paused
-            ? "\uE768"
-            : "\uE769";
+        // 暂停/继续用两个图标切换，和独立录制条保持一致。
+        var paused = _recording.State == RecordingState.Paused;
+        PauseRecordGlyph.IsVisible = !paused;
+        ResumeRecordGlyph.IsVisible = paused;
     }
 
     private void OnOpenRecordFolderClick(object? sender, RoutedEventArgs e)
@@ -393,6 +394,21 @@ public partial class CaptureWindow
         {
             if (!control.IsVisible || control.Bounds.Width <= 0 || control.Bounds.Height <= 0)
                 return;
+
+            // 直接读 Canvas 坐标：窗口被 SetWindowRgn 裁剪后，
+            // TranslatePoint 会跟着重排后的布局变，形成「裁剪 → 重排 → 再裁剪」的抖动。
+            if (control.Parent is Canvas)
+            {
+                var left = Canvas.GetLeft(control);
+                var top = Canvas.GetTop(control);
+
+                AddRect(new Rect(
+                    double.IsNaN(left) ? 0 : left,
+                    double.IsNaN(top) ? 0 : top,
+                    control.Bounds.Width,
+                    control.Bounds.Height));
+                return;
+            }
 
             if (control.TranslatePoint(new Point(0, 0), this) is not { } origin)
                 return;

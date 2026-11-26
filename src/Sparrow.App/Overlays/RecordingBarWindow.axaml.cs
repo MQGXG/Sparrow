@@ -53,7 +53,9 @@ public partial class RecordingBarWindow : Window
         Opened += (_, _) =>
         {
             // 控制条属于录制工具本身：屏幕上可见，但保存的视频里不出现。
-            WindowCaptureExclusion.Exclude(this);
+            // 调试外观时设 SPARROW_RECORD_BAR_CAPTURE=1 可以取消排除，便于屏幕截图。
+            if (Environment.GetEnvironmentVariable("SPARROW_RECORD_BAR_CAPTURE") != "1")
+                WindowCaptureExclusion.Exclude(this);
             PlaceNearRegion();
             UpdateElapsed();
             _timer.Start();
@@ -87,10 +89,14 @@ public partial class RecordingBarWindow : Window
         if (screen is null)
             return;
 
+        // SizeToContent 之后以实际客户区为准；还没量出来就按经验尺寸兜底。
+        var widthDip = ClientSize.Width > 0 ? ClientSize.Width : 420;
+        var heightDip = ClientSize.Height > 0 ? ClientSize.Height : 40;
+
         var bounds = screen.Bounds;
         var scale = screen.Scaling <= 0 ? 1.0 : screen.Scaling;
-        var width = (int)(Width * scale);
-        var height = (int)(Height * scale);
+        var width = (int)Math.Ceiling(widthDip * scale);
+        var height = (int)Math.Ceiling(heightDip * scale);
 
         if (_region is { } region && region.Width > 0 && region.Height > 0)
         {
@@ -132,13 +138,15 @@ public partial class RecordingBarWindow : Window
             switch (state)
             {
                 case RecordingState.Recording:
-                    PauseGlyph.Text = "\uE769"; // 暂停
+                    PauseGlyph.IsVisible = true;
+                    ResumeGlyph.IsVisible = false;
                     PauseButton.IsEnabled = true;
                     RecordButton.IsEnabled = true;
                     break;
 
                 case RecordingState.Paused:
-                    PauseGlyph.Text = "\uE768"; // 继续
+                    PauseGlyph.IsVisible = false;
+                    ResumeGlyph.IsVisible = true;
                     PauseButton.IsEnabled = true;
                     break;
 

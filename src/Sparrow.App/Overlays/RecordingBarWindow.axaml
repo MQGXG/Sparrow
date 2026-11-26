@@ -2,8 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="Sparrow.App.Overlays.RecordingBarWindow"
         Title="Sparrow Recording"
-        Width="560"
-        Height="52"
+        SizeToContent="WidthAndHeight"
         WindowDecorations="None"
         WindowStartupLocation="Manual"
         ShowInTaskbar="False"
@@ -13,144 +12,158 @@
         Background="Transparent"
         TransparencyLevelHint="Transparent">
 
+  <!--
+    与截图工具条（区域录制的第二行）共用同一套视觉语言：
+    32×32 按钮、20px 线性图标、圆角 10 面板、1px 描边、0 8 24 阴影。
+    改动这里时请同步 CaptureWindow.axaml 的 RecordingRow。
+  -->
   <Window.Styles>
     <Style Selector="Button.bar">
-      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Width" Value="32" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinWidth" Value="0" />
       <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Padding" Value="6" />
       <Setter Property="CornerRadius" Value="6" />
-      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Background" Value="Transparent" />
     </Style>
-    <Style Selector="Button.bar:pointerover">
-      <Setter Property="Background" Value="#33FFFFFF" />
+    <!-- Fluent 模板的悬停底色压成半透明白，和截图条一致 -->
+    <Style Selector="Button.bar:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#26FFFFFF" />
+    </Style>
+    <Style Selector="Button.bar:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
     </Style>
     <Style Selector="Button.bar:disabled">
-      <Setter Property="Opacity" Value="0.3" />
+      <Setter Property="Opacity" Value="0.35" />
+    </Style>
+    <Style Selector="Button.bar Path">
+      <Setter Property="Width" Value="20" />
+      <Setter Property="Height" Value="20" />
+    </Style>
+    <Style Selector="Border.sep">
+      <Setter Property="Width" Value="1" />
+      <Setter Property="Height" Value="16" />
+      <Setter Property="Margin" Value="4,0" />
+      <Setter Property="Background" Value="{DynamicResource LineStrongBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
   </Window.Styles>
 
-  <Border Background="#E61A1A1A"
-          BorderBrush="#33FFFFFF"
+  <Border Background="{DynamicResource OverlayBrush}"
+          BorderBrush="{DynamicResource LineStrongBrush}"
           BorderThickness="1"
-          CornerRadius="12"
-          Padding="10,5"
-          BoxShadow="0 8 24 0 #78000000">
-    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,*,Auto"
-          VerticalAlignment="Center">
+          CornerRadius="10"
+          Padding="6,4"
+          BoxShadow="0 8 24 0 #99000000">
+    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="2">
 
-      <!-- 拖拽把手 -->
-      <TextBlock Grid.Column="0"
-                 Text="&#x28BF;"
-                 FontSize="15"
-                 Foreground="#777777"
-                 Margin="0,0,4,0"
-                 VerticalAlignment="Center"
-                 Cursor="SizeAll"
-                 PointerPressed="OnDragHandle" />
+      <!-- 拖拽把手：两列三点 -->
+      <Border Cursor="SizeAll"
+              Background="Transparent"
+              Padding="3,0,5,0"
+              VerticalAlignment="Center"
+              PointerPressed="OnDragHandle"
+              ToolTip.Tip="拖动控制条">
+        <Path Data="{StaticResource IconGrip}"
+              Classes="icon-dot"
+              Width="15" Height="15"
+              Stretch="Uniform"
+              Opacity="0.6" />
+      </Border>
 
-      <!-- 红点：停止并保存 -->
-      <Button Grid.Column="1"
-              x:Name="RecordButton"
+      <!-- 停止并保存 -->
+      <Button x:Name="RecordButton"
               Classes="bar"
               Click="OnStopClick"
-              ToolTip.Tip="停止并保存（红点）">
-        <Border x:Name="RecordGlyph"
-                Width="12"
-                Height="12"
-                CornerRadius="6"
+              ToolTip.Tip="停止并保存">
+        <Border Width="12" Height="12"
+                CornerRadius="3"
                 Background="#FF4D4F" />
       </Button>
 
-      <!-- 暂停 / 继续 -->
-      <Button Grid.Column="2"
-              x:Name="PauseButton"
+      <!-- 暂停 / 继续：两个图标切换可见 -->
+      <Button x:Name="PauseButton"
               Classes="bar"
               Click="OnPauseClick"
               ToolTip.Tip="暂停 / 继续">
-        <TextBlock x:Name="PauseGlyph"
-                   Text="&#xE769;"
-                   FontFamily="Segoe MDL2 Assets"
-                   FontSize="14"
-                   Foreground="#DDDDDD" />
+        <Grid>
+          <Path x:Name="PauseGlyph"
+                Data="{StaticResource IconPause}"
+                Classes="icon" />
+          <Path x:Name="ResumeGlyph"
+                Data="{StaticResource IconResume}"
+                Classes="icon"
+                IsVisible="False" />
+        </Grid>
       </Button>
 
       <!-- 计时 -->
-      <TextBlock Grid.Column="3"
-                 x:Name="ElapsedText"
-                 Text="00:00:00"
-                 FontFamily="Consolas"
-                 FontSize="13"
-                 Foreground="White"
-                 VerticalAlignment="Center"
-                 Margin="8,0,12,0" />
-
-      <!-- 麦克风 / 系统声音：面板开启时点亮 -->
-      <TextBlock x:Name="MicrophoneGlyph"
-                 Grid.Column="4"
-                 Text="&#xE720;"
-                 FontFamily="Segoe MDL2 Assets"
-                 FontSize="14"
-                 Foreground="#DDDDDD"
-                 Opacity="0.3"
-                 VerticalAlignment="Center"
-                 Margin="2,0"
-                 ToolTip.Tip="麦克风" />
-
-      <TextBlock x:Name="SystemAudioGlyph"
-                 Grid.Column="5"
-                 Text="&#xE767;"
-                 FontFamily="Segoe MDL2 Assets"
-                 FontSize="14"
-                 Foreground="#DDDDDD"
-                 Opacity="0.3"
-                 VerticalAlignment="Center"
-                 Margin="2,0,10,0"
-                 ToolTip.Tip="系统声音" />
-
-      <!-- 右侧动作：打开目录 / 取消 / 保存 -->
-      <StackPanel Grid.Column="7"
-                  Orientation="Horizontal"
-                  Spacing="2"
+      <StackPanel Orientation="Horizontal"
+                  Spacing="6"
+                  Margin="6,0,8,0"
                   VerticalAlignment="Center">
-
-        <Button x:Name="CopyRecordingButton"
-                Classes="bar"
-                Click="OnCopyClick"
-                ToolTip.Tip="停止并复制录屏">
-          <TextBlock Text="&#xE8C8;"
-                     FontFamily="Segoe MDL2 Assets"
-                     FontSize="14"
-                     Foreground="#DDDDDD" />
-        </Button>
-
-        <Button x:Name="OpenFolderButton"
-                Classes="bar"
-                Click="OnOpenFolderClick"
-                ToolTip.Tip="打开保存目录">
-          <TextBlock Text="&#xE838;"
-                     FontFamily="Segoe MDL2 Assets"
-                     FontSize="14"
-                     Foreground="#DDDDDD" />
-        </Button>
-
-        <Button Classes="bar"
-                Click="OnCancelClick"
-                ToolTip.Tip="取消并删除本次录制">
-          <TextBlock Text="&#xE711;"
-                     FontFamily="Segoe MDL2 Assets"
-                     FontSize="13"
-                     Foreground="#FF6B6B" />
-        </Button>
-
-        <Button Classes="bar"
-                Click="OnSaveClick"
-                ToolTip.Tip="停止并保存">
-          <TextBlock Text="&#xE74E;"
-                     FontFamily="Segoe MDL2 Assets"
-                     FontSize="14"
-                     Foreground="#7BD88F" />
-        </Button>
+        <Path Data="{StaticResource IconClock}"
+              Classes="icon"
+              Width="16" Height="16" />
+        <TextBlock x:Name="ElapsedText"
+                   Text="00:00:00"
+                   FontFamily="{DynamicResource MonoFont}"
+                   FontSize="13"
+                   Foreground="{DynamicResource TextPrimaryBrush}"
+                   VerticalAlignment="Center" />
       </StackPanel>
-    </Grid>
+
+      <Border Classes="sep" />
+
+      <!-- 麦克风 / 系统声音：本次录制开启时点亮 -->
+      <Border Padding="6,0,2,0" VerticalAlignment="Center" ToolTip.Tip="麦克风">
+        <Path x:Name="MicrophoneGlyph"
+              Data="{StaticResource IconMic}"
+              Classes="icon"
+              Width="18" Height="18"
+              Opacity="0.3" />
+      </Border>
+      <Border Padding="4,0,6,0" VerticalAlignment="Center" ToolTip.Tip="系统声音">
+        <Path x:Name="SystemAudioGlyph"
+              Data="{StaticResource IconSpeaker}"
+              Classes="icon"
+              Width="18" Height="18"
+              Opacity="0.3" />
+      </Border>
+
+      <Border Classes="sep" />
+
+      <!-- 复制录屏 / 打开目录 / 取消 / 保存 -->
+      <Button x:Name="CopyRecordingButton"
+              Classes="bar"
+              Click="OnCopyClick"
+              ToolTip.Tip="停止并复制录屏">
+        <Path Data="{StaticResource IconCopy}" Classes="icon" />
+      </Button>
+
+      <Button x:Name="OpenFolderButton"
+              Classes="bar"
+              Click="OnOpenFolderClick"
+              ToolTip.Tip="打开保存目录">
+        <Path Data="{StaticResource IconFolder}" Classes="icon" />
+      </Button>
+
+      <Button Classes="bar"
+              Click="OnCancelClick"
+              ToolTip.Tip="取消并删除本次录制">
+        <Path Data="{StaticResource IconClose}"
+              Classes="icon"
+              Stroke="#FF8A8A" />
+      </Button>
+
+      <Button Classes="bar"
+              Click="OnSaveClick"
+              ToolTip.Tip="停止并保存">
+        <Path Data="{StaticResource IconCheck}"
+              Classes="icon"
+              Stroke="#7BD88F" />
+      </Button>
+    </StackPanel>
   </Border>
 </Window>
