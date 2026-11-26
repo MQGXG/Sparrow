@@ -189,6 +189,12 @@ public partial class CaptureWindow
         _isRecognizing = true;
         _ocrCancellation = new CancellationTokenSource();
         _translateTarget = options?.TranslateTarget;
+
+        // OCR / 翻译期间收起取色器：结果条出现后卡片跟着鼠标会挡住文字
+        // （对齐 Snow-shot 在进入编辑态时 hideColorPicker）。
+        _colorProbeSuppressed = true;
+        ColorProbe.IsVisible = false;
+
         RecognizeButton.IsEnabled = false;
         TranslateButton.IsEnabled = false;
         TranslateActionButton.IsEnabled = false;
@@ -663,6 +669,9 @@ public partial class CaptureWindow
 
     private void ClearOcrOverlay()
     {
+        // 离开 OCR 编辑态：恢复自动取色。
+        _colorProbeSuppressed = false;
+
         OcrLayer.Children.Clear();
         _ocrBoxes.Clear();
         _selectedOcrBoxes.Clear();

@@ -459,7 +459,8 @@ public partial class CaptureWindow
     {
         // 录制中不显示取色器：这是选区阶段的辅助 UI，
         // 录制时鼠标本来就应该落到下层应用，出现取色卡片会误导用户。
-        if (_recording is not null)
+        // OCR / 翻译结果出来之后同理：卡片跟着鼠标会挡住结果文字。
+        if (_recording is not null || _colorProbeSuppressed)
         {
             ColorProbe.IsVisible = false;
             return;
@@ -523,13 +524,22 @@ public partial class CaptureWindow
         Canvas.SetTop(ProbePreviewImage, -(point.Y * ColorPickZoom) + 54);
     }
 
-    /// <summary>取色卡片贴着光标右下，靠边时钳制在窗口内。</summary>
+    /// <summary>取色卡片贴着光标右下，靠边时翻到左侧/上方，再钳制在窗口内（对齐 Snow-shot）。</summary>
     private void PositionColorProbe(Point point)
     {
         ColorProbe.Measure(Size.Infinity);
         var size = ColorProbe.DesiredSize;
-        var left = Math.Clamp(point.X + 24, 4, Math.Max(4, Width - size.Width - 4));
-        var top = Math.Clamp(point.Y + 24, 4, Math.Max(4, Height - size.Height - 4));
+
+        const double gap = 24;
+
+        var useLeft = point.X + gap + size.Width > Width - 4;
+        var useTop = point.Y + gap + size.Height > Height - 4;
+
+        var left = useLeft ? point.X - gap - size.Width : point.X + gap;
+        var top = useTop ? point.Y - gap - size.Height : point.Y + gap;
+
+        left = Math.Clamp(left, 4, Math.Max(4, Width - size.Width - 4));
+        top = Math.Clamp(top, 4, Math.Max(4, Height - size.Height - 4));
 
         Canvas.SetLeft(ColorProbe, left);
         Canvas.SetTop(ColorProbe, top);

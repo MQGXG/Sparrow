@@ -379,6 +379,12 @@ public partial class CaptureWindow : Window
     /// <summary>取色模式：光标处显示色值，点击复制并写回标注颜色。</summary>
     private bool _colorSampling = true;
 
+    /// <summary>
+    /// OCR / 翻译 / 滚动截图期间暂停自动取色：
+    /// 结果条出现后取色卡片还跟着鼠标会挡住文字（对齐 Snow-shot 的 hideColorPicker）。
+    /// </summary>
+    private bool _colorProbeSuppressed;
+
     /// <summary>取色格式：0 = HEX，1 = RGB，2 = HSL（Shift+I 循环）。</summary>
     private int _colorFormat;
 
