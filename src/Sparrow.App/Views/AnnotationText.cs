@@ -1,6 +1,6 @@
 using Avalonia;
 using SkiaSharp;
-using System.Text;
+using System.Collections.Concurrent;
 
 namespace Sparrow.App.Views;
 
@@ -19,6 +19,13 @@ internal static class AnnotationText
 
     private static IReadOnlyList<string>? _families;
 
+    /// <summary>
+    /// 字体族解析要走系统字体管理器，按「族名 + 粗体 + 斜体」缓存，
+    /// 避免每次测量/导出都重新查找一遍字体。
+    /// </summary>
+    private static readonly ConcurrentDictionary<(string Family, bool Bold, bool Italic), SKTypeface>
+        TypefaceCache = new();
+
     /// <summary>系统字体族：用 Skia 枚举，保证预览和导出看到同一份列表。</summary>
     public static IReadOnlyList<string> Families =>
         _families ??= SKFontManager.Default.FontFamilies
@@ -27,19 +34,29 @@ internal static class AnnotationText
             .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-    public static SKFont CreateFont(double size, bool bold = false, string? family = null, bool italic = false)
+    public static SKFont CreateFont(double size, bool bold = false, string? family = null, bool italic = false) =>
+        new(ResolveTypeface(family, bold, italic), (float)Math.Max(1, size));
+
+    private static SKTypeface ResolveTypeface(string? family, bool bold, bool italic)
     {
-        var style = new SKFontStyle(
-            bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal,
-            SKFontStyleWidth.Normal,
-            italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright);
+        var key = (family ?? string.Empty, bold, italic);
 
-        var typeface =
-            (!string.IsNullOrWhiteSpace(family) ? SKTypeface.FromFamilyName(family, style) : null)
-            ?? SKTypeface.FromFamilyName(Family, style)
-            ?? SKTypeface.Default;
+        return TypefaceCache.GetOrAdd(key, static requested =>
+        {
+            var style = new SKFontStyle(
+                requested.Bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal,
+                SKFontStyleWidth.Normal,
+                requested.Italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright);
 
-        return new SKFont(typeface, (float)Math.Max(1, size));
+            var typeface =
+                (!string.IsNullOrWhiteSpace(requested.Family)
+                    ? SKTypeface.FromFamilyName(requested.Family, style)
+                    : null)
+                ?? SKTypeface.FromFamilyName(Family, style)
+                ?? SKTypeface.Default;
+
+            return typeface;
+        });
     }
 
     /// <summary>导出的文字宽度（DIP）。预览侧用 TextBlock 实测，不调用这里。</summary>
@@ -80,23 +97,41 @@ internal static class AnnotationText
                 continue;
             }
 
-            var current = new StringBuilder();
+            // 逐字符测量时用 char 缓冲 + span 重载，避免每个字符都 ToString 一次
+            var buffer = new char[paragraph.Length];
+            var length = 0;
 
             foreach (var ch in paragraph)
             {
-                current.Append(ch);
+                buffer[length++] = ch;
 
-                if (font.MeasureText(current.ToString()) <= widthLimit || current.Length == 1)
+                if (length == 1 || font.MeasureText(buffer.AsSpan(0, length)) <= widthLimit)
                     continue;
 
-                current.Length--;
-                lines.Add(current.ToString());
-                current.Clear();
-                current.Append(ch);
+                var breakAt = buffer.AsSpan(0, length).LastIndexOf(' ');
+
+                if (breakAt > 0)
+                {
+                    lines.Add(new string(buffer, 0, breakAt));
+
+                    var remaining = length - breakAt - 1;
+                    if (remaining > 0)
+                        Array.Copy(buffer, breakAt + 1, buffer, 0, remaining);
+
+                    length = remaining;
+                    continue;
+                }
+
+                length--;
+                if (length > 0)
+                    lines.Add(new string(buffer, 0, length));
+
+                buffer[0] = ch;
+                length = 1;
             }
 
-            if (current.Length > 0)
-                lines.Add(current.ToString());
+            if (length > 0)
+                lines.Add(new string(buffer, 0, length));
         }
 
         return lines;

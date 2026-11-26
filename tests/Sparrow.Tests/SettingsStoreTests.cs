@@ -93,4 +93,17 @@ public sealed class SettingsStoreTests
 
         store.Load().DisabledPlugins.ShouldBeEmpty();
     }
+
+    [Fact]
+    public void 保存_先写临时文件再替换_不留下半截或临时文件()
+    {
+        using var file = new TempSettingsFile();
+        var store = new SettingsStore(file.Path, new NullLog());
+
+        store.Save(new AppSettings()).ShouldBeTrue();
+
+        File.Exists(file.Path).ShouldBeTrue();
+        File.Exists(file.Path + ".tmp").ShouldBeFalse();
+        store.Load().SchemaVersion.ShouldBe(AppSettings.CurrentSchemaVersion);
+    }
 }

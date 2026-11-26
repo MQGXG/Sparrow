@@ -84,6 +84,12 @@ public partial class ClipboardPanelWindow : Window
     {
         HideDetail(focusSearch: false);
         _savedQuery = History?.Query ?? string.Empty;
+
+        // 绑定带 180ms 防抖：清空搜索框不会立刻回写 Query，
+        // 这里直接清 VM，保证面板呼出时结果就是「全部」。
+        if (History is { } history)
+            history.Query = string.Empty;
+
         SearchBox.Text = string.Empty;
 
         // 搜索行收起时不能 Focus，否则焦点落在不可见控件上，键盘没反应

@@ -56,8 +56,39 @@ public sealed partial class ClipboardHistoryStore
 
     private static string BuildPreview(string text)
     {
-        var single = text.Replace("\r", " ").Replace("\n", " ").Trim();
-        return single.Length <= 80 ? single : single[..80] + "…";
+        // 只扫描一次：去掉首尾空白、把 CR/LF 换成空格、最多保留 80 个字符。
+        // 原实现会对全文做两次 Replace + Trim，复制大段文本时产生多份全量副本。
+        var start = 0;
+        while (start < text.Length && char.IsWhiteSpace(text[start]))
+            start++;
+
+        var end = text.Length;
+        while (end > start && char.IsWhiteSpace(text[end - 1]))
+            end--;
+
+        var length = end - start;
+        if (length == 0)
+            return string.Empty;
+
+        var slice = text.AsSpan(start, length);
+
+        // 常见情况：短文本且没有换行，直接切一段返回，不再构造 StringBuilder
+        if (length <= 80 && slice.IndexOfAny('\r', '\n') < 0)
+            return slice.ToString();
+
+        var take = Math.Min(80, length);
+        var builder = new StringBuilder(take + 1);
+
+        for (var index = 0; index < take; index++)
+        {
+            var ch = slice[index];
+            builder.Append(ch is '\r' or '\n' ? ' ' : ch);
+        }
+
+        if (length > 80)
+            builder.Append('…');
+
+        return builder.ToString();
     }
 
     private static string NewId() => Guid.NewGuid().ToString("N");

@@ -137,7 +137,7 @@
                        VerticalContentAlignment="Center"
                        IsVisible="False"
                        PlaceholderText="搜索工具、描述或分类…"
-                       Text="{Binding ToolQuery, Mode=TwoWay}"
+                       Text="{Binding ToolQuery, Mode=TwoWay, Delay=120}"
                        KeyDown="OnTopSearchKeyDown" />
             </Grid>
           </Border>
@@ -470,7 +470,7 @@
 
                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto">
                   <TextBox x:Name="ClipboardSearchBox"
-                           Text="{Binding Query, Mode=TwoWay}"
+                           Text="{Binding Query, Mode=TwoWay, Delay=180}"
                            PlaceholderText="搜索内容、标签、来源…">
                     <TextBox.InnerLeftContent>
                       <Path Classes="icon icon-sm"
@@ -1015,6 +1015,11 @@
                   <Path Classes="icon icon-xs"
                         Data="{StaticResource IconCopy}" />
                 </Button>
+                <Button Classes="ghost"
+                        Content="取消"
+                        ToolTip.Tip="停止当前工具（已开始的工作无法强制终止，但会立即恢复界面）"
+                        IsVisible="{Binding IsExecuting}"
+                        Click="OnCancelExecutionClick" />
                 <Button Classes="accent"
                         Content="{Binding ExecuteLabel}"
                         ToolTip.Tip="执行当前工具"

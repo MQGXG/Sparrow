@@ -12,17 +12,18 @@ namespace Sparrow.App.Services;
 /// · 词表只有 8 个连接词，不会碰到产品名和代码；
 /// · 前后必须有中文，独立出现的英文片段（代码、URL）保持原样。
 /// </summary>
-internal static class TranslationCleanup
+internal static partial class TranslationCleanup
 {
-    private static readonly string[] Connectives =
-        ["thus", "therefore", "hence", "however", "moreover", "nevertheless", "furthermore", "meanwhile"];
-
-    private static readonly Regex NoisePattern = new(
-        @"(?<=[\u4e00-\u9fff，。、；：！？）】」”])\s*(?<![A-Za-z])(?:"
-        + string.Join('|', Connectives)
-        + @")(?![A-Za-z])\s*(?=[\u4e00-\u9fff])",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    /// <summary>
+    /// 只匹配「中文之间夹着英文连接词」：前后必须有中文，
+    /// 独立出现的英文片段（代码、URL）保持原样。
+    /// 词表直接写进 pattern，交给源生成器编译，避免每次启动编译正则。
+    /// </summary>
+    [GeneratedRegex(
+        @"(?<=[\u4e00-\u9fff，。、；：！？）】」”])\s*(?<![A-Za-z])(?:thus|therefore|hence|however|moreover|nevertheless|furthermore|meanwhile)(?![A-Za-z])\s*(?=[\u4e00-\u9fff])",
+        RegexOptions.IgnoreCase)]
+    private static partial Regex NoisePattern();
 
     public static string Apply(string text) =>
-        string.IsNullOrEmpty(text) ? text : NoisePattern.Replace(text, string.Empty);
+        string.IsNullOrEmpty(text) ? text : NoisePattern().Replace(text, string.Empty);
 }

@@ -24,6 +24,12 @@ public sealed class JsonlHistoryStore : IHistoryStore
     private int _maxEntries;
     private int _retentionDays;
 
+    /// <summary>
+    /// 当前有效行数。默认不保留过期数据时，Add 只需比较计数；
+    /// 不再每写一条都完整读取 + 反序列化整个文件。
+    /// </summary>
+    private int _liveCount;
+
     public JsonlHistoryStore(string path, IAppLog log, int maxEntries = DefaultMaxEntries, int retentionDays = 0)
     {
         _path = path;
@@ -57,7 +63,12 @@ public sealed class JsonlHistoryStore : IHistoryStore
                     Directory.CreateDirectory(directory);
 
                 File.AppendAllText(_path, JsonSerializer.Serialize(entry, JsonOptions) + Environment.NewLine);
-                TryTrim();
+                _liveCount++;
+
+                // 没有保留天数时，只有超过条数上限才需要整理；
+                // 有保留天数时仍按原逻辑每条都检查一次，保证过期记录及时清掉。
+                if (_retentionDays > 0 || _liveCount > _maxEntries)
+                    TryTrim();
             }
             catch (Exception ex)
             {
@@ -87,6 +98,8 @@ public sealed class JsonlHistoryStore : IHistoryStore
             {
                 if (File.Exists(_path))
                     File.Delete(_path);
+
+                _liveCount = 0;
             }
             catch (Exception ex)
             {
@@ -142,6 +155,8 @@ public sealed class JsonlHistoryStore : IHistoryStore
     private void TrimIfNeeded()
     {
         var entries = ReadAll();
+        _liveCount = entries.Count;
+
         if (entries.Count == 0)
             return;
 
@@ -160,9 +175,11 @@ public sealed class JsonlHistoryStore : IHistoryStore
         if (trimmed.Length == 0)
         {
             File.Delete(_path);
+            _liveCount = 0;
             return;
         }
 
         File.WriteAllLines(_path, trimmed.Select(entry => JsonSerializer.Serialize(entry, JsonOptions)));
+        _liveCount = trimmed.Length;
     }
 }

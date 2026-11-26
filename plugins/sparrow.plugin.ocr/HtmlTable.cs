@@ -36,6 +36,9 @@ internal static partial class HtmlTable
     [GeneratedRegex(@"colspan\s*=\s*[""']?(?<n>\d+)", RegexOptions.IgnoreCase)]
     private static partial Regex ColSpanRegex();
 
+    [GeneratedRegex(@" {2,}")]
+    private static partial Regex RepeatedSpacesRegex();
+
     /// <summary>
     /// 转换；输入里没有表格时返回 null（调用方可以原样返回或报错）。
     /// </summary>
@@ -157,9 +160,7 @@ internal static partial class HtmlTable
         text = TagRegex().Replace(text, string.Empty);
         text = WebUtility.HtmlDecode(text);
         text = text.Replace("\r", " ").Replace("\n", " ").Trim();
-
-        while (text.Contains("  ", StringComparison.Ordinal))
-            text = text.Replace("  ", " ");
+        text = RepeatedSpacesRegex().Replace(text, " ");
 
         return text.Replace("|", "\\|");
     }

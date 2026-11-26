@@ -6,7 +6,7 @@
 
 [![.NET](https://img.shields.io/badge/.NET-10-512BD4)](https://dotnet.microsoft.com/)
 [![Avalonia](https://img.shields.io/badge/Avalonia-12-8B44AC)](https://avaloniaui.net/)
-[![Tests](https://img.shields.io/badge/tests-835%20passing-3DD68C)](#从源码构建)
+[![Tests](https://img.shields.io/badge/tests-850%20passing-3DD68C)](#从源码构建)
 [![License](https://img.shields.io/badge/License-MIT-3DD68C)](#协议)
 
 ---
@@ -138,7 +138,7 @@ dotnet build Sparrow.slnx
 dotnet run --project src/Sparrow.App
 ```
 
-构建 App 时会先构建 `plugins/`，插件产物自动复制到 `src/Sparrow.App/bin/<配置>/net10.0/plugins/`。
+构建 App 时会先构建 `plugins/`，插件产物自动复制到 `src/Sparrow.App/bin/<配置>/net10.0-windows10.0.19041.0/plugins/`。
 
 一次构建全部（含 Release）：
 
@@ -159,7 +159,7 @@ dotnet test tests/Sparrow.Tests/Sparrow.Tests.csproj
 ## 常见问题
 
 **识别 / 翻译 / 提示词插件没出现？**
-先执行一次 `dotnet build Sparrow.slnx`，确认 `src/Sparrow.App/bin/<配置>/net10.0/plugins/` 里有对应目录。
+先执行一次 `dotnet build Sparrow.slnx`，确认 `src/Sparrow.App/bin/<配置>/net10.0-windows10.0.19041.0/plugins/` 里有对应目录。
 
 **录制提示找不到 FFmpeg？**
 首次录制会自动下载；也可以运行 `scripts/fetch-ffmpeg.ps1` 手动拉到 `tools/ffmpeg/`。

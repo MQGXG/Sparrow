@@ -9,7 +9,7 @@
 ## 一、核心思想
 
 ```text
-六种入口  ──▶  ContextBuilder  ──▶  一个 ToolContext  ──▶  所有工具
+六种入口  ──▶  输入构造（WorkspaceViewModel.Inputs / PaletteViewModel）  ──▶  一个 ToolContext  ──▶  所有工具
 ```
 
 工具**永远不知道**数据来自剪贴板还是截图。它只看到 `ToolContext.Input`，以及一个用来做提示的 `Source` 标签。
@@ -77,7 +77,7 @@ public sealed record EmptyInput : IToolInput;
 ## 四、从入口到 ToolContext
 
 ```csharp
-// App/Services/ContextBuilder.cs （简化）
+// 分散在 WorkspaceViewModel.Inputs / PaletteViewModel（简化）
 public ToolContext FromClipboard()  => new() { Input = ReadClipboard(), Source = Clipboard };
 public ToolContext FromSelection()  => new() { Input = new TextInput(uia.GetSelectedText()), Source = Selection };
 public ToolContext FromScreenshot(ImageRef shot) => new() { Input = new ImageInput(shot), Source = Screenshot };
@@ -186,7 +186,7 @@ Sparrow 只做「这一次」，不做「每次都这样做」。
 模型是否正确，用三个问题检验：
 
 ```text
-1. 加一个只用 TextInput 的工具，需要改 ContextBuilder 吗？   → 不能改
+1. 加一个只用 TextInput 的工具，需要改输入构造层吗？   → 不能改
 2. 加一种新来源（比如「扫描二维码」），要改所有工具吗？        → 不能改
 3. 工具能知道自己来自剪贴板还是截图并改行为吗？                → 不能
 ```

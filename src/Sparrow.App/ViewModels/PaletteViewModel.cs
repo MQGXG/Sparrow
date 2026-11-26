@@ -29,6 +29,9 @@ public partial class PaletteViewModel : ObservableObject
 
     private ToolRegistry? _registry;
 
+    /// <summary>当前执行的取消源；没有执行时为 null。</summary>
+    private CancellationTokenSource? _executionCts;
+
     [ObservableProperty]
     private string _query = string.Empty;
 
@@ -141,6 +144,10 @@ public partial class PaletteViewModel : ObservableObject
         var entry = Selected.Entry;
         var tool = entry.Tool;
 
+        // 每次执行独立的取消源：面板 Esc 优先取消执行，而不是直接隐藏
+        using var cancellation = new CancellationTokenSource();
+        _executionCts = cancellation;
+
         IsExecuting = true;
 
         try
@@ -157,7 +164,7 @@ public partial class PaletteViewModel : ObservableObject
 
             _log.Info($"执行工具 {tool.Descriptor.Id}，输入类型 {context.Input.GetType().Name}");
 
-            var result = await tool.ExecuteAsync(context, CancellationToken.None);
+            var result = await ToolRunner.ExecuteAsync(tool, context, cancellation.Token);
 
             var elapsed = Stopwatch.GetElapsedTime(startedAt);
             _log.Info($"工具 {tool.Descriptor.Id} 执行完成：成功={result.Success}，耗时={elapsed.TotalMilliseconds:F0}ms");
@@ -194,9 +201,15 @@ public partial class PaletteViewModel : ObservableObject
         }
         finally
         {
+            if (ReferenceEquals(_executionCts, cancellation))
+                _executionCts = null;
+
             IsExecuting = false;
         }
     }
+
+    /// <summary>取消当前执行；没有执行时是空操作。</summary>
+    public void CancelExecution() => _executionCts?.Cancel();
 
     /// <summary>宿主流程（截图识别等）直接展示结果。</summary>
     public void ShowExternalResult(string title, string text) => ShowResult(text, title);

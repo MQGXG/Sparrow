@@ -58,19 +58,35 @@ public sealed class SettingsStore
     /// <summary>保存设置。失败只记日志，不向调用方抛异常。</summary>
     public bool Save(AppSettings settings)
     {
+        var tempPath = _path + ".tmp";
+
         try
         {
             var directory = System.IO.Path.GetDirectoryName(_path);
             if (!string.IsNullOrEmpty(directory))
                 Directory.CreateDirectory(directory);
 
-            File.WriteAllText(_path, JsonSerializer.Serialize(settings, JsonOptions));
+            // 先写临时文件再原子替换：进程在中途退出时不会留下半截 settings.json
+            File.WriteAllText(tempPath, JsonSerializer.Serialize(settings, JsonOptions));
+            File.Move(tempPath, _path, overwrite: true);
             return true;
         }
         catch (Exception ex)
         {
             _log.Error("设置保存失败", ex);
             return false;
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(tempPath))
+                    File.Delete(tempPath);
+            }
+            catch
+            {
+                // 临时文件清不掉不影响本次保存结果
+            }
         }
     }
 }

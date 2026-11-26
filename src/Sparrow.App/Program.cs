@@ -19,6 +19,19 @@ internal static class Program
 
         Startup = Stopwatch.StartNew();
 
+        // 后台线程 / 未观察任务异常：至少落盘，不让 WinExe 静默退出
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            if (e.ExceptionObject is Exception exception)
+                CrashLog.Write(exception);
+        };
+
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            CrashLog.Write(e.Exception);
+            e.SetObserved();
+        };
+
         // 单实例：M0 只做「第二个实例直接退出」。
         // 完整做法（把唤起请求转发给第一个实例）留给 M1，避免现在就引入 IPC。
         //

@@ -98,24 +98,31 @@ public sealed class JsonFormatTool : ITool
 
     private static string Pretty(JsonElement element, string indent)
     {
-        var options = new JsonSerializerOptions
-        {
-            WriteIndented = true,
-            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-        };
-
-        if (string.Equals(indent, "Tab", StringComparison.OrdinalIgnoreCase))
-        {
-            options.IndentCharacter = '\t';
-            options.IndentSize = 1;
-        }
-        else
-        {
-            options.IndentSize = int.TryParse(indent, out var size) && size > 0 ? size : 2;
-        }
+        // 选项按缩进档位缓存：JsonSerializerOptions 首次使用后会建立缓存，
+        // 每次执行都 new 一份会反复付出元数据扫描的成本。
+        var options = string.Equals(indent, "Tab", StringComparison.OrdinalIgnoreCase)
+            ? TabOptions
+            : indent == "4"
+                ? FourSpaceOptions
+                : TwoSpaceOptions;
 
         return JsonSerializer.Serialize(element, options);
     }
+
+    /// <summary>按缩进档位预建的序列化选项（构造后不再修改，可安全复用）。</summary>
+    private static readonly JsonSerializerOptions TwoSpaceOptions = CreatePrettyOptions(2, ' ');
+
+    private static readonly JsonSerializerOptions FourSpaceOptions = CreatePrettyOptions(4, ' ');
+
+    private static readonly JsonSerializerOptions TabOptions = CreatePrettyOptions(1, '\t');
+
+    private static JsonSerializerOptions CreatePrettyOptions(int size, char indentCharacter) => new()
+    {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        IndentCharacter = indentCharacter,
+        IndentSize = size
+    };
 
     // 复用同一个 options 实例，避免每次调用都构造（JsonSerializerOptions 首次使用后有缓存）
     private static readonly JsonSerializerOptions MinifyOptions = new()

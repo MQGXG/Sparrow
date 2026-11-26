@@ -14,16 +14,16 @@
 ```text
 [ ] dotnet build 零 warning（TreatWarningsAsErrors 已开）
 [ ] dotnet build 零 error
-[ ] 所有项目 TargetFramework = net10.0
+[ ] Sdk / 插件 TargetFramework = net10.0；宿主 = net10.0-windows10.0.19041.0
 [ ] global.json 锁定 SDK 10.0.103
+[ ] CI（.github/workflows/ci.yml）Release 构建 + 测试全绿
 ```
 
 ### 1.2 依赖规则
 
 ```text
 [ ] Sparrow.Plugin.Sdk 的 ProjectReference 数量 = 0
-[ ] Sparrow.Core 只引用 Sparrow.Plugin.Sdk
-[ ] plugins/* 只引用 Sparrow.Plugin.Sdk
+[ ] plugins/* 只引用 Sparrow.Plugin.Sdk（OCR worker 例外）
 [ ] plugins/* 的 csproj 不含 Avalonia.*
 [ ] Sparrow.Plugin.Sdk 不引用 Avalonia.*
 [ ] ViewModel 不引用 Avalonia.Controls.*
@@ -34,7 +34,8 @@
 ```text
 [ ] 删掉 plugins/ 下任一插件目录 → 宿主能启动，面板无该工具，无报错
 [ ] 插件产物目录里没有 Sparrow.Plugin.Sdk.dll
-[ ] 宿主源码不出现具体工具 ID（grep 'sparrow\.(json|ocr|clipboard)\.' 在 Sparrow.App 应为空）
+[ ] 宿主源码不出现具体工具 ID（PluginBoundaryTests 通过）
+[ ] 宿主源码不散落插件参数键（PluginBoundaryTests 通过）
 [ ] 每个插件目录名 == plugin.json 的 id
 [ ] plugin.json 的 tools 与该插件实际的 Descriptor.Id 一致
 [ ] ALC 为 isCollectible: true
@@ -69,10 +70,11 @@ dotnet list package --include-transitive | findstr SkiaSharp
 ### 1.5 测试
 
 ```text
-[ ] Sdk / Core 单测全绿
-[ ] 插件单测全绿（每个插件 ≥ 3 个用例）
+[ ] Sdk / App 单测全绿
+[ ] 已接入测试的插件单测全绿（当前 9 个插件）
 [ ] 快照测试全绿
 [ ] 无跳过的测试（Skip 必须写原因）
+[ ] 当前基线：850 用例（2026-11-26）
 ```
 
 ### 1.6 性能
@@ -167,7 +169,7 @@ dotnet list package --include-transitive | findstr SkiaSharp
 [ ] 空剪贴板按热键 → 面板正常打开，不报错
 [ ] 断网 → 非 AI 工具全部正常
 [ ] 磁盘写满 → 有明确错误，不静默失败
-[ ] 工具执行中被 Esc 取消 → 无残留进度条
+[ ] 工具执行中被 Esc / 取消按钮中断 → 无残留进度条
 ```
 
 ### 2.6 插件管理
@@ -190,7 +192,7 @@ dotnet list package --include-transitive | findstr SkiaSharp
 ## 三、发版前检查（打包）
 
 ```text
-[ ] 版本号已更新（<Version> in Directory.Build.props）
+[ ] 版本号已更新（build/pack.ps1 -Version / build/publish.ps1 -Version）
 [ ] CHANGELOG 已写（用户能看懂的话，不是 commit 列表）
 [ ] release-checklist 的工程验收全绿
 [ ] 手工验收全绿

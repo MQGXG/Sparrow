@@ -24,6 +24,11 @@ public sealed class PluginBoundaryTests
         @"\bSparrow\.Plugin\.(?!Sdk\b)[A-Za-z]",
         RegexOptions.Compiled);
 
+    /// <summary>宿主直接按字面量写插件参数键（<c>parameters["translate"]</c>）。</summary>
+    private static readonly Regex ParameterKeyPattern = new(
+        @"parameters\[""(?<key>[^""]+)""\]",
+        RegexOptions.Compiled);
+
     [Fact]
     public void 宿主不得硬编码具体工具ID()
     {
@@ -48,6 +53,20 @@ public sealed class PluginBoundaryTests
 
         hits.ShouldBeEmpty(
             "宿主只能依赖 Sparrow.Plugin.Sdk；引用具体插件会把插件变成编译期内置："
+            + Environment.NewLine
+            + string.Join(Environment.NewLine, hits));
+    }
+
+    [Fact]
+    public void 宿主不得散落插件参数键()
+    {
+        var hits = ScanHost()
+            .Where(hit => ParameterKeyPattern.IsMatch(StripLineComment(hit.Line)))
+            .Select(hit => $"{hit.File}:{hit.Number}  {hit.Line.Trim()}")
+            .ToList();
+
+        hits.ShouldBeEmpty(
+            "宿主直接写插件参数键会让参数契约散落；请集中到 CaptureOcrParameters 常量："
             + Environment.NewLine
             + string.Join(Environment.NewLine, hits));
     }

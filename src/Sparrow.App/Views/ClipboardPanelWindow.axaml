@@ -125,7 +125,7 @@
             ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto"
             IsVisible="False">
         <TextBox x:Name="SearchBox"
-                 Text="{Binding Query, Mode=TwoWay}"
+                 Text="{Binding Query, Mode=TwoWay, Delay=180}"
                  PlaceholderText="搜索内容、标签、来源…">
           <TextBox.InnerLeftContent>
             <Path Classes="icon icon-sm"

@@ -132,6 +132,15 @@ public partial class PaletteWindow : Window
         switch (e.Key)
         {
             case Key.Escape:
+                // 执行中先取消；没有执行时才隐藏面板
+                if (DataContext is PaletteViewModel { IsExecuting: true } running)
+                {
+                    running.CancelExecution();
+                    App.Log.Info("快捷键 Esc：取消执行");
+                    e.Handled = true;
+                    return;
+                }
+
                 Hide();
                 e.Handled = true;
                 return;

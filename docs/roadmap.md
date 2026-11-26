@@ -16,6 +16,12 @@
 | **M4** | 1 周 | AI 是可插拔增强而非前提 | 不配 AI 全功能可用；配了 AI 多出翻译入口 |
 | **M5** | 1 周 | 能交付给别人用 | 安装 → 首次导出 < 3 分钟 |
 
+> **阅读提示（2026-11-26）：** 本文是历史里程碑记录，M0/M1 里的「推迟项」已经落地或合并：
+> `PluginScanner` / ALC 加载器已完成；`Sparrow.Core` 没有独立成项目，Settings/History 仍在
+> `Sparrow.App` 内；`ContextBuilder` 拆成了 `WorkspaceViewModel.Inputs` 与
+> `PaletteViewModel.BuildContext`。当前代码结构以 [`architecture.md`](architecture.md) 为准。
+
+
 > **进行中：屏幕录制（P2）**。它是「会话型宿主能力」，不是插件——
 > 开始 / 停止、控制条、流式落盘、停止热键都在宿主，编码由 ffmpeg 子进程完成。
 > MVP 已跑通设置面板（区域/窗口/全屏、MP4/MKV/MOV/GIF/APNG、6 档画质、编码级别、GOP、帧率、延时开始、

@@ -58,7 +58,7 @@ public partial class App
                 Host = entry.Host
             };
 
-            var result = await entry.Tool.ExecuteAsync(context, CancellationToken.None);
+            var result = await ToolRunner.ExecuteAsync(entry.Tool, context);
 
             var text = result.Payload switch
             {
@@ -330,7 +330,7 @@ public partial class App
             Log.Info($"工具热键执行：{toolId}");
 
             var startedAt = Stopwatch.GetTimestamp();
-            var result = await entry.Tool.ExecuteAsync(context, CancellationToken.None);
+            var result = await ToolRunner.ExecuteAsync(entry.Tool, context);
             var elapsed = Stopwatch.GetElapsedTime(startedAt);
 
             if (!result.Success || result.Payload is null)

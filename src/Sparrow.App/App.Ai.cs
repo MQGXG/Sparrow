@@ -50,7 +50,7 @@ public partial class App
                 .FirstOrDefault();
 
             var parameter = entry?.Descriptor.Parameters
-                .FirstOrDefault(item => item.Key == "translate");
+                .FirstOrDefault(item => item.Key == CaptureOcrParameters.Translate);
 
             if (parameter is null)
                 return [];

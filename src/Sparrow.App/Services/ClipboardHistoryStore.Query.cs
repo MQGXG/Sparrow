@@ -11,23 +11,44 @@ namespace Sparrow.App.Services;
 
 public sealed partial class ClipboardHistoryStore
 {
-    public IReadOnlyList<ClipboardHistoryEntry> Recent(int count)
+    public IReadOnlyList<ClipboardHistoryEntry> Recent(int count) =>
+        RecentCore(count, SelectColumns);
+
+    /// <summary>
+    /// 列表专用：文本只取前 2048 字符，完整文本用 <see cref="LoadText"/> 按需读取。
+    /// 插件仍走 <see cref="Recent"/>，拿到的行为不变。
+    /// </summary>
+    public IReadOnlyList<ClipboardHistoryEntry> RecentForList(int count) =>
+        RecentCore(count, ListColumns);
+
+    private IReadOnlyList<ClipboardHistoryEntry> RecentCore(int count, string columns)
     {
         if (count <= 0)
             return [];
 
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
-        command.CommandText = $"SELECT {SelectColumns} FROM entries ORDER BY created_at DESC LIMIT $count";
+        command.CommandText = $"SELECT {columns} FROM entries ORDER BY created_at DESC LIMIT $count";
         command.Parameters.AddWithValue("$count", count);
 
         return ReadEntries(command);
     }
 
-    public IReadOnlyList<ClipboardHistoryEntry> Search(string keyword, int count)
+    public IReadOnlyList<ClipboardHistoryEntry> Search(string keyword, int count) =>
+        SearchCore(keyword, count, SelectColumns, SelectColumnsJoined);
+
+    /// <summary>列表专用的搜索：同 <see cref="Search"/>，但文本只取前 2048 字符。</summary>
+    public IReadOnlyList<ClipboardHistoryEntry> SearchForList(string keyword, int count) =>
+        SearchCore(keyword, count, ListColumns, ListColumnsJoined);
+
+    private IReadOnlyList<ClipboardHistoryEntry> SearchCore(
+        string keyword,
+        int count,
+        string columns,
+        string joinedColumns)
     {
         if (string.IsNullOrWhiteSpace(keyword))
-            return Recent(count);
+            return RecentCore(count, columns);
 
         if (count <= 0)
             return [];
@@ -39,7 +60,7 @@ public sealed partial class ClipboardHistoryStore
         if (_ftsEnabled && keyword.Length >= 3)
         {
             command.CommandText = $"""
-                SELECT {SelectColumnsJoined}
+                SELECT {joinedColumns}
                 FROM entries_fts f
                 JOIN entries e ON e.rowid = f.rowid
                 WHERE entries_fts MATCH $query
@@ -51,7 +72,7 @@ public sealed partial class ClipboardHistoryStore
         else
         {
             command.CommandText = $"""
-                SELECT {SelectColumns}
+                SELECT {columns}
                 FROM entries
                 WHERE text LIKE $like ESCAPE '\'
                    OR preview LIKE $like ESCAPE '\'
@@ -65,6 +86,25 @@ public sealed partial class ClipboardHistoryStore
 
         command.Parameters.AddWithValue("$count", count);
         return ReadEntries(command);
+    }
+
+    /// <summary>按 id 取回文本全文；列表查询只带前 2048 字符，复制/粘贴/详情用它补齐。</summary>
+    public string? LoadText(string id)
+    {
+        try
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT text FROM entries WHERE id = $id";
+            command.Parameters.AddWithValue("$id", id);
+
+            return command.ExecuteScalar() as string;
+        }
+        catch (Exception ex)
+        {
+            _log.Warn($"读取剪贴板文本失败：{ex.Message}");
+            return null;
+        }
     }
 
     /// <summary>取回文本条目的原始 HTML / RTF；没有则为 null。</summary>

@@ -720,6 +720,12 @@ public partial class WorkspaceWindow : Window
             viewModel.CloseDetail();
     }
 
+    private void OnCancelExecutionClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel viewModel)
+            viewModel.CancelExecution();
+    }
+
     private async void OnExecuteClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is WorkspaceViewModel viewModel)

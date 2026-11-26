@@ -75,6 +75,13 @@ public partial class App : Application
         var log = new FileAppLog();
         Log = log;
 
+        // UI 线程异常：落盘后标记 Handled，避免一个未捕获异常直接带走整个壳
+        Avalonia.Threading.Dispatcher.UIThread.UnhandledException += (_, e) =>
+        {
+            log.Error("UI 线程未处理异常", e.Exception);
+            e.Handled = true;
+        };
+
         // 软件内所有提示信息的统一出口（不在窗口内的地方也能看到）
         _toasts = new ToastService(log);
 
@@ -427,6 +434,25 @@ public partial class App : Application
             _ = RunRecordingProbeAsync(probe, probeSeconds, log);
 
         Log.Info($"启动完成：{Program.Startup.ElapsedMilliseconds} ms，托盘就绪");
+
+        // 首次打开命令面板会触发插件扫描 + 程序集加载。
+        // 启动完成后先在后台预热一次，避免第一次 Ctrl+Alt+S 在 UI 线程上等待。
+        Avalonia.Threading.Dispatcher.UIThread.Post(
+            () =>
+            {
+                _ = Task.Run(() =>
+                {
+                    try
+                    {
+                        _catalog?.GetRegistry();
+                    }
+                    catch (Exception ex)
+                    {
+                        log.Warn($"插件预热失败：{ex.Message}");
+                    }
+                });
+            },
+            Avalonia.Threading.DispatcherPriority.Background);
 
         base.OnFrameworkInitializationCompleted();
     }
