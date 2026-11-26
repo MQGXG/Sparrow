@@ -64,7 +64,7 @@ public partial class RecordingSetupWindow : Window
     {
     }
 
-    public RecordingSetupWindow(string? savedEncoder)
+    public RecordingSetupWindow(string? savedEncoder, bool regionOnly = false)
     {
         InitializeComponent();
 
@@ -72,6 +72,14 @@ public partial class RecordingSetupWindow : Window
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Sparrow",
             "recordings");
+
+        // 从截图工具条打开时区域已经由选区决定，不再给窗口/全屏选项。
+        if (regionOnly)
+        {
+            RegionMode.IsChecked = true;
+            WindowMode.IsVisible = false;
+            FullscreenMode.IsVisible = false;
+        }
 
         _ = DetectCameraAsync();
         _ = LoadEncodersAsync(savedEncoder);

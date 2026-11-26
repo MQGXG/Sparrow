@@ -164,6 +164,24 @@ public partial class App
             return CreateRecordingSessionAsync(region, IntPtr.Zero, setup);
         };
 
+        // 区域录制工具条的「录制设置…」：打开完整面板，确认后仍用当前选区开始。
+        capture.RecordingSetupRequested = _ =>
+        {
+            var panel = new RecordingSetupWindow(_appSettings.RecordEncoder, regionOnly: true);
+
+            panel.Finished += setup =>
+            {
+                if (setup is null)
+                    return;
+
+                PersistRecordingEncoder(setup.Encoder);
+                _pendingRecordingSetup = setup;
+                capture.StartRecordingFromSelection();
+            };
+
+            panel.Show();
+        };
+
         capture.RecordingFinished += (path, error, copied) =>
         {
             _activeCaptureWindow = null;

@@ -2,6 +2,7 @@
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Sparrow.App.Overlays;
@@ -22,6 +23,15 @@ public partial class CaptureWindow
 
     /// <summary>由宿主注入：用选区创建录制会话；返回 null 表示启动失败。</summary>
     internal Func<PixelRect, Task<RecordingSession?>>? RecordingSessionStarter { get; set; }
+
+    /// <summary>由宿主注入：打开完整录制设置面板；确认后宿主仍用当前选区开始。</summary>
+    internal Action<PixelRect>? RecordingSetupRequested { get; set; }
+
+    /// <summary>设置面板确认后，用当前选区开始录制（走截图窗口里的录制条）。</summary>
+    internal void StartRecordingFromSelection() => _ = StartRecordingAsync();
+
+    /// <summary>录制开始时按钮变成「停止」，先摘掉 Flyout，避免点停止又弹出菜单。</summary>
+    private FlyoutBase? _recordFlyout;
 
     /// <summary>录制结束：成功给文件路径，取消/失败给 null；第二个参数是失败原因，第三个是是否已复制到剪贴板。</summary>
     public event Action<string?, string?, bool>? RecordingFinished;
@@ -68,6 +78,11 @@ public partial class CaptureWindow
 
         _recording = session;
         session.StateChanged += OnRecordingStateChanged;
+
+        // 录制中按钮就是「停止」：先摘掉二级菜单，点一下直接停。
+        _recordFlyout = RecordButton.Flyout;
+        RecordButton.Flyout = null;
+        ToolTip.SetTip(RecordButton, "停止录制（Ctrl+Alt+Shift+R）");
 
         // 进入录制时回到指针工具：不选工具就保持点击穿透。
         _tool = AnnotationTool.None;
@@ -133,6 +148,11 @@ public partial class CaptureWindow
         RecordButton.IsEnabled = false;
         PauseRecordButton.IsEnabled = false;
 
+        // 恢复二级菜单，窗口如果因为失败没有关闭也能继续操作。
+        RecordButton.Flyout = _recordFlyout;
+        _recordFlyout = null;
+        ToolTip.SetTip(RecordButton, "录制（R）");
+
         var path = await _recording.StopAsync();
         var error = path is null ? _recording.LastError : null;
         var copy = _copyOnStop;
@@ -171,6 +191,9 @@ public partial class CaptureWindow
     private void OnCancelRecordingClick(object? sender, RoutedEventArgs e)
     {        if (_recording is null)
             return;
+
+        RecordButton.Flyout = _recordFlyout;
+        _recordFlyout = null;
 
         _recording.StateChanged -= OnRecordingStateChanged;
         _recording.Abandon();

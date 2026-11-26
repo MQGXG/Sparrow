@@ -926,10 +926,15 @@
           </Button>
           <Button x:Name="PinButton"
                   Classes="tool" Click="OnPinClick" ToolTip.Tip="固定到屏幕，滚轮缩放（P）">
-            <!-- 45° 倾斜图钉：通用「固定」语义，比直立图钉更容易辨认 -->
-            <Path Data="{StaticResource IconPin}"
-                  StrokeThickness="1.386"
-                  RenderTransform="rotate(45deg)" />
+            <!-- 45° 倾斜图钉：通用「固定」语义；旋转后视觉重心偏左上，平移补回按钮中心 -->
+            <Path Data="{StaticResource IconPin}" StrokeThickness="1.386">
+              <Path.RenderTransform>
+                <TransformGroup>
+                  <RotateTransform Angle="45" />
+                  <TranslateTransform X="2.2" Y="2.2" />
+                </TransformGroup>
+              </Path.RenderTransform>
+            </Path>
           </Button>
           <Button x:Name="ScrollButton"
                   Classes="tool" Click="OnScrollClick" ToolTip.Tip="滚动截图（G）">
@@ -939,7 +944,7 @@
           <Border Classes="tool-separator" />
 
           <Button x:Name="RecordButton"
-                  Classes="tool" Click="OnRecordClick" ToolTip.Tip="录制 / 停止（R）">
+                  Classes="tool" Click="OnRecordClick" ToolTip.Tip="录制（R）">
             <Panel>
               <Ellipse x:Name="RecordDot" Width="14" Height="14" Fill="#FF4D4F" />
               <Border x:Name="RecordStop"
@@ -948,6 +953,14 @@
                       Background="#FF4D4F"
                       IsVisible="False" />
             </Panel>
+            <Button.Flyout>
+              <MenuFlyout Placement="TopEdgeAlignedLeft">
+                <MenuItem x:Name="StartRecordingMenuItem"
+                          Header="开始录制"
+                          Click="OnStartRecordingMenuClick" />
+                <MenuItem Header="录制设置…" Click="OnOpenRecordingSetupMenuClick" />
+              </MenuFlyout>
+            </Button.Flyout>
           </Button>
 
           <Button x:Name="CornerRadiusButton" Classes="tool"
@@ -964,7 +977,7 @@
                 <MenuItem Header="保存（S）" Click="OnSaveClick" />
                 <MenuItem Header="固定（P）" Click="OnPinClick" />
                 <MenuItem Header="滚动（G）" Click="OnScrollClick" />
-                <MenuItem Header="录制（R）" Click="OnRecordClick" />
+                <MenuItem Header="录制（R）" Click="OnStartRecordingMenuClick" />
                 <MenuItem Header="圆角导出" Click="OnCornerRadiusClick" />
               </MenuFlyout>
             </Button.Flyout>

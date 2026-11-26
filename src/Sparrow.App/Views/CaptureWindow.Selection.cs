@@ -395,6 +395,7 @@ public partial class CaptureWindow
         SelectionHalo.Height = _selection.Height + 2;
 
         UpdateSizeBadge(_selection);
+        UpdateRecordMenuHeader();
         UpdateDim();
 
         if (_hasSelection)

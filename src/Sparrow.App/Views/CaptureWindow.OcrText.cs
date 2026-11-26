@@ -569,13 +569,40 @@ public partial class CaptureWindow
 
     private async void OnRecordClick(object? sender, RoutedEventArgs e)
     {
+        // 非录制状态：按钮自带 Flyout，会先弹出「开始录制 / 录制设置」菜单。
+        if (_recording is null)
+            return;
+
+        await StopRecordingAsync();
+    }
+
+    /// <summary>二级菜单里的「开始录制」：用当前选区和上次设置直接开始。</summary>
+    private async void OnStartRecordingMenuClick(object? sender, RoutedEventArgs e)
+    {
         if (_recording is not null)
+            return;
+
+        await ActAsync(CaptureAction.Record);
+    }
+
+    /// <summary>二级菜单里的「录制设置…」：打开完整面板，确认后仍用当前选区开始。</summary>
+    private void OnOpenRecordingSetupMenuClick(object? sender, RoutedEventArgs e)
+        => RecordingSetupRequested?.Invoke(SelectionRect);
+
+    /// <summary>菜单标题带上当前选区尺寸，避免误录错区域。</summary>
+    private void UpdateRecordMenuHeader()
+    {
+        if (_selection.Width <= 0 || _selection.Height <= 0)
         {
-            await StopRecordingAsync();
+            StartRecordingMenuItem.Header = "开始录制";
             return;
         }
 
-        await ActAsync(CaptureAction.Record);
+        // SelectionRect 要等执行动作时才计算，这里直接用选区 DIP × 缩放换成物理像素。
+        var scale = _scaling > 0 ? _scaling : 1;
+        var width = (int)Math.Round(_selection.Width * scale);
+        var height = (int)Math.Round(_selection.Height * scale);
+        StartRecordingMenuItem.Header = $"开始录制（{width} × {height}）";
     }
 
     private void OnCancelClick(object? sender, RoutedEventArgs e)
