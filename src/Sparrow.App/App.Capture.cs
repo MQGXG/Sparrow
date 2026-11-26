@@ -273,7 +273,7 @@ public partial class App
 
         if (capture.Action == CaptureAction.Scroll)
         {
-            await RunScrollCaptureAsync(capture.SelectionRect);
+            await RunScrollCaptureAsync(capture.SelectionRect, capture.CreateScrollControl());
             return;
         }
 

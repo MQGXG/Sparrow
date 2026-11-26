@@ -513,6 +513,19 @@ public partial class CaptureWindow : Window
     /// <summary>选区边框颜色（#RRGGBB）；同时用于十字辅助线和悬停候选框。</summary>
     public string SelectionBorderColor { get; set; } = "#E5A44C";
 
+    /// <summary>纯标注模式：窗口显示一张现成图片，只保留标注工具条，不进入截图流程。</summary>
+    internal bool AnnotationOnly { get; set; }
+
+    /// <summary>标注模式的原图（PNG）。</summary>
+    internal byte[]? AnnotationSource { get; set; }
+
+    /// <summary>标注完成后的 PNG；取消或没有标注时为 null。</summary>
+    internal byte[]? AnnotationResult { get; private set; }
+
+    private byte[]? _annotationBasePng;
+    private Bitmap? _annotationBitmap;
+    private double _annotationImageHeight;
+
     /// <summary>是否还原放大镜全屏颜色滤镜。</summary>
     public bool CaptureRestoreColors { get; set; } = true;
 
@@ -807,6 +820,12 @@ public partial class CaptureWindow : Window
     {
         base.OnOpened(e);
 
+        // 纯标注模式：窗口显示一张现成图片，只保留标注工具条，不进入截图流程。
+        if (AnnotationOnly)
+        {
+            StartAnnotationMode();
+            return;
+        }
         // 与 Snow-shot 一致：录制中重新截图/选区，遮罩和选区会进入视频。
         // （如果希望录制中截图不污染视频，把下面这行加回来即可。）
         // WindowCaptureExclusion.Exclude(this);
@@ -841,6 +860,102 @@ public partial class CaptureWindow : Window
         RefreshNoteStyle();
         ApplySelectionBorderColor();
         BuildPresetMenu();
+    }
+
+    /// <summary>
+    /// 纯标注模式初始化：窗口铺满屏幕（透明），图片居中显示、工具条可自由拖动，
+    /// 不把图片和工具条绑在同一个范围内。
+    /// </summary>
+    private void StartAnnotationMode()
+    {
+        if (AnnotationSource is not { Length: > 0 } png)
+        {
+            Close();
+            return;
+        }
+
+        _annotationBasePng = png;
+
+        using var stream = new MemoryStream(png);
+        _annotationBitmap = new Bitmap(stream);
+
+        // 窗口铺满虚拟屏幕，图片居中；工具条默认放图片下方，之后可以拖到任意位置
+        ApplyVirtualScreenBounds();
+
+        ActionBar.IsVisible = true;
+        HintBar.IsVisible = false;
+        MeasureActionBar();
+        var toolbarSize = ActionBar.DesiredSize;
+
+        var screen = Screens.Primary?.WorkingArea ?? new PixelRect(0, 0, 1920, 1080);
+        var renderScale = RenderScaling > 0 ? RenderScaling : 1;
+        var maxWidth = Math.Max(240, screen.Width / renderScale * 0.8);
+        var maxHeight = Math.Max(180, screen.Height / renderScale * 0.8);
+
+        var ratio = Math.Min(
+            Math.Min(
+                maxWidth / _annotationBitmap.PixelSize.Width,
+                maxHeight / _annotationBitmap.PixelSize.Height),
+            1.0);
+
+        var imageWidth = Math.Max(160, _annotationBitmap.PixelSize.Width * ratio);
+        var imageHeight = Math.Max(120, _annotationBitmap.PixelSize.Height * ratio);
+
+        var imageLeft = Math.Max(8, (Width - imageWidth) / 2);
+        var imageTop = Math.Max(8, (Height - imageHeight) / 2);
+
+        FrozenFrame.Source = _annotationBitmap;
+        FrozenFrame.IsVisible = true;
+        FrozenFrame.Width = imageWidth;
+        FrozenFrame.Height = imageHeight;
+        Canvas.SetLeft(FrozenFrame, imageLeft);
+        Canvas.SetTop(FrozenFrame, imageTop);
+
+        _annotationImageHeight = imageHeight;
+        _selection = new Rect(imageLeft, imageTop, imageWidth, imageHeight);
+        _hasSelection = true;
+        _scaling = imageWidth > 0 ? _annotationBitmap.PixelSize.Width / imageWidth : 1;
+        _colorSampling = false;
+
+        HideAnnotationChrome();
+
+        // 工具条先放图片下方；下方放不下就放上方
+        var toolbarTop = imageTop + imageHeight + 10;
+
+        if (toolbarTop + toolbarSize.Height > Height - 8)
+            toolbarTop = Math.Max(8, imageTop - toolbarSize.Height - 10);
+
+        Canvas.SetLeft(ActionBar, Math.Max(8, (Width - toolbarSize.Width) / 2));
+        Canvas.SetTop(ActionBar, toolbarTop);
+    }
+
+    /// <summary>标注模式只保留标注工具：隐藏选区、角标、遮罩和截图动作。</summary>
+    private void HideAnnotationChrome()
+    {
+        Selection.IsVisible = false;
+        SelectionHalo.IsVisible = false;
+        DimLayer.IsVisible = false;
+        CrosshairLayer.IsVisible = false;
+        CandidateBox.IsVisible = false;
+        CandidateBadge.IsVisible = false;
+        HandleLayer.IsVisible = false;
+        GuideLayer.IsVisible = false;
+        NoteHandleLayer.IsVisible = false;
+        SizeBadge.IsVisible = false;
+        HintBar.IsVisible = false;
+        Magnifier.IsVisible = false;
+        ColorProbe.IsVisible = false;
+        OcrTextBar.IsVisible = false;
+
+        SaveButton.IsVisible = false;
+        PinButton.IsVisible = false;
+        ScrollButton.IsVisible = false;
+        RecordButton.IsVisible = false;
+        CornerRadiusButton.IsVisible = false;
+        MoreButton.IsVisible = false;
+
+        // 识别 / 翻译保留：标注时也常需要把图上的字提出来
+        ToolTip.SetTip(CopyImageButton, "完成标注");
     }
 
     /// <summary>设置里的选区颜色：选区边框、十字辅助线、悬停候选框统一使用。</summary>
@@ -918,6 +1033,9 @@ public partial class CaptureWindow : Window
         _frozenBitmap?.Dispose();
         _frozenBitmap = null;
         _frozenPixels = null;
+
+        _annotationBitmap?.Dispose();
+        _annotationBitmap = null;
 
         TrimFreezeMemory(releasedBytes);
 

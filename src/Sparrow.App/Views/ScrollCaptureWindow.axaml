@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="Sparrow.App.Views.ScrollCaptureWindow"
         Title="SparrowScroll"
-        Width="320"
+        Width="300"
         SizeToContent="Height"
         WindowDecorations="None"
         CanResize="False"
@@ -13,6 +13,7 @@
         Background="Transparent"
         TransparencyLevelHint="Transparent">
 
+  <!-- 只做状态显示：自动/方向/速度已经在工具条的二级菜单里定好 -->
   <Border Background="{StaticResource OverlayBrush}"
           BorderBrush="{StaticResource AccentBorderBrush}"
           BorderThickness="1"
@@ -20,30 +21,30 @@
           Padding="12,10"
           BoxShadow="0 12 32 0 #99000000">
 
-    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="8">
+    <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
       <Image Grid.Row="0"
-             Grid.ColumnSpan="2"
              x:Name="PreviewImage"
-             MaxHeight="340"
+             MaxHeight="300"
              Stretch="Uniform"
              HorizontalAlignment="Center"
              IsVisible="False" />
 
-      <StackPanel Grid.Row="1" Grid.Column="0" Spacing="2">
-        <TextBlock Text="滚动页面，完成后点「完成」"
+      <StackPanel Grid.Row="1" Spacing="2">
+        <TextBlock x:Name="HintText"
+                   Text="正在自动滚动…"
                    FontSize="12"
-                   Foreground="{StaticResource TextPrimaryBrush}" />
+                   Foreground="{StaticResource TextPrimaryBrush}"
+                   TextWrapping="Wrap" />
         <TextBlock x:Name="ProgressText"
                    Text="等待滚动…"
                    FontSize="10"
                    Foreground="{StaticResource TextMutedBrush}" />
       </StackPanel>
 
-      <StackPanel Grid.Row="1"
-                  Grid.Column="1"
+      <StackPanel Grid.Row="2"
                   Orientation="Horizontal"
-                  Spacing="6"
-                  Margin="12,0,0,0">
+                  HorizontalAlignment="Right"
+                  Spacing="6">
         <Button x:Name="FinishButton"
                 Classes="accent small"
                 Content="完成"

@@ -565,7 +565,31 @@ public partial class CaptureWindow
 
     private async void OnPinClick(object? sender, RoutedEventArgs e) => await ActAsync(CaptureAction.Pin);
 
-    private async void OnScrollClick(object? sender, RoutedEventArgs e) => await ActAsync(CaptureAction.Scroll);
+    private void OnScrollClick(object? sender, RoutedEventArgs e)
+    {
+        // 按钮自带 Flyout：点击先弹「自动/方向/速度」二级菜单，
+        // 开始动作交给菜单里的按钮，避免点一下就直接开滚。
+    }
+
+    /// <summary>滚动截图二级菜单里的「开始滚动截图」。</summary>
+    private async void OnStartScrollClick(object? sender, RoutedEventArgs e)
+    {
+        await ActAsync(CaptureAction.Scroll);
+        e.Handled = true;
+    }
+
+    /// <summary>滚动截图设置：从工具条二级菜单读取，宿主创建捕获循环时用。</summary>
+    internal ScrollCaptureControl CreateScrollControl() => new()
+    {
+        AutoScroll = ScrollAutoSwitch.IsChecked == true,
+        Horizontal = ScrollDirectionBox.SelectedIndex == 1,
+        IntervalMs = ScrollSpeedBox.SelectedIndex switch
+        {
+            0 => 420,
+            2 => 120,
+            _ => 240
+        }
+    };
 
     private async void OnRecordClick(object? sender, RoutedEventArgs e)
     {

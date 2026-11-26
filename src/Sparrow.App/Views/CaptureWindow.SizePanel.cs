@@ -393,7 +393,11 @@ public partial class CaptureWindow
     private void MoveToolbar(Point point)
     {
         var size = ActionBar.Bounds.Width > 0 ? ActionBar.Bounds.Size : ActionBar.DesiredSize;
-        var screen = ScreenDipFor(_selection) ?? new Rect(0, 0, Width, Height);
+
+        // 标注模式的工具条可以在整个屏幕内自由挪动；截图模式限制在选区所在显示器。
+        var screen = AnnotationOnly
+            ? new Rect(0, 0, Math.Max(Width, 1), Math.Max(Height, 1))
+            : ScreenDipFor(_selection) ?? new Rect(0, 0, Width, Height);
 
         var left = Math.Clamp(
             _toolbarStartPosition.X + (point.X - _toolbarDragStart.X),
@@ -656,6 +660,11 @@ public partial class CaptureWindow
     private void OnActionBarLayoutUpdated(object? sender, EventArgs e)
     {
         if (!ActionBar.IsVisible || _toolbarManual)
+            return;
+
+        // 标注模式：工具条位置由 StartAnnotationMode 给初值、用户拖动调整，
+        // 这里不再跟着「选区外」规则重排。
+        if (AnnotationOnly)
             return;
 
         var size = ActionBar.Bounds.Size;

@@ -76,6 +76,24 @@ public partial class CaptureWindow
         if (_selection.Width < MinSelectionSize || _selection.Height < MinSelectionSize)
             return;
 
+        // 纯标注模式：完成 = 合成标注并关闭，不执行任何截图动作
+        if (AnnotationOnly)
+        {
+            if (action == CaptureAction.CopyImage)
+            {
+                AnnotationResult = _annotationBasePng is { Length: > 0 } basePng
+                    ? AnnotationRenderer.Compose(
+                        basePng,
+                        _notes.Items,
+                        _scaling > 0 ? _scaling : 1)
+                    : null;
+
+                Close();
+            }
+
+            return;
+        }
+
         // 录制不需要截图：只把选区换算成物理像素，交给宿主启动录制会话。
         if (action == CaptureAction.Record)
         {

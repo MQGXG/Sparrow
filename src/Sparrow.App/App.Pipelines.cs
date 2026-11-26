@@ -92,7 +92,7 @@ public partial class App
     /// 拼接全部发生在宿主，插件仍然只收到一张 ImageInput，
     /// 所以这条功能不需要改 SDK 契约。
     /// </summary>
-    private async Task RunScrollCaptureAsync(PixelRect rect)
+    private async Task RunScrollCaptureAsync(PixelRect rect, ScrollCaptureControl control)
     {
         if (rect.Width < 8 || rect.Height < 8)
             return;
@@ -100,7 +100,7 @@ public partial class App
         using var cts = new CancellationTokenSource();
         var cancelled = false;
 
-        var overlay = new ScrollCaptureWindow();
+        var overlay = new ScrollCaptureWindow(control, rect.Height);
         overlay.Finished += (_, _) => cts.Cancel();
         overlay.Cancelled += (_, _) =>
         {
@@ -115,6 +115,21 @@ public partial class App
         if (!_appSettings.CaptureUiInScroll)
             WindowCaptureExclusion.Exclude(overlay);
 
+        // 自动滚动的滚轮事件发给前台窗口：先把光标移进选区，并把目标窗口切到前台，
+        // 结束后还原光标。截图窗口刚关时我们还在前台，这时切目标最可靠。
+        var originalCursor = WheelScroller.GetCursorPosition();
+        var movedCursor = false;
+
+        if (control.AutoScroll)
+        {
+            var center = new PixelPoint(
+                rect.X + rect.Width / 2,
+                rect.Y + rect.Height / 2);
+
+            movedCursor = WheelScroller.MoveCursor(center.X, center.Y);
+            WheelScroller.ActivateTargetAt(center);
+        }
+
         byte[]? png;
         try
         {
@@ -124,6 +139,7 @@ public partial class App
                     rect.Y,
                     rect.Width,
                     rect.Height,
+                    control,
                     rows => Avalonia.Threading.Dispatcher.UIThread.Post(
                         () => overlay.SetCaptured(rows, rect.Height)),
                     preview => Avalonia.Threading.Dispatcher.UIThread.Post(
@@ -138,6 +154,9 @@ public partial class App
         finally
         {
             overlay.Close();
+
+            if (movedCursor && originalCursor is { } cursor)
+                WheelScroller.MoveCursor(cursor.X, cursor.Y);
         }
 
         if (cancelled || png is null)

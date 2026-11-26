@@ -107,6 +107,28 @@ public partial class ScrollResultWindow : Window
             return;
         }
 
+        var control = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+
+        switch (e.Key)
+        {
+            case Key.C when control:
+                CloseWith(CaptureAction.CopyImage);
+                e.Handled = true;
+                return;
+            case Key.S when !control:
+                CloseWith(CaptureAction.Save);
+                e.Handled = true;
+                return;
+            case Key.P when !control:
+                CloseWith(CaptureAction.Pin);
+                e.Handled = true;
+                return;
+            case Key.R when !control:
+                CloseWith(CaptureAction.Recognize);
+                e.Handled = true;
+                return;
+        }
+
         base.OnKeyDown(e);
     }
 
@@ -182,7 +204,7 @@ public partial class ScrollResultWindow : Window
             ? $"（原 {_sourceHeight}，上裁 {TrimTopRows} / 下裁 {TrimBottomRows}）"
             : string.Empty;
 
-        SizeText.Text = $"{_sourceWidth} × {trimmedHeight} px{suffix}  ·  Esc 关闭";
+        SizeText.Text = $"{_sourceWidth} × {trimmedHeight} px{suffix}";
     }
 
     private static void LayoutShade(Border shade, double top, double height, double width)
@@ -204,6 +226,35 @@ public partial class ScrollResultWindow : Window
 
     private void OnRecognizeClick(object? sender, RoutedEventArgs e) => CloseWith(CaptureAction.Recognize);
 
+    /// <summary>打开标注窗口，把结果合成回当前 PNG（尺寸不变，裁剪比例保持）。</summary>
+    private async void OnAnnotateClick(object? sender, RoutedEventArgs e)
+    {
+        if (_png is not { Length: > 0 })
+            return;
+
+        var result = await ImageAnnotator.AnnotateAsync(this, _png);
+        if (result is null)
+            return;
+
+        _png = result;
+
+        using var stream = new MemoryStream(result);
+        _bitmap?.Dispose();
+        _bitmap = new Bitmap(stream);
+
+        Preview.Source = _bitmap;
+        TrimOverview.Source = _bitmap;
+
+        var (width, height) = ImageSizeReader.Read(result);
+        if (width > 0 && height > 0)
+        {
+            _sourceWidth = width;
+            _sourceHeight = height;
+        }
+
+        UpdateTrimVisual();
+    }
+
     private void OnCopyImageClick(object? sender, RoutedEventArgs e) => CloseWith(CaptureAction.CopyImage);
 
     private void OnSaveClick(object? sender, RoutedEventArgs e) => CloseWith(CaptureAction.Save);
@@ -211,6 +262,13 @@ public partial class ScrollResultWindow : Window
     private void OnPinClick(object? sender, RoutedEventArgs e) => CloseWith(CaptureAction.Pin);
 
     private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();
+
+    /// <summary>无边框窗口：标题行拖动整个面板。</summary>
+    private void OnTitleBarPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            BeginMoveDrag(e);
+    }
 
     private void CloseWith(CaptureAction action)
     {

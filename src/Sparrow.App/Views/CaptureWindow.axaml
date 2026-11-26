@@ -52,8 +52,6 @@
     <StreamGeometry x:Key="IconScan">M4 8.5V6A2 2 0 0 1 6 4h2.5 M15.5 4H18a2 2 0 0 1 2 2v2.5 M20 15.5V18a2 2 0 0 1-2 2h-2.5 M8.5 20H6a2 2 0 0 1-2-2v-2.5 M8 9.5h8 M8 12.5h5.5</StreamGeometry>
     <StreamGeometry x:Key="IconTranslate">M4.5 7h8 M8.5 5v2 M11 7c-.5 3.2-2.7 5.8-5.6 6.9 M6 8.3c.7 2.2 2.5 4 4.8 4.8 M12.8 19.5l3.5-9.3 3.5 9.3 M14.2 16.4h4.4</StreamGeometry>
     <StreamGeometry x:Key="IconSave">M12 4v10.3 M7.9 10.6 12 14.7l4.1-4.1 M5 19.5h14</StreamGeometry>
-    <StreamGeometry x:Key="IconScrollCapture">M4 5.5A1.5 1.5 0 0 1 5.5 4h8A1.5 1.5 0 0 1 15 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-8A1.5 1.5 0 0 1 4 18.5z M19 4v16 M16.4 7.4 19 4.8 21.6 7.4 M16.4 16.6 19 19.2 21.6 16.6</StreamGeometry>
-    <StreamGeometry x:Key="IconOcrFrame">M4 8.5V6.3A2.3 2.3 0 0 1 6.3 4H8.5 M15.5 4h2.2A2.3 2.3 0 0 1 20 6.3v2.2 M20 15.5v2.2a2.3 2.3 0 0 1-2.3 2.3h-2.2 M8.5 20H6.3A2.3 2.3 0 0 1 4 17.7v-2.2</StreamGeometry>
     <StreamGeometry x:Key="IconMosaicBlur">M4.5 8.5c1.9-1.7 3.9-1.7 5.8 0s3.9 1.7 5.8 0 M4.5 12.5c1.9-1.7 3.9-1.7 5.8 0s3.9 1.7 5.8 0 M4.5 16.5c1.9-1.7 3.9-1.7 5.8 0s3.9 1.7 5.8 0</StreamGeometry>
     <StreamGeometry x:Key="IconCornerRadius">M5 20V10.5A5.5 5.5 0 0 1 10.5 5H20</StreamGeometry>
     <StreamGeometry x:Key="IconRedo">M16 5.5 20 9.5l-4 4 M19.5 9.5H10a5.5 5.5 0 0 0 0 11h3</StreamGeometry>
@@ -939,6 +937,63 @@
           <Button x:Name="ScrollButton"
                   Classes="tool" Click="OnScrollClick" ToolTip.Tip="滚动截图（G）">
             <Path Data="{StaticResource IconScrollCapture}" />
+            <Button.Flyout>
+              <Flyout Placement="TopEdgeAlignedLeft">
+                <StackPanel Width="236" Spacing="10">
+                  <TextBlock Text="滚动截图"
+                             FontSize="13"
+                             FontWeight="SemiBold"
+                             Foreground="{StaticResource TextPrimaryBrush}" />
+
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="自动滚动"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource TextSecondaryBrush}" />
+                    <ToggleSwitch Grid.Column="1"
+                                  x:Name="ScrollAutoSwitch"
+                                  IsChecked="True"
+                                  OnContent="开"
+                                  OffContent="关" />
+                  </Grid>
+
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="方向"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource TextSecondaryBrush}" />
+                    <ComboBox Grid.Column="1"
+                              x:Name="ScrollDirectionBox"
+                              Width="110"
+                              SelectedIndex="0">
+                      <ComboBoxItem>纵向</ComboBoxItem>
+                      <ComboBoxItem>横向</ComboBoxItem>
+                    </ComboBox>
+                  </Grid>
+
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="速度"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource TextSecondaryBrush}" />
+                    <ComboBox Grid.Column="1"
+                              x:Name="ScrollSpeedBox"
+                              Width="110"
+                              SelectedIndex="1">
+                      <ComboBoxItem>慢</ComboBoxItem>
+                      <ComboBoxItem>中</ComboBoxItem>
+                      <ComboBoxItem>快</ComboBoxItem>
+                    </ComboBox>
+                  </Grid>
+
+                  <Button Classes="accent"
+                          Content="开始滚动截图"
+                          HorizontalAlignment="Stretch"
+                          HorizontalContentAlignment="Center"
+                          Click="OnStartScrollClick" />
+                </StackPanel>
+              </Flyout>
+            </Button.Flyout>
           </Button>
 
           <Border Classes="tool-separator" />
@@ -976,7 +1031,7 @@
               <MenuFlyout Placement="TopEdgeAlignedRight">
                 <MenuItem Header="保存（S）" Click="OnSaveClick" />
                 <MenuItem Header="固定（P）" Click="OnPinClick" />
-                <MenuItem Header="滚动（G）" Click="OnScrollClick" />
+                <MenuItem Header="滚动（G）" Click="OnStartScrollClick" />
                 <MenuItem Header="录制（R）" Click="OnStartRecordingMenuClick" />
                 <MenuItem Header="圆角导出" Click="OnCornerRadiusClick" />
               </MenuFlyout>
