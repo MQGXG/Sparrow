@@ -35,6 +35,7 @@ internal sealed class CameraPreviewWindow : Window
     private Action<PixelRect> _layoutChanged;
 
     private WriteableBitmap? _bitmap;
+    private long _lastFrameVersion = -1;
     private bool _adjusting;
     private bool _resizing;
     private double _resizeStartWidth;
@@ -134,7 +135,8 @@ internal sealed class CameraPreviewWindow : Window
 
         PositionChanged += (_, _) => ClampToRegion();
 
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(66) };
+        // 30fps 刷新。采集端有新帧时才真正拷贝；没有新帧就跳过，省掉 UI 线程的无效搬运。
+        _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
         _timer.Tick += (_, _) => UpdatePreview();
 
         Opened += (_, _) =>
@@ -188,6 +190,12 @@ internal sealed class CameraPreviewWindow : Window
 
     private void UpdatePreview()
     {
+        var version = _camera.FrameVersion;
+
+        // 采集端没有新帧：保持当前画面，不再重复拷一遍。
+        if (version == _lastFrameVersion && _bitmap is not null)
+            return;
+
         if (!_camera.TryGetPreviewSize(out var width, out var height)
             && !_camera.TryGetFrameSize(out width, out height))
         {
@@ -212,7 +220,14 @@ internal sealed class CameraPreviewWindow : Window
             _image.Source = _bitmap;
         }
 
-        _camera.CopyFrameTo(_bitmap);
+        if (!_camera.CopyFrameTo(_bitmap))
+            return;
+
+        _lastFrameVersion = version;
+
+        // Avalonia 不会因为 WriteableBitmap 的像素变化自动重绘（和 WPF 不同），
+        // 必须显式让 Image 失效，否则预览会停在旧画面上，直到别的事件触发重绘。
+        _image.InvalidateVisual();
     }
 
     private void OnDragPressed(object? sender, PointerPressedEventArgs e)

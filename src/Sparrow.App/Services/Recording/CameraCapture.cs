@@ -34,6 +34,12 @@ internal sealed class CameraCapture : IDisposable
     private int _started;
     private bool _disposed;
 
+    /// <summary>每收到一帧自增。预览用它跳过没有新帧的刷新。</summary>
+    private long _frameVersion;
+
+    private long _fpsWindowStart;
+    private int _fpsFrames;
+
     /// <summary>是否已经拿到过至少一帧。</summary>
     public bool HasFrame
     {
@@ -46,6 +52,16 @@ internal sealed class CameraCapture : IDisposable
 
     /// <summary>初始化/采集失败原因；成功后为 null。</summary>
     public string? Error { get; private set; }
+
+    /// <summary>最新一帧的版本号；预览据此判断是否真的需要刷新。</summary>
+    public long FrameVersion
+    {
+        get
+        {
+            lock (_gate)
+                return _frameVersion;
+        }
+    }
 
     public static CameraCapture Create() => new();
 
@@ -101,8 +117,12 @@ internal sealed class CameraCapture : IDisposable
                 return;
             }
 
-            // 画中画不需要改采集分辨率：预览端会缩小后再拷给 UI，
-            // 录制端直接使用设备默认帧；避免部分驱动在 SetFormatAsync 上卡住。
+            // 默认格式可能是 15fps（弱光下还会更低）：画中画会明显卡顿。
+            // 仅在默认帧率偏低时尝试切到 30fps、≤720p 的格式；
+            // 个别驱动会在 SetFormatAsync 上卡住，所以加超时并保留默认格式兜底。
+            App.Log.Info($"[camera] 默认采集格式：{DescribeFormat(source.CurrentFormat)}");
+            await TryUseBetterFormatAsync(source);
+
             MediaFrameReader reader;
 
             try
@@ -140,20 +160,86 @@ internal sealed class CameraCapture : IDisposable
         }
     }
 
+    /// <summary>
+    /// 默认帧率低于 20fps、或分辨率超过 1080p 时，挑一个 30fps、宽度 ≤1280 的格式。
+    /// 画中画尺寸很小，720p 足够；分辨率降下来后每帧拷贝和缩放也更快。
+    /// </summary>
+    private static async Task TryUseBetterFormatAsync(MediaFrameSource source)
+    {
+        try
+        {
+            var current = source.CurrentFormat;
+            var currentFps = FrameRate(current);
+            var currentWidth = current?.VideoFormat?.Width ?? 0;
+
+            if (currentFps >= 20 && currentWidth <= 1920)
+                return;
+
+            MediaFrameFormat? Pick(int maxWidth) => source.SupportedFormats
+                .Where(format => format.VideoFormat is { Width: > 0, Height: > 0 })
+                .Where(format => FrameRate(format) >= 24)
+                .Where(format => format.VideoFormat.Width <= maxWidth)
+                .OrderByDescending(FrameRate)
+                .ThenByDescending(format => (long)format.VideoFormat.Width * format.VideoFormat.Height)
+                .FirstOrDefault();
+
+            var best = Pick(1280) ?? Pick(1920) ?? Pick(int.MaxValue);
+
+            if (best is null)
+            {
+                App.Log.Warn("[camera] 没有找到 ≥24fps 的采集格式，继续用默认格式");
+                return;
+            }
+
+            await source.SetFormatAsync(best).AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+            App.Log.Info($"[camera] 采集格式切换到 {DescribeFormat(best)}");
+        }
+        catch (TimeoutException)
+        {
+            App.Log.Warn("[camera] 切换采集格式超时，继续用默认格式");
+        }
+        catch (Exception ex)
+        {
+            App.Log.Warn($"[camera] 切换采集格式失败：{ex.Message}");
+        }
+    }
+
+    private static double FrameRate(MediaFrameFormat? format)
+    {
+        var rate = format?.FrameRate;
+
+        if (rate is null || rate.Denominator == 0)
+            return 0;
+
+        return (double)rate.Numerator / rate.Denominator;
+    }
+
+    private static string DescribeFormat(MediaFrameFormat? format)
+    {
+        if (format is null)
+            return "未知";
+
+        var video = format.VideoFormat;
+
+        return $"{video?.Width ?? 0}x{video?.Height ?? 0}@{FrameRate(format):0.#}fps";
+    }
+
     private void OnFrameArrived(MediaFrameReader sender, MediaFrameArrivedEventArgs args)
     {
         try
         {
             using var frame = sender.TryAcquireLatestFrame();
-            var bitmap = frame?.VideoMediaFrame?.SoftwareBitmap;
+            var source = frame?.VideoMediaFrame?.SoftwareBitmap;
 
-            if (bitmap is null)
+            if (source is null)
                 return;
 
             SoftwareBitmap? converted = null;
 
             try
             {
+                var bitmap = source;
+
                 if (bitmap.BitmapPixelFormat != BitmapPixelFormat.Bgra8
                     || bitmap.BitmapAlphaMode != BitmapAlphaMode.Premultiplied)
                 {
@@ -166,10 +252,15 @@ internal sealed class CameraCapture : IDisposable
                 }
 
                 CopyFrame(bitmap);
+                LogFrameRate();
             }
             finally
             {
                 converted?.Dispose();
+
+                // 帧自带的 SoftwareBitmap 是独立强引用：只 Dispose MediaFrameReference
+                // 不会释放它。不显式释放会让可用帧缓冲越来越少（官方文档明确要求）。
+                source.Dispose();
             }
         }
         catch
@@ -201,22 +292,57 @@ internal sealed class CameraCapture : IDisposable
             if (_pixels.Length != rowBytes * height)
                 _pixels = new byte[rowBytes * height];
 
-            for (var row = 0; row < height; row++)
+            if (description.Stride == rowBytes)
             {
-                var offset = description.StartIndex + row * description.Stride;
+                // 大多数摄像头是连续内存：一次拷完，省掉每行一次 P/Invoke。
+                Marshal.Copy(source + description.StartIndex, _pixels, 0, rowBytes * height);
+            }
+            else
+            {
+                for (var row = 0; row < height; row++)
+                {
+                    var offset = description.StartIndex + row * description.Stride;
 
-                Marshal.Copy(source + offset, _pixels, row * rowBytes, rowBytes);
+                    Marshal.Copy(source + offset, _pixels, row * rowBytes, rowBytes);
+                }
             }
 
             _width = width;
             _height = height;
             BuildPreview(width, height);
+            _frameVersion++;
         }
+    }
+
+    /// <summary>每 5 秒记录一次真实采集帧率，方便确认“慢”是不是设备/弱光导致的掉帧。</summary>
+    private void LogFrameRate()
+    {
+        var count = Interlocked.Increment(ref _fpsFrames);
+        var now = Environment.TickCount64;
+        var start = Interlocked.Read(ref _fpsWindowStart);
+
+        if (start == 0)
+        {
+            Interlocked.CompareExchange(ref _fpsWindowStart, now, 0);
+            return;
+        }
+
+        var elapsed = now - start;
+
+        if (elapsed < 5000)
+            return;
+
+        if (Interlocked.CompareExchange(ref _fpsWindowStart, now, start) != start)
+            return;
+
+        Interlocked.Exchange(ref _fpsFrames, 0);
+        App.Log.Info($"[camera] 实际采集 {count * 1000.0 / elapsed:0.#}fps");
     }
 
     /// <summary>
     /// 生成 640 宽以内的预览帧。预览窗口很小，没必要每次把整张 1080p/720p
-    /// 拷到 UI 线程；这里在采集线程做最邻近缩小，UI 每帧只搬几十 KB。
+    /// 拷到 UI 线程；这里在采集线程做缩小，UI 每帧只搬几十 KB。
+    /// 用 Skia 的原生缩放，避免 C# 逐像素循环在采集回调里占满 CPU。
     /// </summary>
     private void BuildPreview(int width, int height)
     {
@@ -232,24 +358,32 @@ internal sealed class CameraCapture : IDisposable
             _previewPixels = new byte[previewWidth * previewHeight * 4];
         }
 
-        var sourceStride = width * 4;
-        var targetStride = previewWidth * 4;
+        var sourceHandle = GCHandle.Alloc(_pixels, GCHandleType.Pinned);
+        var targetHandle = GCHandle.Alloc(_previewPixels, GCHandleType.Pinned);
 
-        for (var y = 0; y < previewHeight; y++)
+        try
         {
-            var sourceRow = (int)((long)y * height / previewHeight) * sourceStride;
-            var targetRow = y * targetStride;
+            using var sourceBitmap = new SKBitmap();
+            using var targetBitmap = new SKBitmap();
 
-            for (var x = 0; x < previewWidth; x++)
-            {
-                var sourceOffset = sourceRow + (int)((long)x * width / previewWidth) * 4;
-                var targetOffset = targetRow + x * 4;
+            sourceBitmap.InstallPixels(
+                new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul),
+                sourceHandle.AddrOfPinnedObject(),
+                width * 4);
 
-                _previewPixels[targetOffset] = _pixels[sourceOffset];
-                _previewPixels[targetOffset + 1] = _pixels[sourceOffset + 1];
-                _previewPixels[targetOffset + 2] = _pixels[sourceOffset + 2];
-                _previewPixels[targetOffset + 3] = _pixels[sourceOffset + 3];
-            }
+            targetBitmap.InstallPixels(
+                new SKImageInfo(previewWidth, previewHeight, SKColorType.Bgra8888, SKAlphaType.Premul),
+                targetHandle.AddrOfPinnedObject(),
+                previewWidth * 4);
+
+            sourceBitmap.ScalePixels(
+                targetBitmap,
+                new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.None));
+        }
+        finally
+        {
+            sourceHandle.Free();
+            targetHandle.Free();
         }
     }
 
