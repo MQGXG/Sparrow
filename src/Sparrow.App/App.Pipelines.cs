@@ -383,11 +383,31 @@ public partial class App
         return (modifiers, virtualKey);
     }
 
-    private static Task WaitForClosedAsync(Window window)
+    private static async Task WaitForClosedAsync(Window window)
     {
-        var completion = new TaskCompletionSource<bool>();
-        window.Closed += (_, _) => completion.TrySetResult(true);
-        return completion.Task;
+        var completion = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        void OnClosed(object? _, EventArgs __) => completion.TrySetResult(true);
+
+        window.Closed += OnClosed;
+
+        // 窗口若被 Hide / 异常销毁而从未触发 Closed，无限期等待会把 async void
+        // 状态机连同冻结帧、结果 PNG 永久挂住。给一个宽松的兜底，保证状态机
+        // 一定会结束；正常关窗走 Closed 分支，超时只在异常路径生效。
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(30));
+
+        try
+        {
+            await Task.WhenAny(
+                completion.Task,
+                Task.Delay(Timeout.InfiniteTimeSpan, timeout.Token)).ConfigureAwait(true);
+        }
+        finally
+        {
+            // 无论正常关闭还是超时兜底，都断开订阅，避免窗口残留委托。
+            window.Closed -= OnClosed;
+        }
     }
 
     /// <summary>预建 UIA 树前把目标浏览器窗口提到前台，Chromium 才会构建网页无障碍树。</summary>

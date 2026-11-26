@@ -1024,7 +1024,31 @@ public partial class CaptureWindow : Window
         _ocrCancellation?.Cancel();
         _ocrCancellation?.Dispose();
         _ocrCancellation = null;
-        _groupShowTimer?.Stop();
+        // 三个 DispatcherTimer 都由全局 Dispatcher 持有，Tick 委托捕获 this。
+        // 关窗必须全部 Stop + 解绑 + 置 null：只要有一个还在跑，Dispatcher 就会
+        // 通过 Timer → Tick → 窗口 强引用住整个视觉树和 4K 冻结帧，后面的
+        // Dispose()/LOH 压缩全部白做（反复开关截图窗口内存不回落的主因）。
+        if (_groupShowTimer is { } groupShowTimer)
+        {
+            groupShowTimer.Stop();
+            groupShowTimer.Tick -= OnGroupShowTimerTick;
+            _groupShowTimer = null;
+        }
+
+        if (_groupCloseTimer is { } groupCloseTimer)
+        {
+            groupCloseTimer.Stop();
+            groupCloseTimer.Tick -= OnGroupCloseTimerTick;
+            _groupCloseTimer = null;
+        }
+
+        // _recordTimer 的 Tick 是内联 lambda，无法显式解绑；Stop 之后 Dispatcher
+        // 不再持有该 timer，timer 与 lambda 成为可回收的孤岛，置 null 即可。
+        if (_recordTimer is { } recordTimer)
+        {
+            recordTimer.Stop();
+            _recordTimer = null;
+        }
 
         var releasedBytes = (_frozenPixels?.Length ?? 0)
             + (long)_frozenWidth * _frozenHeight * 4;
@@ -1038,6 +1062,10 @@ public partial class CaptureWindow : Window
         _annotationBitmap = null;
 
         TrimFreezeMemory(releasedBytes);
+
+        // 工具窗口关闭时顺带丢掉图片缓存引用（Clear 只清引用、不主动 Dispose，
+        // 位图仍被 Image.Source 引用时不会渲染崩溃），让缓存高位尽快回落。
+        ImageCache.Instance.Clear();
 
         base.OnClosed(e);
     }

@@ -483,12 +483,14 @@ internal sealed class RecordingSession : IDisposable
             // 停止失败也要尽量释放原生资源。
         }
 
-        _encoder.Abandon();
-        _audio?.Dispose();
-        _wav?.Dispose();
-        _watermark?.Dispose();
-        _source.Dispose();
-        _cts.Dispose();
+        // 逐项释放：任何一个原生资源抛异常都不能跳过后面的释放，
+        // 尤其是 _source（WGC 帧池 + 33MB LOH 帧缓冲）。
+        DisposeQuietly(_encoder.Abandon);
+        DisposeQuietly(() => { _audio?.Dispose(); });
+        DisposeQuietly(() => { _wav?.Dispose(); });
+        DisposeQuietly(() => { _watermark?.Dispose(); });
+        DisposeQuietly(_source.Dispose);
+        DisposeQuietly(_cts.Dispose);
 
         TryDelete(_videoPath);
         TryDelete(_options.OutputPath + ".wav");
@@ -511,18 +513,35 @@ internal sealed class RecordingSession : IDisposable
 
         // 失败路径不再调 finalize：没有完整帧序时 DoFinalize 可能长时间阻塞。
         if (State == RecordingState.Faulted)
-            _encoder.Abandon();
+            DisposeQuietly(_encoder.Abandon);
         else
-            _encoder.Dispose();
+            DisposeQuietly(_encoder.Dispose);
 
-        _audio?.Dispose();
-        _wav?.Dispose();
-        _watermark?.Dispose();
-        _source.Dispose();
-        _cts.Dispose();
+        DisposeQuietly(() => { _audio?.Dispose(); });
+        DisposeQuietly(() => { _wav?.Dispose(); });
+        DisposeQuietly(() => { _watermark?.Dispose(); });
+        DisposeQuietly(_source.Dispose);
+        DisposeQuietly(_cts.Dispose);
 
         // 正常完成后 FinalizeOutput 已清理；失败/取消时兜底删除临时文件。
         TryDelete(_videoPath);
         TryDelete(_options.OutputPath + ".wav");
+    }
+
+    /// <summary>
+    /// 单项释放失败不阻断其余项。原实现里 _encoder / _audio 若抛异常，
+    /// 后面的 _source.Dispose() 会被整段跳过，WGC 会话、帧池与 33MB
+    /// 帧缓冲就常驻到进程退出（录屏失败后 LOH 高水位不回落的原因）。
+    /// </summary>
+    private static void DisposeQuietly(Action dispose)
+    {
+        try
+        {
+            dispose();
+        }
+        catch
+        {
+            // 忽略单项失败，继续释放剩余资源。
+        }
     }
 }

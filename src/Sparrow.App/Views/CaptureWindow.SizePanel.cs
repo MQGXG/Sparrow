@@ -83,7 +83,8 @@ public partial class CaptureWindow
     /// <summary>把输入框里的数值应用到选区：左上角不动，超出窗口就钳制。</summary>
     internal void CommitSizeEdit(int axis)
     {
-        if (_sizeEditGuard || !_hasSelection)
+        // 纯标注模式的图片尺寸固定，X/Y/宽高/比例输入都会让选区与底图脱节
+        if (AnnotationOnly || _sizeEditGuard || !_hasSelection)
             return;
 
         // 圆角不是几何，单独处理
@@ -185,6 +186,10 @@ public partial class CaptureWindow
     /// </summary>
     internal void ApplyRatioPreset(double ratio, string label)
     {
+        // 纯标注模式的图片尺寸固定，改宽高比会让选区与底图脱节
+        if (AnnotationOnly)
+            return;
+
         _ratioPreset = ratio;
         RatioButton.Content = label;
 

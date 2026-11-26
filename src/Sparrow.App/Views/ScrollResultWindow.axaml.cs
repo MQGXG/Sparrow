@@ -93,6 +93,10 @@ public partial class ScrollResultWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        // 关窗顺带丢掉图片缓存引用（Clear 不主动 Dispose，位图仍被
+        // Image.Source 引用时不会崩）；让工具窗口关闭后内存能回落。
+        ImageCache.Instance.Clear();
+
         _bitmap?.Dispose();
         _bitmap = null;
         base.OnClosed(e);

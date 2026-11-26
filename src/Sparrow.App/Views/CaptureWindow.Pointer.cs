@@ -213,6 +213,24 @@ public partial class CaptureWindow
 
         if (_hasSelection)
         {
+            // 纯标注模式：图片就是选区，只允许整体平移（底图跟着一起动）。
+            // 缩放手柄、吸附线、「框外重新框选」都会改选区尺寸或位置，
+            // 让居中的图片与选区脱节，这里一律挡掉。
+            if (AnnotationOnly)
+            {
+                if (_selection.Contains(point))
+                {
+                    _mode = DragMode.Move;
+                    _dragOrigin = point;
+                    _selectionOrigin = _selection;
+                    HideTextEditor();
+                    Cursor = MoveCursor;
+                }
+
+                e.Handled = true;
+                return;
+            }
+
             var handle = HitHandle(point);
             if (handle != ResizeHandle.None)
             {
@@ -355,7 +373,8 @@ public partial class CaptureWindow
                 return;
             case DragMode.Move:
                 ApplyMove(point);
-                UpdateMagnifier(point);
+                if (!AnnotationOnly)
+                    UpdateMagnifier(point);
                 e.Handled = true;
                 return;
             case DragMode.Resize:
@@ -553,10 +572,15 @@ public partial class CaptureWindow
         }
         else
         {
-            // 移动/拉伸结束：动作栏跟着新位置走
-            UpdateSizeBadge(_selection);
-            PositionActionBar(_selection);
-            UpdateHandles();
+            // 纯标注模式：整体平移结束不刷新选区尺寸/手柄，工具条也不跟随
+            // 选区（用户可自由拖动），否则刚隐藏的选区 UI 会又被显示出来。
+            if (!AnnotationOnly)
+            {
+                // 移动/拉伸结束：动作栏跟着新位置走
+                UpdateSizeBadge(_selection);
+                PositionActionBar(_selection);
+                UpdateHandles();
+            }
 
             // 边框临时让位的绘图工具在这里恢复
             if (_toolBeforeResize is { } previous)
@@ -565,8 +589,11 @@ public partial class CaptureWindow
                 ForceTool(previous);
             }
 
-            // 几何真的变了才进撤销栈；快照是拖动开始前的选区 + 标注
-            if (_notesBeforeDrag is { } notesBefore && _selection != _selectionOrigin)
+            // 几何真的变了才进撤销栈；快照是拖动开始前的选区 + 标注。
+            // 标注模式不压栈：选区就是图片矩形，撤销不该把它挪回去。
+            if (!AnnotationOnly
+                && _notesBeforeDrag is { } notesBefore
+                && _selection != _selectionOrigin)
             {
                 _selectionUndo.Push(new SelectionSnapshot(_selectionOrigin, notesBefore));
                 _selectionRedo.Clear();

@@ -46,6 +46,28 @@ public partial class WatermarkEditorWindow : Window
         };
     }
 
+    /// <summary>
+    /// 替换水印位图：先断开 Image.Source 引用，再释放旧位图。
+    /// Avalonia 的 Bitmap 是 native 内存，GC 看不见真实占用，只置 null 会让
+    /// 每张 4K 图留在 finalizer 队列里，反复换图 / 开关窗口工作集只涨不跌。
+    /// </summary>
+    private void SetWatermarkImage(Bitmap? bitmap)
+    {
+        var previous = WatermarkImage.Source;
+        WatermarkImage.Source = bitmap;
+        WatermarkImage.IsVisible = bitmap is not null;
+
+        if (previous is IDisposable disposable && !ReferenceEquals(previous, bitmap))
+            disposable.Dispose();
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        // 关窗时立刻释放当前水印位图，不等 finalizer。
+        SetWatermarkImage(null);
+        base.OnClosed(e);
+    }
+
     private void ApplyLayout(WatermarkLayout layout)
     {
         _imagePath = layout.ImagePath;
@@ -59,21 +81,18 @@ public partial class WatermarkEditorWindow : Window
         {
             try
             {
-                WatermarkImage.Source = new Bitmap(layout.ImagePath);
-                WatermarkImage.IsVisible = true;
+                SetWatermarkImage(new Bitmap(layout.ImagePath));
             }
             catch
             {
                 _imagePath = "";
-                WatermarkImage.Source = null;
-                WatermarkImage.IsVisible = false;
+                SetWatermarkImage(null);
             }
         }
         else
         {
             _imagePath = "";
-            WatermarkImage.Source = null;
-            WatermarkImage.IsVisible = false;
+            SetWatermarkImage(null);
         }
     }
 
@@ -173,8 +192,7 @@ public partial class WatermarkEditorWindow : Window
 
         try
         {
-            WatermarkImage.Source = new Bitmap(path);
-            WatermarkImage.IsVisible = true;
+            SetWatermarkImage(new Bitmap(path));
             _imagePath = path;
         }
         catch
@@ -186,8 +204,7 @@ public partial class WatermarkEditorWindow : Window
     private void OnClearImage(object? sender, RoutedEventArgs e)
     {
         _imagePath = "";
-        WatermarkImage.Source = null;
-        WatermarkImage.IsVisible = false;
+        SetWatermarkImage(null);
     }
 
     private void OnConfirm(object? sender, RoutedEventArgs e)

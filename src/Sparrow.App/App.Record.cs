@@ -158,11 +158,30 @@ public partial class App
         var bar = new RecordingBarWindow(session, region);
         _recordingBar = bar;
 
+        // 收尾统一挂在 Closed：停止 / 取消 / Completed / Faulted、以及异常路径
+        //（StopAsync 抛异常、用户直接关控制条）最终都会关闭窗口，保证 WGC 会话、
+        // 帧池、ffmpeg 句柄和 33MB 帧缓冲必达释放。Dispose 内含
+        // _worker.Wait(3s)，必须放到后台线程，否则停止录制时 UI 会冻结数秒。
+        bar.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_recordingBar, bar))
+                _recordingBar = null;
+
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    session.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn($"[record] 释放录制会话失败：{ex.Message}");
+                }
+            });
+        };
+
         bar.Finished += (path, copied) =>
         {
-            _recordingBar = null;
-            session.Dispose();
-
             if (path is null)
             {
                 _toasts?.Show("已取消录制。");
