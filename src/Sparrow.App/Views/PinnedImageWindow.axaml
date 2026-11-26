@@ -8,12 +8,13 @@
         CanResize="False"
         Background="Transparent"
         TransparencyLevelHint="Transparent"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        RequestedThemeVariant="Dark">
 
   <Grid>
-    <Border BorderBrush="{StaticResource AccentBorderBrush}"
+    <Border BorderBrush="{DynamicResource AccentBorderBrush}"
             BorderThickness="1"
-            Background="{StaticResource BgBrush}"
+            Background="{DynamicResource BgBrush}"
             Cursor="SizeAll"
             BoxShadow="0 8 24 0 #99000000">
       <Image x:Name="Preview" Stretch="Uniform" />
@@ -29,7 +30,7 @@
             Height="26"
             Padding="0"
             CornerRadius="13"
-            Background="{StaticResource OverlayBrush}"
+            Background="{DynamicResource OverlayBrush}"
             ToolTip.Tip="启用标注模式"
             Click="OnAnnotateClick">
       <Path Data="{StaticResource IconPen}"
@@ -51,7 +52,7 @@
             Height="26"
             Padding="0"
             CornerRadius="13"
-            Background="{StaticResource DangerBrush}"
+            Background="{DynamicResource DangerBrush}"
             Foreground="White"
             FontSize="12"
             Content="✕"

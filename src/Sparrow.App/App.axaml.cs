@@ -118,6 +118,10 @@ public partial class App : Application
         _settingsStore = settingsStore;
         _appSettings = settings;
 
+        // 外观要在创建任何窗口之前应用，避免启动时先深后浅闪一下。
+        // 默认 dark，与历史版本外观一致。
+        ThemeService.Apply(settings.Appearance);
+
         // 工具热键：settings.json 的 toolHotkeys（工具 ID → 热键），格式错误只会跳过该条
         var toolHotkeyPlans = ToolHotkeyPlanner.Build(settings.ToolHotkeys, log);
 
@@ -188,6 +192,13 @@ public partial class App : Application
         var startup = new StartupService(log);
         var settingsViewModel = new SettingsViewModel(_catalog, settingsStore, startup, settings, ai, aiSecrets, _localModels);
         _settingsViewModel = settingsViewModel;
+
+        // 设置页 / 顶栏切换外观：即时换肤，并同步宿主持有的设置快照
+        settingsViewModel.AppearanceChanged += appearance =>
+        {
+            _appSettings = _appSettings with { Appearance = appearance };
+            ThemeService.Apply(appearance);
+        };
 
         // 设置页的状态提示统一转成 toast（页面本身不再常驻一行文字）
         settingsViewModel.PropertyChanged += (_, e) =>

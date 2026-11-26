@@ -24,8 +24,13 @@ public sealed class Win32WindowPinApi : IWindowPinApi
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetWindowTextW(IntPtr hWnd, StringBuilder text, int maxCount);
 
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+    // 64 位进程必须走 GetWindowLongPtrW；用 32 位入口读 GWL_EXSTYLE
+    // 在部分窗口上会拿到被截断的值，导致「已置顶」被误判成「未置顶」。
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
+    private static extern int GetWindowLong32(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+    private static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool SetWindowPos(
@@ -43,6 +48,11 @@ public sealed class Win32WindowPinApi : IWindowPinApi
         title = buffer.ToString();
         return !string.IsNullOrWhiteSpace(title);
     }
+
+    private static long GetWindowLong(IntPtr hWnd, int nIndex) =>
+        IntPtr.Size == 8
+            ? GetWindowLongPtr64(hWnd, nIndex).ToInt64()
+            : GetWindowLong32(hWnd, nIndex);
 
     public bool IsTopMost(nint handle) =>
         (GetWindowLong(handle, GwlExStyle) & WsExTopMost) != 0;

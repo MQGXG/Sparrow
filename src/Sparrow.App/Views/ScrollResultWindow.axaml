@@ -11,12 +11,13 @@
         CanResize="True"
         WindowStartupLocation="CenterScreen"
         Background="Transparent"
-        TransparencyLevelHint="Transparent">
+        TransparencyLevelHint="Transparent"
+        RequestedThemeVariant="Dark">
 
   <!-- 无边框悬浮面板：不再是系统窗口的样子 -->
   <Grid Margin="10">
-    <Border Background="{StaticResource BgBrush}"
-            BorderBrush="{StaticResource LineStrongBrush}"
+    <Border Background="{DynamicResource BgBrush}"
+            BorderBrush="{DynamicResource LineStrongBrush}"
             BorderThickness="1"
             CornerRadius="12"
             ClipToBounds="True"
@@ -37,7 +38,7 @@
           <TextBlock Text="滚动截图"
                      FontSize="14"
                      FontWeight="SemiBold"
-                     Foreground="{StaticResource TextPrimaryBrush}" />
+                     Foreground="{DynamicResource TextPrimaryBrush}" />
           <TextBlock x:Name="SizeText"
                      Classes="num" />
         </StackPanel>
@@ -61,13 +62,13 @@
             ColumnSpacing="10"
             Margin="16,12,16,0">
         <Border Background="#FF0B0E13"
-                BorderBrush="{StaticResource LineBrush}"
+                BorderBrush="{DynamicResource LineBrush}"
                 BorderThickness="1"
                 CornerRadius="8"
                 Padding="8"
                 ClipToBounds="True">
           <Panel>
-            <Border Background="{StaticResource DotGridBrush}" IsHitTestVisible="False" />
+            <Border Background="{DynamicResource DotGridBrush}" IsHitTestVisible="False" />
             <ScrollViewer HorizontalScrollBarVisibility="Disabled"
                           VerticalScrollBarVisibility="Auto">
               <Image x:Name="Preview"
@@ -79,7 +80,7 @@
 
         <Border Grid.Column="1"
                 Background="#FF0B0E13"
-                BorderBrush="{StaticResource LineBrush}"
+                BorderBrush="{DynamicResource LineBrush}"
                 BorderThickness="1"
                 CornerRadius="8"
                 Padding="6"
@@ -101,11 +102,11 @@
               <Border x:Name="TrimTopHandle"
                       Height="8"
                       CornerRadius="2"
-                      Background="{StaticResource AccentBrush}" />
+                      Background="{DynamicResource AccentBrush}" />
               <Border x:Name="TrimBottomHandle"
                       Height="8"
                       CornerRadius="2"
-                      Background="{StaticResource AccentBrush}" />
+                      Background="{DynamicResource AccentBrush}" />
             </Canvas>
           </Grid>
         </Border>
@@ -114,7 +115,7 @@
       <!-- 动作条 -->
       <Border Grid.Row="3"
               Background="#FF0B0E13"
-              BorderBrush="{StaticResource LineBrush}"
+              BorderBrush="{DynamicResource LineBrush}"
               BorderThickness="0,1,0,0"
               Margin="0,12,0,0"
               Padding="16,10">

@@ -20,6 +20,26 @@
       <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     </Style>
+
+    <!-- 外观三态预览卡：卡片里的迷你窗口用固定色，避免跟着主题变了反而分不清 -->
+    <Style Selector="Button.appearance-card">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="8" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.appearance-card:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource LineStrongBrush}" />
+    </Style>
+    <Style Selector="Button.appearance-card.appearance-selected">
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+    </Style>
   </UserControl.Styles>
 
   <Grid RowDefinitions="Auto,*">
@@ -107,10 +127,10 @@
             <TextBlock Text="插件"
                        FontSize="13"
                        FontWeight="SemiBold"
-                       Foreground="{StaticResource TextPrimaryBrush}" />
+                       Foreground="{DynamicResource TextPrimaryBrush}" />
             <TextBlock Text="插件目录里的工具；复制新插件后点「重新扫描」即可生效"
                        FontSize="11"
-                       Foreground="{StaticResource TextMutedBrush}"
+                       Foreground="{DynamicResource TextMutedBrush}"
                        TextWrapping="Wrap" />
           </StackPanel>
           <TextBlock Grid.Column="2"
@@ -141,7 +161,7 @@
             <ItemsControl ItemsSource="{Binding Plugins}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:PluginItemViewModel">
-                  <Border Background="{StaticResource SurfaceRaisedBrush}"
+                  <Border Background="{DynamicResource SurfaceRaisedBrush}"
                           CornerRadius="2"
                           Padding="14,12">
                     <Grid ColumnDefinitions="*,Auto,Auto,Auto">
@@ -149,11 +169,11 @@
                         <TextBlock Text="{Binding Name}"
                                    FontSize="13"
                                    FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextPrimaryBrush}" />
+                                   Foreground="{DynamicResource TextPrimaryBrush}" />
                         <TextBlock Text="{Binding Id}"
                                    FontFamily="{StaticResource MonoFont}"
                                    FontSize="11"
-                                   Foreground="{StaticResource TextMutedBrush}" />
+                                   Foreground="{DynamicResource TextMutedBrush}" />
                       </StackPanel>
 
                       <TextBlock Grid.Column="1"
@@ -169,10 +189,10 @@
                                   VerticalAlignment="Center">
                         <TextBlock Text="{Binding ToolCount}"
                                    FontSize="11"
-                                   Foreground="{StaticResource TextSecondaryBrush}" />
+                                   Foreground="{DynamicResource TextSecondaryBrush}" />
                         <TextBlock Text="个工具"
                                    FontSize="11"
-                                   Foreground="{StaticResource TextMutedBrush}" />
+                                   Foreground="{DynamicResource TextMutedBrush}" />
                       </StackPanel>
 
                       <ToggleSwitch Grid.Column="3"
@@ -202,10 +222,10 @@
                 <TextBlock Text="离线模型"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="下载后无需 API Key、不需要联网；只在工具使用时加载"
                            FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}"
+                           Foreground="{DynamicResource TextMutedBrush}"
                            TextWrapping="Wrap" />
               </StackPanel>
               <TextBlock Grid.Column="2"
@@ -235,7 +255,7 @@
                           IsVisible="{Binding HasLocalModels}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:LocalModelItemViewModel">
-                  <Border Background="{StaticResource SurfaceRaisedBrush}"
+                  <Border Background="{DynamicResource SurfaceRaisedBrush}"
                           CornerRadius="2"
                           Padding="14,12"
                           Margin="0,0,0,8">
@@ -245,10 +265,10 @@
                           <TextBlock Text="{Binding Name}"
                                      FontSize="13"
                                      FontWeight="SemiBold"
-                                     Foreground="{StaticResource TextPrimaryBrush}"
+                                     Foreground="{DynamicResource TextPrimaryBrush}"
                                      VerticalAlignment="Center" />
-                          <Border Background="{StaticResource AccentSoftBrush}"
-                                  BorderBrush="{StaticResource AccentBorderBrush}"
+                          <Border Background="{DynamicResource AccentSoftBrush}"
+                                  BorderBrush="{DynamicResource AccentBorderBrush}"
                                   BorderThickness="1"
                                   CornerRadius="2"
                                   Padding="6,1"
@@ -256,36 +276,36 @@
                                   VerticalAlignment="Center">
                             <TextBlock Text="已下载"
                                        FontSize="10"
-                                       Foreground="{StaticResource AccentBrush}" />
+                                       Foreground="{DynamicResource AccentBrush}" />
                           </Border>
                         </StackPanel>
 
                         <TextBlock Text="{Binding Description}"
                                    FontSize="11"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
                                    TextWrapping="Wrap" />
 
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <TextBlock Text="{Binding SizeText}"
                                      FontSize="11"
-                                     Foreground="{StaticResource TextMutedBrush}" />
+                                     Foreground="{DynamicResource TextMutedBrush}" />
                           <TextBlock Text="·"
                                      FontSize="11"
-                                     Foreground="{StaticResource TextMutedBrush}" />
+                                     Foreground="{DynamicResource TextMutedBrush}" />
                           <TextBlock Text="{Binding MemoryText}"
                                      FontSize="11"
-                                     Foreground="{StaticResource TextMutedBrush}" />
+                                     Foreground="{DynamicResource TextMutedBrush}" />
                           <TextBlock Text="·"
                                      FontSize="11"
-                                     Foreground="{StaticResource TextMutedBrush}" />
+                                     Foreground="{DynamicResource TextMutedBrush}" />
                           <TextBlock Text="{Binding StateText}"
                                      FontSize="11"
-                                     Foreground="{StaticResource TextMutedBrush}" />
+                                     Foreground="{DynamicResource TextMutedBrush}" />
                         </StackPanel>
 
                         <TextBlock Text="{Binding License}"
                                    FontSize="10"
-                                   Foreground="{StaticResource TextMutedBrush}"
+                                   Foreground="{DynamicResource TextMutedBrush}"
                                    TextWrapping="Wrap" />
                       </StackPanel>
 
@@ -317,7 +337,7 @@
 
             <TextBlock Margin="20,0,20,14"
                        FontSize="11"
-                       Foreground="{StaticResource TextMutedBrush}"
+                       Foreground="{DynamicResource TextMutedBrush}"
                        TextWrapping="Wrap"
                        IsVisible="{Binding HasLocalModels}"
                        Text="模型存放在 %LocalAppData%\Sparrow\models，删除会释放磁盘空间。" />
@@ -345,10 +365,10 @@
                 <TextBlock Text="搜索面板"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="唤出命令面板"
                            FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
               <TextBox x:Name="SearchHotkeyBox"
                        Grid.Column="1"
@@ -367,10 +387,10 @@
                 <TextBlock Text="截图识别"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="选区截图与文字识别"
                            FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
               <TextBox Grid.Column="1"
                        Width="260"
@@ -388,10 +408,10 @@
                 <TextBlock Text="屏幕录制"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="开始/停止录制"
                            FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
               <TextBox Grid.Column="1"
                        Width="260"
@@ -409,15 +429,15 @@
               <TextBlock Text="截图窗口内快捷键"
                          FontSize="13"
                          FontWeight="SemiBold"
-                         Foreground="{StaticResource TextPrimaryBrush}" />
+                         Foreground="{DynamicResource TextPrimaryBrush}" />
               <TextBlock Text="单键或 Ctrl+组合；留空表示禁用该快捷键"
                          FontSize="11"
-                         Foreground="{StaticResource TextMutedBrush}" />
+                         Foreground="{DynamicResource TextMutedBrush}" />
             </StackPanel>
 
             <Grid ColumnDefinitions="*,Auto" Margin="20,10">
               <TextBlock Text="识别文字" VerticalAlignment="Center"
-                         Foreground="{StaticResource TextPrimaryBrush}" />
+                         Foreground="{DynamicResource TextPrimaryBrush}" />
               <TextBox Grid.Column="1" Width="260" IsReadOnly="True" Tag="hotkey"
                        ToolTip.Tip="点击后直接按组合键；Backspace 清空"
                        PlaceholderText="留空禁用"
@@ -428,7 +448,7 @@
 
             <Grid ColumnDefinitions="*,Auto" Margin="20,10">
               <TextBlock Text="翻译（识别并出译文）" VerticalAlignment="Center"
-                         Foreground="{StaticResource TextPrimaryBrush}" />
+                         Foreground="{DynamicResource TextPrimaryBrush}" />
               <TextBox Grid.Column="1" Width="260" IsReadOnly="True" Tag="hotkey"
                        ToolTip.Tip="点击后直接按组合键；Backspace 清空"
                        PlaceholderText="留空禁用"
@@ -439,7 +459,7 @@
 
             <Grid ColumnDefinitions="*,Auto" Margin="20,10">
               <TextBlock Text="复制图片" VerticalAlignment="Center"
-                         Foreground="{StaticResource TextPrimaryBrush}" />
+                         Foreground="{DynamicResource TextPrimaryBrush}" />
               <TextBox Grid.Column="1" Width="260" IsReadOnly="True" Tag="hotkey"
                        ToolTip.Tip="点击后直接按组合键；Backspace 清空"
                        PlaceholderText="留空禁用"
@@ -450,7 +470,7 @@
 
             <Grid ColumnDefinitions="*,Auto" Margin="20,10">
               <TextBlock Text="保存" VerticalAlignment="Center"
-                         Foreground="{StaticResource TextPrimaryBrush}" />
+                         Foreground="{DynamicResource TextPrimaryBrush}" />
               <TextBox Grid.Column="1" Width="260" IsReadOnly="True" Tag="hotkey"
                        ToolTip.Tip="点击后直接按组合键；Backspace 清空"
                        PlaceholderText="留空禁用"
@@ -461,7 +481,7 @@
 
             <Grid ColumnDefinitions="*,Auto" Margin="20,10">
               <TextBlock Text="固定到屏幕" VerticalAlignment="Center"
-                         Foreground="{StaticResource TextPrimaryBrush}" />
+                         Foreground="{DynamicResource TextPrimaryBrush}" />
               <TextBox Grid.Column="1" Width="260" IsReadOnly="True" Tag="hotkey"
                        ToolTip.Tip="点击后直接按组合键；Backspace 清空"
                        PlaceholderText="留空禁用"
@@ -472,7 +492,7 @@
 
             <Grid ColumnDefinitions="*,Auto" Margin="20,10">
               <TextBlock Text="滚动截图" VerticalAlignment="Center"
-                         Foreground="{StaticResource TextPrimaryBrush}" />
+                         Foreground="{DynamicResource TextPrimaryBrush}" />
               <TextBox Grid.Column="1" Width="260" IsReadOnly="True" Tag="hotkey"
                        ToolTip.Tip="点击后直接按组合键；Backspace 清空"
                        PlaceholderText="留空禁用"
@@ -483,7 +503,7 @@
 
             <Grid ColumnDefinitions="*,Auto" Margin="20,10">
               <TextBlock Text="取色" VerticalAlignment="Center"
-                         Foreground="{StaticResource TextPrimaryBrush}" />
+                         Foreground="{DynamicResource TextPrimaryBrush}" />
               <TextBox Grid.Column="1" Width="260" IsReadOnly="True" Tag="hotkey"
                        ToolTip.Tip="点击后直接按组合键；Backspace 清空"
                        PlaceholderText="留空禁用"
@@ -494,7 +514,7 @@
 
             <Grid ColumnDefinitions="*,Auto" Margin="20,10">
               <TextBlock Text="识别框显示方式" VerticalAlignment="Center"
-                         Foreground="{StaticResource TextPrimaryBrush}" />
+                         Foreground="{DynamicResource TextPrimaryBrush}" />
               <TextBox Grid.Column="1" Width="260" IsReadOnly="True" Tag="hotkey"
                        ToolTip.Tip="点击后直接按组合键；Backspace 清空"
                        PlaceholderText="留空禁用"
@@ -508,12 +528,12 @@
                 <TextBlock Text="窗口元素 API"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="识别光标下的控件（图标 / 按钮 / 列表项）；自动 = UIA 优先，MSAA 兜底"
                            FontSize="11"
                            MaxWidth="520"
                            TextWrapping="Wrap"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
               <ComboBox Grid.Column="1"
                         Width="260"
@@ -535,12 +555,12 @@
                 <TextBlock Text="截图捕获 API"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="取帧方式；自动 = 平时 GDI、HDR 显示器用 WGC。WGC 跨屏时逐屏抓取再拼接"
                            FontSize="11"
                            MaxWidth="520"
                            TextWrapping="Wrap"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
               <ComboBox Grid.Column="1"
                         Width="260"
@@ -562,12 +582,12 @@
                 <TextBlock Text="选区边框颜色"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="选区、十字辅助线和悬停候选框共用的强调色"
                            FontSize="11"
                            MaxWidth="520"
                            TextWrapping="Wrap"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
               <ComboBox Grid.Column="1"
                         Width="260"
@@ -589,12 +609,12 @@
                 <TextBlock Text="显示光标"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="在新的普通截图中画上鼠标光标；滚动截图始终不画，避免每帧重复"
                            FontSize="11"
                            MaxWidth="520"
                            TextWrapping="Wrap"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
               <ToggleSwitch Grid.Column="1"
                             OnContent="开"
@@ -610,12 +630,12 @@
                 <TextBlock Text="滚动截图时捕获界面"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="在拼接结果中包含滚动截图窗口及其工具栏；关闭后这些窗口会从取帧中排除"
                            FontSize="11"
                            MaxWidth="520"
                            TextWrapping="Wrap"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
               <ToggleSwitch Grid.Column="1"
                             OnContent="开"
@@ -631,12 +651,12 @@
                 <TextBlock Text="还原屏幕原始颜色"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="还原 Windows 放大镜的全屏颜色滤镜（反色 / 灰度等）；WGC 取帧本来就是原始颜色"
                            FontSize="11"
                            MaxWidth="520"
                            TextWrapping="Wrap"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
               <ToggleSwitch Grid.Column="1"
                             OnContent="开"
@@ -652,10 +672,10 @@
                 <TextBlock Text="剪贴板面板"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="只呼出搜索与列表，双击 / 回车直接复制"
                            FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
               <TextBox x:Name="ClipboardPanelHotkeyBox"
                        Grid.Column="1"
@@ -677,10 +697,10 @@
                   <TextBlock Text="工具热键"
                              FontSize="12"
                              FontWeight="SemiBold"
-                             Foreground="{StaticResource TextPrimaryBrush}" />
+                             Foreground="{DynamicResource TextPrimaryBrush}" />
                   <TextBlock Text="留空 = 不绑定；按下直接执行，不打开面板"
                              FontSize="11"
-                             Foreground="{StaticResource TextMutedBrush}" />
+                             Foreground="{DynamicResource TextMutedBrush}" />
                 </StackPanel>
               </Grid>
 
@@ -690,7 +710,7 @@
                     <Grid ColumnDefinitions="*,Auto" Margin="0,5">
                       <TextBlock Text="{Binding Name}"
                                  FontSize="12"
-                                 Foreground="{StaticResource TextSecondaryBrush}"
+                                 Foreground="{DynamicResource TextSecondaryBrush}"
                                  VerticalAlignment="Center" />
                       <TextBox Grid.Column="1"
                                Width="260"
@@ -710,7 +730,7 @@
             <Grid Margin="20,14">
               <TextBlock Text="点输入框后直接按组合键；Backspace 清空；保存后重启应用生效。"
                          FontSize="11"
-                         Foreground="{StaticResource TextMutedBrush}"
+                         Foreground="{DynamicResource TextMutedBrush}"
                          VerticalAlignment="Center" />
               <Button Classes="accent small"
                       Content="保存热键"
@@ -736,6 +756,105 @@
 
         <Border Classes="panel" Padding="0" IsVisible="{Binding IsGeneralSelected}">
           <StackPanel>
+            <!-- 外观：通用分组第一行，三态预览卡 -->
+            <StackPanel Margin="20,14" Spacing="12">
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <Border Classes="hud-icon">
+                  <Path Data="{StaticResource IconSettings}" />
+                </Border>
+                <StackPanel Grid.Column="1" Spacing="3" Margin="12,0,12,0" VerticalAlignment="Center">
+                  <TextBlock Text="外观"
+                             FontSize="13"
+                             FontWeight="SemiBold"
+                             Foreground="{DynamicResource TextPrimaryBrush}" />
+                  <TextBlock Text="深色 / 浅色 / 跟随系统，切换即时生效"
+                             FontSize="11"
+                             Foreground="{DynamicResource TextMutedBrush}" />
+                </StackPanel>
+                <TextBlock Grid.Column="2" Classes="num" Text="// APPEARANCE" VerticalAlignment="Center" />
+              </Grid>
+
+              <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
+                <!-- 跟随系统：左深右浅 -->
+                <Button Classes="appearance-card"
+                        Classes.appearance-selected="{Binding IsSystemAppearance}"
+                        Tag="system"
+                        Click="OnAppearanceClick"
+                        AutomationProperties.Name="跟随系统">
+                  <StackPanel Spacing="8">
+                    <Border Height="52" CornerRadius="5" ClipToBounds="True"
+                            BorderBrush="#33000000" BorderThickness="1">
+                      <Grid ColumnDefinitions="*,*">
+                        <Border Grid.Column="0" Background="#0B0E13" />
+                        <Border Grid.Column="1" Background="#F7F8FA" />
+                        <Border Grid.Column="0" Height="9" VerticalAlignment="Top" Background="#1A212C" />
+                        <Border Grid.Column="1" Height="9" VerticalAlignment="Top" Background="#FFFFFF" />
+                        <Border Grid.ColumnSpan="2" Width="22" Height="3" CornerRadius="1.5"
+                                Background="#E5A44C" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                Margin="8,17,0,0" />
+                        <Border Grid.ColumnSpan="2" Height="7" CornerRadius="2" Background="#2B3543"
+                                HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="8,0,8,9" />
+                      </Grid>
+                    </Border>
+                    <TextBlock Text="跟随系统" FontSize="11" HorizontalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                  </StackPanel>
+                </Button>
+
+                <!-- 浅色 -->
+                <Button Classes="appearance-card"
+                        Classes.appearance-selected="{Binding IsLightAppearance}"
+                        Tag="light"
+                        Click="OnAppearanceClick"
+                        AutomationProperties.Name="浅色">
+                  <StackPanel Spacing="8">
+                    <Border Height="52" CornerRadius="5" ClipToBounds="True"
+                            Background="#F7F8FA" BorderBrush="#33000000" BorderThickness="1">
+                      <Grid>
+                        <Border Height="9" VerticalAlignment="Top" Background="#FFFFFF" />
+                        <Border Width="22" Height="3" CornerRadius="1.5" Background="#E5A44C"
+                                HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8,17,0,0" />
+                        <Border Height="7" CornerRadius="2" Background="#E2E5EA"
+                                HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="8,0,8,9" />
+                        <Border Width="26" Height="18" CornerRadius="3" Background="#FFFFFF"
+                                BorderBrush="#E2E5EA" BorderThickness="1"
+                                HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0" />
+                      </Grid>
+                    </Border>
+                    <TextBlock Text="浅色" FontSize="11" HorizontalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                  </StackPanel>
+                </Button>
+
+                <!-- 深色 -->
+                <Button Classes="appearance-card"
+                        Classes.appearance-selected="{Binding IsDarkAppearance}"
+                        Tag="dark"
+                        Click="OnAppearanceClick"
+                        AutomationProperties.Name="深色">
+                  <StackPanel Spacing="8">
+                    <Border Height="52" CornerRadius="5" ClipToBounds="True"
+                            Background="#0B0E13" BorderBrush="#33000000" BorderThickness="1">
+                      <Grid>
+                        <Border Height="9" VerticalAlignment="Top" Background="#1A212C" />
+                        <Border Width="22" Height="3" CornerRadius="1.5" Background="#E5A44C"
+                                HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8,17,0,0" />
+                        <Border Height="7" CornerRadius="2" Background="#2B3543"
+                                HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="8,0,8,9" />
+                        <Border Width="26" Height="18" CornerRadius="3" Background="#1A212C"
+                                BorderBrush="#2B3543" BorderThickness="1"
+                                HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0" />
+                      </Grid>
+                    </Border>
+                    <TextBlock Text="深色" FontSize="11" HorizontalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                  </StackPanel>
+                </Button>
+              </Grid>
+            </StackPanel>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
             <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,14">
               <Border Classes="hud-icon">
                 <Path Data="{StaticResource IconPower}" />
@@ -744,10 +863,10 @@
                 <TextBlock Text="开机自启"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="只在启动时进托盘，不弹窗口"
                            FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
               <ToggleSwitch Grid.Column="2"
                             OnContent="开"
@@ -766,10 +885,10 @@
                 <TextBlock Text="剪贴板历史"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="本机本地存储；关闭后已记录的内容保留"
                            FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
               <ToggleSwitch Grid.Column="2"
                             OnContent="开"
@@ -788,10 +907,10 @@
                 <TextBlock Text="剪贴板保留（天）"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="0 表示永久保留；收藏条目不参与清理"
                            FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
               <NumericUpDown Grid.Column="2"
                              Value="{Binding ClipboardRetentionDays, Mode=TwoWay}"
@@ -813,10 +932,10 @@
                 <TextBlock Text="剪贴板总容量（MB）"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="超出后从最旧的开始删，收藏不参与；0 表示不限制"
                            FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
               <NumericUpDown Grid.Column="2"
                              Value="{Binding ClipboardMaxMb, Mode=TwoWay}"
@@ -838,10 +957,10 @@
                 <TextBlock Text="历史最多保留（条）"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="超过后只保留最近的部分，改完立即清理一次"
                            FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
               <NumericUpDown Grid.Column="2"
                              Value="{Binding HistoryMaxEntries, Mode=TwoWay}"
@@ -863,10 +982,10 @@
                 <TextBlock Text="历史保留（天）"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="0 表示不按天数清理"
                            FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
               <NumericUpDown Grid.Column="2"
                              Value="{Binding HistoryRetentionDays, Mode=TwoWay}"
@@ -904,10 +1023,10 @@
                 <TextBlock Text="启用模型"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="AI 类工具可用；插件只拿到统一接口"
                            FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
               <ToggleSwitch Grid.Column="2"
                             OnContent="开"
@@ -923,7 +1042,7 @@
                 <TextBlock Text="提供方"
                            FontSize="12"
                            VerticalAlignment="Center"
-                           Foreground="{StaticResource TextSecondaryBrush}" />
+                           Foreground="{DynamicResource TextSecondaryBrush}" />
                 <ComboBox Grid.Column="1"
                           ItemsSource="{Binding AiProviderOptions}"
                           SelectedItem="{Binding SelectedAiProvider, Mode=TwoWay}"
@@ -939,7 +1058,7 @@
                            Text="Base URL"
                            FontSize="12"
                            VerticalAlignment="Center"
-                           Foreground="{StaticResource TextSecondaryBrush}" />
+                           Foreground="{DynamicResource TextSecondaryBrush}" />
                 <TextBox Grid.Row="1"
                          Grid.Column="1"
                          Text="{Binding AiBaseUrl, Mode=TwoWay}"
@@ -949,7 +1068,7 @@
                            Text="模型名"
                            FontSize="12"
                            VerticalAlignment="Center"
-                           Foreground="{StaticResource TextSecondaryBrush}" />
+                           Foreground="{DynamicResource TextSecondaryBrush}" />
                 <TextBox Grid.Row="2"
                          Grid.Column="1"
                          Text="{Binding AiModel, Mode=TwoWay}"
@@ -959,7 +1078,7 @@
                            Text="API Key"
                            FontSize="12"
                            VerticalAlignment="Center"
-                           Foreground="{StaticResource TextSecondaryBrush}" />
+                           Foreground="{DynamicResource TextSecondaryBrush}" />
                 <TextBox Grid.Row="3"
                          Grid.Column="1"
                          Text="{Binding AiKey, Mode=TwoWay}"
@@ -968,7 +1087,7 @@
               </Grid>
               <TextBlock Text="API Key 由宿主用 Windows DPAPI 加密保存，不会进入插件或日志。"
                          FontSize="11"
-                         Foreground="{StaticResource TextMutedBrush}" />
+                         Foreground="{DynamicResource TextMutedBrush}" />
             </StackPanel>
 
             <Border Classes="hud-line" Margin="20,0" />
@@ -976,7 +1095,7 @@
             <Grid Margin="20,14" ColumnDefinitions="*,Auto,Auto">
               <TextBlock Text="{Binding AiStatus}"
                          FontSize="11"
-                         Foreground="{StaticResource AccentBrush}"
+                         Foreground="{DynamicResource AccentBrush}"
                          TextWrapping="Wrap"
                          VerticalAlignment="Center" />
               <Button Grid.Column="1"
@@ -1003,10 +1122,10 @@
                 <TextBlock Text="数据与缓存"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="模型、录制、剪贴板历史可以分别放到不同的盘；更改后重启生效，不会自动搬运旧文件"
                            FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}"
+                           Foreground="{DynamicResource TextMutedBrush}"
                            TextWrapping="Wrap" />
               </StackPanel>
             </Grid>
@@ -1019,15 +1138,15 @@
                 <TextBlock Text="数据根目录"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="{Binding DataDirectoryDisplay}"
                            FontFamily="{StaticResource MonoFont}"
                            FontSize="11"
                            TextTrimming="CharacterEllipsis"
-                           Foreground="{StaticResource TextSecondaryBrush}" />
+                           Foreground="{DynamicResource TextSecondaryBrush}" />
                 <TextBlock Text="剪贴板历史、历史记录"
                            FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
               <StackPanel Grid.Column="1"
                           Orientation="Horizontal"
@@ -1056,15 +1175,15 @@
                 <TextBlock Text="模型目录"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="{Binding ModelDirectoryDisplay}"
                            FontFamily="{StaticResource MonoFont}"
                            FontSize="11"
                            TextTrimming="CharacterEllipsis"
-                           Foreground="{StaticResource TextSecondaryBrush}" />
+                           Foreground="{DynamicResource TextSecondaryBrush}" />
                 <TextBlock Text="离线模型文件（OCR / 翻译等）"
                            FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
               <StackPanel Grid.Column="1"
                           Orientation="Horizontal"
@@ -1093,15 +1212,15 @@
                 <TextBlock Text="录制目录"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="{Binding RecordDirectoryDisplay}"
                            FontFamily="{StaticResource MonoFont}"
                            FontSize="11"
                            TextTrimming="CharacterEllipsis"
-                           Foreground="{StaticResource TextSecondaryBrush}" />
+                           Foreground="{DynamicResource TextSecondaryBrush}" />
                 <TextBlock Text="屏幕录制的输出文件"
                            FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
               <StackPanel Grid.Column="1"
                           Orientation="Horizontal"
@@ -1130,15 +1249,15 @@
                 <TextBlock Text="日志目录"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="{Binding LogDirectoryDisplay}"
                            FontFamily="{StaticResource MonoFont}"
                            FontSize="11"
                            TextTrimming="CharacterEllipsis"
-                           Foreground="{StaticResource TextSecondaryBrush}" />
+                           Foreground="{DynamicResource TextSecondaryBrush}" />
                 <TextBlock Text="固定在程序数据目录：启动早期就要写日志，不跟随上面的设置"
                            FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}"
+                           Foreground="{DynamicResource TextMutedBrush}"
                            TextWrapping="Wrap" />
               </StackPanel>
               <StackPanel Grid.Column="1"
@@ -1162,21 +1281,21 @@
 
             <!-- Hero：点阵底 + 大 Logo + 名称 + 徽章 -->
             <Grid Height="156">
-              <Border Background="{StaticResource DotGridBrush}" IsHitTestVisible="False" />
+              <Border Background="{DynamicResource DotGridBrush}" IsHitTestVisible="False" />
               <TextBlock Classes="num"
                          Text="01 / IDENTITY"
                          HorizontalAlignment="Right"
                          VerticalAlignment="Top"
                          Margin="0,16,22,0"
-                         Foreground="{StaticResource AccentBrush}"
+                         Foreground="{DynamicResource AccentBrush}"
                          Opacity="0.75" />
 
               <Grid ColumnDefinitions="Auto,*" Margin="24,22,24,18">
                 <Border Width="86"
                         Height="86"
                         CornerRadius="6"
-                        Background="{StaticResource AccentSoftBrush}"
-                        BorderBrush="{StaticResource AccentBrush}"
+                        Background="{DynamicResource AccentSoftBrush}"
+                        BorderBrush="{DynamicResource AccentBrush}"
                         BorderThickness="1"
                         VerticalAlignment="Center">
                   <Image Source="avares://Sparrow.App/Assets/sparrow-32.png"
@@ -1188,12 +1307,12 @@
                 <StackPanel Grid.Column="1" Margin="22,0,0,0" Spacing="8" VerticalAlignment="Center">
                   <TextBlock Classes="num"
                              Text="// SPARROW · LOCAL-FIRST TOOLKIT"
-                             Foreground="{StaticResource AccentBrush}"
+                             Foreground="{DynamicResource AccentBrush}"
                              LetterSpacing="1.4" />
                   <TextBlock FontFamily="{StaticResource DisplayFont}"
                              FontSize="27"
                              FontWeight="Bold"
-                             Foreground="{StaticResource TextPrimaryBrush}"
+                             Foreground="{DynamicResource TextPrimaryBrush}"
                              Text="麻雀 · 工具台" />
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <Border Classes="chip">
@@ -1204,11 +1323,11 @@
                       <TextBlock Classes="num" Text="Windows x64 · .NET 10" />
                     </Border>
                     <Border Classes="chip"
-                            Background="{StaticResource AccentSoftBrush}"
-                            BorderBrush="{StaticResource AccentBrush}">
+                            Background="{DynamicResource AccentSoftBrush}"
+                            BorderBrush="{DynamicResource AccentBrush}">
                       <TextBlock Classes="num"
                                  Text="本地就绪"
-                                 Foreground="{StaticResource AccentBrush}" />
+                                 Foreground="{DynamicResource AccentBrush}" />
                     </Border>
                   </StackPanel>
                 </StackPanel>
@@ -1236,11 +1355,11 @@
               <StackPanel Grid.Column="2" Spacing="5">
                 <TextBlock Classes="section" Text="运行模式" />
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                  <Ellipse Width="7" Height="7" Fill="{StaticResource AccentBrush}" VerticalAlignment="Center" />
+                  <Ellipse Width="7" Height="7" Fill="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
                   <TextBlock FontFamily="{StaticResource MonoFont}"
                              FontSize="18"
                              FontWeight="SemiBold"
-                             Foreground="{StaticResource AccentBrush}"
+                             Foreground="{DynamicResource AccentBrush}"
                              Text="LOCAL" />
                 </StackPanel>
               </StackPanel>
@@ -1282,11 +1401,11 @@
                   <TextBlock Text="更新"
                              FontSize="13"
                              FontWeight="SemiBold"
-                             Foreground="{StaticResource TextPrimaryBrush}" />
+                             Foreground="{DynamicResource TextPrimaryBrush}" />
                 </StackPanel>
                 <TextBlock Text="{Binding UpdateStatus, FallbackValue='未检查'}"
                            FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}"
+                           Foreground="{DynamicResource TextMutedBrush}"
                            TextWrapping="Wrap"
                            MaxWidth="420" />
               </StackPanel>
@@ -1319,11 +1438,11 @@
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <Path Data="{StaticResource IconLink}" Classes="icon icon-xs" />
                     <TextBlock Text="GitHub" FontSize="13" FontWeight="SemiBold"
-                               Foreground="{StaticResource TextPrimaryBrush}" />
+                               Foreground="{DynamicResource TextPrimaryBrush}" />
                   </StackPanel>
                   <TextBlock Text="查看源码，一起改进"
                              FontSize="11"
-                             Foreground="{StaticResource TextMutedBrush}" />
+                             Foreground="{DynamicResource TextMutedBrush}" />
                 </StackPanel>
               </Button>
 
@@ -1335,11 +1454,11 @@
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <Path Data="{StaticResource IconText}" Classes="icon icon-xs" />
                     <TextBlock Text="问题反馈" FontSize="13" FontWeight="SemiBold"
-                               Foreground="{StaticResource TextPrimaryBrush}" />
+                               Foreground="{DynamicResource TextPrimaryBrush}" />
                   </StackPanel>
                   <TextBlock Text="Bug 与建议，附上版本号和日志"
                              FontSize="11"
-                             Foreground="{StaticResource TextMutedBrush}" />
+                             Foreground="{DynamicResource TextMutedBrush}" />
                 </StackPanel>
               </Button>
 
@@ -1351,11 +1470,11 @@
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <Path Data="{StaticResource IconFile}" Classes="icon icon-xs" />
                     <TextBlock Text="本地日志" FontSize="13" FontWeight="SemiBold"
-                               Foreground="{StaticResource TextPrimaryBrush}" />
+                               Foreground="{DynamicResource TextPrimaryBrush}" />
                   </StackPanel>
                   <TextBlock Text="完整的启动与执行记录"
                              FontSize="11"
-                             Foreground="{StaticResource TextMutedBrush}" />
+                             Foreground="{DynamicResource TextMutedBrush}" />
                 </StackPanel>
               </Button>
             </Grid>
@@ -1363,17 +1482,17 @@
             <Border Classes="hud-line" />
             <Border Margin="24,18"
                     Padding="16,12"
-                    Background="{StaticResource AccentSoftBrush}"
-                    BorderBrush="{StaticResource AccentBrush}"
+                    Background="{DynamicResource AccentSoftBrush}"
+                    BorderBrush="{DynamicResource AccentBrush}"
                     BorderThickness="2,0,0,0"
                     CornerRadius="4">
               <StackPanel Spacing="5">
                 <TextBlock Classes="num"
                            Text="// 所有工具都在本地执行"
-                           Foreground="{StaticResource AccentBrush}" />
+                           Foreground="{DynamicResource AccentBrush}" />
                 <TextBlock Text="屏幕上的每个像素都留在本机：识别、翻译、录制、处理，不经过任何服务器。"
                            FontSize="12"
-                           Foreground="{StaticResource TextSecondaryBrush}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
                            TextWrapping="Wrap" />
               </StackPanel>
             </Border>
@@ -1386,7 +1505,7 @@
                 <TextBlock Classes="num" Text="SUPPORT / 排查" />
                 <TextBlock Text="遇到问题时，日志里有完整的启动与执行记录。"
                            FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
               <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                 <Button Classes="ghost" Click="OnOpenLogsClick" ToolTip.Tip="打开日志目录">
@@ -1413,10 +1532,10 @@
                 <TextBlock Text="MQXGXG"
                            FontSize="16"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="Sparrow 是一个本地优先的桌面工具台：处理都在本机完成，源码开源在 GitHub。"
                            FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}"
+                           Foreground="{DynamicResource TextMutedBrush}"
                            TextWrapping="Wrap"
                            MaxWidth="480" />
               </StackPanel>
@@ -1425,7 +1544,7 @@
                       Grid.Column="1"
                       IsVisible="False"
                       Background="#FFFFFFFF"
-                      BorderBrush="{StaticResource AccentBrush}"
+                      BorderBrush="{DynamicResource AccentBrush}"
                       BorderThickness="1"
                       CornerRadius="6"
                       Padding="6"

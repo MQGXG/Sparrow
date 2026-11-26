@@ -8,14 +8,13 @@
         Title="Sparrow · 工具台"
         Width="1120"
         Height="730"
-        RequestedThemeVariant="Dark"
         DragDrop.AllowDrop="True"
         Icon="avares://Sparrow.App/Assets/sparrow-64.png"
         MinWidth="920"
         MinHeight="600"
         WindowStartupLocation="CenterScreen"
         ExtendClientAreaToDecorationsHint="True"
-        ExtendClientAreaTitleBarHeightHint="48"
+        ExtendClientAreaTitleBarHeightHint="60"
         WindowDecorationsTheme="{DynamicResource SparrowWindowDecorations}">
 
   <Window.Styles>
@@ -39,29 +38,61 @@
     <Style Selector="Button.top-icon.active Path.icon">
       <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
     </Style>
+
+    <!-- ===== 页头字阶：一级标题 + 一行说明，代替原来孤零零的两个 tab ===== -->
+    <Style Selector="TextBlock.page-title">
+      <!-- 控件级 Styles 里不能用 StaticResource 取 App 级资源（会抛 KeyNotFound），必须 Dynamic -->
+      <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}" />
+      <Setter Property="FontSize" Value="22" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+    <Style Selector="TextBlock.page-caption">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    </Style>
+
+    <!-- ===== 工具卡片：圆角 + 统一表面色；取景框角标退成弱装饰 ===== -->
+    <Style Selector="Button.tool-card">
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+    </Style>
+    <Style Selector="Button.tool-card:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
+    </Style>
+    <Style Selector="Button.tool-card Path.frame">
+      <Setter Property="Opacity" Value="0.25" />
+      <Setter Property="Margin" Value="8" />
+    </Style>
+    <Style Selector="Button.tool-card:pointerover Path.frame">
+      <Setter Property="Opacity" Value="0.85" />
+      <Setter Property="Margin" Value="6" />
+    </Style>
   </Window.Styles>
 
   <Panel>
 
     <!-- HUD 底纹：点阵图纸 + 窗角 45° 斜线，纯装饰层，不参与命中 -->
-    <Border Background="{StaticResource DotGridBrush}" IsHitTestVisible="False" />
+    <Border Background="{DynamicResource DotGridBrush}" IsHitTestVisible="False" />
     <Path IsHitTestVisible="False"
           HorizontalAlignment="Right" VerticalAlignment="Top"
           Margin="0,72,200,0"
           Opacity="0.08"
-          Stroke="{StaticResource AccentBrush}"
+          Stroke="{DynamicResource AccentBrush}"
           StrokeThickness="1.5"
           Data="M0,44 L44,0 M14,44 L58,0 M28,44 L72,0" />
     <Path IsHitTestVisible="False"
           HorizontalAlignment="Left" VerticalAlignment="Bottom"
           Margin="200,0,0,72"
           Opacity="0.08"
-          Stroke="{StaticResource AccentBrush}"
+          Stroke="{DynamicResource AccentBrush}"
           StrokeThickness="1.5"
           Data="M0,44 L44,0 M14,44 L58,0 M28,44 L72,0" />
 
     <!-- 窗口壳：标题栏 + 主体。标题栏延伸进系统装饰区，整条是拖动区 -->
-    <Grid RowDefinitions="48,*">
+    <Grid RowDefinitions="60,*">
 
       <!-- 标题栏：品牌 + 搜索/设置；右侧 146px 让给系统的最小化/最大化/关闭 -->
       <Grid Grid.Row="0"
@@ -71,30 +102,54 @@
             WindowDecorationProperties.ElementRole="TitleBar">
         <StackPanel Grid.Column="0"
                     Orientation="Horizontal"
-                    Spacing="9"
-                    Margin="20,0,0,0"
+                    Spacing="10"
+                    Margin="24,0,0,0"
                     VerticalAlignment="Center">
           <Image Source="avares://Sparrow.App/Assets/sparrow-32.png"
-                 Width="20"
-                 Height="20"
+                 Width="22" Height="22"
                  VerticalAlignment="Center" />
           <TextBlock Text="麻雀"
-                     FontFamily="{StaticResource DisplayFont}"
-                     FontSize="18"
+                     FontFamily="{DynamicResource DisplayFont}"
+                     FontSize="16"
                      FontWeight="SemiBold"
-                     Foreground="{StaticResource TextPrimaryBrush}"
+                     Foreground="{DynamicResource TextPrimaryBrush}"
                      VerticalAlignment="Center" />
+          <Border Width="1" Height="14"
+                  Background="{DynamicResource LineBrush}" />
+          <TextBlock Text="工作区"
+                     FontSize="13"
+                     Foreground="{DynamicResource TextSecondaryBrush}"
+                     VerticalAlignment="Center" />
+          <TextBlock Classes="num" Text="WORKSPACE" VerticalAlignment="Center" />
         </StackPanel>
 
-        <!-- 右上角动作区：搜索默认只占一枚图标，点开向左展开输入条 -->
+        <!-- 右上角动作区：外观切换常驻，搜索 / 设置在设置页隐藏 -->
         <StackPanel Grid.Column="2"
                     Orientation="Horizontal"
                     Spacing="6"
                     Margin="0,0,146,0"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Center"
-                    IsVisible="{Binding !IsSettingsVisible}"
                     WindowDecorationProperties.ElementRole="User">
+
+          <!-- 外观：深色显示太阳（点一下转浅色），浅色显示月亮（点一下转深色） -->
+          <Button x:Name="ThemeToggleButton"
+                  Classes="ghost top-icon"
+                  Click="OnThemeToggleClick"
+                  ToolTip.Tip="切换到浅色"
+                  AutomationProperties.Name="切换外观">
+            <Panel>
+              <Path x:Name="ThemeSunIcon" Classes="icon icon-sm"
+                    Data="{StaticResource IconSun}" />
+              <Path x:Name="ThemeMoonIcon" Classes="icon icon-sm"
+                    Data="{StaticResource IconMoon}" IsVisible="False" />
+            </Panel>
+          </Button>
+
+          <StackPanel Orientation="Horizontal"
+                      Spacing="6"
+                      IsVisible="{Binding !IsSettingsVisible}"
+                      WindowDecorationProperties.ElementRole="User">
 
           <Border x:Name="TopSearchPill"
                   Classes="top-search"
@@ -150,6 +205,7 @@
             <Path Classes="icon icon-sm"
                   Data="{StaticResource IconSettings}" />
           </Button>
+          </StackPanel>
         </StackPanel>
       </Grid>
 
@@ -157,38 +213,55 @@
       <Border Grid.Row="0"
               VerticalAlignment="Bottom"
               Height="1"
-              Background="{StaticResource LineBrush}" />
+              Background="{DynamicResource LineBrush}" />
 
-      <!-- 主体：工作区（工具 / 剪贴板 / 工具台）或设置页 -->
-      <Panel Grid.Row="1">
+      <!-- 主体：单列内容区（工具 / 剪贴板 / 工具台 / 设置）+ 统一状态栏 -->
+      <Grid Grid.Row="1" RowDefinitions="*,Auto">
+        <Panel Grid.Row="0">
 
       <Grid IsVisible="{Binding !IsSettingsVisible}"
-            Margin="24,12,24,20"
+            Margin="24,20,24,16"
             RowDefinitions="Auto,*">
 
-        <!-- 主视图切换：放在内容区顶部，不再占用系统标题栏 -->
+        <!-- 页头：标题 / 说明 + 工具墙 / 剪贴板视图切换；设置入口在顶栏 -->
         <Grid x:Name="WallTabRow"
               Grid.Row="0"
-              Margin="0,0,0,16"
+              Margin="0,0,0,20"
               IsVisible="{Binding !IsDetailOpen}">
-          <StackPanel Orientation="Horizontal" Spacing="26">
-            <Button Classes="hud-tab"
-                    Classes.selected="{Binding IsToolsSelected}"
-                    Click="OnShowToolsClick">
-              <StackPanel>
-                <TextBlock Text="工具" />
-                <Border Classes="tick" />
-              </StackPanel>
-            </Button>
-            <Button Classes="hud-tab"
-                    Classes.selected="{Binding IsClipboardOpen}"
-                    Click="OnShowClipboardClick">
-              <StackPanel>
-                <TextBlock Text="剪贴板" />
-                <Border Classes="tick" />
-              </StackPanel>
-            </Button>
-          </StackPanel>
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="4" VerticalAlignment="Center">
+              <TextBlock Classes="page-title" Text="工具墙"
+                         IsVisible="{Binding IsToolsSelected}" />
+              <TextBlock Classes="page-title" Text="剪贴板"
+                         IsVisible="{Binding IsClipboardOpen}" />
+              <TextBlock Classes="page-caption"
+                         Text="挑一个工具开始 · 输入、处理、结果都留在本机"
+                         IsVisible="{Binding IsToolsSelected}" />
+              <TextBlock Classes="page-caption"
+                         Text="按时间分叠 · 搜索、标签、来源筛选与顺序粘贴"
+                         IsVisible="{Binding IsClipboardOpen}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="24"
+                        VerticalAlignment="Bottom">
+              <Button Classes="hud-tab"
+                      Classes.selected="{Binding IsToolsSelected}"
+                      Click="OnShowToolsClick">
+                <StackPanel>
+                  <TextBlock Text="工具" />
+                  <Border Classes="tick" />
+                </StackPanel>
+              </Button>
+              <Button Classes="hud-tab"
+                      Classes.selected="{Binding IsClipboardOpen}"
+                      Click="OnShowClipboardClick">
+                <StackPanel>
+                  <TextBlock Text="剪贴板" />
+                  <Border Classes="tick" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
+          </Grid>
         </Grid>
 
         <Grid Grid.Row="1">
@@ -291,13 +364,13 @@
                             <TextBlock Classes="num"
                                        Text="{Binding IndexLabel}"
                                        FontSize="16"
-                                       Foreground="{StaticResource AccentBrush}"
+                                       Foreground="{DynamicResource AccentBrush}"
                                        VerticalAlignment="Center" />
                             <Border Classes="hud-tick" Height="15" />
                             <TextBlock Text="{Binding DisplayName}"
                                        FontSize="14"
                                        FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
                                        VerticalAlignment="Center" />
                           </StackPanel>
 
@@ -305,7 +378,7 @@
                                   Height="1"
                                   Margin="16,0,14,0"
                                   VerticalAlignment="Center"
-                                  Background="{StaticResource LineBrush}" />
+                                  Background="{DynamicResource LineBrush}" />
 
                           <StackPanel Grid.Column="2"
                                       Orientation="Horizontal"
@@ -359,8 +432,8 @@
                                     <StackPanel Orientation="Horizontal" Spacing="12">
                                       <Border Width="40"
                                               Height="40"
-                                              CornerRadius="2"
-                                              Background="{StaticResource AccentSoftBrush}"
+                                              CornerRadius="10"
+                                              Background="{DynamicResource AccentSoftBrush}"
                                               VerticalAlignment="Center">
                                         <Path Classes="icon icon-lg"
                                               HorizontalAlignment="Center"
@@ -371,10 +444,10 @@
                                         <TextBlock Text="{Binding Name}"
                                                    FontSize="14"
                                                    FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextPrimaryBrush}" />
+                                                   Foreground="{DynamicResource TextPrimaryBrush}" />
                                         <TextBlock Text="{Binding CategoryDisplay}"
                                                    FontSize="11"
-                                                   Foreground="{StaticResource TextMutedBrush}" />
+                                                   Foreground="{DynamicResource TextMutedBrush}" />
                                       </StackPanel>
                                     </StackPanel>
 
@@ -393,7 +466,7 @@
                                              Margin="0,8,0,0"
                                              FontSize="12"
                                              LineHeight="18"
-                                             Foreground="{StaticResource TextSecondaryBrush}"
+                                             Foreground="{DynamicResource TextSecondaryBrush}"
                                              TextWrapping="Wrap"
                                              MaxLines="2" />
 
@@ -402,7 +475,7 @@
                                              Text="打开 →"
                                              HorizontalAlignment="Right"
                                              FontSize="11"
-                                             Foreground="{StaticResource AccentBrush}" />
+                                             Foreground="{DynamicResource AccentBrush}" />
                                 </Grid>
                               </Panel>
                             </Button>
@@ -414,34 +487,21 @@
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
 
-              <!-- 墙面收尾：发丝线 + 本地优先签名 -->
-              <StackPanel Margin="0,8,0,0" IsVisible="{Binding HasTools}">
-                <Border Classes="hud-line" Margin="0,0,0,10" />
-                <Grid ColumnDefinitions="*,Auto">
-                  <TextBlock Classes="num"
-                             Text="SPARROW / LOCAL-FIRST"
-                             LetterSpacing="1.2" />
-                  <TextBlock Grid.Column="1"
-                             Classes="num"
-                             Text="{Binding ToolCount, StringFormat='INDEXED {0:00}'}" />
-                </Grid>
-              </StackPanel>
-
               <!-- 墙空态：取景框里的大号麻雀标记 -->
               <StackPanel IsVisible="{Binding IsToolListEmpty}"
                           HorizontalAlignment="Center"
                           Margin="0,64,0,32">
                 <Panel Width="128" Height="128" HorizontalAlignment="Center">
-                  <Path Stroke="{StaticResource LineStrongBrush}" StrokeThickness="2"
+                  <Path Stroke="{DynamicResource LineStrongBrush}" StrokeThickness="2"
                         HorizontalAlignment="Left" VerticalAlignment="Top"
                         Data="M0,11 L0,0 L11,0" />
-                  <Path Stroke="{StaticResource LineStrongBrush}" StrokeThickness="2"
+                  <Path Stroke="{DynamicResource LineStrongBrush}" StrokeThickness="2"
                         HorizontalAlignment="Right" VerticalAlignment="Top"
                         Data="M0,0 L11,0 L11,11" />
-                  <Path Stroke="{StaticResource LineStrongBrush}" StrokeThickness="2"
+                  <Path Stroke="{DynamicResource LineStrongBrush}" StrokeThickness="2"
                         HorizontalAlignment="Left" VerticalAlignment="Bottom"
                         Data="M0,0 L0,11 L11,11" />
-                  <Path Stroke="{StaticResource LineStrongBrush}" StrokeThickness="2"
+                  <Path Stroke="{DynamicResource LineStrongBrush}" StrokeThickness="2"
                         HorizontalAlignment="Right" VerticalAlignment="Bottom"
                         Data="M11,0 L11,11 L0,11" />
                   <Image Source="avares://Sparrow.App/Assets/sparrow-64.png"
@@ -451,7 +511,7 @@
                 </Panel>
                 <TextBlock Text="{Binding EmptyToolMessage}"
                            FontSize="12"
-                           Foreground="{StaticResource TextMutedBrush}"
+                           Foreground="{DynamicResource TextMutedBrush}"
                            HorizontalAlignment="Center"
                            TextAlignment="Center"
                            TextWrapping="Wrap"
@@ -532,7 +592,7 @@
                              IsVisible="{Binding HasStatus}"
                              Margin="12,0,0,0"
                              FontSize="10"
-                             Foreground="{StaticResource AccentBrush}"
+                             Foreground="{DynamicResource AccentBrush}"
                              VerticalAlignment="Center" />
                 </Grid>
 
@@ -596,8 +656,8 @@
 
                 <Border Grid.Row="4"
                         IsVisible="{Binding HasQueue}"
-                        Background="{StaticResource SurfaceBrush}"
-                        BorderBrush="{StaticResource LineBrush}"
+                        Background="{DynamicResource SurfaceBrush}"
+                        BorderBrush="{DynamicResource LineBrush}"
                         BorderThickness="1"
                         CornerRadius="8"
                         Padding="10,8">
@@ -646,7 +706,7 @@
                     <TextBlock Text="{Binding QueueHint}"
                                Margin="8,0,0,0"
                                FontSize="10"
-                               Foreground="{StaticResource TextMutedBrush}" />
+                               Foreground="{DynamicResource TextMutedBrush}" />
                   </StackPanel>
                 </Border>
 
@@ -676,7 +736,7 @@
                                          LetterSpacing="0.8"
                                          Margin="6,0,0,0"
                                          VerticalAlignment="Center"
-                                         Foreground="{StaticResource TextMutedBrush}" />
+                                         Foreground="{DynamicResource TextMutedBrush}" />
                               <Border Grid.Column="2"
                                       Classes="hud-line"
                                       Margin="10,0"
@@ -737,7 +797,7 @@
                                 <Border Width="2"
                                         Height="24"
                                         CornerRadius="1"
-                                        Background="{StaticResource AccentBrush}"
+                                        Background="{DynamicResource AccentBrush}"
                                         VerticalAlignment="Center"
                                         IsVisible="{Binding IsSelected}" />
 
@@ -745,8 +805,8 @@
                                         Width="38"
                                         Height="38"
                                         CornerRadius="6"
-                                        Background="{StaticResource SurfaceBrush}"
-                                        BorderBrush="{StaticResource LineBrush}"
+                                        Background="{DynamicResource SurfaceBrush}"
+                                        BorderBrush="{DynamicResource LineBrush}"
                                         BorderThickness="1"
                                         ClipToBounds="True">
                                   <Panel>
@@ -785,20 +845,20 @@
                                   <TextBlock Text="{Binding Preview}"
                                              FontSize="12"
                                              TextTrimming="CharacterEllipsis"
-                                             Foreground="{StaticResource TextPrimaryBrush}" />
+                                             Foreground="{DynamicResource TextPrimaryBrush}" />
                                   <TextBlock Text="{Binding TagLine}"
                                              FontSize="10"
                                              TextTrimming="CharacterEllipsis"
-                                             Foreground="{StaticResource AccentBrush}"
+                                             Foreground="{DynamicResource AccentBrush}"
                                              IsVisible="{Binding HasTags}" />
                                   <StackPanel Orientation="Horizontal" Spacing="6">
                                     <TextBlock Text="{Binding TimeLabel}"
                                                FontSize="10"
-                                               Foreground="{StaticResource TextMutedBrush}" />
+                                               Foreground="{DynamicResource TextMutedBrush}" />
                                     <TextBlock Text="·"
                                                FontSize="10"
                                                IsVisible="{Binding HasSource}"
-                                               Foreground="{StaticResource TextMutedBrush}" />
+                                               Foreground="{DynamicResource TextMutedBrush}" />
                                     <!--
                                       来源用图标而不是文字：这一行右边还挤着 6 个常驻按钮，
                                       文字来源会把预览挤没。拿不到真图标时回退到进程名首字母。
@@ -807,8 +867,8 @@
                                            Height="14"
                                            IsVisible="{Binding HasSource}"
                                            ToolTip.Tip="{Binding SourceLabel}">
-                                      <Border Background="{StaticResource SurfaceRaisedBrush}"
-                                              BorderBrush="{StaticResource LineBrush}"
+                                      <Border Background="{DynamicResource SurfaceRaisedBrush}"
+                                              BorderBrush="{DynamicResource LineBrush}"
                                               BorderThickness="1"
                                               CornerRadius="3"
                                               IsVisible="{Binding !HasSourceIcon}">
@@ -933,11 +993,11 @@
                       <TextBlock Text="剪贴板还是空的"
                                  HorizontalAlignment="Center"
                                  FontSize="12"
-                                 Foreground="{StaticResource TextSecondaryBrush}" />
+                                 Foreground="{DynamicResource TextSecondaryBrush}" />
                       <TextBlock Text="复制点什么，这里会按时间自动分叠"
                                  HorizontalAlignment="Center"
                                  FontSize="10"
-                                 Foreground="{StaticResource TextMutedBrush}" />
+                                 Foreground="{DynamicResource TextMutedBrush}" />
                     </StackPanel>
                   </Grid>
                 </Border>
@@ -949,14 +1009,14 @@
             <Panel x:Name="ClipboardDetailLayer"
                    IsVisible="False"
                    DataContext="{Binding Clipboard}">
-              <Border Background="#CC07090B"
+              <Border Background="{DynamicResource OverlayBrush}"
                       PointerPressed="OnClipboardDetailBackdropPressed" />
               <Border Margin="10"
                       CornerRadius="10"
-                      BorderBrush="{StaticResource LineStrongBrush}"
+                      BorderBrush="{DynamicResource LineStrongBrush}"
                       BorderThickness="1"
                       ClipToBounds="True"
-                      Background="{StaticResource WindowBgGradientBrush}">
+                      Background="{DynamicResource WindowBgGradientBrush}">
                 <views:ClipboardDetailView x:Name="ClipboardDetailViewHost"
                                            CloseRequested="OnClipboardDetailCloseRequested"
                                            Copied="OnClipboardDetailCopied" />
@@ -1056,7 +1116,7 @@
                                   VerticalAlignment="Center" />
                         <TextBlock Text="{Binding Label}"
                                    FontSize="12"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
                                    VerticalAlignment="Center" />
                       </StackPanel>
 
@@ -1064,7 +1124,7 @@
                       <StackPanel Spacing="5" IsVisible="{Binding !IsToggle}">
                         <TextBlock Text="{Binding Label}"
                                    FontSize="11"
-                                   Foreground="{StaticResource TextMutedBrush}" />
+                                   Foreground="{DynamicResource TextMutedBrush}" />
                         <ComboBox ItemsSource="{Binding Choices}"
                                   SelectedItem="{Binding SelectedChoice, Mode=TwoWay}"
                                   IsVisible="{Binding IsChoice}"
@@ -1105,8 +1165,8 @@
                          VerticalContentAlignment="Top" />
 
             <Border IsVisible="{Binding !IsTextInput}"
-                    Background="{StaticResource SurfaceRaisedBrush}"
-                    BorderBrush="{StaticResource LineBrush}"
+                    Background="{DynamicResource SurfaceRaisedBrush}"
+                    BorderBrush="{DynamicResource LineBrush}"
                     BorderThickness="1"
                     CornerRadius="8"
                     Padding="12,8"
@@ -1163,7 +1223,7 @@
                                        Classes.selected="{Binding IsSelected}"
                                        Width="{Binding Width}"
                                        Height="{Binding Height}"
-                                       Stroke="{StaticResource AccentBrush}"
+                                       Stroke="{DynamicResource AccentBrush}"
                                        StrokeThickness="2"
                                        Cursor="Hand"
                                        ToolTip.Tip="点击选中 / 取消，选中后可一起复制"
@@ -1227,7 +1287,7 @@
                            IsVisible="{Binding IsImagesInput}"
                            HorizontalAlignment="Center"
                            FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
 
                 <!-- 小缩略图条：点哪张跳哪张 -->
                 <ScrollViewer Grid.Row="2"
@@ -1246,8 +1306,8 @@
                         <Border Width="52"
                                 Height="36"
                                 CornerRadius="4"
-                                Background="{StaticResource SurfaceBrush}"
-                                BorderBrush="{StaticResource LineBrush}"
+                                Background="{DynamicResource SurfaceBrush}"
+                                BorderBrush="{DynamicResource LineBrush}"
                                 BorderThickness="1"
                                 ClipToBounds="True"
                                 Cursor="Hand"
@@ -1267,7 +1327,7 @@
                              VerticalAlignment="Center"
                              TextWrapping="Wrap"
                              FontSize="12"
-                             Foreground="{StaticResource TextMutedBrush}" />
+                             Foreground="{DynamicResource TextMutedBrush}" />
                   <StackPanel Grid.Column="1"
                               Orientation="Horizontal"
                               Spacing="8"
@@ -1392,15 +1452,15 @@
                              Text="{Binding ResultSummary}"
                              IsVisible="{Binding HasResult}"
                              FontSize="11"
-                             Foreground="{StaticResource TextMutedBrush}"
+                             Foreground="{DynamicResource TextMutedBrush}"
                              VerticalAlignment="Center" />
                 </Grid>
 
                 <!-- 错误：红色左边条 + 一行人话 -->
                 <Border Grid.Row="1"
                         IsVisible="{Binding HasError}"
-                        Background="{StaticResource SurfaceRaisedBrush}"
-                        BorderBrush="{StaticResource LineBrush}"
+                        Background="{DynamicResource SurfaceRaisedBrush}"
+                        BorderBrush="{DynamicResource LineBrush}"
                         BorderThickness="1"
                         CornerRadius="8"
                         Padding="12,8"
@@ -1409,11 +1469,11 @@
                     <Border Width="3"
                             Margin="0,2"
                             CornerRadius="1.5"
-                            Background="{StaticResource DangerBrush}" />
+                            Background="{DynamicResource DangerBrush}" />
                     <TextBlock Grid.Column="1"
                                Margin="10,0,0,0"
                                Text="{Binding ErrorText}"
-                               Foreground="{StaticResource DangerBrush}"
+                               Foreground="{DynamicResource DangerBrush}"
                                FontSize="12"
                                VerticalAlignment="Center"
                                TextWrapping="Wrap" />
@@ -1428,8 +1488,8 @@
                         <Border Margin="0,0,0,8"
                                 Padding="12,10"
                                 CornerRadius="8"
-                                Background="{StaticResource SurfaceRaisedBrush}"
-                                BorderBrush="{StaticResource LineBrush}"
+                                Background="{DynamicResource SurfaceRaisedBrush}"
+                                BorderBrush="{DynamicResource LineBrush}"
                                 BorderThickness="1">
                           <StackPanel Spacing="6">
                             <!-- 标题行：名称 + 框开关 + 复制本条 + 展开 -->
@@ -1439,7 +1499,7 @@
                                          FontSize="12"
                                          FontWeight="SemiBold"
                                          TextTrimming="CharacterEllipsis"
-                                         Foreground="{StaticResource TextPrimaryBrush}" />
+                                         Foreground="{DynamicResource TextPrimaryBrush}" />
 
                               <Button Grid.Column="1"
                                       Classes="ghost small"
@@ -1486,7 +1546,7 @@
                                                  IsVisible="{Binding !IsExpanded}"
                                                  FontSize="12"
                                                  TextWrapping="Wrap"
-                                                 Foreground="{StaticResource TextSecondaryBrush}" />
+                                                 Foreground="{DynamicResource TextSecondaryBrush}" />
 
                             <!-- 展开态：全文（原图和识别框看左侧轮播，右侧不重复显示图片） -->
                             <StackPanel IsVisible="{Binding IsExpanded}" Spacing="8">
@@ -1495,13 +1555,13 @@
                                                    FontSize="12"
                                                    LineHeight="18"
                                                    TextWrapping="Wrap"
-                                                   Foreground="{StaticResource TextSecondaryBrush}" />
+                                                   Foreground="{DynamicResource TextSecondaryBrush}" />
 
                               <TextBlock Text="{Binding Body}"
                                          IsVisible="{Binding IsFailed}"
                                          FontSize="12"
                                          TextWrapping="Wrap"
-                                         Foreground="{StaticResource DangerBrush}" />
+                                         Foreground="{DynamicResource DangerBrush}" />
                             </StackPanel>
                           </StackPanel>
                         </Border>
@@ -1516,7 +1576,7 @@
                                        FontFamily="{StaticResource MonoFont}"
                                        FontSize="13"
                                        LineHeight="20"
-                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
                                        TextWrapping="Wrap" />
                 </ScrollViewer>
 
@@ -1526,15 +1586,15 @@
                                        FontFamily="{StaticResource MonoFont}"
                                        FontSize="13"
                                        LineHeight="20"
-                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
                                        TextWrapping="Wrap" />
                 </ScrollViewer>
 
                 <!-- SVG 预览 -->
                 <Border Grid.Row="2"
                         IsVisible="{Binding IsSvgPreviewVisible}"
-                        Background="{StaticResource SurfaceRaisedBrush}"
-                        BorderBrush="{StaticResource LineBrush}"
+                        Background="{DynamicResource SurfaceRaisedBrush}"
+                        BorderBrush="{DynamicResource LineBrush}"
                         BorderThickness="1"
                         CornerRadius="8"
                         Padding="10"
@@ -1548,8 +1608,8 @@
                 <!-- 图片结果（缩放 / 格式转换） -->
                 <Border Grid.Row="2"
                         IsVisible="{Binding HasImageResult}"
-                        Background="{StaticResource SurfaceRaisedBrush}"
-                        BorderBrush="{StaticResource LineBrush}"
+                        Background="{DynamicResource SurfaceRaisedBrush}"
+                        BorderBrush="{DynamicResource LineBrush}"
                         BorderThickness="1"
                         CornerRadius="8"
                         Padding="10"
@@ -1565,7 +1625,7 @@
                            IsVisible="{Binding IsResultEmpty}"
                            Text="执行后结果显示在这里"
                            FontSize="12"
-                           Foreground="{StaticResource TextMutedBrush}"
+                           Foreground="{DynamicResource TextMutedBrush}"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center" />
               </Grid>
@@ -1576,28 +1636,46 @@
         </Grid>
       </Grid>
 
-      <!-- 设置视图：返回和页头都在内容区，系统标题栏只保留品牌与动作 -->
+      <!-- 设置视图：返回和页头都在内容区，顶栏只保留品牌与动作 -->
       <Grid IsVisible="{Binding IsSettingsVisible}" RowDefinitions="Auto,*">
-        <Grid Grid.Row="0" ColumnDefinitions="Auto,*" Margin="24,16,24,8">
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="24,16,24,8">
           <Button Grid.Column="0"
                   Classes="ghost"
                   Content="← 返回"
                   Click="OnBackClick" />
           <TextBlock Grid.Column="1"
-                     Classes="title"
+                     Classes="page-title"
                      Text="设置"
                      VerticalAlignment="Center"
                      Margin="12,0,0,0" />
+          <TextBlock Grid.Column="2"
+                     Classes="num"
+                     Text="// SETTINGS"
+                     VerticalAlignment="Center" />
         </Grid>
 
         <views:SettingsView Grid.Row="1" DataContext="{Binding Settings}" />
       </Grid>
-      </Panel>
+        </Panel>
+
+        <!-- 统一状态栏：每个页面都有一致的底边 -->
+        <Border Grid.Row="1"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource LineBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="24,8">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="num" Text="SPARROW / LOCAL-FIRST · 所有处理都在本机完成" />
+            <TextBlock Grid.Column="1" Classes="num"
+                       Text="{Binding ToolCount, StringFormat='INDEXED {0:00}'}" />
+          </Grid>
+        </Border>
+      </Grid>
     </Grid>
 
     <!-- 图片集大图预览：点缩略图打开，点任意处 / Esc 关闭 -->
     <Border IsVisible="{Binding IsImagePreviewVisible}"
-            Background="#D9000000"
+            Background="{DynamicResource ScrimBrush}"
             PointerPressed="OnCloseImagePreviewClick"
             Cursor="Hand">
       <Image Source="{Binding PreviewImagePng, Converter={x:Static converters:ByteArrayToBitmapConverter.Instance}, ConverterParameter=preview}"

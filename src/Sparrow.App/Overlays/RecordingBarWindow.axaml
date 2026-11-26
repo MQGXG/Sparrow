@@ -10,7 +10,8 @@
         Topmost="True"
         CanResize="False"
         Background="Transparent"
-        TransparencyLevelHint="Transparent">
+        TransparencyLevelHint="Transparent"
+        RequestedThemeVariant="Dark">
 
   <!--
     与截图工具条（区域录制的第二行）共用同一套视觉语言：

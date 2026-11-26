@@ -9,9 +9,9 @@ namespace Sparrow.App.Overlays;
 /// <summary>
 /// 全屏拾取窗口：图钉光标跟随鼠标，左键选择窗口，右键 / Esc 取消。
 ///
-/// 点击时先隐藏自己再解析光标下的窗口——遮罩本身不能成为命中目标；
-/// 若光标下仍是本进程的窗口（命令面板 / 工作区），
-/// <see cref="WindowPickerApi.ResolveAtCursor"/> 会继续往下穿透。
+/// 点击时先隐藏自己再解析；<see cref="WindowPickerApi.ResolveAtCursor"/> 按 Z 序
+/// 枚举顶层窗口，只取「覆盖光标点、非本进程、可见且非 Shell」的第一个，
+/// 不再靠 Z 序盲穿透，避免置顶到不在光标下的窗口。
 /// </summary>
 public partial class WindowPickerWindow : Window
 {
@@ -98,8 +98,9 @@ public partial class WindowPickerWindow : Window
     private void PlacePin(Point position)
     {
         PinGlyph.IsVisible = true;
-        Canvas.SetLeft(PinGlyph, position.X - 12);
-        Canvas.SetTop(PinGlyph, position.Y - 30);
+        // 34px 徽章：右下角贴近光标，让针尖视觉上指向鼠标位置
+        Canvas.SetLeft(PinGlyph, position.X - 14);
+        Canvas.SetTop(PinGlyph, position.Y - 34);
     }
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)

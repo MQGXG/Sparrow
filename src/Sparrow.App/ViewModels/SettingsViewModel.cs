@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Avalonia;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Sparrow.App.Plugins;
 using Sparrow.App.Services;
@@ -35,6 +36,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _store = store;
         _startup = startup;
         _settings = settings;
+        _appearance = ThemeService.Normalize(settings.Appearance);
         _ai = ai;
         _secrets = secrets;
         _localModels = localModels;
@@ -102,6 +104,38 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
     /// <summary>「不记录」名单变化时通知监听器。</summary>
     public event Action<IReadOnlyList<string>>? ClipboardExclusionsChanged;
+
+    /// <summary>外观三态变化时通知宿主即时换肤（设置页与顶栏快捷按钮共用）。</summary>
+    public event Action<string>? AppearanceChanged;
+
+    private string _appearance;
+
+    /// <summary>system / light / dark；写入即持久化并通知宿主。</summary>
+    public string Appearance
+    {
+        get => _appearance;
+        set
+        {
+            var next = ThemeService.Normalize(value);
+            if (!SetProperty(ref _appearance, next))
+                return;
+
+            _settings = _settings with { Appearance = next };
+            _store.Save(_settings);
+            OnPropertyChanged(nameof(IsSystemAppearance));
+            OnPropertyChanged(nameof(IsLightAppearance));
+            OnPropertyChanged(nameof(IsDarkAppearance));
+            AppearanceChanged?.Invoke(next);
+        }
+    }
+
+    public bool IsSystemAppearance => _appearance == ThemeService.System;
+    public bool IsLightAppearance => _appearance == ThemeService.Light;
+    public bool IsDarkAppearance => _appearance == ThemeService.Dark;
+
+    /// <summary>顶栏快捷按钮：在当前观感的深 / 浅之间互切。</summary>
+    public void ToggleDarkLight() =>
+        Appearance = ThemeService.Toggle(_appearance, Application.Current?.ActualThemeVariant);
 
     /// <summary>剪贴板保留天数；0 = 永久。</summary>
     [ObservableProperty]

@@ -6,7 +6,7 @@ using Avalonia.Threading;
 namespace Sparrow.App.Overlays;
 
 /// <summary>
-/// 被置顶窗口标题栏旁的图钉：50ms 跟随一次，hover 变 ✕，点击触发取消置顶。
+/// 被置顶窗口标题栏旁的图钉：50ms 跟随一次，hover 变矢量 ✕，点击触发取消置顶。
 /// 目标窗口销毁 / 最小化时自动隐藏或关闭，不留孤儿窗口。
 /// </summary>
 public partial class PinIndicatorWindow : Window
@@ -27,6 +27,12 @@ public partial class PinIndicatorWindow : Window
         _target = target;
         _onRemove = onRemove;
 
+        // 明确反馈：告诉用户到底哪个窗口被钉住了，而不是只留下一个看不懂的图钉
+        var title = WindowPickerApi.GetTitle(_target);
+        ToolTip.SetTip(this, string.IsNullOrWhiteSpace(title)
+            ? "已置顶 · 点击取消"
+            : $"已置顶：{title} · 点击取消");
+
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
         _timer.Tick += (_, _) => Follow();
 
@@ -34,12 +40,16 @@ public partial class PinIndicatorWindow : Window
         {
             PinGlyph.IsVisible = false;
             CloseGlyph.IsVisible = true;
+            StatusRing.IsVisible = false;
+            Plate.Classes.Add("removing");
         };
 
         PointerExited += (_, _) =>
         {
             PinGlyph.IsVisible = true;
             CloseGlyph.IsVisible = false;
+            StatusRing.IsVisible = true;
+            Plate.Classes.Remove("removing");
         };
 
         PointerPressed += OnPointerPressed;
@@ -73,8 +83,9 @@ public partial class PinIndicatorWindow : Window
 
         var bounds = WindowPickerApi.GetBounds(_target);
 
-        // 位置是物理像素：贴标题栏右侧，内缩一点避开最小化/关闭按钮
-        Position = new PixelPoint(bounds.Right - 46, bounds.Top + 8);
+        // 位置是物理像素：34px 徽章贴标题栏右侧，留 18px 避开最小化 / 关闭按钮，
+        // 垂直方向在标准标题栏高度里居中。
+        Position = new PixelPoint(bounds.Right - 52, bounds.Top + 6);
     }
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)

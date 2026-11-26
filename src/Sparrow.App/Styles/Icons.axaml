@@ -42,6 +42,18 @@
   <StreamGeometry x:Key="IconCheck">M5 12.5 10 17.5 19 7</StreamGeometry>
   <!-- 图钉：钉帽 + 钉身，用于把快速面板置顶 -->
   <StreamGeometry x:Key="IconPin">M16 9V4h1a1 1 0 0 0 0-2H7a1 1 0 0 0 0 2h1v5c0 1.66-1.34 3-3 3v2h6v7.5l1 1 1-1V14h6v-2c-1.66 0-3-1.34-3-3z</StreamGeometry>
+  <!-- 描边图钉：标题栏指示 / 拾取光标共用，避免 Segoe MDL2 字体图标在不同系统上发虚或变方块 -->
+  <StreamGeometry x:Key="IconPinOutline">M8 3.5H16 M6.5 9 L8 3.5 H16 L17.5 9 L12 12 Z M12 12 V20.5</StreamGeometry>
+
+  <!-- ============ 精制图钉徽记（标题栏指示 / 拾取光标共用） ============
+       拆成 4 层几何，由窗口分别填充渐变、描边与高光，做出立体感；
+       单色线框版本（IconPinOutline）保留给其它小尺寸场景。 -->
+  <!-- 钉体：扁圆钉帽 + 收窄钉身 + 针尖，三段共用一个填充 -->
+  <StreamGeometry x:Key="IconPinEmblem">M5.8 5.7 a6.2 3.3 0 1 0 12.4 0 a6.2 3.3 0 1 0 -12.4 0 Z M9.6 8.2 H14.4 L12.9 18.2 H11.1 Z M10.9 18.2 H13.1 L12 21.6 Z</StreamGeometry>
+  <!-- 钉帽内圈：细高光环 -->
+  <StreamGeometry x:Key="IconPinRim">M7.6 5.7 a4.4 2.1 0 1 0 8.8 0 a4.4 2.1 0 1 0 -8.8 0</StreamGeometry>
+  <!-- 钉帽左上：短弧高光 -->
+  <StreamGeometry x:Key="IconPinGlint">M8.2 4.3 a4.3 2.1 0 0 1 4.6 -0.8</StreamGeometry>
 
   <!-- ============ 类型标识（与工具墙的取景框语言一致，只画轮廓） ============ -->
   <StreamGeometry x:Key="IconLink">M10.5 13.5a4.5 4.5 0 0 0 6.36 0l3-3a4.5 4.5 0 0 0-6.36-6.36l-1.5 1.5 M13.5 10.5a4.5 4.5 0 0 0-6.36 0l-3 3a4.5 4.5 0 0 0 6.36 6.36l1.5-1.5</StreamGeometry>
@@ -69,5 +81,11 @@
   <StreamGeometry x:Key="IconFolder">M3.6 6.7A1.7 1.7 0 0 1 5.3 5h3.4l2.1 2.4h7.9A1.7 1.7 0 0 1 20.4 9.1v8.2a1.7 1.7 0 0 1-1.7 1.7H5.3a1.7 1.7 0 0 1-1.7-1.7z</StreamGeometry>
   <!-- 拖拽把手：两列三点，实心点（配合 Path.icon-dot） -->
   <StreamGeometry x:Key="IconGrip">M9 7.6a1.5 1.5 0 1 0 3 0 1.5 1.5 0 1 0-3 0 M12.6 7.6a1.5 1.5 0 1 0 3 0 1.5 1.5 0 1 0-3 0 M9 12.2a1.5 1.5 0 1 0 3 0 1.5 1.5 0 1 0-3 0 M12.6 12.2a1.5 1.5 0 1 0 3 0 1.5 1.5 0 1 0-3 0 M9 16.8a1.5 1.5 0 1 0 3 0 1.5 1.5 0 1 0-3 0 M12.6 16.8a1.5 1.5 0 1 0 3 0 1.5 1.5 0 1 0-3 0</StreamGeometry>
+
+  <!-- ============ 外观（顶栏深浅色切换） ============ -->
+  <!-- 太阳：深色界面里显示，点击切到浅色 -->
+  <StreamGeometry x:Key="IconSun">M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z M12 2.5v2.2 M12 19.3v2.2 M2.5 12h2.2 M19.3 12h2.2 M5.28 5.28l1.55 1.55 M17.17 17.17l1.55 1.55 M18.72 5.28l-1.55 1.55 M6.83 17.17l-1.55 1.55</StreamGeometry>
+  <!-- 月牙：浅色界面里显示，点击切到深色 -->
+  <StreamGeometry x:Key="IconMoon">M20.5 14.2A8.6 8.6 0 0 1 9.8 3.5 8.6 8.6 0 1 0 20.5 14.2Z</StreamGeometry>
 
 </ResourceDictionary>

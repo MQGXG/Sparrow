@@ -10,7 +10,8 @@
         Topmost="True"
         CanResize="False"
         Background="Transparent"
-        TransparencyLevelHint="Transparent">
+        TransparencyLevelHint="Transparent"
+        RequestedThemeVariant="Dark">
 
   <Window.Styles>
     <Style Selector="TextBlock.caption">

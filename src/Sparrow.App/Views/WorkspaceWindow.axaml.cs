@@ -191,8 +191,40 @@ public partial class WorkspaceWindow : Window
 
         // 与 Snow-shot 一致：录制中打开工作区，窗口会进入视频。
 
-        // 让 Windows 标题栏跟随应用的深色主题
-        WindowChrome.TryApplyDarkTitleBar(this);
+        // 系统标题栏不归 Avalonia 管；顶栏外观图标也要按实际主题选日 / 月
+        SyncThemeChrome();
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+
+        // 控件颜色由 DynamicResource 自动刷新；「跟随系统」模式下系统主题变化
+        // 会改 ActualThemeVariant，系统标题栏与顶栏图标需要跟着再刷一次。
+        if (change.Property.Name == "ActualThemeVariant")
+            SyncThemeChrome();
+    }
+
+    /// <summary>系统标题栏 + 顶栏日 / 月图标，统一按窗口的实际主题同步。</summary>
+    private void SyncThemeChrome()
+    {
+        var isDark = ThemeService.IsDark(ActualThemeVariant);
+        WindowChrome.TryApplyTitleBarTheme(this, isDark);
+
+        // 属性系统在 InitializeComponent 之前就会回调，XAML 字段此时可能还是 null
+        if (ThemeSunIcon is { } sun)
+            sun.IsVisible = isDark;
+        if (ThemeMoonIcon is { } moon)
+            moon.IsVisible = !isDark;
+        if (ThemeToggleButton is { } toggle)
+            ToolTip.SetTip(toggle, isDark ? "切换到浅色" : "切换到深色");
+    }
+
+    /// <summary>顶栏快捷切换：深 / 浅互切，走设置页同一份 ViewModel 以保持一致并持久化。</summary>
+    private void OnThemeToggleClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel { Settings: { } settings })
+            settings.ToggleDarkLight();
     }
 
     private void OnDragOver(object? sender, DragEventArgs e)

@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using Sparrow.App.Services;
@@ -60,14 +61,40 @@ public partial class ClipboardPanelWindow : Window
 
         // 隧道阶段拦 Esc / Enter，避免被搜索框先吃掉
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
+
+        ApplyThemeBackdrop();
     }
 
     private ClipboardHistoryViewModel? History => DataContext as ClipboardHistoryViewModel;
 
+    /// <summary>
+    /// 详情层遮罩必须完全不透明，但又不能写死深色（浅色主题下会是一整块黑）。
+    /// XAML 保留不透明兜底色，这里按实际主题换成 BgBrush；取不到资源时保持兜底。
+    /// </summary>
+    private void ApplyThemeBackdrop()
+    {
+        if (DetailBackdrop is { } backdrop
+            && this.TryFindResource("BgBrush", ActualThemeVariant, out var value)
+            && value is IBrush brush)
+        {
+            backdrop.Background = brush;
+        }
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property.Name == "ActualThemeVariant")
+        {
+            ApplyThemeBackdrop();
+            WindowChrome.TryApplyTitleBarTheme(this, ThemeService.IsDark(ActualThemeVariant));
+        }
+    }
+
     protected override void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
-        WindowChrome.TryApplyDarkTitleBar(this);
+        WindowChrome.TryApplyTitleBarTheme(this, ThemeService.IsDark(ActualThemeVariant));
 
         // 与 Snow-shot 一致：录制中打开剪贴板小窗，窗口会进入视频。
 

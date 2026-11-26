@@ -9,7 +9,8 @@
         ShowInTaskbar="False"
         Cursor="Cross"
         Background="Transparent"
-        TransparencyLevelHint="Transparent">
+        TransparencyLevelHint="Transparent"
+        RequestedThemeVariant="Dark">
 
   <Window.Resources>
     <!-- 紧凑滑块：默认 Fluent 是 20px 拇指 / 32px 高，塞进 40px 属性条里像大圆点 -->
@@ -461,14 +462,14 @@
     <Border x:Name="CandidateBadge"
             IsVisible="False"
             IsHitTestVisible="False"
-            Background="{StaticResource OverlayBrush}"
-            BorderBrush="{StaticResource LineStrongBrush}"
+            Background="{DynamicResource OverlayBrush}"
+            BorderBrush="{DynamicResource LineStrongBrush}"
             BorderThickness="1"
             CornerRadius="6"
             Padding="6,3">
       <TextBlock x:Name="CandidateText"
                  FontSize="11"
-                 Foreground="{StaticResource TextPrimaryBrush}" />
+                 Foreground="{DynamicResource TextPrimaryBrush}" />
     </Border>
 
     <!-- 选区只画边框：填充透明，中间保持原图，不盖一层颜色 -->
@@ -481,7 +482,7 @@
     <Rectangle x:Name="Selection"
                IsVisible="False"
                Fill="Transparent"
-               Stroke="{StaticResource AccentBrush}"
+               Stroke="{DynamicResource AccentBrush}"
                StrokeThickness="2" />
 
     <!-- 文字工具的就地输入：不显示输入框，只留闪烁的光标，和画布上的文字一样 -->
@@ -561,8 +562,8 @@
     <Border x:Name="ColorProbe"
             IsVisible="False"
             IsHitTestVisible="False"
-            Background="{StaticResource OverlayBrush}"
-            BorderBrush="{StaticResource LineStrongBrush}"
+            Background="{DynamicResource OverlayBrush}"
+            BorderBrush="{DynamicResource LineStrongBrush}"
             BorderThickness="1"
             CornerRadius="8"
             Padding="8"
@@ -597,13 +598,13 @@
         <TextBlock x:Name="ProbePosition"
                    FontSize="10"
                    HorizontalAlignment="Center"
-                   Foreground="{StaticResource TextMutedBrush}"
+                   Foreground="{DynamicResource TextMutedBrush}"
                    Text="0, 0" />
         <TextBlock x:Name="ProbeValue"
                    FontSize="14"
                    HorizontalAlignment="Center"
                    FontFamily="{DynamicResource MonoFont}"
-                   Foreground="{StaticResource TextPrimaryBrush}"
+                   Foreground="{DynamicResource TextPrimaryBrush}"
                    Text="#000000" />
         <!-- 当前颜色条：放在色值下方，撑满卡片宽度，避免和像素预览混淆 -->
         <Border x:Name="ProbeSwatch"
@@ -612,7 +613,7 @@
                 Background="#FF000000" />
         <TextBlock FontSize="9"
                    HorizontalAlignment="Center"
-                   Foreground="{StaticResource TextMutedBrush}"
+                   Foreground="{DynamicResource TextMutedBrush}"
                    Text="按 I 复制 · Shift+I 格式" />
       </StackPanel>
     </Border>
@@ -711,18 +712,18 @@
     <Border x:Name="HintBar"
             Canvas.Left="0"
             Canvas.Top="24"
-            Background="{StaticResource OverlayBrush}"
-            BorderBrush="{StaticResource LineStrongBrush}"
+            Background="{DynamicResource OverlayBrush}"
+            BorderBrush="{DynamicResource LineStrongBrush}"
             BorderThickness="1"
             CornerRadius="999"
             Padding="14,6">
       <StackPanel Orientation="Horizontal">
         <TextBlock FontSize="11.5"
                    Text="拖拽框选"
-                   Foreground="{StaticResource TextPrimaryBrush}" />
+                   Foreground="{DynamicResource TextPrimaryBrush}" />
         <TextBlock FontSize="11.5"
                    Text=" · 单击选中 · 滚轮切层 · Tab 整窗/元素 · I 取色 · Esc 取消"
-                   Foreground="{StaticResource TextSecondaryBrush}" />
+                   Foreground="{DynamicResource TextSecondaryBrush}" />
       </StackPanel>
     </Border>
 
@@ -732,14 +733,14 @@
             Canvas.Top="24"
             IsVisible="False"
             IsHitTestVisible="False"
-            Background="{StaticResource OverlayBrush}"
-            BorderBrush="{StaticResource LineStrongBrush}"
+            Background="{DynamicResource OverlayBrush}"
+            BorderBrush="{DynamicResource LineStrongBrush}"
             BorderThickness="1"
             CornerRadius="999"
             Padding="14,6">
       <TextBlock FontSize="11.5"
                  Text="已定一条边 · 再拖一条边定角度 · Esc 取消"
-                 Foreground="{StaticResource TextPrimaryBrush}" />
+                 Foreground="{DynamicResource TextPrimaryBrush}" />
     </Border>
 
     <!-- 两段式浮层：主工具条一行，属性栏按当前工具出现（参考 LumaShot） -->
@@ -943,13 +944,13 @@
                   <TextBlock Text="滚动截图"
                              FontSize="13"
                              FontWeight="SemiBold"
-                             Foreground="{StaticResource TextPrimaryBrush}" />
+                             Foreground="{DynamicResource TextPrimaryBrush}" />
 
                   <Grid ColumnDefinitions="*,Auto">
                     <TextBlock Text="自动滚动"
                                FontSize="12"
                                VerticalAlignment="Center"
-                               Foreground="{StaticResource TextSecondaryBrush}" />
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
                     <ToggleSwitch Grid.Column="1"
                                   x:Name="ScrollAutoSwitch"
                                   IsChecked="True"
@@ -961,7 +962,7 @@
                     <TextBlock Text="方向"
                                FontSize="12"
                                VerticalAlignment="Center"
-                               Foreground="{StaticResource TextSecondaryBrush}" />
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
                     <ComboBox Grid.Column="1"
                               x:Name="ScrollDirectionBox"
                               Width="110"
@@ -975,7 +976,7 @@
                     <TextBlock Text="速度"
                                FontSize="12"
                                VerticalAlignment="Center"
-                               Foreground="{StaticResource TextSecondaryBrush}" />
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
                     <ComboBox Grid.Column="1"
                               x:Name="ScrollSpeedBox"
                               Width="110"
@@ -1217,7 +1218,7 @@
                  MaxWidth="420"
                  FontSize="11"
                  TextTrimming="CharacterEllipsis"
-                 Foreground="{StaticResource TextSecondaryBrush}" />
+                 Foreground="{DynamicResource TextSecondaryBrush}" />
 
       <!-- 属性栏：只显示当前工具用得上的设置；宽度随内容，居中挂在主条下方 -->
       <Border x:Name="StyleRow" Classes="capture-bar" HorizontalAlignment="Center" IsVisible="False">
@@ -1720,15 +1721,15 @@
     <Border x:Name="CustomColorPanel"
             IsVisible="False"
             Width="256"
-            Background="{StaticResource OverlayBrush}"
-            BorderBrush="{StaticResource LineStrongBrush}"
+            Background="{DynamicResource OverlayBrush}"
+            BorderBrush="{DynamicResource LineStrongBrush}"
             BorderThickness="1"
             CornerRadius="10"
             Padding="12"
             BoxShadow="0 12 32 0 #99000000">
       <StackPanel Spacing="8">
         <Grid ColumnDefinitions="*,Auto">
-          <TextBlock x:Name="ColorPanelTitle" Text="描边颜色" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" />
+          <TextBlock x:Name="ColorPanelTitle" Text="描边颜色" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" />
           <Button Grid.Column="1" Classes="ghost" Content="✕" FontSize="11" Padding="6,0"
                   Click="OnCloseColorPanel" ToolTip.Tip="关闭" />
         </Grid>

@@ -12,6 +12,9 @@ public sealed record AppSettings
 
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
 
+    /// <summary>外观三态：system（跟随系统）/ light / dark；默认深色，保持既有识别度。</summary>
+    public string Appearance { get; init; } = "dark";
+
     /// <summary>被禁用的插件 ID（等于插件目录名）。命中的插件不扫描、不加载、不进搜索结果。</summary>
     public string[] DisabledPlugins { get; init; } = [];
 

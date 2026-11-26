@@ -151,6 +151,13 @@ public partial class SettingsView : UserControl
         }
     }
 
+    /// <summary>外观三态预览卡：Tag 直接是设置值，ViewModel 负责归一化与持久化。</summary>
+    private void OnAppearanceClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string appearance } && DataContext is SettingsViewModel viewModel)
+            viewModel.Appearance = appearance;
+    }
+
     private void OnClearAiKeyClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is SettingsViewModel viewModel)

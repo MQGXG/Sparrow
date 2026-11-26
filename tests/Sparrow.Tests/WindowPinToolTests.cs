@@ -42,6 +42,8 @@ public sealed class WindowPinToolTests
         public string? Title { get; set; } = "记事本";
         public bool TopMost { get; set; }
         public bool SetSucceeds { get; set; } = true;
+        /// <summary>模拟系统静默拒绝：调用返回成功，但状态没变。</summary>
+        public bool ApplySucceeds { get; set; } = true;
         public List<(nint Handle, bool TopMost)> SetCalls { get; } = [];
 
         public bool TryGetTitle(nint handle, out string title)
@@ -55,8 +57,11 @@ public sealed class WindowPinToolTests
         public bool SetTopMost(nint handle, bool topMost)
         {
             SetCalls.Add((handle, topMost));
-            TopMost = topMost;
-            return SetSucceeds;
+            if (!SetSucceeds)
+                return false;
+            if (ApplySucceeds)
+                TopMost = topMost;
+            return true;
         }
     }
 
@@ -234,5 +239,20 @@ public sealed class WindowPinToolTests
         result.Success.ShouldBeFalse();
         result.Error!.Kind.ShouldBe(ToolErrorKind.Execution);
         result.Error.Message.ShouldContain("失败");
+    }
+
+    [Fact]
+    public async Task 系统静默拒绝置顶_回报失败且不显示图钉()
+    {
+        var api = new FakePinApi { TopMost = false, ApplySucceeds = false };
+        var overlay = new FakeOverlay();
+
+        var result = await ExecuteAsync(api, overlay);
+
+        result.Success.ShouldBeFalse();
+        result.Error!.Kind.ShouldBe(ToolErrorKind.Execution);
+        result.Error.Message.ShouldContain("拒绝置顶");
+        overlay.Shown.ShouldBeEmpty("置顶没生效时不能再留一个孤儿图钉");
+        api.SetCalls.ShouldContain(((nint)42, false), "失败后要尝试还原，不留半状态");
     }
 }

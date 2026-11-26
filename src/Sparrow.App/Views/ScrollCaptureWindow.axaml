@@ -11,11 +11,12 @@
         ShowActivated="False"
         WindowStartupLocation="Manual"
         Background="Transparent"
-        TransparencyLevelHint="Transparent">
+        TransparencyLevelHint="Transparent"
+        RequestedThemeVariant="Dark">
 
   <!-- 只做状态显示：自动/方向/速度已经在工具条的二级菜单里定好 -->
-  <Border Background="{StaticResource OverlayBrush}"
-          BorderBrush="{StaticResource AccentBorderBrush}"
+  <Border Background="{DynamicResource OverlayBrush}"
+          BorderBrush="{DynamicResource AccentBorderBrush}"
           BorderThickness="1"
           CornerRadius="10"
           Padding="12,10"
@@ -33,12 +34,12 @@
         <TextBlock x:Name="HintText"
                    Text="正在自动滚动…"
                    FontSize="12"
-                   Foreground="{StaticResource TextPrimaryBrush}"
+                   Foreground="{DynamicResource TextPrimaryBrush}"
                    TextWrapping="Wrap" />
         <TextBlock x:Name="ProgressText"
                    Text="等待滚动…"
                    FontSize="10"
-                   Foreground="{StaticResource TextMutedBrush}" />
+                   Foreground="{DynamicResource TextMutedBrush}" />
       </StackPanel>
 
       <StackPanel Grid.Row="2"
