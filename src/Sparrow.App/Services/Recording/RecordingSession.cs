@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace Sparrow.App.Services.Recording;
 
@@ -49,6 +50,9 @@ internal sealed class RecordingSession : IDisposable
     public long FramesWritten => Interlocked.Read(ref _framesWritten);
 
     public TimeSpan Elapsed => _clock.Elapsed;
+
+    /// <summary>实际使用的帧率（可能被分辨率上限压低）。</summary>
+    public int FramesPerSecond => _options.FramesPerSecond;
 
     public string OutputPath => _options.OutputPath;
 
@@ -115,6 +119,11 @@ internal sealed class RecordingSession : IDisposable
 
         if (source is null)
             return null;
+
+        // 分辨率越高，能稳定编码的帧率越低：超了会丢帧、视频时长被压缩。
+        var maxFps = MaxFramesPerSecond(source.Width, source.Height);
+        if (options.FramesPerSecond > maxFps)
+            options = options with { FramesPerSecond = maxFps };
 
         // 视频先写临时文件；有音频时等停止再合并成最终文件。
         // 容器跟输出格式走：MKV/MOV 让 ffmpeg 按扩展名选封装器。
@@ -308,8 +317,31 @@ internal sealed class RecordingSession : IDisposable
         }
     }
 
+    /// <summary>把系统定时器精度提到 1ms，否则 Sleep(1) 实际约 15ms，60fps 以上会掉帧。</summary>
+    [DllImport("winmm.dll")]
+    private static extern uint timeBeginPeriod(uint period);
+
+    [DllImport("winmm.dll")]
+    private static extern uint timeEndPeriod(uint period);
+
+    /// <summary>按像素数限制可稳定编码的帧率；超了只会丢帧并压缩视频时长。</summary>
+    private static int MaxFramesPerSecond(int width, int height)
+    {
+        var pixels = (long)width * height;
+
+        return pixels switch
+        {
+            <= 1280L * 720 => 144,
+            <= 1920L * 1080 => 120,
+            <= 2560L * 1440 => 60,
+            // 4K 在常见核显/中端独显上 60fps 会持续掉帧，30 才能保证时长准确。
+            _ => 30
+        };
+    }
+
     private void Run()
     {
+        timeBeginPeriod(1);
         _clock.Start();
         SetState(RecordingState.Recording, null);
 
@@ -385,8 +417,9 @@ internal sealed class RecordingSession : IDisposable
                     Interlocked.Increment(ref _framesWritten);
                     nextDue += interval;
 
-                    // 编码落后超过一帧就跳过去，不补写（补写会让画面突然加速）。
-                    if (nextDue < now - interval)
+                    // 卡顿超过 1 秒才重置时间轴；普通掉帧继续追帧，
+                    // 避免把视频时长压短（高帧率时尤其明显）。
+                    if (nextDue < now - TimeSpan.FromSeconds(1))
                         nextDue = now;
                 }
                 else
@@ -404,6 +437,8 @@ internal sealed class RecordingSession : IDisposable
         }
         finally
         {
+            timeEndPeriod(1);
+
             try
             {
                 _wav?.Complete();

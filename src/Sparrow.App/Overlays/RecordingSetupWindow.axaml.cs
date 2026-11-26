@@ -282,7 +282,14 @@ public partial class RecordingSetupWindow : Window
         var outputDirectory = OutputDirectoryBox.Text?.Trim() ?? "";
         var baseName = BaseNameBox.Text?.Trim() ?? "Sparrow";
 
-        var fps = FpsBox.SelectedIndex == 1 ? 60 : 30;
+        var fps = FpsBox.SelectedIndex switch
+        {
+            1 => 60,
+            2 => 90,
+            3 => 120,
+            4 => 144,
+            _ => 30
+        };
         var cursor = CursorCheck.IsChecked == true;
 
         var format = FormatBox.SelectedIndex switch

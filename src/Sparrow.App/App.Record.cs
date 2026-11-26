@@ -192,7 +192,7 @@ public partial class App
         _toasts?.Show("开始录制 · Ctrl+Alt+Shift+R 可再次停止", TimeSpan.FromSeconds(3));
         Log.Info(
             $"[record] 开始录制：{session.OutputPath}" +
-            $"（{setup.FramesPerSecond}fps，CRF {setup.Crf}）");
+            $"（{session.FramesPerSecond}fps，CRF {setup.Crf}，编码器 {session.EncoderName}）");
     }
 
     /// <summary>创建录制会话（倒计时 + 路径 + 选项）；不显示任何控制条。</summary>
@@ -290,7 +290,7 @@ public partial class App
 
         Log.Info(
             $"[record] 开始录制：{outputPath}" +
-            $"（{setup.FramesPerSecond}fps，CRF {setup.Crf}，编码器 {session.EncoderName}）");
+            $"（{session.FramesPerSecond}fps，CRF {setup.Crf}，编码器 {session.EncoderName}）");
         return session;
     }
 

@@ -126,9 +126,13 @@
         <ComboBox Grid.Row="0" Grid.Column="5"
                   x:Name="FpsBox"
                   SelectedIndex="0"
-                  HorizontalAlignment="Stretch">
+                  HorizontalAlignment="Stretch"
+                  ToolTip.Tip="高于 60 帧建议使用硬件编码，并控制录制区域不超过 1080p">
           <ComboBoxItem>30 帧/秒</ComboBoxItem>
           <ComboBoxItem>60 帧/秒</ComboBoxItem>
+          <ComboBoxItem>90 帧/秒</ComboBoxItem>
+          <ComboBoxItem>120 帧/秒</ComboBoxItem>
+          <ComboBoxItem>144 帧/秒</ComboBoxItem>
         </ComboBox>
 
         <TextBlock Grid.Row="1" Grid.Column="0" Classes="caption" Text="编码器" />
