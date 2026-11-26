@@ -519,9 +519,6 @@ public partial class CaptureWindow : Window
     /// <summary>标注模式的目标图片屏幕矩形（物理像素）；有值时窗口贴着图片，不铺满屏幕。</summary>
     internal PixelRect? AnnotationBounds { get; set; }
 
-    /// <summary>标注窗口内容的最小宽度：保证工具条不被挤成多行。</summary>
-    internal const double AnnotationMinContentWidth = 700;
-
     /// <summary>标注模式的原图（PNG）。</summary>
     internal byte[]? AnnotationSource { get; set; }
 
@@ -535,11 +532,15 @@ public partial class CaptureWindow : Window
     private Bitmap? _annotationBitmap;
     private double _annotationImageHeight;
 
-    /// <summary>标注窗口是否贴着图片（true = 小窗，不遮罩桌面）。</summary>
-    private bool _annotationSnug;
+    /// <summary>
+    /// 浮动标注模式：窗口铺满虚拟屏幕，但用窗口区域裁剪成「图片 + 工具条」，
+    /// 其余位置透明且点击穿透，图片和工具条都能自由拖动。
+    /// </summary>
+    private bool _annotationFloating;
 
-    /// <summary>标注过程中是否拖动过小窗；只有拖过才在完成后把贴图挪到新位置。</summary>
-    private bool _annotationWindowMoved;
+    private List<PixelRect> _annotationRegion = [];
+    private IntPtr _annotationRegionHandle;
+    private DispatcherTimer? _annotationRegionTimer;
 
     /// <summary>是否还原放大镜全屏颜色滤镜。</summary>
     public bool CaptureRestoreColors { get; set; } = true;
@@ -898,10 +899,10 @@ public partial class CaptureWindow : Window
         ActionBar.IsVisible = true;
         HintBar.IsVisible = false;
 
-        // 宿主提供了图片的屏幕矩形：贴着图片展开，不铺满屏幕。
+        // 宿主提供了图片的屏幕矩形：浮动标注（不遮罩桌面，区域外点击穿透）。
         if (AnnotationBounds is { Width: > 0, Height: > 0 } bounds)
         {
-            StartSnugAnnotation(bounds);
+            StartFloatingAnnotation(bounds);
             return;
         }
 
@@ -967,61 +968,26 @@ public partial class CaptureWindow : Window
     }
 
     /// <summary>
-    /// 贴着图片展开的标注窗口：只包住图片和工具条，图片尽量停在原来的屏幕位置，
-    /// 周围不铺遮罩，不影响用户同时操作其他程序。
+    /// 浮动标注模式：窗口铺满虚拟屏幕，但用窗口区域裁剪成「图片 + 工具条」，
+    /// 其余位置透明、点击穿透。图片和工具条都能自由拖动，桌面照常可以操作
+    /// （思路同录制时把工具条和画布分窗口，效果接近 snow-shot 的浮动工具条）。
     /// </summary>
-    private void StartSnugAnnotation(PixelRect bounds)
+    private void StartFloatingAnnotation(PixelRect bounds)
     {
-        const double pad = 8;
-        const double gap = 10;
+        // 先铺满虚拟屏幕：_origin / _virtualWidth / _virtualHeight 由它设置，
+        // 窗口区域裁剪和 DIP→物理换算都依赖这几个值。
+        ApplyVirtualScreenBounds();
+
+        _annotationFloating = true;
 
         var scale = RenderScaling > 0 ? RenderScaling : 1;
-
-        // 先按完整工具条测量，避免首帧被挤成多行
-        MeasureActionBar();
-        var toolbar = ActionBar.DesiredSize;
 
         var imageWidth = Math.Max(1, bounds.Width / scale);
         var imageHeight = Math.Max(1, bounds.Height / scale);
 
-        var barWidth = toolbar.Width > 0 ? toolbar.Width : AnnotationMinContentWidth;
-        var barHeight = toolbar.Height > 0 ? toolbar.Height : 44;
-
-        var contentWidth = Math.Max(Math.Max(imageWidth, AnnotationMinContentWidth), barWidth);
-        var windowWidth = contentWidth + pad * 2;
-        var windowHeight = imageHeight + gap + barHeight + pad * 2;
-
-        var screen = Screens.ScreenFromPoint(new PixelPoint(bounds.X, bounds.Y)) ?? Screens.Primary;
-        var work = screen?.WorkingArea ?? new PixelRect(0, 0, 1920, 1080);
-
-        var physicalWidth = windowWidth * scale;
-        var physicalHeight = windowHeight * scale;
-
-        // 水平：图片尽量停在原位，窗口多出来的宽度往有空间的一侧展开
-        double left = bounds.X;
-
-        if (left + physicalWidth > work.Right)
-            left = bounds.X + bounds.Width - physicalWidth;
-
-        left = Math.Clamp(left, work.X, Math.Max(work.X, work.Right - physicalWidth));
-
-        var imageLeft = Math.Max(0, (bounds.X - left) / scale);
-
-        // 垂直：默认工具条在图片下方；下方放不下就翻到上方
-        var imageTop = pad;
-        double top = bounds.Y - pad * scale;
-
-        if (top + physicalHeight > work.Bottom)
-        {
-            imageTop = barHeight + gap + pad;
-            top = bounds.Y - (barHeight + gap + pad) * scale;
-        }
-
-        top = Math.Clamp(top, work.Y, Math.Max(work.Y, work.Bottom - physicalHeight));
-
-        Position = new PixelPoint((int)Math.Round(left), (int)Math.Round(top));
-        Width = windowWidth;
-        Height = windowHeight;
+        // 图片停在宿主显示的位置（屏幕物理坐标 → 窗口局部 DIP）
+        var imageLeft = (bounds.X - _origin.X) / scale;
+        var imageTop = (bounds.Y - _origin.Y) / scale;
 
         FrozenFrame.Source = _annotationBitmap;
         FrozenFrame.IsVisible = true;
@@ -1038,23 +1004,134 @@ public partial class CaptureWindow : Window
             : 1;
         _colorSampling = false;
         _cornerRadius = 0;
-        _annotationSnug = true;
 
         HideAnnotationChrome();
 
-        // 不遮罩：窗口只覆盖图片和工具条，桌面照常可见、可操作
+        // 不遮罩：桌面照常可见。窗口区域只保留图片和工具条，其余位置点击穿透。
         DimLayer.IsVisible = false;
 
+        _toolbarManual = false;
+        MeasureActionBar();
         PlaceAnnotationToolbar();
 
-        // 布局完成后再显示，避免先闪一下默认位置
+        LayoutUpdated += OnAnnotationLayoutUpdated;
+
+        // 工具组/颜色浮层出现时不一定触发 LayoutUpdated：这里再兜一层轮询，
+        // 保证可交互区域始终能覆盖到浮层（否则浮层会被窗口区域裁掉）。
+        _annotationRegionTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+        _annotationRegionTimer.Tick += (_, _) => UpdateAnnotationInputRegion();
+        _annotationRegionTimer.Start();
+
+        UpdateAnnotationInputRegion();
+
+        // 区域裁剪完成后再显示，避免先挡住桌面
         Opacity = 1;
     }
 
-    /// <summary>当前图片在屏幕上的物理像素矩形（小窗模式用，宿主据此让贴图跟着走）。</summary>
+    private void OnAnnotationLayoutUpdated(object? sender, EventArgs e) =>
+        UpdateAnnotationInputRegion();
+
+    /// <summary>
+    /// 把窗口区域裁剪成「图片 + 工具条 + 浮层」：区域外的桌面不归本窗口，
+    /// 鼠标会直接落到其他程序上（和录制中的穿透逻辑一致）。
+    /// </summary>
+    private void UpdateAnnotationInputRegion()
+    {
+        if (!_annotationFloating)
+            return;
+
+        var hwnd = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+
+        if (hwnd == IntPtr.Zero)
+            return;
+
+        var scale = RenderScaling > 0 ? RenderScaling : 1;
+        var rects = new List<PixelRect>();
+
+        var image = ToWindowPixels(_selection, scale);
+
+        if (image.Width > 0 && image.Height > 0)
+            rects.Add(image);
+
+        void Add(Control control)
+        {
+            if (!control.IsVisible)
+                return;
+
+            if (control.TranslatePoint(new Point(0, 0), this) is not { } origin)
+                return;
+
+            var size = control.Bounds.Size;
+
+            if (size.Width <= 0 || size.Height <= 0)
+                return;
+
+            var rect = ToWindowPixels(new Rect(origin, size), scale);
+
+            if (rect.Width > 0 && rect.Height > 0)
+                rects.Add(rect);
+        }
+
+        Add(ActionBar);
+        Add(ToolGroupPopover);
+        Add(RecognitionPopover);
+        Add(CustomColorPanel);
+        Add(TextNoteBox);
+
+        // 布局每帧都可能触发：区域没变就不要反复 SetWindowRgn。
+        if (hwnd == _annotationRegionHandle
+            && rects.Count == _annotationRegion.Count
+            && rects.SequenceEqual(_annotationRegion))
+            return;
+
+        var region = CreateRectRgn(0, 0, 0, 0);
+
+        foreach (var rect in rects)
+        {
+            var piece = CreateRectRgn(rect.X, rect.Y, rect.Right, rect.Bottom);
+            CombineRgn(region, region, piece, RgnOr);
+            DeleteObject(piece);
+        }
+
+        if (SetWindowRgn(hwnd, region, true) == 0)
+        {
+            DeleteObject(region);
+            _annotationRegion = [];
+            _annotationRegionHandle = IntPtr.Zero;
+            return;
+        }
+
+        _annotationRegion = rects;
+        _annotationRegionHandle = hwnd;
+    }
+
+    /// <summary>标注结束：解除区域裁剪。</summary>
+    private void ResetAnnotationInputRegion()
+    {
+        LayoutUpdated -= OnAnnotationLayoutUpdated;
+
+        if (_annotationRegionTimer is { } timer)
+        {
+            timer.Stop();
+            _annotationRegionTimer = null;
+        }
+
+        _annotationRegion = [];
+        _annotationRegionHandle = IntPtr.Zero;
+
+        var hwnd = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+
+        if (hwnd == IntPtr.Zero)
+            return;
+
+        // IntPtr.Zero = 取消裁剪；系统会释放上一次的 region。
+        SetWindowRgn(hwnd, IntPtr.Zero, true);
+    }
+
+    /// <summary>当前图片在屏幕上的物理像素矩形（宿主据此让贴图跟着走）。</summary>
     private PixelRect? GetAnnotationImageScreenRect()
     {
-        if (!_annotationSnug || _selection.Width <= 0 || _selection.Height <= 0)
+        if (!_annotationFloating || _selection.Width <= 0 || _selection.Height <= 0)
             return null;
 
         var scale = RenderScaling > 0 ? RenderScaling : 1;
@@ -1066,10 +1143,10 @@ public partial class CaptureWindow : Window
             Math.Max(1, (int)Math.Round(_selection.Height * scale)));
     }
 
-    /// <summary>标注模式下把工具条贴在图片正下方（放不下就放上方），并水平对齐图片。</summary>
+    /// <summary>标注模式下把工具条贴在图片正下方（放不下就放上方）；用户拖过之后就不再自动跟随。</summary>
     private void PlaceAnnotationToolbar()
     {
-        if (!ActionBar.IsVisible || _selection.Width <= 0 || Width <= 0)
+        if (_toolbarManual || !ActionBar.IsVisible || _selection.Width <= 0 || Width <= 0)
             return;
 
         var size = ActionBar.DesiredSize;
@@ -1188,6 +1265,9 @@ public partial class CaptureWindow : Window
         _regionOverlay = null;
 
         EndRecordingInputRegion();
+
+        if (_annotationFloating)
+            ResetAnnotationInputRegion();
 
         _probeGeneration++;
         _uiProbe?.Dispose();

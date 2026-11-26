@@ -24,19 +24,14 @@ internal static class ImageAnnotator
         };
 
         // 宿主（贴图 / 滚动截图结果）告诉标注层图片在屏幕上的位置：
-        // 标注窗口只包住图片和工具条，铺满全屏会影响用户同时操作其他程序。
+        // 标注层按这个位置显示图片，工具条和图片都能自由拖动，
+        // 其余屏幕区域透明且点击穿透，不影响同时操作其他程序。
         if (owner is IAnnotationImageHost host
             && host.AnnotationImageRect is { Width: > 0, Height: > 0 } rect)
         {
-            var scale = owner.RenderScaling > 0 ? owner.RenderScaling : 1;
-            var imageWidth = Math.Max(1, rect.Width / scale);
-
             window.AnnotationBounds = rect;
-            window.Position = new PixelPoint(rect.X, rect.Y);
-            window.Width = Math.Max(CaptureWindow.AnnotationMinContentWidth, imageWidth) + 16;
-            window.Height = Math.Max(1, rect.Height / scale) + 72;
 
-            // StartAnnotationMode 排好版后再显示，避免先在默认位置闪一下
+            // 排好版（含窗口区域裁剪）后再显示，避免先挡住桌面
             window.Opacity = 0;
         }
 
@@ -49,7 +44,7 @@ internal static class ImageAnnotator
         {
             await window.ShowDialog(owner);
 
-            // 标注时拖动过小窗：贴图跟着落到标注结束的位置（和 snow-shot 一致）
+            // 标注时拖过图片：贴图跟着落到标注结束的位置（和 snow-shot 一致）
             if (owner is PinnedImageWindow
                 && window.AnnotationResult is not null
                 && window.AnnotationImageScreenRect is { } imageRect)

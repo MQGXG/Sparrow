@@ -88,8 +88,8 @@ public partial class CaptureWindow
                         _scaling > 0 ? _scaling : 1)
                     : null;
 
-                // 标注时拖动过小窗：记下最终位置，宿主据此把贴图挪过去
-                if (_annotationWindowMoved && _annotationSnug)
+                // 标注时可能拖动过图片：记下最终位置，宿主据此把贴图挪过去
+                if (_annotationFloating)
                     AnnotationImageScreenRect = GetAnnotationImageScreenRect();
 
                 Close();

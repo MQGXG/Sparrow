@@ -218,20 +218,6 @@ public partial class CaptureWindow
             // 让居中的图片与选区脱节，这里一律挡掉。
             if (AnnotationOnly)
             {
-                // 贴着图片的小窗模式：拖图片/空白处 = 拖动整个标注窗（参考 snow-shot）。
-                if (_annotationSnug)
-                {
-                    // 已经由按钮/输入框等控件处理的按下不要抢（否则按钮点不动）。
-                    if (e.Handled || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-                        return;
-
-                    _annotationWindowMoved = true;
-                    Cursor = MoveCursor;
-                    BeginMoveDrag(e);
-                    e.Handled = true;
-                    return;
-                }
-
                 if (_selection.Contains(point))
                 {
                     _mode = DragMode.Move;

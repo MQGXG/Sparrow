@@ -256,11 +256,6 @@ public partial class CaptureWindow
 
     private void ApplyMove(Point current)
     {
-        // 贴着图片的小窗模式：图片固定在窗口里，拖动不再挪图
-        // （否则会把图拖到窗口边缘、露出透明底）。
-        if (_annotationSnug)
-            return;
-
         // 选区一动就恢复「工具条跟随」，对齐参考的 resetPositionForSelection 语义
         // （标注模式的工具条可以自由拖动，不绑在图片上，不重置这个状态）
         if (!AnnotationOnly)
@@ -420,11 +415,11 @@ public partial class CaptureWindow
             Canvas.SetLeft(NoteLayer, _selection.X);
             Canvas.SetTop(NoteLayer, _selection.Y);
 
-            // 拖动图片时遮罩的透光洞和工具条要一起跟着走。
-            // 贴图小窗模式不铺遮罩，只移动工具条。
-            if (_annotationSnug)
+            // 浮动标注模式不铺遮罩；拖动图片时要同步更新可交互区域和工具条。
+            if (_annotationFloating)
             {
                 DimLayer.IsVisible = false;
+                UpdateAnnotationInputRegion();
             }
             else
             {

@@ -278,10 +278,10 @@ public sealed partial class CaptureWindowTests
     }
 
     /// <summary>
-    /// 贴图标注只展开成一个小窗：不铺满屏幕、不遮罩桌面，图片保持原比例。
+    /// 贴图标注：图片停在宿主给的位置、不遮罩屏幕；其余区域交给桌面，不影响正常操作。
     /// </summary>
     [AvaloniaFact]
-    public void 标注模式_指定图片区域时只展开小窗()
+    public void 标注模式_指定图片区域时图片停在原位且不遮罩()
     {
         var window = new CaptureWindow
         {
@@ -291,18 +291,17 @@ public sealed partial class CaptureWindowTests
             AnnotationBounds = new PixelRect(200, 120, 320, 200)
         };
 
-        // 与 ImageAnnotator 一致：先摆到图片位置并给一个初始尺寸
-        window.Position = new PixelPoint(200, 120);
-        window.Width = CaptureWindow.AnnotationMinContentWidth + 16;
-        window.Height = 272;
-
         window.Show();
 
         window.DimLayer.IsVisible.ShouldBeFalse();
-        window.Width.ShouldBeLessThan(1200);
-        window.Height.ShouldBeLessThan(800);
 
-        (window.FrozenFrame.Width / window.FrozenFrame.Height).ShouldBe(1.6, 0.001);
+        var scale = window.RenderScaling > 0 ? window.RenderScaling : 1;
+
+        // 图片停在宿主给的位置（窗口左上角是虚拟屏幕原点）
+        Canvas.GetLeft(window.FrozenFrame).ShouldBe((200 - window.Position.X) / scale, 0.01);
+        Canvas.GetTop(window.FrozenFrame).ShouldBe((120 - window.Position.Y) / scale, 0.01);
+        window.FrozenFrame.Width.ShouldBe(320 / scale, 0.01);
+        window.FrozenFrame.Height.ShouldBe(200 / scale, 0.01);
 
         // 工具条贴在图片下方
         Canvas.GetTop(window.ActionBar).ShouldBeGreaterThan(
