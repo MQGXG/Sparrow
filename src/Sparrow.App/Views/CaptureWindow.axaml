@@ -9,7 +9,8 @@
         ShowInTaskbar="False"
         Cursor="Cross"
         Background="Transparent"
-        TransparencyLevelHint="Transparent">
+        TransparencyLevelHint="Transparent"
+        RequestedThemeVariant="Dark">
 
   <Window.Resources>
     <!-- 紧凑滑块：默认 Fluent 是 20px 拇指 / 32px 高，塞进 40px 属性条里像大圆点 -->
@@ -52,8 +53,6 @@
     <StreamGeometry x:Key="IconScan">M4 8.5V6A2 2 0 0 1 6 4h2.5 M15.5 4H18a2 2 0 0 1 2 2v2.5 M20 15.5V18a2 2 0 0 1-2 2h-2.5 M8.5 20H6a2 2 0 0 1-2-2v-2.5 M8 9.5h8 M8 12.5h5.5</StreamGeometry>
     <StreamGeometry x:Key="IconTranslate">M4.5 7h8 M8.5 5v2 M11 7c-.5 3.2-2.7 5.8-5.6 6.9 M6 8.3c.7 2.2 2.5 4 4.8 4.8 M12.8 19.5l3.5-9.3 3.5 9.3 M14.2 16.4h4.4</StreamGeometry>
     <StreamGeometry x:Key="IconSave">M12 4v10.3 M7.9 10.6 12 14.7l4.1-4.1 M5 19.5h14</StreamGeometry>
-    <StreamGeometry x:Key="IconScrollCapture">M6.8 2.2h10.4v19.6H6.8z M12 6v12 M9 8.8 12 5.8l3 3 M9 15.2 12 18.2l3-3</StreamGeometry>
-    <StreamGeometry x:Key="IconOcrFrame">M4 8.5V6.3A2.3 2.3 0 0 1 6.3 4H8.5 M15.5 4h2.2A2.3 2.3 0 0 1 20 6.3v2.2 M20 15.5v2.2a2.3 2.3 0 0 1-2.3 2.3h-2.2 M8.5 20H6.3A2.3 2.3 0 0 1 4 17.7v-2.2</StreamGeometry>
     <StreamGeometry x:Key="IconMosaicBlur">M4.5 8.5c1.9-1.7 3.9-1.7 5.8 0s3.9 1.7 5.8 0 M4.5 12.5c1.9-1.7 3.9-1.7 5.8 0s3.9 1.7 5.8 0 M4.5 16.5c1.9-1.7 3.9-1.7 5.8 0s3.9 1.7 5.8 0</StreamGeometry>
     <StreamGeometry x:Key="IconCornerRadius">M5 20V10.5A5.5 5.5 0 0 1 10.5 5H20</StreamGeometry>
     <StreamGeometry x:Key="IconRedo">M16 5.5 20 9.5l-4 4 M19.5 9.5H10a5.5 5.5 0 0 0 0 11h3</StreamGeometry>
@@ -92,14 +91,14 @@
     <Border x:Name="CandidateBadge"
             IsVisible="False"
             IsHitTestVisible="False"
-            Background="{StaticResource OverlayBrush}"
-            BorderBrush="{StaticResource LineStrongBrush}"
+            Background="{DynamicResource OverlayBrush}"
+            BorderBrush="{DynamicResource LineStrongBrush}"
             BorderThickness="1"
             CornerRadius="6"
             Padding="6,3">
       <TextBlock x:Name="CandidateText"
                  FontSize="11"
-                 Foreground="{StaticResource TextPrimaryBrush}" />
+                 Foreground="{DynamicResource TextPrimaryBrush}" />
     </Border>
 
     <!-- 选区只画边框：填充透明，中间保持原图，不盖一层颜色 -->
@@ -112,7 +111,7 @@
     <Rectangle x:Name="Selection"
                IsVisible="False"
                Fill="Transparent"
-               Stroke="{StaticResource AccentBrush}"
+               Stroke="{DynamicResource AccentBrush}"
                StrokeThickness="2" />
 
     <!-- 文字工具的就地输入：不显示输入框，只留闪烁的光标，和画布上的文字一样 -->
@@ -192,8 +191,8 @@
     <Border x:Name="ColorProbe"
             IsVisible="False"
             IsHitTestVisible="False"
-            Background="{StaticResource OverlayBrush}"
-            BorderBrush="{StaticResource LineStrongBrush}"
+            Background="{DynamicResource OverlayBrush}"
+            BorderBrush="{DynamicResource LineStrongBrush}"
             BorderThickness="1"
             CornerRadius="8"
             Padding="8"
@@ -228,13 +227,13 @@
         <TextBlock x:Name="ProbePosition"
                    FontSize="10"
                    HorizontalAlignment="Center"
-                   Foreground="{StaticResource TextMutedBrush}"
+                   Foreground="{DynamicResource TextMutedBrush}"
                    Text="0, 0" />
         <TextBlock x:Name="ProbeValue"
                    FontSize="14"
                    HorizontalAlignment="Center"
                    FontFamily="{DynamicResource MonoFont}"
-                   Foreground="{StaticResource TextPrimaryBrush}"
+                   Foreground="{DynamicResource TextPrimaryBrush}"
                    Text="#000000" />
         <!-- 当前颜色条：放在色值下方，撑满卡片宽度，避免和像素预览混淆 -->
         <Border x:Name="ProbeSwatch"
@@ -243,7 +242,7 @@
                 Background="#FF000000" />
         <TextBlock FontSize="9"
                    HorizontalAlignment="Center"
-                   Foreground="{StaticResource TextMutedBrush}"
+                   Foreground="{DynamicResource TextMutedBrush}"
                    Text="按 I 复制 · Shift+I 格式" />
       </StackPanel>
     </Border>
@@ -342,18 +341,18 @@
     <Border x:Name="HintBar"
             Canvas.Left="0"
             Canvas.Top="24"
-            Background="{StaticResource OverlayBrush}"
-            BorderBrush="{StaticResource LineStrongBrush}"
+            Background="{DynamicResource OverlayBrush}"
+            BorderBrush="{DynamicResource LineStrongBrush}"
             BorderThickness="1"
             CornerRadius="999"
             Padding="14,6">
       <StackPanel Orientation="Horizontal">
         <TextBlock FontSize="11.5"
                    Text="拖拽框选"
-                   Foreground="{StaticResource TextPrimaryBrush}" />
+                   Foreground="{DynamicResource TextPrimaryBrush}" />
         <TextBlock FontSize="11.5"
                    Text=" · 单击选中 · 滚轮切层 · Tab 整窗/元素 · I 取色 · Esc 取消"
-                   Foreground="{StaticResource TextSecondaryBrush}" />
+                   Foreground="{DynamicResource TextSecondaryBrush}" />
       </StackPanel>
     </Border>
 
@@ -363,14 +362,14 @@
             Canvas.Top="24"
             IsVisible="False"
             IsHitTestVisible="False"
-            Background="{StaticResource OverlayBrush}"
-            BorderBrush="{StaticResource LineStrongBrush}"
+            Background="{DynamicResource OverlayBrush}"
+            BorderBrush="{DynamicResource LineStrongBrush}"
             BorderThickness="1"
             CornerRadius="999"
             Padding="14,6">
       <TextBlock FontSize="11.5"
                  Text="已定一条边 · 再拖一条边定角度 · Esc 取消"
-                 Foreground="{StaticResource TextPrimaryBrush}" />
+                 Foreground="{DynamicResource TextPrimaryBrush}" />
     </Border>
 
     <!-- 两段式浮层：主工具条一行，属性栏按当前工具出现（参考 LumaShot） -->
@@ -555,17 +554,82 @@
           </Button>
           <Button x:Name="PinButton"
                   Classes="tool" Click="OnPinClick" ToolTip.Tip="固定到屏幕，滚轮缩放（P）">
-            <Path Data="{StaticResource IconPin}" StrokeThickness="1.386" />
+            <!-- 45° 倾斜图钉：通用「固定」语义；旋转后视觉重心偏左上，平移补回按钮中心 -->
+            <Path Data="{StaticResource IconPin}" StrokeThickness="1.386">
+              <Path.RenderTransform>
+                <TransformGroup>
+                  <RotateTransform Angle="45" />
+                  <TranslateTransform X="2.2" Y="2.2" />
+                </TransformGroup>
+              </Path.RenderTransform>
+            </Path>
           </Button>
           <Button x:Name="ScrollButton"
                   Classes="tool" Click="OnScrollClick" ToolTip.Tip="滚动截图（G）">
             <Path Data="{StaticResource IconScrollCapture}" />
+            <Button.Flyout>
+              <Flyout Placement="TopEdgeAlignedLeft">
+                <StackPanel Width="236" Spacing="10">
+                  <TextBlock Text="滚动截图"
+                             FontSize="13"
+                             FontWeight="SemiBold"
+                             Foreground="{DynamicResource TextPrimaryBrush}" />
+
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="自动滚动"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <ToggleSwitch Grid.Column="1"
+                                  x:Name="ScrollAutoSwitch"
+                                  IsChecked="True"
+                                  OnContent="开"
+                                  OffContent="关" />
+                  </Grid>
+
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="方向"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <ComboBox Grid.Column="1"
+                              x:Name="ScrollDirectionBox"
+                              Width="110"
+                              SelectedIndex="0">
+                      <ComboBoxItem>纵向</ComboBoxItem>
+                      <ComboBoxItem>横向</ComboBoxItem>
+                    </ComboBox>
+                  </Grid>
+
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="速度"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <ComboBox Grid.Column="1"
+                              x:Name="ScrollSpeedBox"
+                              Width="110"
+                              SelectedIndex="1">
+                      <ComboBoxItem>慢</ComboBoxItem>
+                      <ComboBoxItem>中</ComboBoxItem>
+                      <ComboBoxItem>快</ComboBoxItem>
+                    </ComboBox>
+                  </Grid>
+
+                  <Button Classes="accent"
+                          Content="开始滚动截图"
+                          HorizontalAlignment="Stretch"
+                          HorizontalContentAlignment="Center"
+                          Click="OnStartScrollClick" />
+                </StackPanel>
+              </Flyout>
+            </Button.Flyout>
           </Button>
 
           <Border Classes="tool-separator" />
 
           <Button x:Name="RecordButton"
-                  Classes="tool" Click="OnRecordClick" ToolTip.Tip="录制 / 停止（R）">
+                  Classes="tool" Click="OnRecordClick" ToolTip.Tip="录制（R）">
             <Panel>
               <Ellipse x:Name="RecordDot" Width="14" Height="14" Fill="#FF4D4F" />
               <Border x:Name="RecordStop"
@@ -574,6 +638,14 @@
                       Background="#FF4D4F"
                       IsVisible="False" />
             </Panel>
+            <Button.Flyout>
+              <MenuFlyout Placement="TopEdgeAlignedLeft">
+                <MenuItem x:Name="StartRecordingMenuItem"
+                          Header="开始录制"
+                          Click="OnStartRecordingMenuClick" />
+                <MenuItem Header="录制设置…" Click="OnOpenRecordingSetupMenuClick" />
+              </MenuFlyout>
+            </Button.Flyout>
           </Button>
 
           <Button x:Name="CornerRadiusButton" Classes="tool"
@@ -589,8 +661,8 @@
               <MenuFlyout Placement="TopEdgeAlignedRight">
                 <MenuItem Header="保存（S）" Click="OnSaveClick" />
                 <MenuItem Header="固定（P）" Click="OnPinClick" />
-                <MenuItem Header="滚动（G）" Click="OnScrollClick" />
-                <MenuItem Header="录制（R）" Click="OnRecordClick" />
+                <MenuItem Header="滚动（G）" Click="OnStartScrollClick" />
+                <MenuItem Header="录制（R）" Click="OnStartRecordingMenuClick" />
                 <MenuItem Header="圆角导出" Click="OnCornerRadiusClick" />
               </MenuFlyout>
             </Button.Flyout>
@@ -631,42 +703,61 @@
           </Button>
           <Button x:Name="PauseRecordButton"
                   Classes="tool"
+                  Margin="2,0,0,0"
                   Click="OnPauseRecordingClick"
                   ToolTip.Tip="暂停 / 继续">
-            <TextBlock x:Name="PauseRecordGlyph"
-                       Text="&#xE769;"
-                       FontFamily="Segoe MDL2 Assets"
-                       FontSize="15"
-                       Foreground="#DDDDDD"
-                       VerticalAlignment="Center"
-                       HorizontalAlignment="Center" />
+            <!-- 用实心圆角条/三角，避免细线在 Uniform 缩放下显得歪 -->
+            <Grid Width="14" Height="14">
+              <StackPanel x:Name="PauseRecordGlyph"
+                          Orientation="Horizontal"
+                          Spacing="4"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center">
+                <Border Width="3.5" Height="12" CornerRadius="1.75"
+                        Background="{DynamicResource TextSecondaryBrush}" />
+                <Border Width="3.5" Height="12" CornerRadius="1.75"
+                        Background="{DynamicResource TextSecondaryBrush}" />
+              </StackPanel>
+              <Path x:Name="ResumeRecordGlyph"
+                    Data="M2.6 1 12.6 7 2.6 13Z"
+                    Fill="{DynamicResource TextSecondaryBrush}"
+                    Width="14" Height="14"
+                    Stretch="Uniform"
+                    IsVisible="False" />
+            </Grid>
           </Button>
-          <TextBlock x:Name="RecordElapsed"
-                     Text="00:00:00"
-                     FontFamily="Consolas"
-                     FontSize="13"
-                     Foreground="#F2F4F7"
-                     VerticalAlignment="Center"
-                     Margin="8,0,8,0" />
+          <!-- 计时：时钟图标 + 等宽读数，和独立录制条保持一致 -->
+          <StackPanel Orientation="Horizontal"
+                      Spacing="6"
+                      Margin="8,0,8,0"
+                      VerticalAlignment="Center">
+            <Path Data="{StaticResource IconClock}"
+                  Classes="icon"
+                  Width="16" Height="16" />
+            <TextBlock x:Name="RecordElapsed"
+                       Text="00:00:00"
+                       FontFamily="{DynamicResource MonoFont}"
+                       FontSize="13"
+                       Foreground="{DynamicResource TextPrimaryBrush}"
+                       VerticalAlignment="Center" />
+          </StackPanel>
           <Border Classes="tool-separator" Margin="0,0,4,0" />
-          <TextBlock x:Name="RecordMicrophoneGlyph"
-                     Text="&#xE720;"
-                     FontFamily="Segoe MDL2 Assets"
-                     FontSize="14"
-                     Foreground="#DDDDDD"
-                     Opacity="0.45"
-                     VerticalAlignment="Center"
-                     Margin="4,0,0,0"
-                     ToolTip.Tip="麦克风" />
-          <TextBlock x:Name="RecordSpeakerGlyph"
-                     Text="&#xE767;"
-                     FontFamily="Segoe MDL2 Assets"
-                     FontSize="14"
-                     Foreground="#DDDDDD"
-                     Opacity="0.45"
-                     VerticalAlignment="Center"
-                     Margin="6,0,0,0"
-                     ToolTip.Tip="系统声音" />
+          <Path x:Name="RecordMicrophoneGlyph"
+                Data="{StaticResource IconMic}"
+                Classes="icon"
+                Width="18" Height="18"
+                Margin="4,0,0,0"
+                Opacity="0.45"
+                VerticalAlignment="Center"
+                ToolTip.Tip="麦克风" />
+          <Path x:Name="RecordSpeakerGlyph"
+                Data="{StaticResource IconSpeaker}"
+                Classes="icon"
+                Width="18" Height="18"
+                Margin="6,0,0,0"
+                Opacity="0.45"
+                VerticalAlignment="Center"
+                ToolTip.Tip="系统声音" />
           <Border Classes="tool-separator" Margin="6,0,0,0" />
           <!-- 停止并复制录屏文件到剪贴板（对齐 Snow-shot 的 Copy recording） -->
           <Button x:Name="CopyRecordingButton"
@@ -675,19 +766,18 @@
                   ToolTip.Tip="停止并复制录屏">
             <Path Data="{StaticResource IconCopy}" StrokeThickness="1.161" />
           </Button>
-          <!-- 次要动作：打开保存目录 / 取消录制 -->
-          <Button x:Name="RecordingMoreButton"
+          <!-- 次要动作：打开保存目录 / 取消录制（直接铺开，不用「更多」） -->
+          <Button x:Name="OpenRecordFolderButton"
                   Classes="tool"
-                  ToolTip.Tip="录制选项">
-            <Path Data="{StaticResource IconMore}"
-                  Width="18" Height="18"
-                  StrokeThickness="0.873" />
-            <Button.Flyout>
-              <MenuFlyout Placement="TopEdgeAlignedRight">
-                <MenuItem Header="打开保存目录" Click="OnOpenRecordFolderClick" />
-                <MenuItem Header="取消录制" Click="OnCancelRecordingClick" />
-              </MenuFlyout>
-            </Button.Flyout>
+                  Click="OnOpenRecordFolderClick"
+                  ToolTip.Tip="打开保存目录">
+            <Path Data="{StaticResource IconFolder}" />
+          </Button>
+          <Button x:Name="CancelRecordButton"
+                  Classes="tool"
+                  Click="OnCancelRecordingClick"
+                  ToolTip.Tip="取消并删除本次录制">
+            <Path Data="{StaticResource IconClose}" Stroke="#FF8A8A" />
           </Button>
         </StackPanel>
       </Border>
@@ -757,7 +847,7 @@
                  MaxWidth="420"
                  FontSize="11"
                  TextTrimming="CharacterEllipsis"
-                 Foreground="{StaticResource TextSecondaryBrush}" />
+                 Foreground="{DynamicResource TextSecondaryBrush}" />
 
       <!-- 属性栏：只显示当前工具用得上的设置；宽度随内容，居中挂在主条下方 -->
       <Border x:Name="StyleRow" Classes="capture-bar" HorizontalAlignment="Center" IsVisible="False">
@@ -1260,15 +1350,15 @@
     <Border x:Name="CustomColorPanel"
             IsVisible="False"
             Width="256"
-            Background="{StaticResource OverlayBrush}"
-            BorderBrush="{StaticResource LineStrongBrush}"
+            Background="{DynamicResource OverlayBrush}"
+            BorderBrush="{DynamicResource LineStrongBrush}"
             BorderThickness="1"
             CornerRadius="10"
             Padding="12"
             BoxShadow="0 12 32 0 #99000000">
       <StackPanel Spacing="8">
         <Grid ColumnDefinitions="*,Auto">
-          <TextBlock x:Name="ColorPanelTitle" Text="描边颜色" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" />
+          <TextBlock x:Name="ColorPanelTitle" Text="描边颜色" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" />
           <Button Grid.Column="1" Classes="ghost" Content="✕" FontSize="11" Padding="6,0"
                   Click="OnCloseColorPanel" ToolTip.Tip="关闭" />
         </Grid>

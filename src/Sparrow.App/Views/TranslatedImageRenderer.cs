@@ -1,4 +1,3 @@
-using System.Text;
 using Avalonia;
 using SkiaSharp;
 
@@ -34,8 +33,10 @@ internal static class TranslatedImageRenderer
             canvas.DrawBitmap(crop, 0, 0);
             canvas.Scale((float)Math.Max(scale, 0.01));
 
+            // 整个渲染过程复用一个 SKFont：字体族已经缓存，字号逐行调整即可
+            using var font = AnnotationText.CreateFont(12);
             foreach (var line in usable)
-                DrawLine(canvas, crop, line, scale);
+                DrawLine(canvas, crop, line, scale, font);
         }
 
         using var image = SKImage.FromBitmap(bitmap);
@@ -71,7 +72,7 @@ internal static class TranslatedImageRenderer
     /// <summary>最小字号：再小就看不清，宁可按框裁剪。</summary>
     private const float MinFontSize = 6f;
 
-    private static void DrawLine(SKCanvas canvas, SKBitmap crop, LineBox line, double scale)
+    private static void DrawLine(SKCanvas canvas, SKBitmap crop, LineBox line, double scale, SKFont font)
     {
         var rect = new SKRect(
             (float)line.Box.X,
@@ -89,7 +90,6 @@ internal static class TranslatedImageRenderer
             canvas.DrawRect(rect, fill);
 
         var text = line.Translation!;
-        var typeface = SKTypeface.FromFamilyName("Microsoft YaHei UI") ?? SKTypeface.Default;
 
         // 内边距按行高给；格子很窄时按宽度再收一点，避免留白吃掉字宽
         var padding = Math.Min(rect.Height * 0.08f, rect.Width * 0.04f);
@@ -100,7 +100,6 @@ internal static class TranslatedImageRenderer
         var size = Math.Max(MinFontSize, Math.Min(rect.Height, rect.Width) * 0.82f);
         List<string> rows;
 
-        using var font = new SKFont(typeface, size);
         while (true)
         {
             font.Size = size;
@@ -139,38 +138,46 @@ internal static class TranslatedImageRenderer
 
         foreach (var paragraph in text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
         {
-            var current = new StringBuilder();
+            if (paragraph.Length == 0)
+                continue;
+
+            // 逐字符测量时用 char 缓冲 + span 重载，避免每个字符都 ToString 一次
+            var buffer = new char[paragraph.Length];
+            var length = 0;
 
             foreach (var ch in paragraph)
             {
-                current.Append(ch);
+                buffer[length++] = ch;
 
-                if (font.MeasureText(current.ToString()) <= maxWidth)
+                if (font.MeasureText(buffer.AsSpan(0, length)) <= maxWidth)
                     continue;
 
-                var pending = current.ToString();
-                var breakAt = pending.LastIndexOf(' ');
+                var breakAt = buffer.AsSpan(0, length).LastIndexOf(' ');
 
                 if (breakAt > 0)
                 {
                     // 现在空格处断：英文单词不被拆成两半
-                    rows.Add(pending[..breakAt]);
-                    current.Clear();
-                    current.Append(pending[(breakAt + 1)..]);
+                    rows.Add(new string(buffer, 0, breakAt));
+
+                    var remaining = length - breakAt - 1;
+                    if (remaining > 0)
+                        Array.Copy(buffer, breakAt + 1, buffer, 0, remaining);
+
+                    length = remaining;
                     continue;
                 }
 
                 // 没有空格可断（中文或超长单词）：退回一个字符
-                current.Length--;
-                if (current.Length > 0)
-                    rows.Add(current.ToString());
+                length--;
+                if (length > 0)
+                    rows.Add(new string(buffer, 0, length));
 
-                current.Clear();
-                current.Append(ch);
+                buffer[0] = ch;
+                length = 1;
             }
 
-            if (current.Length > 0)
-                rows.Add(current.ToString());
+            if (length > 0)
+                rows.Add(new string(buffer, 0, length));
         }
 
         return rows;

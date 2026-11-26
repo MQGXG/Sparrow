@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Avalonia;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Sparrow.App.Plugins;
 using Sparrow.App.Services;
@@ -35,6 +36,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _store = store;
         _startup = startup;
         _settings = settings;
+        _appearance = ThemeService.Normalize(settings.Appearance);
         _ai = ai;
         _secrets = secrets;
         _localModels = localModels;
@@ -60,6 +62,13 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _captureShowCursor = settings.CaptureShowCursor;
         _captureUiInScroll = settings.CaptureUiInScroll;
         _captureRestoreColors = settings.CaptureRestoreColors;
+
+        _selectionBorderColor = SelectionBorderColorOptions
+            .FirstOrDefault(option => option.Key == settings.SelectionBorderColor)
+            ?? SelectionBorderColorOptions[0];
+        _dataDirectory = settings.DataDirectory;
+        _modelDirectory = settings.ModelDirectory;
+        _recordDirectory = settings.RecordDirectory;
         _startWithWindows = startup.IsEnabled;
         _historyMaxEntries = settings.HistoryMaxEntries;
         _historyRetentionDays = settings.HistoryRetentionDays;
@@ -95,6 +104,38 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
     /// <summary>「不记录」名单变化时通知监听器。</summary>
     public event Action<IReadOnlyList<string>>? ClipboardExclusionsChanged;
+
+    /// <summary>外观三态变化时通知宿主即时换肤（设置页与顶栏快捷按钮共用）。</summary>
+    public event Action<string>? AppearanceChanged;
+
+    private string _appearance;
+
+    /// <summary>system / light / dark；写入即持久化并通知宿主。</summary>
+    public string Appearance
+    {
+        get => _appearance;
+        set
+        {
+            var next = ThemeService.Normalize(value);
+            if (!SetProperty(ref _appearance, next))
+                return;
+
+            _settings = _settings with { Appearance = next };
+            _store.Save(_settings);
+            OnPropertyChanged(nameof(IsSystemAppearance));
+            OnPropertyChanged(nameof(IsLightAppearance));
+            OnPropertyChanged(nameof(IsDarkAppearance));
+            AppearanceChanged?.Invoke(next);
+        }
+    }
+
+    public bool IsSystemAppearance => _appearance == ThemeService.System;
+    public bool IsLightAppearance => _appearance == ThemeService.Light;
+    public bool IsDarkAppearance => _appearance == ThemeService.Dark;
+
+    /// <summary>顶栏快捷按钮：在当前观感的深 / 浅之间互切。</summary>
+    public void ToggleDarkLight() =>
+        Appearance = ThemeService.Toggle(_appearance, Application.Current?.ActualThemeVariant);
 
     /// <summary>剪贴板保留天数；0 = 永久。</summary>
     [ObservableProperty]
@@ -271,6 +312,82 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         ScreenCapture.RestoreColors = value;
     }
 
+    /// <summary>选区边框颜色；同时用于十字辅助线和悬停候选框。</summary>
+    [ObservableProperty]
+    private SettingsChoiceOption _selectionBorderColor = null!;
+
+    public IReadOnlyList<SettingsChoiceOption> SelectionBorderColorOptions { get; } =
+    [
+        new("#E5A44C", "琥珀（默认）"),
+        new("#4C9AFF", "蓝色"),
+        new("#3DD68C", "绿色"),
+        new("#FF6B6B", "红色"),
+        new("#FFFFFF", "白色"),
+        new("#22D3EE", "青色"),
+        new("#C084FC", "紫色")
+    ];
+
+    partial void OnSelectionBorderColorChanged(SettingsChoiceOption value)
+    {
+        _settings = _settings with { SelectionBorderColor = value.Key };
+        _store.Save(_settings);
+        StatusMessage = $"选区边框颜色：{value.Label}";
+    }
+
+    /// <summary>数据目录：剪贴板/模型/录制/历史；空 = 默认的 %LOCALAPPDATA%\Sparrow。</summary>
+    [ObservableProperty]
+    private string _dataDirectory = string.Empty;
+
+    public string DataDirectoryDisplay =>
+        string.IsNullOrWhiteSpace(DataDirectory) ? SparrowPaths.ConfigRoot : DataDirectory;
+
+    partial void OnDataDirectoryChanged(string value)
+    {
+        _settings = _settings with { DataDirectory = value };
+        _store.Save(_settings);
+        OnPropertyChanged(nameof(DataDirectoryDisplay));
+        OnPropertyChanged(nameof(ModelDirectoryDisplay));
+        OnPropertyChanged(nameof(RecordDirectoryDisplay));
+        StatusMessage = "数据目录已更改，重启后生效";
+    }
+
+    /// <summary>离线模型目录；空 = 数据目录下的 models。</summary>
+    [ObservableProperty]
+    private string _modelDirectory = string.Empty;
+
+    public string ModelDirectoryDisplay =>
+        string.IsNullOrWhiteSpace(ModelDirectory)
+            ? Path.Combine(DataDirectoryDisplay, "models")
+            : ModelDirectory;
+
+    partial void OnModelDirectoryChanged(string value)
+    {
+        _settings = _settings with { ModelDirectory = value };
+        _store.Save(_settings);
+        OnPropertyChanged(nameof(ModelDirectoryDisplay));
+        StatusMessage = "模型目录已更改，重启后生效";
+    }
+
+    /// <summary>录制文件目录；空 = 数据目录下的 recordings。</summary>
+    [ObservableProperty]
+    private string _recordDirectory = string.Empty;
+
+    public string RecordDirectoryDisplay =>
+        string.IsNullOrWhiteSpace(RecordDirectory)
+            ? Path.Combine(DataDirectoryDisplay, "recordings")
+            : RecordDirectory;
+
+    partial void OnRecordDirectoryChanged(string value)
+    {
+        _settings = _settings with { RecordDirectory = value };
+        _store.Save(_settings);
+        OnPropertyChanged(nameof(RecordDirectoryDisplay));
+        StatusMessage = "录制目录已更改，重启后生效";
+    }
+
+    /// <summary>日志目录固定：启动早期就要写日志，不能依赖设置。</summary>
+    public string LogDirectoryDisplay => SparrowPaths.Logs;
+
     [ObservableProperty]
     private string _clipboardPanelHotkey = "Ctrl+Alt+B";
 
@@ -346,7 +463,12 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
     public bool IsGeneralSelected => SelectedSection == SettingsSection.General;
 
+    public bool IsDataSelected => SelectedSection == SettingsSection.Data;
+
     public bool IsAboutSelected => SelectedSection == SettingsSection.About;
+
+    /// <summary>全部插件注册的工具总数（关于页指标用）。</summary>
+    public int ToolCount => Plugins.Sum(plugin => plugin.ToolCount);
 
     partial void OnSelectedSectionChanged(SettingsSection value)
     {
@@ -354,6 +476,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         OnPropertyChanged(nameof(IsModelSelected));
         OnPropertyChanged(nameof(IsHotkeysSelected));
         OnPropertyChanged(nameof(IsGeneralSelected));
+        OnPropertyChanged(nameof(IsDataSelected));
         OnPropertyChanged(nameof(IsAboutSelected));
 
         // 工具热键列表才需要工具注册表：切到热键分段时才加载插件，冷启动路径保持零加载
@@ -392,6 +515,8 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         // 插件列表变了（重新扫描后），工具热键行需要跟着重建；没显示过热键分段就不碰注册表
         if (_toolHotkeysLoaded)
             ReloadToolHotkeys();
+
+        OnPropertyChanged(nameof(ToolCount));
     }
 
     /// <summary>工具热键行：工具全集（注册表）按名称排序，预填已配置值。</summary>

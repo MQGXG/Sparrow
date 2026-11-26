@@ -20,8 +20,8 @@
 
   <!-- 抬起的浮层：渐变底 + 阴影，比描边更能表达层级 -->
   <Border x:Name="Shell"
-          Background="{StaticResource SurfaceGradientBrush}"
-          BorderBrush="{StaticResource LineStrongBrush}"
+          Background="{DynamicResource SurfaceGradientBrush}"
+          BorderBrush="{DynamicResource LineStrongBrush}"
           BorderThickness="1"
           CornerRadius="14"
           BoxShadow="0 24 64 0 #99000000"
@@ -46,7 +46,7 @@
 
     <Panel>
       <!-- HUD 底纹：小窗密度高，点阵压暗一档 -->
-      <Border Background="{StaticResource DotGridBrush}"
+      <Border Background="{DynamicResource DotGridBrush}"
               IsHitTestVisible="False"
               Opacity="0.6" />
 
@@ -73,7 +73,7 @@
         </Border>
       </Grid>
 
-      <Border Height="1" Background="{StaticResource LineBrush}" />
+      <Border Height="1" Background="{DynamicResource LineBrush}" />
 
       <!-- 执行中的进度条：OCR 这类工具要 2 秒以上，没有反馈会以为没反应 -->
       <ProgressBar IsIndeterminate="True"
@@ -81,7 +81,7 @@
                    Height="2"
                    MinHeight="2"
                    Background="Transparent"
-                   Foreground="{StaticResource AccentBrush}" />
+                   Foreground="{DynamicResource AccentBrush}" />
 
       <!-- 工具列表 -->
       <Panel>
@@ -106,11 +106,11 @@
                                                Term="{Binding HighlightTerm}"
                                                FontSize="13"
                                                FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextPrimaryBrush}" />
+                                               Foreground="{DynamicResource TextPrimaryBrush}" />
                   <controls:HighlightTextBlock SourceText="{Binding Description}"
                                                Term="{Binding HighlightTerm}"
                                                FontSize="11"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"
                                                TextWrapping="Wrap" />
                 </StackPanel>
 
@@ -119,7 +119,7 @@
                         Margin="12,0,0,0">
                   <TextBlock Text="{Binding CategoryLabel}"
                              FontSize="11"
-                             Foreground="{StaticResource TextMutedBrush}" />
+                             Foreground="{DynamicResource TextMutedBrush}" />
                 </Border>
               </Grid>
             </DataTemplate>
@@ -138,11 +138,11 @@
                 Data="{StaticResource IconSearch}" />
           <TextBlock Text="没有匹配的工具"
                      FontSize="13"
-                     Foreground="{StaticResource TextSecondaryBrush}"
+                     Foreground="{DynamicResource TextSecondaryBrush}"
                      HorizontalAlignment="Center" />
           <TextBlock Text="试试 json、base64、ocr"
                      FontSize="11"
-                     Foreground="{StaticResource TextMutedBrush}"
+                     Foreground="{DynamicResource TextMutedBrush}"
                      HorizontalAlignment="Center" />
         </StackPanel>
       </Panel>
@@ -152,8 +152,8 @@
               Margin="12,2,12,0"
               Padding="12,8"
               CornerRadius="10"
-              Background="{StaticResource SurfaceRaisedBrush}"
-              BorderBrush="{StaticResource LineBrush}"
+              Background="{DynamicResource SurfaceRaisedBrush}"
+              BorderBrush="{DynamicResource LineBrush}"
               BorderThickness="1">
         <Grid RowDefinitions="Auto,Auto">
           <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,Auto">
@@ -163,12 +163,12 @@
                      Height="6"
                      Margin="0,0,8,0"
                      VerticalAlignment="Center"
-                     Fill="{StaticResource AccentBrush}" />
+                     Fill="{DynamicResource AccentBrush}" />
 
             <TextBlock Grid.Column="1"
                        Text="{Binding ResultTitle}"
                        FontSize="11"
-                       Foreground="{StaticResource TextMutedBrush}"
+                       Foreground="{DynamicResource TextMutedBrush}"
                        VerticalAlignment="Center" />
 
             <TextBlock Grid.Column="2"
@@ -176,7 +176,7 @@
                        IsVisible="{Binding HasResult}"
                        Margin="0,0,12,0"
                        FontSize="11"
-                       Foreground="{StaticResource TextMutedBrush}"
+                       Foreground="{DynamicResource TextMutedBrush}"
                        VerticalAlignment="Center" />
 
             <Button Grid.Column="3"
@@ -189,7 +189,7 @@
             <SelectableTextBlock Text="{Binding ResultText}"
                                  FontFamily="{StaticResource MonoFont}"
                                  FontSize="13"
-                                 Foreground="{StaticResource TextPrimaryBrush}"
+                                 Foreground="{DynamicResource TextPrimaryBrush}"
                                  TextWrapping="Wrap" />
           </ScrollViewer>
         </Grid>
@@ -200,20 +200,20 @@
               Margin="12,2,12,0"
               Padding="12,8"
               CornerRadius="10"
-              Background="{StaticResource SurfaceRaisedBrush}"
-              BorderBrush="{StaticResource LineBrush}"
+              Background="{DynamicResource SurfaceRaisedBrush}"
+              BorderBrush="{DynamicResource LineBrush}"
               BorderThickness="1">
         <Grid ColumnDefinitions="Auto,*">
           <Border Grid.Column="0"
                   Width="3"
                   Margin="0,2"
                   CornerRadius="1.5"
-                  Background="{StaticResource DangerBrush}" />
+                  Background="{DynamicResource DangerBrush}" />
 
           <TextBlock Grid.Column="1"
                      Margin="10,0,0,0"
                      Text="{Binding ErrorText}"
-                     Foreground="{StaticResource DangerBrush}"
+                     Foreground="{DynamicResource DangerBrush}"
                      FontSize="12"
                      VerticalAlignment="Center"
                      TextWrapping="Wrap" />
@@ -225,16 +225,16 @@
                   Spacing="6"
                   Margin="16,12,16,12">
         <Border Classes="kbd"><TextBlock Text="↑ ↓" /></Border>
-        <TextBlock Text="选择" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" />
+        <TextBlock Text="选择" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
 
         <Border Classes="kbd" Margin="8,0,0,0"><TextBlock Text="Enter" /></Border>
-        <TextBlock Text="执行" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" />
+        <TextBlock Text="执行" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
 
         <Border Classes="kbd" Margin="8,0,0,0"><TextBlock Text="Ctrl+C" /></Border>
-        <TextBlock Text="复制" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" />
+        <TextBlock Text="复制" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
 
         <Border Classes="kbd" Margin="8,0,0,0"><TextBlock Text="Esc" /></Border>
-        <TextBlock Text="关闭" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" />
+        <TextBlock Text="关闭" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
       </StackPanel>
 
       </StackPanel>

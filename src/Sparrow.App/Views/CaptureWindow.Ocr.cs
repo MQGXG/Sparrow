@@ -76,6 +76,24 @@ public partial class CaptureWindow
         if (_selection.Width < MinSelectionSize || _selection.Height < MinSelectionSize)
             return;
 
+        // 纯标注模式：完成 = 合成标注并关闭，不执行任何截图动作
+        if (AnnotationOnly)
+        {
+            if (action == CaptureAction.CopyImage)
+            {
+                AnnotationResult = _annotationBasePng is { Length: > 0 } basePng
+                    ? AnnotationRenderer.Compose(
+                        basePng,
+                        _notes.Items,
+                        _scaling > 0 ? _scaling : 1)
+                    : null;
+
+                Close();
+            }
+
+            return;
+        }
+
         // 录制不需要截图：只把选区换算成物理像素，交给宿主启动录制会话。
         if (action == CaptureAction.Record)
         {
@@ -189,6 +207,12 @@ public partial class CaptureWindow
         _isRecognizing = true;
         _ocrCancellation = new CancellationTokenSource();
         _translateTarget = options?.TranslateTarget;
+
+        // OCR / 翻译期间收起取色器：结果条出现后卡片跟着鼠标会挡住文字
+        // （对齐 Snow-shot 在进入编辑态时 hideColorPicker）。
+        _colorProbeSuppressed = true;
+        ColorProbe.IsVisible = false;
+
         RecognizeButton.IsEnabled = false;
         TranslateButton.IsEnabled = false;
         TranslateActionButton.IsEnabled = false;
@@ -663,6 +687,9 @@ public partial class CaptureWindow
 
     private void ClearOcrOverlay()
     {
+        // 离开 OCR 编辑态：恢复自动取色。
+        _colorProbeSuppressed = false;
+
         OcrLayer.Children.Clear();
         _ocrBoxes.Clear();
         _selectedOcrBoxes.Clear();

@@ -56,9 +56,10 @@ public sealed partial class ClipboardEntryViewModel : ObservableObject
         if (entry.Kind != ClipboardEntryKind.Text || entry.Text is not { Length: > 0 } text)
             return string.Empty;
 
-        var firstLine = text.TrimStart();
-        var end = firstLine.IndexOfAny(['\r', '\n']);
-        return (end >= 0 ? firstLine[..end] : firstLine).Trim();
+        // 用 span 找首行，避免 TrimStart 复制整段文本（列表刷新时每条都要算一次）
+        var span = text.AsSpan().TrimStart();
+        var end = span.IndexOfAny('\r', '\n');
+        return (end >= 0 ? span[..end] : span).Trim().ToString();
     }
 
     public ClipboardHistoryEntry Entry { get; }

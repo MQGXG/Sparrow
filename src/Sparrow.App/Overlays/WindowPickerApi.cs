@@ -6,15 +6,14 @@ namespace Sparrow.App.Overlays;
 /// <summary>
 /// 拾取窗口 / 图钉跟随所需的 Win32 操作。
 ///
-/// 关键算法移植自 OmniSeeker 的 <c>WindowPinService.GetTopLevelWindowAt</c>：
-/// 光标下如果是本进程窗口（命令面板、工作区、拾取遮罩自己），
-/// 用 <c>GetWindow(GW_HWNDNEXT)</c> 往下穿透，直到找到别的进程的可见根窗口。
-/// 这样面板挡在中间也不会选错。
+/// 命中规则：按 Z 序枚举所有顶层窗口，只取「覆盖光标点、非本进程、可见、
+/// 未最小化、非 Shell」的第一个。旧实现用 GetWindow(GW_HWNDNEXT) 沿 Z 序
+/// 盲穿透，选到的窗口可能根本不在光标下（从托盘菜单启动时尤其容易误选），
+/// 于是「点了一个窗口，却把另一个窗口置顶、只留一个图钉在最前面」。
 /// </summary>
 internal static class WindowPickerApi
 {
     private const uint GaRoot = 2;
-    private const uint GwHwndNext = 2;
     private const int GwlExStyle = -20;
     private const long WsExTopMost = 0x00000008;
     private const uint SwpNoSize = 0x0001;
@@ -45,6 +44,20 @@ internal static class WindowPickerApi
         public int Bottom;
     }
 
+    /// <summary>一次窗口枚举的快照；候选按 Z 序（最前 → 最后）传入命中判断。</summary>
+    internal readonly record struct WindowCandidate(
+        nint Handle,
+        uint ProcessId,
+        bool Visible,
+        bool Minimized,
+        bool IsShell,
+        Rect Bounds);
+
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out Point point);
 
@@ -53,9 +66,6 @@ internal static class WindowPickerApi
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetAncestor(IntPtr hWnd, uint gaFlags);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
 
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
@@ -75,10 +85,10 @@ internal static class WindowPickerApi
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hWnd, out Rect rect);
 
-    [DllImport("user32.dll", EntryPoint = "GetWindowLong")]
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
     private static extern int GetWindowLong32(IntPtr hWnd, int nIndex);
 
-    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")]
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
     private static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
 
     [DllImport("user32.dll", SetLastError = true)]
@@ -89,26 +99,73 @@ internal static class WindowPickerApi
     /// <summary>读取当前光标位置（物理像素）。</summary>
     public static bool TryGetCursor(out Point point) => GetCursorPos(out point);
 
-    /// <summary>点击时刻解析光标下第一个「别的进程的可见根窗口」；找不到返回 0。</summary>
+    /// <summary>点击时刻解析光标下最靠前的、非本进程的可见顶层窗口；找不到返回 0。</summary>
     public static nint ResolveAtCursor()
     {
         if (!GetCursorPos(out var point))
             return 0;
 
         var currentProcessId = (uint)Environment.ProcessId;
-        var handle = WindowFromPoint(point);
+        var candidates = new List<WindowCandidate>();
 
-        while (handle != IntPtr.Zero)
+        // EnumWindows 的回调顺序就是 Z 序；遮罩 / 面板等本进程窗口会在命中判断里被排除，
+        // 所以不再依赖「Hide() 之后遮罩是否真的已从命中链移除」。
+        EnumWindows((handle, _) =>
         {
-            var root = GetAncestor(handle, GaRoot);
-            if (root != IntPtr.Zero && IsWindowVisible(root) && !IsShellWindow(root))
-            {
-                GetWindowThreadProcessId(root, out var processId);
-                if (processId != currentProcessId)
-                    return root;
-            }
+            GetWindowThreadProcessId(handle, out var processId);
+            GetWindowRect(handle, out var bounds);
 
-            handle = GetWindow(root == IntPtr.Zero ? handle : root, GwHwndNext);
+            candidates.Add(new WindowCandidate(
+                handle,
+                processId,
+                IsWindowVisible(handle),
+                IsIconic(handle),
+                IsShellWindow(handle),
+                bounds));
+
+            return true;
+        }, IntPtr.Zero);
+
+        var picked = SelectWindowAt(point, currentProcessId, candidates);
+        if (picked != 0)
+            return picked;
+
+        // 兜底：异形窗口 / DPI 虚拟化可能让矩形不准，直接用光标下的根窗口，
+        // 但绝不沿 Z 序盲穿透——找不到就当取消，避免置顶到不相干的窗口。
+        var underCursor = WindowFromPoint(point);
+        if (underCursor == IntPtr.Zero)
+            return 0;
+
+        var root = GetAncestor(underCursor, GaRoot);
+        if (root == IntPtr.Zero || !IsWindowVisible(root) || IsShellWindow(root))
+            return 0;
+
+        GetWindowThreadProcessId(root, out var rootProcessId);
+        return rootProcessId != 0 && rootProcessId != currentProcessId ? root : 0;
+    }
+
+    /// <summary>纯命中判断：返回第一个覆盖光标点的合格窗口；没有就返回 0（取消）。</summary>
+    internal static nint SelectWindowAt(
+        Point point,
+        uint currentProcessId,
+        IReadOnlyList<WindowCandidate> candidatesInZOrder)
+    {
+        foreach (var candidate in candidatesInZOrder)
+        {
+            if (!candidate.Visible || candidate.Minimized || candidate.IsShell)
+                continue;
+            if (candidate.ProcessId == 0 || candidate.ProcessId == currentProcessId)
+                continue;
+
+            var bounds = candidate.Bounds;
+            if (bounds.Right <= bounds.Left || bounds.Bottom <= bounds.Top)
+                continue;
+            if (point.X < bounds.Left || point.X >= bounds.Right)
+                continue;
+            if (point.Y < bounds.Top || point.Y >= bounds.Bottom)
+                continue;
+
+            return candidate.Handle;
         }
 
         return 0;

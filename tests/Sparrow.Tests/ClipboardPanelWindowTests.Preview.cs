@@ -46,8 +46,8 @@ public sealed partial class ClipboardPanelWindowTests
             viewModel.Kinds.First(kind => kind.Name == "文本").Count.ShouldBe(10);
             viewModel.Kinds.First(kind => kind.Name == "收藏").Count.ShouldBe(1);
 
-            viewModel.StatusBarText.ShouldContain("10 /");
-            viewModel.StatusBarText.ShouldContain("条");
+            viewModel.StatusBarText.ShouldContain("10 条");
+            viewModel.StatusBarText.ShouldContain("MB");
             viewModel.StatusHint.ShouldContain("Enter");
         }
         finally

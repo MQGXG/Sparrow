@@ -2,84 +2,170 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="Sparrow.App.Views.ScrollResultWindow"
         Title="Sparrow · 滚动截图"
-        Width="820"
-        Height="660"
-        MinWidth="480"
-        MinHeight="400"
+        Width="920"
+        Height="740"
+        MinWidth="520"
+        MinHeight="420"
         Icon="avares://Sparrow.App/Assets/sparrow-64.png"
+        WindowDecorations="None"
+        CanResize="True"
         WindowStartupLocation="CenterScreen"
-        Background="{StaticResource BgBrush}">
+        Background="Transparent"
+        TransparencyLevelHint="Transparent"
+        RequestedThemeVariant="Dark">
 
-  <Grid RowDefinitions="Auto,*,Auto" Margin="16"> 
+  <!-- 无边框悬浮面板：不再是系统窗口的样子 -->
+  <Grid Margin="10">
+    <Border Background="{DynamicResource BgBrush}"
+            BorderBrush="{DynamicResource LineStrongBrush}"
+            BorderThickness="1"
+            CornerRadius="12"
+            ClipToBounds="True"
+            BoxShadow="0 18 48 0 #99000000">
+      <Grid RowDefinitions="Auto,Auto,*,Auto">
 
-    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
-      <StackPanel Spacing="3">
-        <TextBlock Classes="subtitle"
-                   Text="滚动截图" />
-        <TextBlock x:Name="SizeText"
-                   Classes="num" />
-      </StackPanel>
+      <!-- 标题行：可拖动，不再是系统标题栏 -->
+      <Grid Grid.Row="0"
+            ColumnDefinitions="Auto,*,Auto"
+            Margin="16,12,10,0"
+            Background="Transparent"
+            PointerPressed="OnTitleBarPressed">
+        <Border Classes="hud-icon" Width="32" Height="32">
+          <Path Data="{StaticResource IconScrollCapture}" />
+        </Border>
 
-      <Button Grid.Column="1"
-              Classes="ghost small"
-              Content="关闭"
-              Click="OnCloseClick" />
-    </Grid>
+        <StackPanel Grid.Column="1" Spacing="2" Margin="10,0,0,0" VerticalAlignment="Center">
+          <TextBlock Text="滚动截图"
+                     FontSize="14"
+                     FontWeight="SemiBold"
+                     Foreground="{DynamicResource TextPrimaryBrush}" />
+          <TextBlock x:Name="SizeText"
+                     Classes="num" />
+        </StackPanel>
 
-    <Grid Grid.Row="1"
-          ColumnDefinitions="*,Auto"
-          Margin="0,12,0,0">
-      <Border Grid.Column="0"
-              Classes="panel"
-              Padding="8">
-        <ScrollViewer HorizontalScrollBarVisibility="Disabled"
-                      VerticalScrollBarVisibility="Auto">
-          <Image x:Name="Preview"
-                 Stretch="Uniform"
-                 HorizontalAlignment="Stretch" />
-        </ScrollViewer>
-      </Border>
+        <Button Grid.Column="2"
+                Classes="ghost"
+                Width="30"
+                Height="30"
+                Padding="0"
+                Click="OnCloseClick"
+                ToolTip.Tip="关闭（Esc）">
+          <Path Data="{StaticResource IconClose}" Classes="icon icon-xs" />
+        </Button>
+      </Grid>
 
-      <!-- 整图缩略 + 头尾裁剪手柄 -->
-      <Border Grid.Column="1"
-              Width="64"
-              Margin="12,0,0,0"
-              Padding="6"
-              Classes="panel"
-              ToolTip.Tip="拖动琥珀色手柄裁掉长图头尾">
-        <Grid>
-          <Image x:Name="TrimOverview"
-                 Stretch="Fill"
-                 Opacity="0.85" />
+      <Border Grid.Row="1" Classes="hud-line" Margin="16,10,16,0" />
 
-          <Canvas x:Name="TrimTrack"
-                  Background="Transparent"
-                  ClipToBounds="True"
-                  Cursor="SizeNorthSouth"
-                  PointerPressed="OnTrimPointerPressed"
-                  PointerMoved="OnTrimPointerMoved"
-                  PointerReleased="OnTrimPointerReleased"
-                  PointerCaptureLost="OnTrimPointerCaptureLost">
-            <Border x:Name="TrimTopShade" Background="#99000000" />
-            <Border x:Name="TrimBottomShade" Background="#99000000" />
-            <Border x:Name="TrimTopHandle" Height="6" Background="{StaticResource AccentBrush}" />
-            <Border x:Name="TrimBottomHandle" Height="6" Background="{StaticResource AccentBrush}" />
-          </Canvas>
+      <!-- 预览 + 头尾裁剪条 -->
+      <Grid Grid.Row="2"
+            ColumnDefinitions="*,88"
+            ColumnSpacing="10"
+            Margin="16,12,16,0">
+        <Border Background="#FF0B0E13"
+                BorderBrush="{DynamicResource LineBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="8"
+                ClipToBounds="True">
+          <Panel>
+            <Border Background="{DynamicResource DotGridBrush}" IsHitTestVisible="False" />
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+              <Image x:Name="Preview"
+                     Stretch="Uniform"
+                     HorizontalAlignment="Stretch" />
+            </ScrollViewer>
+          </Panel>
+        </Border>
+
+        <Border Grid.Column="1"
+                Background="#FF0B0E13"
+                BorderBrush="{DynamicResource LineBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="6"
+                ToolTip.Tip="拖动琥珀色手柄裁掉长图头尾">
+          <Grid>
+            <Image x:Name="TrimOverview"
+                   Stretch="Fill"
+                   Opacity="0.85" />
+            <Canvas x:Name="TrimTrack"
+                    Background="Transparent"
+                    ClipToBounds="True"
+                    Cursor="SizeNorthSouth"
+                    PointerPressed="OnTrimPointerPressed"
+                    PointerMoved="OnTrimPointerMoved"
+                    PointerReleased="OnTrimPointerReleased"
+                    PointerCaptureLost="OnTrimPointerCaptureLost">
+              <Border x:Name="TrimTopShade" Background="#99000000" />
+              <Border x:Name="TrimBottomShade" Background="#99000000" />
+              <Border x:Name="TrimTopHandle"
+                      Height="8"
+                      CornerRadius="2"
+                      Background="{DynamicResource AccentBrush}" />
+              <Border x:Name="TrimBottomHandle"
+                      Height="8"
+                      CornerRadius="2"
+                      Background="{DynamicResource AccentBrush}" />
+            </Canvas>
+          </Grid>
+        </Border>
+      </Grid>
+
+      <!-- 动作条 -->
+      <Border Grid.Row="3"
+              Background="#FF0B0E13"
+              BorderBrush="{DynamicResource LineBrush}"
+              BorderThickness="0,1,0,0"
+              Margin="0,12,0,0"
+              Padding="16,10">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Classes="num"
+                     Text="Ctrl+C 复制 · S 保存 · P 固定 · R 识别 · Esc 关闭"
+                     VerticalAlignment="Center" />
+
+          <StackPanel Grid.Column="1"
+                      Orientation="Horizontal"
+                      Spacing="6"
+                      VerticalAlignment="Center">
+            <Button Classes="ghost" Click="OnAnnotateClick" ToolTip.Tip="标注：画笔 / 矩形 / 箭头 / 文字">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Path Data="{StaticResource IconPen}" Classes="icon icon-xs" />
+                <TextBlock Text="标注" />
+              </StackPanel>
+            </Button>
+
+            <Button Classes="ghost" Click="OnCopyImageClick" ToolTip.Tip="复制图片（Ctrl+C）">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Path Data="{StaticResource IconCopy}" Classes="icon icon-xs" />
+                <TextBlock Text="复制" />
+              </StackPanel>
+            </Button>
+
+            <Button Classes="ghost" Click="OnSaveClick" ToolTip.Tip="保存为 PNG（S）">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Path Data="{StaticResource IconSave}" Classes="icon icon-xs" />
+                <TextBlock Text="保存" />
+              </StackPanel>
+            </Button>
+
+            <Button Classes="ghost" Click="OnPinClick" ToolTip.Tip="固定到屏幕（P）">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Path Data="{StaticResource IconPin}" Classes="icon icon-xs" />
+                <TextBlock Text="固定" />
+              </StackPanel>
+            </Button>
+
+            <Button Classes="accent" Click="OnRecognizeClick" ToolTip.Tip="识别文字（R）">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Path Data="{StaticResource IconOcrFrame}" Classes="icon icon-xs" />
+                <TextBlock Text="识别文字" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
         </Grid>
       </Border>
-    </Grid>
-
-    <!-- 和普通截图共用同一组结果动作 -->
-    <StackPanel Grid.Row="2"
-                Orientation="Horizontal"
-                HorizontalAlignment="Right"
-                Spacing="8"
-                Margin="0,12,0,0">
-      <Button Content="复制图片" Click="OnCopyImageClick" />
-      <Button Content="保存" Click="OnSaveClick" />
-      <Button Content="固定" Click="OnPinClick" />
-      <Button Classes="accent" Content="识别文字" Click="OnRecognizeClick" />
-    </StackPanel>
-
+      </Grid>
+    </Border>
   </Grid>
 </Window>

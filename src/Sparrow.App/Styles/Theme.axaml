@@ -2,102 +2,14 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
   <Styles.Resources>
-
-    <!-- ============================================================
-         设计 token：只有一套灰阶 + 一个强调色。
-         界面里不再出现散落的十六进制颜色，统一从这里取。
-         ============================================================ -->
-
-    <!-- 背景层级：窗口 < 面板 < 抬起元素 < 悬停。每级亮度差 ~4%，保证在普通屏幕上能分开 -->
-    <SolidColorBrush x:Key="BgBrush" Color="#0B0E13" />
-    <SolidColorBrush x:Key="SurfaceBrush" Color="#12171F" />
-    <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#1A212C" />
-    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#242D3A" />
-
-    <!-- 描边：常态 / 强调 / 分隔 -->
-    <SolidColorBrush x:Key="LineBrush" Color="#2B3543" />
-    <SolidColorBrush x:Key="LineStrongBrush" Color="#3D4959" />
-    <SolidColorBrush x:Key="OverlayBrush" Color="#CC0B0E13" />
-
-    <!-- 文字三级 -->
-    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#E9EEF6" />
-    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#9BA8BA" />
-    <SolidColorBrush x:Key="TextMutedBrush" Color="#8695A8" />
-
-    <!-- 唯一强调色：琥珀。文字用 AmberText，底色用 AccentSoft -->
-    <SolidColorBrush x:Key="AccentBrush" Color="#E5A44C" />
-    <SolidColorBrush x:Key="AccentHoverBrush" Color="#F0B463" />
-    <SolidColorBrush x:Key="AccentSoftBrush" Color="#2C2318" />
-    <SolidColorBrush x:Key="AccentBorderBrush" Color="#5C4A26" />
-    <!-- 琥珀底上的文字色：主按钮、序号角标 -->
-    <SolidColorBrush x:Key="AccentOnBrush" Color="#1A1206" />
-
-    <!-- 语义色 -->
-    <SolidColorBrush x:Key="DangerBrush" Color="#F87171" />
-    <SolidColorBrush x:Key="DangerBgBrush" Color="#2A1517" />
-    <SolidColorBrush x:Key="DangerLineBrush" Color="#5C2A2E" />
-
-    <!-- 强调色的衍生态 -->
-    <SolidColorBrush x:Key="AccentPressedBrush" Color="#C98C3A" />
-    <!-- 12% 透明琥珀：截图选区填充、可选文本选区 -->
-    <SolidColorBrush x:Key="AccentSelectionBrush" Color="#20E5A44C" />
-
     <!--
-      渐变（质感层）：克制到几乎察觉不到，只允许用在三处——
-      窗口底、面板/浮层底、主按钮。渐变色差全部压在 ±5% 明度以内。
+      颜色 token 统一放在 App.axaml 的 ThemeDictionaries（Dark / Light 两套）。
+      这里只保留与主题无关的资源；下方所有颜色引用一律用 DynamicResource，
+      这样 RequestedThemeVariant 切换时界面即时换肤，无需重启。
     -->
-    <LinearGradientBrush x:Key="WindowBgGradientBrush" StartPoint="0%,0%" EndPoint="0%,100%">
-      <GradientStop Color="#0D1118" Offset="0" />
-      <GradientStop Color="#0A0D12" Offset="1" />
-    </LinearGradientBrush>
-
-    <LinearGradientBrush x:Key="SurfaceGradientBrush" StartPoint="0%,0%" EndPoint="0%,100%">
-      <GradientStop Color="#151B25" Offset="0" />
-      <GradientStop Color="#10141B" Offset="1" />
-    </LinearGradientBrush>
-
-    <LinearGradientBrush x:Key="PanelGradientBrush" StartPoint="0%,0%" EndPoint="0%,100%">
-      <GradientStop Color="#161C26" Offset="0" />
-      <GradientStop Color="#10151D" Offset="1" />
-    </LinearGradientBrush>
-
-    <LinearGradientBrush x:Key="AccentGradientBrush" StartPoint="0%,0%" EndPoint="0%,100%">
-      <GradientStop Color="#F0B463" Offset="0" />
-      <GradientStop Color="#DEA142" Offset="1" />
-    </LinearGradientBrush>
-
-    <LinearGradientBrush x:Key="AccentGradientHoverBrush" StartPoint="0%,0%" EndPoint="0%,100%">
-      <GradientStop Color="#F5BF76" Offset="0" />
-      <GradientStop Color="#E5A94D" Offset="1" />
-    </LinearGradientBrush>
-
-    <!--
-      点阵图纸底纹：32px 一格的极淡灰蓝点，铺满窗口底部。
-      这是「取景框 HUD」风格的底噪层，只可整层叠加，不参与命中。
-    -->
-    <ImageBrush x:Key="DotGridBrush"
-                Source="avares://Sparrow.App/Assets/dot-grid.png"
-                TileMode="Tile"
-                DestinationRect="0,0,32,32"
-                Stretch="None" />
-
-    <!--
-      覆盖 Fluent 的系统强调色（默认是紫/蓝）。
-      列表选中、开关、ComboBox 高亮都由它派生，改这一个就不用逐个控件改。
-    -->
-    <Color x:Key="SystemAccentColor">#E5A44C</Color>
-    <Color x:Key="SystemAccentColorLight1">#F0B463</Color>
-    <Color x:Key="SystemAccentColorLight2">#F7CE94</Color>
-    <Color x:Key="SystemAccentColorLight3">#FBE6C6</Color>
-    <Color x:Key="SystemAccentColorDark1">#C98C3A</Color>
-    <Color x:Key="SystemAccentColorDark2">#A9712A</Color>
-    <Color x:Key="SystemAccentColorDark3">#86561C</Color>
-
-    <!-- 字体：标题用 Display，正文用 Text；等宽给结果区 -->
     <FontFamily x:Key="UiFont">Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI</FontFamily>
     <FontFamily x:Key="DisplayFont">Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI</FontFamily>
     <FontFamily x:Key="MonoFont">Cascadia Code, Cascadia Mono, Consolas, Microsoft YaHei UI</FontFamily>
-
   </Styles.Resources>
 
   <!-- ============================================================
@@ -106,22 +18,22 @@
 
   <Style Selector="Window">
     <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
-    <Setter Property="Background" Value="{StaticResource WindowBgGradientBrush}" />
+    <Setter Property="Background" Value="{DynamicResource WindowBgGradientBrush}" />
   </Style>
 
   <Style Selector="TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
   </Style>
 
   <!-- 按钮：默认是「描边次级按钮」，不再用 Fluent 的灰底 -->
   <Style Selector="Button">
-    <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="8" />
     <Setter Property="Padding" Value="12,6" />
     <Setter Property="FontSize" Value="12" />
-    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="Transitions">
@@ -132,12 +44,12 @@
   </Style>
 
   <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource LineStrongBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource LineStrongBrush}" />
   </Style>
 
   <Style Selector="Button:pressed /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
   </Style>
 
   <Style Selector="Button:disabled /template/ ContentPresenter#PART_ContentPresenter">
@@ -154,16 +66,16 @@
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="CornerRadius" Value="0" />
     <Setter Property="Padding" Value="0" />
-    <Setter Property="Foreground" Value="#9BA8BA" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
   </Style>
 
   <Style Selector="Button.caption:pointerover">
-    <Setter Property="Background" Value="#242D3A" />
-    <Setter Property="Foreground" Value="#E9EEF6" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
   </Style>
 
   <Style Selector="Button.caption:pressed">
-    <Setter Property="Background" Value="#12171F" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
   </Style>
 
   <Style Selector="Button.caption.close:pointerover">
@@ -177,49 +89,49 @@
 
   <!-- 主按钮：整屏只允许一个。琥珀渐变从上到下压暗，按下再沉一档 -->
   <Style Selector="Button.accent">
-    <Setter Property="Background" Value="{StaticResource AccentGradientBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
-    <Setter Property="Foreground" Value="{StaticResource AccentOnBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentGradientBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentOnBrush}" />
     <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
 
   <Style Selector="Button.accent:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource AccentGradientHoverBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource AccentHoverBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentGradientHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentHoverBrush}" />
   </Style>
 
   <Style Selector="Button.accent:pressed /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource AccentPressedBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource AccentPressedBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentPressedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentPressedBrush}" />
   </Style>
 
   <!-- 幽灵按钮：无底色，用于工具栏和结果卡片 -->
   <Style Selector="Button.ghost">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
-    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
   </Style>
 
   <Style Selector="Button.ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
 
   <!-- 危险操作：平时和幽灵按钮一样安静，hover 才染红 -->
   <Style Selector="Button.danger">
-    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
   </Style>
 
   <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource DangerBgBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource DangerLineBrush}" />
-    <Setter Property="Foreground" Value="{StaticResource DangerBrush}" />
+    <Setter Property="Background" Value="{DynamicResource DangerBgBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource DangerLineBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
   </Style>
 
   <!-- 工具卡片：细描边 + 常驻外扩的取景框角标；hover 底色提亮、角标张开变亮琥珀 -->
   <Style Selector="Button.tool-card">
-    <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="2" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -228,17 +140,17 @@
   </Style>
 
   <Style Selector="Button.tool-card:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource LineStrongBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource LineStrongBrush}" />
   </Style>
 
   <Style Selector="Button.tool-card:pressed /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
   </Style>
 
   <!-- 取景框角标：常驻半透明琥珀、贴卡片内角；hover 变实、向角张开 -->
   <Style Selector="Button.tool-card Path.frame">
-    <Setter Property="Stroke" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
     <Setter Property="Opacity" Value="0.55" />
     <Setter Property="StrokeThickness" Value="2" />
     <Setter Property="Margin" Value="3" />
@@ -279,41 +191,41 @@
 
   <!-- 选中的工具（工作区左栏） -->
   <Style Selector="Button.selected">
-    <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
   </Style>
 
   <Style Selector="Button.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
   </Style>
 
   <!-- 键盘焦点环：只在键盘导航时出现，鼠标点击不闪 -->
   <Style Selector="Button:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
   </Style>
 
   <Style Selector="ListBoxItem:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
   </Style>
 
   <!-- 输入框 -->
   <Style Selector="TextBox">
-    <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="8" />
     <Setter Property="Padding" Value="10,8" />
     <Setter Property="FontSize" Value="13" />
-    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
-    <Setter Property="CaretBrush" Value="{StaticResource AccentBrush}" />
-    <Setter Property="SelectionBrush" Value="{StaticResource AccentBorderBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    <Setter Property="CaretBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="SelectionBrush" Value="{DynamicResource AccentBorderBrush}" />
   </Style>
 
   <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
-    <Setter Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
   </Style>
 
   <!-- 多行参数：术语表这类需要换行输入，单行框放不下 -->
@@ -346,28 +258,28 @@
 
   <!-- 下拉框：默认模板带一圈深色底，统一成和输入框一致 -->
   <Style Selector="ComboBox">
-    <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="8" />
     <Setter Property="Padding" Value="10,6" />
     <Setter Property="FontSize" Value="12" />
-    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
   </Style>
 
   <Style Selector="ComboBox:pointerover /template/ Border#Background">
-    <Setter Property="BorderBrush" Value="{StaticResource LineStrongBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource LineStrongBrush}" />
   </Style>
 
   <!-- 复选框 -->
   <Style Selector="CheckBox">
     <Setter Property="FontSize" Value="12" />
-    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
   </Style>
 
   <Style Selector="CheckBox /template/ Border#PART_CheckBackground">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="BorderBrush" Value="{StaticResource LineStrongBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource LineStrongBrush}" />
     <Setter Property="CornerRadius" Value="4" />
   </Style>
 
@@ -379,7 +291,7 @@
   </Style>
 
   <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
     <Setter Property="Transitions">
       <Transitions>
         <BrushTransition Property="Background" Duration="0:0:0.12" />
@@ -388,13 +300,13 @@
   </Style>
 
   <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
   </Style>
 
   <Style Selector="ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
   </Style>
 
   <!--
@@ -467,8 +379,8 @@
 
   <!-- 分类标签：小、方、低对比 -->
   <Style Selector="Border.chip">
-    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="4" />
     <Setter Property="Padding" Value="6,2" />
@@ -477,8 +389,8 @@
 
   <!-- 键盘提示：kbd 小方块 -->
   <Style Selector="Border.kbd">
-    <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="4" />
     <Setter Property="Padding" Value="5,1" />
@@ -486,13 +398,13 @@
 
   <Style Selector="Border.kbd TextBlock">
     <Setter Property="FontSize" Value="11" />
-    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
 
   <!-- 面板：工作区 / 设置里的分组容器。渐变给一点顶光 -->
   <Style Selector="Border.panel">
-    <Setter Property="Background" Value="{StaticResource PanelGradientBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+    <Setter Property="Background" Value="{DynamicResource PanelGradientBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="12" />
   </Style>
@@ -500,7 +412,7 @@
   <!-- 小标题：正片里的分区标签 -->
   <Style Selector="TextBlock.section">
     <Setter Property="FontSize" Value="11" />
-    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="LetterSpacing" Value="0.8" />
   </Style>
 
@@ -512,35 +424,35 @@
     <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
     <Setter Property="FontSize" Value="17" />
     <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
   </Style>
 
   <Style Selector="TextBlock.subtitle">
     <Setter Property="FontSize" Value="15" />
     <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
   </Style>
 
   <Style Selector="TextBlock.body">
     <Setter Property="FontSize" Value="13" />
-    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
   </Style>
 
   <Style Selector="TextBlock.caption">
     <Setter Property="FontSize" Value="12" />
-    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
   </Style>
 
   <Style Selector="TextBlock.micro">
     <Setter Property="FontSize" Value="11" />
-    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
 
   <!-- 数据感：计数、时间、尺寸等数字用等宽字体（Developer Mono 气质） -->
   <Style Selector="TextBlock.num">
     <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
     <Setter Property="FontSize" Value="11" />
-    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
 
   <!-- ============================================================
@@ -554,7 +466,7 @@
     <Setter Property="CornerRadius" Value="0" />
     <Setter Property="Padding" Value="2,6" />
     <Setter Property="FontSize" Value="13" />
-    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
   </Style>
 
   <Style Selector="Button.hud-tab:pointerover /template/ ContentPresenter#PART_ContentPresenter">
@@ -562,7 +474,7 @@
   </Style>
 
   <Style Selector="Button.hud-tab TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
     <Setter Property="FontWeight" Value="Normal" />
     <Setter Property="Transitions">
       <Transitions>
@@ -572,7 +484,7 @@
   </Style>
 
   <Style Selector="Button.hud-tab.selected TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
     <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
 
@@ -588,18 +500,18 @@
   </Style>
 
   <Style Selector="Button.hud-tab.selected Border.tick">
-    <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
   </Style>
 
   <!-- 分类 chip：方角、描边、低存在感；选中才亮琥珀 -->
   <Style Selector="Button.hud-chip">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="2" />
     <Setter Property="Padding" Value="10,5" />
     <Setter Property="FontSize" Value="12" />
-    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
     <Setter Property="Transitions">
       <Transitions>
         <BrushTransition Property="BorderBrush" Duration="0:0:0.12" />
@@ -608,18 +520,18 @@
   </Style>
 
   <Style Selector="Button.hud-chip:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource LineStrongBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource LineStrongBrush}" />
   </Style>
 
   <Style Selector="Button.hud-chip.selected /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
-    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
   </Style>
 
   <Style Selector="Button.hud-chip.selected TextBlock.num">
-    <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
   </Style>
 
   <!-- 类型 chip 是图标 + 计数：选中时图标也要转琥珀，否则只有数字变色 -->
@@ -634,7 +546,7 @@
     <Setter Property="CornerRadius" Value="0" />
     <Setter Property="Padding" Value="0,2,0,0" />
     <Setter Property="FontSize" Value="12" />
-    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
   </Style>
 
   <Style Selector="Button.hud-filter /template/ ContentPresenter#PART_ContentPresenter">
@@ -642,7 +554,7 @@
   </Style>
 
   <Style Selector="Button.hud-filter TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
     <Setter Property="Transitions">
       <Transitions>
         <BrushTransition Property="Foreground" Duration="0:0:0.12" />
@@ -651,11 +563,11 @@
   </Style>
 
   <Style Selector="Button.hud-filter TextBlock.num">
-    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
 
   <Style Selector="Button.hud-filter:pointerover TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
   </Style>
 
   <Style Selector="Button.hud-filter Border.tick">
@@ -670,16 +582,16 @@
   </Style>
 
   <Style Selector="Button.hud-filter.selected TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
     <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
 
   <Style Selector="Button.hud-filter.selected TextBlock.num">
-    <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
   </Style>
 
   <Style Selector="Button.hud-filter.selected Border.tick">
-    <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
   </Style>
 
   <!-- 分组标题：透明底、hover 才浮一层；点击折叠 -->
@@ -692,7 +604,7 @@
   </Style>
 
   <Style Selector="Button.group-header:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
   </Style>
 
   <!-- 大数字读出：等宽 20px，数据是界面里的「仪表」 -->
@@ -700,7 +612,7 @@
     <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
     <Setter Property="FontSize" Value="20" />
     <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
   </Style>
 
   <!-- 分区刻度条：分区头左侧的 2px 琥珀短竖条 -->
@@ -708,7 +620,7 @@
     <Setter Property="Width" Value="2" />
     <Setter Property="Height" Value="13" />
     <Setter Property="CornerRadius" Value="1" />
-    <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
@@ -717,12 +629,12 @@
     <Setter Property="Width" Value="34" />
     <Setter Property="Height" Value="34" />
     <Setter Property="CornerRadius" Value="2" />
-    <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
   <Style Selector="Border.hud-icon Path">
-    <Setter Property="Stroke" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
     <Setter Property="StrokeThickness" Value="1.5" />
     <Setter Property="StrokeLineCap" Value="Round" />
     <Setter Property="StrokeJoin" Value="Round" />
@@ -736,7 +648,7 @@
   <!-- 发丝分隔线：行与行之间，替代卡片描边 -->
   <Style Selector="Border.hud-line">
     <Setter Property="Height" Value="1" />
-    <Setter Property="Background" Value="{StaticResource LineBrush}" />
+    <Setter Property="Background" Value="{DynamicResource LineBrush}" />
   </Style>
 
   <!-- Expander 头部去掉 Fluent 的粗体灰底 -->
@@ -750,7 +662,7 @@
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="2,4" />
     <Setter Property="FontSize" Value="11" />
-    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
 
   <!-- 滚动条收细 -->
@@ -764,7 +676,7 @@
 
   <!-- 滚动条：去轨道底色，thumb 收成圆头短条，hover 才提亮 -->
   <Style Selector="ScrollBar /template/ Thumb">
-    <Setter Property="Background" Value="#333D4C" />
+    <Setter Property="Background" Value="{DynamicResource ScrollThumbBrush}" />
     <Setter Property="CornerRadius" Value="4" />
     <Setter Property="Transitions">
       <Transitions>
@@ -774,7 +686,7 @@
   </Style>
 
   <Style Selector="ScrollBar /template/ Thumb:pointerover /template/ Border">
-    <Setter Property="Background" Value="#465263" />
+    <Setter Property="Background" Value="{DynamicResource ScrollThumbHoverBrush}" />
   </Style>
 
   <Style Selector="ScrollBar:vertical /template/ Border#VerticalRoot">
@@ -789,7 +701,7 @@
 
   <!-- 开关：琥珀为开，线框为关，去掉 Fluent 自带的灰蓝底和半透明容器 -->
   <Style Selector="ToggleSwitch">
-    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
     <Setter Property="FontSize" Value="12" />
   </Style>
 
@@ -799,36 +711,36 @@
 
   <Style Selector="ToggleSwitch /template/ Border#OuterBorder">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="BorderBrush" Value="{StaticResource LineStrongBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource LineStrongBrush}" />
   </Style>
 
   <Style Selector="ToggleSwitch:pointerover /template/ Border#OuterBorder">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="BorderBrush" Value="{StaticResource TextMutedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TextMutedBrush}" />
   </Style>
 
   <Style Selector="ToggleSwitch /template/ Border#SwitchKnobBounds">
-    <Setter Property="Background" Value="{StaticResource AccentBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   </Style>
 
   <Style Selector="ToggleSwitch:pointerover /template/ Border#SwitchKnobBounds">
-    <Setter Property="Background" Value="{StaticResource AccentHoverBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource AccentHoverBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentHoverBrush}" />
   </Style>
 
   <Style Selector="ToggleSwitch:pressed /template/ Border#SwitchKnobBounds">
-    <Setter Property="Background" Value="{StaticResource AccentPressedBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource AccentPressedBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentPressedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentPressedBrush}" />
   </Style>
 
   <!-- 旋钮圆点：开时深色嵌在琥珀里，关时是灰点 -->
   <Style Selector="ToggleSwitch /template/ Ellipse#SwitchKnobOn">
-    <Setter Property="Fill" Value="#1A1206" />
+    <Setter Property="Fill" Value="{DynamicResource AccentOnBrush}" />
   </Style>
 
   <Style Selector="ToggleSwitch /template/ Ellipse#SwitchKnobOff">
-    <Setter Property="Fill" Value="{StaticResource TextMutedBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource TextMutedBrush}" />
   </Style>
 
   <!-- 下拉项：圆角 + 琥珀选中，和列表选中态一致 -->
@@ -839,19 +751,19 @@
   </Style>
 
   <Style Selector="ComboBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
   </Style>
 
   <Style Selector="ComboBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
   </Style>
 
   <!-- ToolTip：深底描边小字；浮层更接近动作栏的质感 -->
   <Style Selector="ToolTip">
-    <Setter Property="Background" Value="{StaticResource OverlayBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource LineStrongBrush}" />
+    <Setter Property="Background" Value="{DynamicResource OverlayBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource LineStrongBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
     <Setter Property="CornerRadius" Value="8" />
     <Setter Property="Padding" Value="10,6" />
     <Setter Property="FontSize" Value="11" />
@@ -860,7 +772,7 @@
 
   <!-- 可选中文本：选区用淡琥珀，不用系统蓝 -->
   <Style Selector="SelectableTextBlock">
-    <Setter Property="SelectionBrush" Value="{StaticResource AccentBorderBrush}" />
+    <Setter Property="SelectionBrush" Value="{DynamicResource AccentBorderBrush}" />
   </Style>
 
 </Styles>

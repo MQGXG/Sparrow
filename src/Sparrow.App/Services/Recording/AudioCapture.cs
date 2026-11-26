@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Runtime.InteropServices;
 
 namespace Sparrow.App.Services.Recording;
@@ -29,6 +30,9 @@ internal sealed class AudioCapture : IDisposable
     private readonly List<Source> _sources = [];
     private bool _started;
     private bool _disposed;
+
+    /// <summary>混音用的可复用缓冲，避免每个视频帧都分配一份 int[样本数]。</summary>
+    private int[] _mixBuffer = [];
 
     /// <summary>每个视频帧需要的音频样本数（stereo 交错）。</summary>
     public static int SamplesPerFrame(int framesPerSecond) =>
@@ -166,7 +170,12 @@ internal sealed class AudioCapture : IDisposable
         foreach (var source in _sources)
             Drain(source);
 
-        var mix = new int[destination.Length];
+        if (_mixBuffer.Length < destination.Length)
+            _mixBuffer = new int[destination.Length];
+
+        var mix = _mixBuffer.AsSpan(0, destination.Length);
+        mix.Clear();
+
         var any = false;
 
         foreach (var source in _sources)
@@ -221,11 +230,19 @@ internal sealed class AudioCapture : IDisposable
                         }
                         else
                         {
-                            var buffer = new short[sampleCount];
-                            Marshal.Copy(data, buffer, 0, sampleCount);
+                            var buffer = ArrayPool<short>.Shared.Rent(sampleCount);
 
-                            foreach (var sample in buffer)
-                                source.Samples.Enqueue(sample);
+                            try
+                            {
+                                Marshal.Copy(data, buffer, 0, sampleCount);
+
+                                for (var i = 0; i < sampleCount; i++)
+                                    source.Samples.Enqueue(buffer[i]);
+                            }
+                            finally
+                            {
+                                ArrayPool<short>.Shared.Return(buffer);
+                            }
                         }
                     }
                 }

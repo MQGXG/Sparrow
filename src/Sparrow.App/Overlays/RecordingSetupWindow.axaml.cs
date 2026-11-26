@@ -1,6 +1,8 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Sparrow.App.Services;
 using Sparrow.App.Services.Recording;
 using Windows.Devices.Enumeration;
 
@@ -64,19 +66,50 @@ public partial class RecordingSetupWindow : Window
     {
     }
 
-    public RecordingSetupWindow(string? savedEncoder, bool cameraEnabled = false)
+    public RecordingSetupWindow(
+        string? savedEncoder,
+        bool regionOnly = false,
+        bool cameraEnabled = false)
     {
         InitializeComponent();
 
-        OutputDirectoryBox.Text = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Sparrow",
-            "recordings");
+        OutputDirectoryBox.Text = SparrowPaths.Recordings;
+
+        // 从截图工具条打开时区域已经由选区决定，不再给窗口/全屏选项。
+        if (regionOnly)
+        {
+            RegionMode.IsChecked = true;
+            WindowMode.IsVisible = false;
+            FullscreenMode.IsVisible = false;
+        }
 
         CameraCheck.IsChecked = cameraEnabled;
 
         _ = DetectCameraAsync();
         _ = LoadEncodersAsync(savedEncoder);
+        UpdateFormatVisibility();
+    }
+
+    /// <summary>无边框窗口：拖标题栏移动窗口。</summary>
+    private void OnTitlePointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            BeginMoveDrag(e);
+    }
+
+    /// <summary>GIF / APNG 才需要动画帧率与尺寸；视频格式下隐藏。</summary>
+    private void OnFormatChanged(object? sender, SelectionChangedEventArgs e) =>
+        UpdateFormatVisibility();
+
+    private void UpdateFormatVisibility()
+    {
+        // 初始化阶段控件可能还没赋值，等构造末尾再统一刷新一次。
+        if (AnimationOptions is null || AudioSection is null)
+            return;
+
+        var gifLike = FormatBox.SelectedIndex is 3 or 4;
+        AnimationOptions.IsVisible = gifLike;
+        AudioSection.IsVisible = !gifLike;
     }
 
     /// <summary>
@@ -261,7 +294,14 @@ public partial class RecordingSetupWindow : Window
         var outputDirectory = OutputDirectoryBox.Text?.Trim() ?? "";
         var baseName = BaseNameBox.Text?.Trim() ?? "Sparrow";
 
-        var fps = FpsBox.SelectedIndex == 1 ? 60 : 30;
+        var fps = FpsBox.SelectedIndex switch
+        {
+            1 => 60,
+            2 => 90,
+            3 => 120,
+            4 => 144,
+            _ => 30
+        };
         var cursor = CursorCheck.IsChecked == true;
 
         var format = FormatBox.SelectedIndex switch

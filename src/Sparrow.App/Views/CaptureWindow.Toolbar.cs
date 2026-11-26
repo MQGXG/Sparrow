@@ -661,6 +661,9 @@ public partial class CaptureWindow
 
         if (ActionBar.IsVisible && !_toolbarManual)
             PositionActionBar(_selection);
+
+        // 工具切换会改变「选区是否可交互」：录制中立刻同步窗口区域。
+        UpdateRecordingInputRegion();
     }
 
     private static void SetSelected(Button button, bool selected)

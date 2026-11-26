@@ -135,6 +135,7 @@ internal sealed class WgcFrameSource : IDisposable
 
             session = pool.CreateCaptureSession(item);
             session.IsCursorCaptureEnabled = includeCursor;
+            TryDisableCaptureBorder(session);
             session.StartCapture();
 
             return new WgcFrameSource(
@@ -154,6 +155,26 @@ internal sealed class WgcFrameSource : IDisposable
             pool?.Dispose();
             error = $"启动窗口捕获失败：{ex.Message}";
             return null;
+        }
+    }
+
+    /// <summary>
+    /// 关闭 WGC 的捕获边框：Windows 会在被捕获区域外围画一圈黄色高亮，
+    /// 表示「正在被录制」。Win11 22H2+ 可以用 IsBorderRequired 关掉；
+    /// 老系统没有这个属性时保留系统默认（属隐私指示器，不算 bug）。
+    /// </summary>
+    private static void TryDisableCaptureBorder(GraphicsCaptureSession session)
+    {
+        try
+        {
+            // TargetFramework 是 19041，编译期没有这个属性；
+            // Win11 22H2+ 的运行时投影才带 IsBorderRequired，用反射避免升级 SDK。
+            var property = session.GetType().GetProperty("IsBorderRequired");
+            property?.SetValue(session, false);
+        }
+        catch
+        {
+            // 属性不存在（旧 SDK / 旧系统）或系统拒绝：保持默认边框。
         }
     }
 
@@ -253,6 +274,7 @@ internal sealed class WgcFrameSource : IDisposable
 
             session = pool.CreateCaptureSession(item);
             session.IsCursorCaptureEnabled = includeCursor;
+            TryDisableCaptureBorder(session);
             session.StartCapture();
 
             var screenRect = new PixelRect(

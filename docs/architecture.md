@@ -17,7 +17,7 @@
 
 ## 二、项目结构
 
-### 2.1 宿主（4 个项目）
+### 2.1 宿主（2 个项目 + OCR worker）
 
 ```text
 Sparrow/
@@ -25,70 +25,49 @@ Sparrow/
 ├─ Directory.Build.props          公共编译设置
 ├─ Directory.Packages.props       集中包版本（唯一版本来源）
 ├─ global.json                    锁定 SDK 10.0.103
+├─ .editorconfig                  缩进 / 编码 / 换行约定
+├─ .github/workflows/ci.yml       Release 构建 + 测试 + 漏洞审计
 │
 ├─ src/
 │  ├─ Sparrow.Plugin.Sdk/         ← 契约包，对外发布，向后兼容承诺
-│  │  ├─ ITool.cs
-│  │  ├─ IToolHost.cs
+│  │  ├─ ITool.cs  IToolHost.cs
 │  │  ├─ ToolDescriptor.cs  ToolParameter.cs
-│  │  ├─ ToolContext.cs     ToolResult.cs
-│  │  ├─ Inputs/            TextInput, ImageInput, FileSetInput, EmptyInput
-│  │  ├─ Payloads/          Text, Svg, Image, FileSet, Table
-│  │  ├─ ToolAction.cs  ToolError.cs  ToolProgress.cs
-│  │  └─ Enums/             InputShape, OutputShape, ToolSource, PlatformCapability
+│  │  ├─ ToolContext.cs  ToolResult.cs
+│  │  ├─ Inputs.cs  Payloads.cs  ClipboardHistory.cs
+│  │  └─ Enums.cs
 │  │
-│  ├─ Sparrow.Core/               ← 宿主领域，可自由重构，不对外
-│  │  ├─ History/           HistoryEntry
-│  │  ├─ Settings/          AppSettings, PluginSettings
-│  │  └─ Ports/             IHistoryStore, ISettingsStore, ISecretStore, IAppPaths
-│  │
-│  ├─ Sparrow.App/                ← Avalonia 壳 + ViewModel + 服务
-│  │  ├─ Program.cs  App.axaml(.cs)
-│  │  ├─ Shell/
-│  │  │  ├─ TrayService.cs
-│  │  │  ├─ HotkeyService.cs
-│  │  │  ├─ SingleInstanceGuard.cs
-│  │  │  ├─ WindowNavigator.cs
-│  │  │  ├─ ClipboardMonitor.cs
-│  │  │  └─ ScreenshotPicker.cs
-│  │  ├─ Plugins/                 ← 插件子系统的宿主侧
-│  │  │  ├─ PluginScanner.cs      扫描目录、读清单（不加载程序集）
-│  │  │  ├─ PluginManifest.cs
-│  │  │  ├─ PluginLoadContext.cs  ALC 隔离
-│  │  │  ├─ PluginLoader.cs       加载 / 卸载 / 故障处理
-│  │  │  ├─ PluginHost.cs         IToolHost 实现
-│  │  │  └─ ToolRegistry.cs       元数据索引 + 搜索
-│  │  ├─ ViewModels/
-│  │  ├─ Views/  Controls/  Themes/
-│  │  ├─ Services/
-│  │  │  ├─ ToolScheduler.cs
-│  │  │  ├─ ContextBuilder.cs
-│  │  │  ├─ SqliteHistoryStore.cs
-│  │  │  └─ JsonSettingsStore.cs
-│  │  └─ Platform/Windows/        ← M1 起才拆独立项目
-│  │     ├─ Win32Hotkey.cs  Win32Clipboard.cs  Win32Screenshot.cs
-│  │     └─ Native/User32.cs, Gdi32.cs
-│  │
-│  └─ Sparrow.Ocr.Host/           ← 独立进程，只被 OCR 插件通过 stdio 调用
-│     └─ Program.cs
+│  └─ Sparrow.App/                ← Avalonia 壳 + ViewModel + 服务 + 平台互操作
+│     ├─ Program.cs  App.axaml(.cs)  App.*.cs（执行 / 截图 / 录制 / AI 分部）
+│     ├─ Shell/                   托盘、热键、单实例、剪贴板监听、粘贴注入
+│     ├─ Plugins/                 扫描 / 清单 / ALC / 加载 / ToolHost / ToolCatalog
+│     ├─ ViewModels/              面板、工作区、剪贴板、设置
+│     ├─ Views/ Controls/ Styles/ 截图窗口、工作区、设置、工具条、标注渲染
+│     ├─ Overlays/                窗口拾取、录制条、倒计时、Toast
+│     ├─ Services/
+│     │  ├─ ToolRunner.cs         ← 工具执行唯一入口（后台 + 超时 + 取消）
+│     │  ├─ ClipboardHistoryStore.*  SQLite（WAL + FTS5）
+│     │  ├─ ClipboardMonitor.cs / ClipboardPasteService.cs
+│     │  ├─ Recording/            WGC 取帧、WASAPI、ffmpeg 编码
+│     │  └─ ScreenCapture / ScrollCapture / UI Automation
+│     ├─ Settings/  History/
+│     └─ Converters/
 │
-├─ plugins/                        ← 每个工具一个插件项目
-│  ├─ Sparrow.Plugin.Json.Format/
-│  ├─ Sparrow.Plugin.Ocr.Region/    （region + image，共用模型）
+├─ plugins/                        ← 每个工具一个插件项目（13 个）
+│  ├─ sparrow.plugin.json-format/
+│  ├─ sparrow.plugin.ocr/
+│  │  └─ worker/                  ← 独立进程，stdio 调用，Paddle 模型
 │  └─ …
 │
-├─ tests/
-│  └─ Sparrow.Tests/
-│
-├─ docs/
-└─ build/
+├─ tests/Sparrow.Tests/
+├─ tools/                         RapidOcrProbe / SelectorProbe
+├─ docs/  build/  scripts/
 ```
 
 ### 2.2 项目数量怎么控制
 
 ```text
-宿主  4 个（Sdk / Core / App / Ocr.Host）
-插件  每个工具 1 个（M0 是 1 个，M3 是 13 个）
+宿主  2 个（Sdk / App）+ OCR worker（随 OCR 插件构建）
+插件  每个工具 1 个（当前 13 个）
 ```
 
 听起来项目会变多，但这和「20 个按概念层次拆的项目」是两回事：
@@ -103,7 +82,7 @@ Sparrow/
 
 **代价**：每个插件项目有约 3–5 个文件是样板（csproj / plugin.json / 一个空类）。
 
-**对策**：提供 `dotnet new sparrow-tool` 模板，一条命令生成骨架。见 [`tool-development.md`](tool-development.md)。
+**对策**：计划提供 `dotnet new sparrow-tool` 模板（尚未落地，见 [`tool-development.md`](tool-development.md)）；当前按现有插件目录复制骨架。
 
 ---
 
@@ -111,43 +90,36 @@ Sparrow/
 
 ```text
 Sparrow.Plugin.Sdk  → 不依赖任何项目（只允许 BCL + Microsoft.Extensions.*.Abstractions）
-Sparrow.Core        → 依赖 Sdk
-Sparrow.App         → 依赖 Sdk；另以 ReferenceOutputAssembly=false 引用 plugins/*，
-                       只为构建顺序与产物复制，不是运行时依赖
-Sparrow.Ocr.Host    → 不依赖任何 Sparrow 项目（只靠 stdio）
-plugins/*           → 只依赖 Sdk
-tests/*             → 依赖全部
+Sparrow.App         → 依赖 Sdk；另以 ReferenceOutputAssembly=false glob 引用 plugins/*，
+                      只为构建顺序与产物复制，不是运行时依赖
+plugins/*           → 只依赖 Sdk；OCR 插件额外引用同目录 worker 子项目
+tests/*             → 依赖 App / Sdk 和已接入测试的插件
 ```
 
-### 3.1 CI 断言（不是靠自觉）
+### 3.1 边界断言（不是靠自觉）
+
+`tests/Sparrow.Tests/PluginBoundaryTests.cs` 守以下六条：
 
 ```text
 1. Sparrow.Plugin.Sdk 的 ProjectReference 数量必须 = 0
-2. plugins/* 的 ProjectReference 只能是 Sparrow.Plugin.Sdk
-3. plugins/* 的 csproj 里不得出现 Avalonia.PackageReference
-4. Sparrow.App 的源码里不得出现具体工具名（grep 关键字检查）
-5. Sparrow.App 对 plugins/* 的引用必须是构建期依赖（ReferenceOutputAssembly=false、Private=false）
+2. plugins/* 的 ProjectReference 只能是 Sdk（OCR worker 例外）
+3. plugins/* 的 csproj 里不得出现 Avalonia
+4. Sparrow.App 源码里不得出现具体工具 ID
+5. Sparrow.App 源码里不得散落插件参数键（parameters["..."]），
+   截图 OCR 的三个键集中到 CaptureOcrParameters
+6. Sparrow.App 对 plugins/* 的引用必须是构建期依赖（ReferenceOutputAssembly=false、Private=false）
 ```
 
-第 4 条最有用。宿主的 `PluginScanner` / `ToolRegistry` 里如果出现 `"json"` 这种字符串，说明边界破了。
-
-```powershell
-# 示例：宿主代码不应出现工具名
-$hits = Select-String -Path src/Sparrow.App/**/*.cs -Pattern 'sparrow\.(json|ocr|clipboard)\.'
-if ($hits) { throw "宿主代码出现具体工具 ID，边界已破" }
-```
-
-**注意**：`ContextBuilder` 里会出现 `Clipboard`、`Screenshot` 这类词，那是**输入来源**，不是工具，允许。
+第 4、5 条最有用。边界一旦变成「宿主知道某个插件」，插件化就会慢慢退化成编译期内置。
 
 ### 3.2 插件允许与禁止的依赖
 
 | 允许 | 禁止 |
 |---|---|
 | `System.Text.Json` | `Avalonia.*` |
-| `SkiaSharp` / `Svg.Skia` | `Sparrow.Core` |
-| `Microsoft.Extensions.Logging.Abstractions` | `Sparrow.App` |
-| 第三方纯计算库 | 其他插件 |
-| | `Microsoft.Data.Sqlite`（存储归宿主） |
+| `SkiaSharp` / `Svg.Skia` | `Sparrow.App` |
+| `Microsoft.Extensions.Logging.Abstractions` | 其他插件 |
+| 第三方纯计算库 | `Microsoft.Data.Sqlite`（存储归宿主） |
 
 判断标准：**会不会产生副作用**。纯计算可以直连，副作用必须走 `IToolHost`。
 
@@ -276,34 +248,38 @@ ocr 插件             → 独立进程，不受此约束
 3. **ARM 平台无解** → 明确「OCR 支持 Windows x64 / Linux x64 / macOS x64；ARM 走系统 OCR 兜底或置灰」。
 
 ```text
-Sparrow.App (主进程)  ──stdio(JSON 长度前缀)──▶  Sparrow.Ocr.Host (子进程)
-   │                                              ├─ 加载 Paddle 模型
-   └─ Ocr 插件（普通插件）                          ├─ 识别
-      只负责：截图的区域 → 传给子进程 → 收文本      └─ 空闲 60s 自动退出
+Sparrow.App (主进程)
+   │
+   └─ Ocr 插件（普通插件，plugins/sparrow.plugin.ocr）
+        │  只负责：截图的区域 → 传给 worker → 收文本
+        └─ stdio(JSON 长度前缀) ──▶  Sparrow.Ocr.Worker (子进程)
+                                      ├─ 加载 Paddle 模型
+                                      ├─ 识别
+                                      └─ 空闲 60s 自动退出
 ```
 
-**注意**：OCR **插件**本身仍是普通插件（B 档），它只是把重活委托给子进程。这样「每个工具都是插件」不破例。
+**注意**：worker 是 OCR 插件目录下的子项目，不是独立宿主项目；OCR **插件**本身仍是普通插件（B 档），只是把重活委托给子进程。这样「每个工具都是插件」不破例。
 
 ---
 
 ## 七、错误与取消约定
 
+所有工具执行统一走 `Sparrow.App/Services/ToolRunner.cs`，调用方不再直接 `await tool.ExecuteAsync`：
+
 ```text
-所有 ExecuteAsync 必须：
-  1. 接受 CancellationToken 并向下传递
-  2. 在超时内结束（文本类 10s / 描摹 120s / OCR 120s），否则被调度器取消
-  3. 抛出的托管异常由调度器捕获，转成 ToolError，不穿透到 UI 线程
+1. Task.Run 到线程池：同步插件（JSON / Base64 / 图片转换）不会阻塞 UI 线程
+2. 调用方传 CancellationToken：命令面板 Esc、工作区「取消」按钮都能中断
+3. 兜底超时 10 分钟：插件忽略取消时，宿主不会无限等待；超时返回 ToolResult.Timeout
+4. 插件异常仍抛给调用方，由 Panel / Workspace 转成 ToolError 并落日志
 ```
 
-调度器的隔离边界：
-
 ```csharp
-try   { return await tool.ExecuteAsync(ctx, cts.Token); }
-catch (OperationCanceledException) { return ToolResult.Cancelled(); }
-catch (Exception ex)               { return ToolResult.Failed(ex.Message, ex.ToString()); }
+var result = await ToolRunner.ExecuteAsync(entry.Tool, context, cancellationToken);
 ```
 
 **插件不得自己弹窗、不得自己写日志文件、不得读设置文件。** 只能返回结果。
+UI 线程未处理异常由 `Dispatcher.UIThread.UnhandledException` 记录并标记 Handled；
+后台线程与未观察任务异常写入 `CrashLog`，避免 WinExe 静默退出。
 
 ---
 

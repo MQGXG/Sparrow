@@ -75,6 +75,13 @@ public partial class App : Application
         var log = new FileAppLog();
         Log = log;
 
+        // UI 线程异常：落盘后标记 Handled，避免一个未捕获异常直接带走整个壳
+        Avalonia.Threading.Dispatcher.UIThread.UnhandledException += (_, e) =>
+        {
+            log.Error("UI 线程未处理异常", e.Exception);
+            e.Handled = true;
+        };
+
         // 软件内所有提示信息的统一出口（不在窗口内的地方也能看到）
         _toasts = new ToastService(log);
 
@@ -93,9 +100,27 @@ public partial class App : Application
         var isFirstRun = !File.Exists(settingsPath);
         var settings = settingsStore.Load();
 
+        // 旧版本剪贴板只留 200 条：容量才用几个百分点就开始丢历史。
+        // 升级时抬到 1000，用户手动改成别的值不动。
+        if (settings.ClipboardHistoryMaxEntries == 200)
+        {
+            settings = settings with { ClipboardHistoryMaxEntries = 1000 };
+            settingsStore.Save(settings);
+        }
+
+        // 可变数据（剪贴板/模型/录制/历史）跟随用户设置的数据目录。
+        SparrowPaths.Apply(
+            settings.DataDirectory,
+            settings.ModelDirectory,
+            settings.RecordDirectory);
+
         // 面板的置顶状态要写回同一份 settings
         _settingsStore = settingsStore;
         _appSettings = settings;
+
+        // 外观要在创建任何窗口之前应用，避免启动时先深后浅闪一下。
+        // 默认 dark，与历史版本外观一致。
+        ThemeService.Apply(settings.Appearance);
 
         // 工具热键：settings.json 的 toolHotkeys（工具 ID → 热键），格式错误只会跳过该条
         var toolHotkeyPlans = ToolHotkeyPlanner.Build(settings.ToolHotkeys, log);
@@ -119,10 +144,7 @@ public partial class App : Application
         _ai = ai;
 
         // 剪贴板历史：监听 + 落盘都是宿主能力，插件经 IToolHost.ClipboardHistory 只读
-        var clipboardHistoryPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Sparrow",
-            "clipboard.db");
+        var clipboardHistoryPath = SparrowPaths.ClipboardDb;
         var clipboardHistory = new ClipboardHistoryStore(
             clipboardHistoryPath,
             log,
@@ -142,10 +164,7 @@ public partial class App : Application
         _localTranslation = new LocalTranslationService(_localModels, log);
         _catalog = new ToolCatalog(pluginsRoot, log, settings, ai, clipboardHistory, _windowOverlay, _localModels, _localTranslation);
 
-        var historyPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Sparrow",
-            "history.jsonl");
+        var historyPath = SparrowPaths.HistoryFile;
         var history = new JsonlHistoryStore(
             historyPath,
             log,
@@ -173,6 +192,13 @@ public partial class App : Application
         var startup = new StartupService(log);
         var settingsViewModel = new SettingsViewModel(_catalog, settingsStore, startup, settings, ai, aiSecrets, _localModels);
         _settingsViewModel = settingsViewModel;
+
+        // 设置页 / 顶栏切换外观：即时换肤，并同步宿主持有的设置快照
+        settingsViewModel.AppearanceChanged += appearance =>
+        {
+            _appSettings = _appSettings with { Appearance = appearance };
+            ThemeService.Apply(appearance);
+        };
 
         // 设置页的状态提示统一转成 toast（页面本身不再常驻一行文字）
         settingsViewModel.PropertyChanged += (_, e) =>
@@ -423,6 +449,25 @@ public partial class App : Application
             _ = RunRecordingProbeAsync(probe, probeSeconds, log);
 
         Log.Info($"启动完成：{Program.Startup.ElapsedMilliseconds} ms，托盘就绪");
+
+        // 首次打开命令面板会触发插件扫描 + 程序集加载。
+        // 启动完成后先在后台预热一次，避免第一次 Ctrl+Alt+S 在 UI 线程上等待。
+        Avalonia.Threading.Dispatcher.UIThread.Post(
+            () =>
+            {
+                _ = Task.Run(() =>
+                {
+                    try
+                    {
+                        _catalog?.GetRegistry();
+                    }
+                    catch (Exception ex)
+                    {
+                        log.Warn($"插件预热失败：{ex.Message}");
+                    }
+                });
+            },
+            Avalonia.Threading.DispatcherPriority.Background);
 
         base.OnFrameworkInitializationCompleted();
     }

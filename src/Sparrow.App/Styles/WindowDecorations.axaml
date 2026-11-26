@@ -19,7 +19,7 @@
     <Setter Property="Height" Value="48" />
     <Setter Property="Padding" Value="0" />
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Foreground" Value="#9BA8BA" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="(WindowDecorationProperties.ElementRole)" Value="DecorationsElement" />
@@ -34,12 +34,12 @@
     </Setter>
 
     <Style Selector="^:pointerover">
-      <Setter Property="Background" Value="#242D3A" />
-      <Setter Property="Foreground" Value="#E9EEF6" />
+      <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
     </Style>
 
     <Style Selector="^:pressed">
-      <Setter Property="Background" Value="#12171F" />
+      <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
     </Style>
   </ControlTheme>
 
@@ -69,7 +69,7 @@
               <Border x:Name="PART_WindowBorder"
                       Background="Transparent"
                       BorderThickness="{TemplateBinding FrameThickness}"
-                      BorderBrush="#2B3543"
+                      BorderBrush="{DynamicResource LineBrush}"
                       IsHitTestVisible="False" />
 
               <!-- 透明标题栏：只提供拖动 / 命中区域，文案由窗口自己的品牌行负责 -->
@@ -152,7 +152,7 @@
           <chrome:WindowDrawnDecorationsContent.FullscreenPopover>
             <Panel Height="{TemplateBinding DefaultTitleBarHeight}"
                    VerticalAlignment="Top"
-                   Background="#12171F"
+                   Background="{DynamicResource SurfaceBrush}"
                    WindowDecorationProperties.ElementRole="DecorationsElement">
               <StackPanel HorizontalAlignment="Right"
                           Orientation="Horizontal">

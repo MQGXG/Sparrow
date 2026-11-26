@@ -18,9 +18,7 @@ public static class SelectorTrace
     private static readonly bool Enabled = Debugger.IsAttached
         || Environment.GetEnvironmentVariable("SPARROW_SELECTOR_DIAGNOSTICS") == "1";
 
-    private static readonly string DirectoryPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Sparrow");
+    private static readonly string DirectoryPath = SparrowPaths.Logs;
     private static readonly string FilePath = Path.Combine(DirectoryPath, "selector.log");
     private static readonly string PreviousPath = Path.Combine(DirectoryPath, "selector.prev.log");
 

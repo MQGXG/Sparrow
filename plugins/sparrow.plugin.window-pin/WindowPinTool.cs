@@ -66,6 +66,14 @@ public sealed class WindowPinTool : ITool
         if (!_api.SetTopMost(handle, !wasTopMost))
             return ToolResult.Failed($"设置窗口置顶失败：{title}");
 
+        // 回读：系统托管窗口 / 权限隔离（UIPI）会静默拒绝 z 序变更。
+        // 若照常显示图钉，用户只会看到「一个图钉浮在最前面」，目标窗口其实没钉住。
+        if (_api.IsTopMost(handle) != !wasTopMost)
+        {
+            _api.SetTopMost(handle, wasTopMost);
+            return ToolResult.Failed($"窗口拒绝置顶（系统窗口或权限限制）：{title}");
+        }
+
         if (wasTopMost)
         {
             overlay.HidePinIndicator(handle);

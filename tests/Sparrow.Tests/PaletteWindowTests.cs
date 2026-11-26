@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -68,23 +69,35 @@ public sealed class PaletteWindowTests
         return (window, viewModel, clipboard);
     }
 
+    /// <summary>
+    /// 工具执行已后台化（ToolRunner → Task.Run），按键返回时结果可能还没写回 ViewModel。
+    /// 全量并行时线程池更忙，同步断言会偶发假失败；这里显式等结果落定。
+    /// </summary>
+    private static async Task WaitForResultAsync(PaletteViewModel viewModel)
+    {
+        for (var i = 0; i < 200 && !viewModel.HasResult; i++)
+            await Task.Delay(10);
+    }
+
     [AvaloniaFact]
-    public void Enter_执行当前工具()
+    public async Task Enter_执行当前工具()
     {
         var (window, viewModel, _) = Create();
 
         window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.None, null);
+        await WaitForResultAsync(viewModel);
 
         viewModel.HasResult.ShouldBeTrue();
         viewModel.ResultText!.ShouldContain("\"a\": 1");
     }
 
     [AvaloniaFact]
-    public void CtrlC_复制结果到剪贴板()
+    public async Task CtrlC_复制结果到剪贴板()
     {
         var (window, viewModel, clipboard) = Create();
 
         window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.None, null);
+        await WaitForResultAsync(viewModel);
         window.KeyPress(Key.C, RawInputModifiers.Control, PhysicalKey.None, null);
 
         clipboard.Text.ShouldBe(viewModel.ResultText);

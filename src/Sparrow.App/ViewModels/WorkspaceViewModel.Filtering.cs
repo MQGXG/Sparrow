@@ -68,6 +68,9 @@ public partial class WorkspaceViewModel
     /// <summary>执行代次：用来丢弃上一次执行迟到的进度回调。</summary>
     private int _progressGeneration;
 
+    /// <summary>当前执行的取消源；没有执行时为 null。</summary>
+    private CancellationTokenSource? _executionCts;
+
     /// <summary>是否已经拖入一张图片；图片工具执行时优先用它，而不是剪贴板。</summary>
     [ObservableProperty]
     private bool _hasDroppedImage;

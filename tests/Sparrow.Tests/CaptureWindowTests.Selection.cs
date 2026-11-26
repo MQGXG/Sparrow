@@ -140,7 +140,7 @@ public sealed partial class CaptureWindowTests
         window.Close();
     }
 
-    /// <summary>选区之外压暗、选区内保持原图亮度：遮罩用 Exclude 挖洞。</summary>
+    /// <summary>选区之外压暗、选区内保持原图亮度：遮罩用 EvenOdd 的 GeometryGroup 挖洞。</summary>
     [AvaloniaFact]
     public void 选区遮罩_按选区挖洞只压暗外面()
     {
@@ -151,10 +151,13 @@ public sealed partial class CaptureWindowTests
         window.MouseMove(new Point(300, 250));
         window.MouseUp(new Point(300, 250), MouseButton.Left);
 
-        var combined = window.DimLayer.Data.ShouldBeOfType<CombinedGeometry>();
-        combined.GeometryCombineMode.ShouldBe(GeometryCombineMode.Exclude);
+        // 不用 CombinedGeometry.Exclude：Avalonia 下它的 Bounds 可能算成空，
+        // Path 会整块不绘制（遮罩消失）。EvenOdd 的 GeometryGroup 稳定。
+        var group = window.DimLayer.Data.ShouldBeOfType<GeometryGroup>();
+        group.FillRule.ShouldBe(FillRule.EvenOdd);
+        group.Children.Count.ShouldBe(2);
 
-        var hole = combined.Geometry2.ShouldBeOfType<RectangleGeometry>();
+        var hole = group.Children[1].ShouldBeOfType<RectangleGeometry>();
         hole.Rect.ShouldBe(new Rect(
             Canvas.GetLeft(window.Selection),
             Canvas.GetTop(window.Selection),
@@ -197,5 +200,48 @@ public sealed partial class CaptureWindowTests
         placed.Y.ShouldBeGreaterThanOrEqualTo(8);
         placed.Right.ShouldBeLessThanOrEqualTo(bounds.Width - 8);
         placed.Bottom.ShouldBeLessThanOrEqualTo(bounds.Height - 8);
+    }
+
+    // 1×1 透明 PNG：纯标注模式只需要能解码成 Bitmap
+    private static readonly byte[] AnnotationModePng = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+
+    /// <summary>
+    /// 贴图点「标注」后，图片就是选区。整体拖动时底图必须跟着一起走，
+    /// 且选区框 / 手柄 / 尺寸角标不能重新冒出来（旧实现里拖动后二者会分离，
+    /// 标注还会被反向平移导致导出错位）。
+    /// </summary>
+    [AvaloniaFact]
+    public void 标注模式_拖动后底图与选区同步且不显示选区框()
+    {
+        var window = new CaptureWindow
+        {
+            AnnotationOnly = true,
+            AnnotationSource = AnnotationModePng,
+            FreezeOnOpen = false
+        };
+        window.Show();
+
+        var left = Canvas.GetLeft(window.FrozenFrame);
+        var top = Canvas.GetTop(window.FrozenFrame);
+        var imageWidth = window.FrozenFrame.Width;
+        var imageHeight = window.FrozenFrame.Height;
+
+        window.MouseDown(new Point(left + 20, top + 20), MouseButton.Left);
+        window.MouseMove(new Point(left + 60, top + 45));
+        window.MouseUp(new Point(left + 60, top + 45), MouseButton.Left);
+
+        // 底图整体平移，尺寸不变
+        Canvas.GetLeft(window.FrozenFrame).ShouldBe(left + 40, 0.01);
+        Canvas.GetTop(window.FrozenFrame).ShouldBe(top + 25, 0.01);
+        window.FrozenFrame.Width.ShouldBe(imageWidth, 0.01);
+        window.FrozenFrame.Height.ShouldBe(imageHeight, 0.01);
+
+        // 选区 UI 永远不出现在标注模式
+        window.Selection.IsVisible.ShouldBeFalse();
+        window.HandleLayer.IsVisible.ShouldBeFalse();
+        window.SizeBadge.IsVisible.ShouldBeFalse();
+
+        window.Close();
     }
 }

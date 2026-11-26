@@ -20,9 +20,10 @@ public enum PasteTransform
 /// 大小写只处理字母；<see cref="PasteTransform.Capitalize"/> 会压缩空白；
 /// <see cref="PasteTransform.Camel"/> 按非字母数字切词。
 /// </summary>
-public static class PasteTransforms
+public static partial class PasteTransforms
 {
-    private static readonly Regex WordSeparator = new(@"[^\p{L}\p{Nd}]+", RegexOptions.Compiled);
+    [GeneratedRegex(@"[^\p{L}\p{Nd}]+")]
+    private static partial Regex WordSeparator();
 
     public static string Apply(string text, PasteTransform transform) => transform switch
     {
@@ -98,7 +99,7 @@ public static class PasteTransforms
     /// <summary>按非字母数字切词，首词全小写，后续词首字母大写。</summary>
     private static string Camel(string text)
     {
-        var words = WordSeparator.Split(text);
+        var words = WordSeparator().Split(text);
         var builder = new StringBuilder(text.Length);
         var first = true;
 

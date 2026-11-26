@@ -7,6 +7,13 @@
     <Project Path="plugins/sparrow.plugin.translate/Sparrow.Plugin.Translate.csproj" />
     <Project Path="plugins/sparrow.plugin.svg-prompt/Sparrow.Plugin.Svg.Prompt.csproj" />
     <Project Path="plugins/sparrow.plugin.files-hash/Sparrow.Plugin.Files.Hash.csproj" />
+    <Project Path="plugins/sparrow.plugin.images-convert/Sparrow.Plugin.Images.Convert.csproj" />
+    <Project Path="plugins/sparrow.plugin.images-resize/Sparrow.Plugin.Images.Resize.csproj" />
+    <Project Path="plugins/sparrow.plugin.window-pin/Sparrow.Plugin.Window.Pin.csproj" />
+    <Project Path="plugins/sparrow.plugin.video-compress/Sparrow.Plugin.Video.Compress.csproj" />
+    <Project Path="plugins/sparrow.plugin.video-frames/Sparrow.Plugin.Video.Frames.csproj" />
+    <Project Path="plugins/sparrow.plugin.video-gif/Sparrow.Plugin.Video.Gif.csproj" />
+    <Project Path="plugins/sparrow.plugin.video-trim/Sparrow.Plugin.Video.Trim.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Sparrow.App/Sparrow.App.csproj" />

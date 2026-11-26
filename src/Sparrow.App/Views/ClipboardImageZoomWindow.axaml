@@ -7,7 +7,8 @@
         ShowInTaskbar="False"
         Topmost="True"
         Background="#F20B0E13"
-        WindowStartupLocation="Manual">
+        WindowStartupLocation="Manual"
+        RequestedThemeVariant="Dark">
 
   <!-- 整屏灯箱：点任意处或 Esc 关闭，不抢焦点、不留标题栏 -->
   <Panel Cursor="Hand" Tapped="OnCloseTapped">
@@ -15,8 +16,8 @@
            Stretch="Uniform"
            Margin="32,32,32,52" />
 
-    <Border Background="{StaticResource OverlayBrush}"
-            BorderBrush="{StaticResource LineStrongBrush}"
+    <Border Background="{DynamicResource OverlayBrush}"
+            BorderBrush="{DynamicResource LineStrongBrush}"
             BorderThickness="1"
             CornerRadius="16"
             Padding="14,6"

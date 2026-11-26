@@ -12,6 +12,9 @@ public sealed record AppSettings
 
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
 
+    /// <summary>外观三态：system（跟随系统）/ light / dark；默认深色，保持既有识别度。</summary>
+    public string Appearance { get; init; } = "dark";
+
     /// <summary>被禁用的插件 ID（等于插件目录名）。命中的插件不扫描、不加载、不进搜索结果。</summary>
     public string[] DisabledPlugins { get; init; } = [];
 
@@ -68,7 +71,20 @@ public sealed record AppSettings
     public bool ClipboardHistoryEnabled { get; init; } = true;
 
     /// <summary>剪贴板历史最多保留多少条；图片另存为 PNG 文件。</summary>
-    public int ClipboardHistoryMaxEntries { get; init; } = 200;
+    /// <summary>剪贴板历史最多保留条数；容量上限内尽量多留。</summary>
+    public int ClipboardHistoryMaxEntries { get; init; } = 1000;
+
+    /// <summary>
+    /// 默认数据目录（剪贴板历史、历史记录）；模型和录制可各自覆盖。
+    /// 空 = %LOCALAPPDATA%\Sparrow。配置和日志仍固定在默认位置。
+    /// </summary>
+    public string DataDirectory { get; init; } = string.Empty;
+
+    /// <summary>离线模型目录；空 = 数据目录下的 models。</summary>
+    public string ModelDirectory { get; init; } = string.Empty;
+
+    /// <summary>录制文件目录；空 = 数据目录下的 recordings。</summary>
+    public string RecordDirectory { get; init; } = string.Empty;
 
     /// <summary>剪贴板历史保留天数；0 表示不按天数清理。</summary>
     public int ClipboardHistoryRetentionDays { get; init; }
@@ -124,6 +140,9 @@ public sealed record AppSettings
 
     /// <summary>截图标注颜色（#RRGGBB）。</summary>
     public string AnnotationColor { get; init; } = "#E5A44C";
+
+    /// <summary>截取选区边框颜色（#RRGGBB）；同时用于十字辅助线和候选框。</summary>
+    public string SelectionBorderColor { get; init; } = "#E5A44C";
 
     /// <summary>截图标注线宽（DIP）。</summary>
     public double AnnotationWidth { get; init; } = 3;

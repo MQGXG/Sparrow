@@ -35,6 +35,10 @@ public partial class WorkspaceViewModel
         // 执行即记忆：下次打开这个工具时参数保持上次的值
         _parameters?.Save(entry.Descriptor.Id, parameters);
 
+        // 每次执行独立的取消源：面板 Esc / 工作区「取消」按钮都走它
+        using var cancellation = new CancellationTokenSource();
+        _executionCts = cancellation;
+
         IsExecuting = true;
         ProgressText = null;
 
@@ -70,7 +74,7 @@ public partial class WorkspaceViewModel
             };
 
             var startedAt = Stopwatch.GetTimestamp();
-            var result = await entry.Tool.ExecuteAsync(context, CancellationToken.None);
+            var result = await ToolRunner.ExecuteAsync(entry.Tool, context, cancellation.Token);
             var elapsed = (long)Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
 
             if (result.Success && result.Payload is not null)
@@ -131,11 +135,17 @@ public partial class WorkspaceViewModel
         }
         finally
         {
+            if (ReferenceEquals(_executionCts, cancellation))
+                _executionCts = null;
+
             _progressGeneration++;
             ProgressText = null;
             IsExecuting = false;
         }
     }
+
+    /// <summary>取消当前执行；没有执行时是空操作。</summary>
+    public void CancelExecution() => _executionCts?.Cancel();
 
     private void ShowTextResult(ToolEntry entry, ToolContext context, string text, long elapsed)
     {

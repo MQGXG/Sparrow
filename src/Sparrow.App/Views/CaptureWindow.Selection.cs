@@ -217,7 +217,9 @@ public partial class CaptureWindow
 
     private void NudgeSelection(double dx, double dy)
     {
-        if (!_hasSelection)
+        // 纯标注模式禁用方向键微调：它会把标注反向平移并压入选区撤销栈，
+        // 让整图导出时的标注坐标错位；需要挪动图片请用鼠标拖动。
+        if (!_hasSelection || AnnotationOnly)
             return;
 
         var left = Math.Clamp(_selection.X + dx, 0, Math.Max(0, Width - _selection.Width));
@@ -255,7 +257,9 @@ public partial class CaptureWindow
     private void ApplyMove(Point current)
     {
         // 选区一动就恢复「工具条跟随」，对齐参考的 resetPositionForSelection 语义
-        _toolbarManual = false;
+        // （标注模式的工具条可以自由拖动，不绑在图片上，不重置这个状态）
+        if (!AnnotationOnly)
+            _toolbarManual = false;
 
         var dx = current.X - _dragOrigin.X;
         var dy = current.Y - _dragOrigin.Y;
@@ -268,6 +272,16 @@ public partial class CaptureWindow
             _selectionOrigin.Y + dy,
             0,
             Math.Max(0, Height - _selectionOrigin.Height));
+
+        if (AnnotationOnly)
+        {
+            // 图片 + 选区 + 标注层作为一个整体平移。不做吸附、不显示辅助线，
+            // 也不反向平移标注：标注坐标是相对图片左上角的，跟着图片走才
+            // 不会与底图错开，导出（整张原图 + 标注）位置才正确。
+            _selection = new Rect(left, top, _selectionOrigin.Width, _selectionOrigin.Height);
+            UpdateSelectionVisuals();
+            return;
+        }
 
         // 吸附：屏幕边/中线，以及选区所在窗口的边/中线
         var (snapX, guideX) = SnapGuides.SnapEdges(
@@ -291,6 +305,10 @@ public partial class CaptureWindow
 
     private void ApplyResize(Point current)
     {
+        // 纯标注模式的图片尺寸固定，拉伸选区只会让选区与底图脱节
+        if (AnnotationOnly)
+            return;
+
         _toolbarManual = false;
 
         var dx = current.X - _dragOrigin.X;
@@ -380,6 +398,26 @@ public partial class CaptureWindow
             return;
         }
 
+        // 纯标注模式：图片本身就是画布，_selection 就是这张图的矩形。
+        // 任何改动选区的路径都必须让底图与标注层同步，且绝不重新显示
+        // 选区框 / 手柄 / 角标 / 遮罩 —— 否则拖动后会冒出一个与图片
+        // 分离的选区框（贴图「标注」后移动选区与图片分开的直接原因）。
+        if (AnnotationOnly)
+        {
+            Selection.IsVisible = false;
+            SelectionHalo.IsVisible = false;
+            HandleLayer.IsVisible = false;
+            SizeBadge.IsVisible = false;
+            DimLayer.IsVisible = false;
+            GuideLayer.IsVisible = false;
+
+            Canvas.SetLeft(FrozenFrame, _selection.X);
+            Canvas.SetTop(FrozenFrame, _selection.Y);
+            Canvas.SetLeft(NoteLayer, _selection.X);
+            Canvas.SetTop(NoteLayer, _selection.Y);
+            return;
+        }
+
         var visible = _selection.Width > 0 && _selection.Height > 0;
         var radius = SelectionRadius();
 
@@ -402,6 +440,7 @@ public partial class CaptureWindow
         SelectionHalo.Height = _selection.Height + 2;
 
         UpdateSizeBadge(_selection);
+        UpdateRecordMenuHeader();
         UpdateDim();
 
         if (_hasSelection)
@@ -432,14 +471,20 @@ public partial class CaptureWindow
             return;
         }
 
-        DimLayer.Data = new CombinedGeometry(
-            GeometryCombineMode.Exclude,
-            new RectangleGeometry(bounds),
-            new RectangleGeometry(hole.Value)
+        // 用 EvenOdd 的 GeometryGroup 挖洞：
+        // CombinedGeometry 的 Exclude 在 Avalonia 上 Bounds 可能算成空，
+        // Path 会整块不绘制（表现为遮罩突然消失、选区内外一样亮）。
+        var radius = hole is { } h && h == _selection ? SelectionRadius() : 0;
+
+        DimLayer.Data = new GeometryGroup
+        {
+            FillRule = FillRule.EvenOdd,
+            Children =
             {
-                RadiusX = hole is { } h && h == _selection ? SelectionRadius() : 0,
-                RadiusY = hole is { } r && r == _selection ? SelectionRadius() : 0
-            });
+                new RectangleGeometry(bounds),
+                new RectangleGeometry(hole.Value) { RadiusX = radius, RadiusY = radius }
+            }
+        };
     }
 
     /// <summary>选区预览半径：不超过短边的一半。</summary>

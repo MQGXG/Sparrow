@@ -20,7 +20,7 @@ namespace Sparrow.App.Services;
 /// </summary>
 public sealed partial class ClipboardHistoryStore : IClipboardHistory
 {
-    private const int DefaultMaxEntries = 200;
+    private const int DefaultMaxEntries = 1000;
 
     /// <summary>超过 32MB 的图片不记录：占盘且几乎不会还原使用。</summary>
     private const long MaxImageBytes = 32 * 1024 * 1024;
@@ -34,6 +34,25 @@ public sealed partial class ClipboardHistoryStore : IClipboardHistory
     /// <summary>与 FTS 表 JOIN 时必须带表别名，否则 preview / text 等列名会歧义。</summary>
     private const string SelectColumnsJoined =
         "e.id, e.kind, e.preview, e.text, e.image_file, e.paths, e.content_hash, e.byte_size, e.created_at, e.favorite, e.tags, e.auto_tags, e.source_app";
+
+    /// <summary>
+    /// 列表查询只带前 2048 个字符的文本：列表只显示摘要 / 首行，
+    /// 完整文本在复制、粘贴或打开详情时再按 id 读取。
+    /// 避免每次按键都把最多 1000 条全文（每条上限 256K 字符）搬进内存。
+    /// </summary>
+    internal const int ListTextChars = 2048;
+
+    private static readonly string ListTextExpression =
+        $"CASE WHEN length(text) > {ListTextChars} THEN substr(text, 1, {ListTextChars}) ELSE text END";
+
+    private static readonly string ListColumns =
+        "id, kind, preview, " + ListTextExpression +
+        ", image_file, paths, content_hash, byte_size, created_at, favorite, tags, auto_tags, source_app";
+
+    private static readonly string ListColumnsJoined =
+        $"e.id, e.kind, e.preview, CASE WHEN length(e.text) > {ListTextChars} " +
+        $"THEN substr(e.text, 1, {ListTextChars}) ELSE e.text END" +
+        ", e.image_file, e.paths, e.content_hash, e.byte_size, e.created_at, e.favorite, e.tags, e.auto_tags, e.source_app";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

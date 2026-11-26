@@ -379,6 +379,12 @@ public partial class CaptureWindow : Window
     /// <summary>取色模式：光标处显示色值，点击复制并写回标注颜色。</summary>
     private bool _colorSampling = true;
 
+    /// <summary>
+    /// OCR / 翻译 / 滚动截图期间暂停自动取色：
+    /// 结果条出现后取色卡片还跟着鼠标会挡住文字（对齐 Snow-shot 的 hideColorPicker）。
+    /// </summary>
+    private bool _colorProbeSuppressed;
+
     /// <summary>取色格式：0 = HEX，1 = RGB，2 = HSL（Shift+I 循环）。</summary>
     private int _colorFormat;
 
@@ -503,6 +509,22 @@ public partial class CaptureWindow : Window
 
     /// <summary>普通截图是否画鼠标光标。</summary>
     public bool CaptureShowCursor { get; set; }
+
+    /// <summary>选区边框颜色（#RRGGBB）；同时用于十字辅助线和悬停候选框。</summary>
+    public string SelectionBorderColor { get; set; } = "#E5A44C";
+
+    /// <summary>纯标注模式：窗口显示一张现成图片，只保留标注工具条，不进入截图流程。</summary>
+    internal bool AnnotationOnly { get; set; }
+
+    /// <summary>标注模式的原图（PNG）。</summary>
+    internal byte[]? AnnotationSource { get; set; }
+
+    /// <summary>标注完成后的 PNG；取消或没有标注时为 null。</summary>
+    internal byte[]? AnnotationResult { get; private set; }
+
+    private byte[]? _annotationBasePng;
+    private Bitmap? _annotationBitmap;
+    private double _annotationImageHeight;
 
     /// <summary>是否还原放大镜全屏颜色滤镜。</summary>
     public bool CaptureRestoreColors { get; set; } = true;
@@ -798,6 +820,12 @@ public partial class CaptureWindow : Window
     {
         base.OnOpened(e);
 
+        // 纯标注模式：窗口显示一张现成图片，只保留标注工具条，不进入截图流程。
+        if (AnnotationOnly)
+        {
+            StartAnnotationMode();
+            return;
+        }
         // 与 Snow-shot 一致：录制中重新截图/选区，遮罩和选区会进入视频。
         // （如果希望录制中截图不污染视频，把下面这行加回来即可。）
         // WindowCaptureExclusion.Exclude(this);
@@ -830,7 +858,119 @@ public partial class CaptureWindow : Window
 
         // 宿主在构造后注入上次的样式；这里把按钮状态同步过来
         RefreshNoteStyle();
+        ApplySelectionBorderColor();
         BuildPresetMenu();
+    }
+
+    /// <summary>
+    /// 纯标注模式初始化：窗口铺满屏幕（透明），图片居中显示、工具条可自由拖动，
+    /// 不把图片和工具条绑在同一个范围内。
+    /// </summary>
+    private void StartAnnotationMode()
+    {
+        if (AnnotationSource is not { Length: > 0 } png)
+        {
+            Close();
+            return;
+        }
+
+        _annotationBasePng = png;
+
+        using var stream = new MemoryStream(png);
+        _annotationBitmap = new Bitmap(stream);
+
+        // 窗口铺满虚拟屏幕，图片居中；工具条默认放图片下方，之后可以拖到任意位置
+        ApplyVirtualScreenBounds();
+
+        ActionBar.IsVisible = true;
+        HintBar.IsVisible = false;
+        MeasureActionBar();
+        var toolbarSize = ActionBar.DesiredSize;
+
+        var screen = Screens.Primary?.WorkingArea ?? new PixelRect(0, 0, 1920, 1080);
+        var renderScale = RenderScaling > 0 ? RenderScaling : 1;
+        var maxWidth = Math.Max(240, screen.Width / renderScale * 0.8);
+        var maxHeight = Math.Max(180, screen.Height / renderScale * 0.8);
+
+        var ratio = Math.Min(
+            Math.Min(
+                maxWidth / _annotationBitmap.PixelSize.Width,
+                maxHeight / _annotationBitmap.PixelSize.Height),
+            1.0);
+
+        var imageWidth = Math.Max(160, _annotationBitmap.PixelSize.Width * ratio);
+        var imageHeight = Math.Max(120, _annotationBitmap.PixelSize.Height * ratio);
+
+        var imageLeft = Math.Max(8, (Width - imageWidth) / 2);
+        var imageTop = Math.Max(8, (Height - imageHeight) / 2);
+
+        FrozenFrame.Source = _annotationBitmap;
+        FrozenFrame.IsVisible = true;
+        FrozenFrame.Width = imageWidth;
+        FrozenFrame.Height = imageHeight;
+        Canvas.SetLeft(FrozenFrame, imageLeft);
+        Canvas.SetTop(FrozenFrame, imageTop);
+
+        _annotationImageHeight = imageHeight;
+        _selection = new Rect(imageLeft, imageTop, imageWidth, imageHeight);
+        _hasSelection = true;
+        _scaling = imageWidth > 0 ? _annotationBitmap.PixelSize.Width / imageWidth : 1;
+        _colorSampling = false;
+
+        HideAnnotationChrome();
+
+        // 工具条先放图片下方；下方放不下就放上方
+        var toolbarTop = imageTop + imageHeight + 10;
+
+        if (toolbarTop + toolbarSize.Height > Height - 8)
+            toolbarTop = Math.Max(8, imageTop - toolbarSize.Height - 10);
+
+        Canvas.SetLeft(ActionBar, Math.Max(8, (Width - toolbarSize.Width) / 2));
+        Canvas.SetTop(ActionBar, toolbarTop);
+    }
+
+    /// <summary>标注模式只保留标注工具：隐藏选区、角标、遮罩和截图动作。</summary>
+    private void HideAnnotationChrome()
+    {
+        Selection.IsVisible = false;
+        SelectionHalo.IsVisible = false;
+        DimLayer.IsVisible = false;
+        CrosshairLayer.IsVisible = false;
+        CandidateBox.IsVisible = false;
+        CandidateBadge.IsVisible = false;
+        HandleLayer.IsVisible = false;
+        GuideLayer.IsVisible = false;
+        NoteHandleLayer.IsVisible = false;
+        SizeBadge.IsVisible = false;
+        HintBar.IsVisible = false;
+        Magnifier.IsVisible = false;
+        ColorProbe.IsVisible = false;
+        OcrTextBar.IsVisible = false;
+
+        SaveButton.IsVisible = false;
+        PinButton.IsVisible = false;
+        ScrollButton.IsVisible = false;
+        RecordButton.IsVisible = false;
+        CornerRadiusButton.IsVisible = false;
+        MoreButton.IsVisible = false;
+
+        // 识别 / 翻译保留：标注时也常需要把图上的字提出来
+        ToolTip.SetTip(CopyImageButton, "完成标注");
+    }
+
+    /// <summary>设置里的选区颜色：选区边框、十字辅助线、悬停候选框统一使用。</summary>
+    private void ApplySelectionBorderColor()
+    {
+        if (!Color.TryParse(SelectionBorderColor, out var color))
+            color = Color.Parse("#E5A44C");
+
+        Selection.Stroke = new SolidColorBrush(color);
+        CandidateBox.Stroke = new SolidColorBrush(color);
+
+        // 十字线用同色半透明，避免抢过选区边框
+        var faint = new SolidColorBrush(Color.FromArgb(0x73, color.R, color.G, color.B));
+        CrosshairV.Stroke = faint;
+        CrosshairH.Stroke = faint;
     }
 
     private void RefreshNoteStyle()
@@ -889,7 +1029,31 @@ public partial class CaptureWindow : Window
         _ocrCancellation?.Cancel();
         _ocrCancellation?.Dispose();
         _ocrCancellation = null;
-        _groupShowTimer?.Stop();
+        // 三个 DispatcherTimer 都由全局 Dispatcher 持有，Tick 委托捕获 this。
+        // 关窗必须全部 Stop + 解绑 + 置 null：只要有一个还在跑，Dispatcher 就会
+        // 通过 Timer → Tick → 窗口 强引用住整个视觉树和 4K 冻结帧，后面的
+        // Dispose()/LOH 压缩全部白做（反复开关截图窗口内存不回落的主因）。
+        if (_groupShowTimer is { } groupShowTimer)
+        {
+            groupShowTimer.Stop();
+            groupShowTimer.Tick -= OnGroupShowTimerTick;
+            _groupShowTimer = null;
+        }
+
+        if (_groupCloseTimer is { } groupCloseTimer)
+        {
+            groupCloseTimer.Stop();
+            groupCloseTimer.Tick -= OnGroupCloseTimerTick;
+            _groupCloseTimer = null;
+        }
+
+        // _recordTimer 的 Tick 是内联 lambda，无法显式解绑；Stop 之后 Dispatcher
+        // 不再持有该 timer，timer 与 lambda 成为可回收的孤岛，置 null 即可。
+        if (_recordTimer is { } recordTimer)
+        {
+            recordTimer.Stop();
+            _recordTimer = null;
+        }
 
         var releasedBytes = (_frozenPixels?.Length ?? 0)
             + (long)_frozenWidth * _frozenHeight * 4;
@@ -899,7 +1063,14 @@ public partial class CaptureWindow : Window
         _frozenBitmap = null;
         _frozenPixels = null;
 
+        _annotationBitmap?.Dispose();
+        _annotationBitmap = null;
+
         TrimFreezeMemory(releasedBytes);
+
+        // 工具窗口关闭时顺带丢掉图片缓存引用（Clear 只清引用、不主动 Dispose，
+        // 位图仍被 Image.Source 引用时不会渲染崩溃），让缓存高位尽快回落。
+        ImageCache.Instance.Clear();
 
         base.OnClosed(e);
     }

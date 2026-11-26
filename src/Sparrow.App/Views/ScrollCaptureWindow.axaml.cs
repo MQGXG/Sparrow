@@ -6,19 +6,34 @@ using Sparrow.App.Services;
 namespace Sparrow.App.Views;
 
 /// <summary>
-/// 滚动截图时的悬浮提示条。
+/// 滚动截图时的悬浮状态条。
 ///
-/// 关键点：ShowActivated=false、不抢焦点。用户还要继续用滚轮操作下面的页面，
-/// 如果这个窗口抢走焦点，滚轮事件就会送到覆盖层。
-/// 停止捕获靠「完成」按钮，而不是 Enter——因为窗口本来就没有焦点。
+/// 只显示进度和完成/取消——自动/方向/速度已经在工具条的二级菜单里定好，
+/// 这里再放设置会让「点开始之后还要再选一次」，也就是之前一闪而过的问题。
+///
+/// ShowActivated=false、不抢焦点：手动模式还要继续操作下面的页面。
 /// </summary>
 public partial class ScrollCaptureWindow : Window
 {
+    private readonly int _frameHeight;
+
     private WriteableBitmap? _preview;
 
     public ScrollCaptureWindow()
+        : this(new ScrollCaptureControl(), 800)
+    {
+    }
+
+    internal ScrollCaptureWindow(ScrollCaptureControl control, int frameHeight)
     {
         InitializeComponent();
+
+        _frameHeight = Math.Max(1, frameHeight);
+
+        HintText.Text = control.AutoScroll
+            ? "正在自动滚动…"
+            : "请用滚轮滚动页面，完成后点「完成」";
+
         Opened += (_, _) => WindowCaptureExclusion.Exclude(this);
     }
 
@@ -31,10 +46,8 @@ public partial class ScrollCaptureWindow : Window
     /// <summary>更新已捕获的屏数。</summary>
     public void SetCaptured(int rows, int frameHeight)
     {
-        if (frameHeight <= 0)
-            return;
-
-        var screens = rows / (double)frameHeight;
+        var height = frameHeight > 0 ? frameHeight : _frameHeight;
+        var screens = rows / (double)height;
         ProgressText.Text = $"已捕获 {screens:F1} 屏（{rows} px）";
     }
 

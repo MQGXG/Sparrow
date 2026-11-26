@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using Sparrow.App.Services;
@@ -60,14 +61,40 @@ public partial class ClipboardPanelWindow : Window
 
         // 隧道阶段拦 Esc / Enter，避免被搜索框先吃掉
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
+
+        ApplyThemeBackdrop();
     }
 
     private ClipboardHistoryViewModel? History => DataContext as ClipboardHistoryViewModel;
 
+    /// <summary>
+    /// 详情层遮罩必须完全不透明，但又不能写死深色（浅色主题下会是一整块黑）。
+    /// XAML 保留不透明兜底色，这里按实际主题换成 BgBrush；取不到资源时保持兜底。
+    /// </summary>
+    private void ApplyThemeBackdrop()
+    {
+        if (DetailBackdrop is { } backdrop
+            && this.TryFindResource("BgBrush", ActualThemeVariant, out var value)
+            && value is IBrush brush)
+        {
+            backdrop.Background = brush;
+        }
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property.Name == "ActualThemeVariant")
+        {
+            ApplyThemeBackdrop();
+            WindowChrome.TryApplyTitleBarTheme(this, ThemeService.IsDark(ActualThemeVariant));
+        }
+    }
+
     protected override void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
-        WindowChrome.TryApplyDarkTitleBar(this);
+        WindowChrome.TryApplyTitleBarTheme(this, ThemeService.IsDark(ActualThemeVariant));
 
         // 与 Snow-shot 一致：录制中打开剪贴板小窗，窗口会进入视频。
 
@@ -84,6 +111,12 @@ public partial class ClipboardPanelWindow : Window
     {
         HideDetail(focusSearch: false);
         _savedQuery = History?.Query ?? string.Empty;
+
+        // 绑定带 180ms 防抖：清空搜索框不会立刻回写 Query，
+        // 这里直接清 VM，保证面板呼出时结果就是「全部」。
+        if (History is { } history)
+            history.Query = string.Empty;
+
         SearchBox.Text = string.Empty;
 
         // 搜索行收起时不能 Focus，否则焦点落在不可见控件上，键盘没反应
@@ -161,6 +194,14 @@ public partial class ClipboardPanelWindow : Window
 
         Settings = Settings with { ClipboardPanelTopmost = Topmost };
         SettingsStore?.Save(Settings);
+
+        // Windows 有时不会立刻刷新 Z 序（尤其面板刚打开还没激活）：
+        // 重新激活并把置顶状态再压一次，避免「点了没反应」。
+        if (Topmost)
+        {
+            Activate();
+            Topmost = true;
+        }
 
         e.Handled = true;
     }

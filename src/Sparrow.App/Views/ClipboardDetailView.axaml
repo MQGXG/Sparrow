@@ -9,10 +9,10 @@
     详情内容本身：主窗的独立详情窗口和快取面板的覆盖层共用同一份视图，
     容器只负责「开 / 关」，避免两套布局和两套事件。
   -->
-  <Panel Background="{StaticResource WindowBgGradientBrush}">
+  <Panel Background="{DynamicResource WindowBgGradientBrush}">
 
     <!-- 和主窗一致的 HUD 底纹 -->
-    <Border Background="{StaticResource DotGridBrush}" IsHitTestVisible="False" />
+    <Border Background="{DynamicResource DotGridBrush}" IsHitTestVisible="False" />
 
     <Grid RowDefinitions="Auto,Auto,*,Auto">
 
@@ -40,7 +40,7 @@
                     IsVisible="{Binding HasDetail}">
               <TextBlock Text="{Binding SelectedItem.KindLabel}"
                          FontSize="10"
-                         Foreground="{StaticResource AccentBrush}" />
+                         Foreground="{DynamicResource AccentBrush}" />
             </Border>
           </StackPanel>
           <TextBlock Text="{Binding SelectedItem.DetailTimeLabel}"
@@ -79,8 +79,8 @@
               Margin="18,0,18,12"
               Padding="10,6"
               CornerRadius="8"
-              Background="{StaticResource SurfaceBrush}"
-              BorderBrush="{StaticResource LineBrush}"
+              Background="{DynamicResource SurfaceBrush}"
+              BorderBrush="{DynamicResource LineBrush}"
               BorderThickness="1"
               IsVisible="{Binding HasDetail}">
         <Grid ColumnDefinitions="Auto,*,Auto,Auto">
@@ -105,8 +105,8 @@
                     Margin="18,0,12,14"
                     VerticalScrollBarVisibility="Auto">
         <StackPanel Spacing="8" Margin="0,0,6,0">
-          <Border Background="{StaticResource SurfaceBrush}"
-                  BorderBrush="{StaticResource LineBrush}"
+          <Border Background="{DynamicResource SurfaceBrush}"
+                  BorderBrush="{DynamicResource LineBrush}"
                   BorderThickness="1"
                   CornerRadius="8"
                   Padding="12,10"
@@ -116,11 +116,11 @@
                                  FontSize="12"
                                  LineHeight="18"
                                  TextWrapping="Wrap"
-                                 Foreground="{StaticResource TextPrimaryBrush}" />
+                                 Foreground="{DynamicResource TextPrimaryBrush}" />
           </Border>
 
-          <Border Background="{StaticResource SurfaceBrush}"
-                  BorderBrush="{StaticResource LineBrush}"
+          <Border Background="{DynamicResource SurfaceBrush}"
+                  BorderBrush="{DynamicResource LineBrush}"
                   BorderThickness="1"
                   CornerRadius="8"
                   Padding="8"
@@ -138,8 +138,8 @@
                      HorizontalAlignment="Center"
                      IsVisible="{Binding HasDetailImage}" />
 
-          <Border Background="{StaticResource SurfaceBrush}"
-                  BorderBrush="{StaticResource LineBrush}"
+          <Border Background="{DynamicResource SurfaceBrush}"
+                  BorderBrush="{DynamicResource LineBrush}"
                   BorderThickness="1"
                   CornerRadius="8"
                   Padding="12,10"
@@ -149,7 +149,7 @@
                                  FontSize="12"
                                  LineHeight="18"
                                  TextWrapping="Wrap"
-                                 Foreground="{StaticResource TextPrimaryBrush}" />
+                                 Foreground="{DynamicResource TextPrimaryBrush}" />
           </Border>
         </StackPanel>
       </ScrollViewer>
@@ -163,28 +163,28 @@
         <Border Width="56"
                 Height="56"
                 CornerRadius="12"
-                Background="{StaticResource SurfaceBrush}"
-                BorderBrush="{StaticResource LineBrush}"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource LineBrush}"
                 BorderThickness="1"
                 HorizontalAlignment="Center">
           <Path Classes="icon icon-xl"
-                Stroke="{StaticResource LineStrongBrush}"
+                Stroke="{DynamicResource LineStrongBrush}"
                 Data="{StaticResource IconClipboard}" />
         </Border>
         <TextBlock Text="没有可显示的记录"
                    HorizontalAlignment="Center"
                    FontSize="12"
-                   Foreground="{StaticResource TextSecondaryBrush}" />
+                   Foreground="{DynamicResource TextSecondaryBrush}" />
         <TextBlock Text="回到列表再选一条查看"
                    HorizontalAlignment="Center"
                    FontSize="10"
-                   Foreground="{StaticResource TextMutedBrush}" />
+                   Foreground="{DynamicResource TextMutedBrush}" />
       </StackPanel>
 
       <!-- 标签：常驻底栏 -->
       <Border Grid.Row="3"
               IsVisible="{Binding HasDetail}"
-              BorderBrush="{StaticResource LineBrush}"
+              BorderBrush="{DynamicResource LineBrush}"
               BorderThickness="0,1,0,0"
               Padding="18,12,18,16">
         <StackPanel Spacing="8">
@@ -194,7 +194,7 @@
                        VerticalAlignment="Center" />
             <TextBlock Text="还没有标签"
                        FontSize="10"
-                       Foreground="{StaticResource TextMutedBrush}"
+                       Foreground="{DynamicResource TextMutedBrush}"
                        VerticalAlignment="Center"
                        IsVisible="{Binding !SelectedItem.HasManualTags}" />
           </StackPanel>

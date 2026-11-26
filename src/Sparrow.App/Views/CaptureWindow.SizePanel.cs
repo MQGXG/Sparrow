@@ -83,7 +83,8 @@ public partial class CaptureWindow
     /// <summary>把输入框里的数值应用到选区：左上角不动，超出窗口就钳制。</summary>
     internal void CommitSizeEdit(int axis)
     {
-        if (_sizeEditGuard || !_hasSelection)
+        // 纯标注模式的图片尺寸固定，X/Y/宽高/比例输入都会让选区与底图脱节
+        if (AnnotationOnly || _sizeEditGuard || !_hasSelection)
             return;
 
         // 圆角不是几何，单独处理
@@ -185,6 +186,10 @@ public partial class CaptureWindow
     /// </summary>
     internal void ApplyRatioPreset(double ratio, string label)
     {
+        // 纯标注模式的图片尺寸固定，改宽高比会让选区与底图脱节
+        if (AnnotationOnly)
+            return;
+
         _ratioPreset = ratio;
         RatioButton.Content = label;
 
@@ -407,7 +412,11 @@ public partial class CaptureWindow
     private void MoveToolbar(Point point)
     {
         var size = ActionBar.Bounds.Width > 0 ? ActionBar.Bounds.Size : ActionBar.DesiredSize;
-        var screen = ScreenDipFor(_selection) ?? new Rect(0, 0, Width, Height);
+
+        // 标注模式的工具条可以在整个屏幕内自由挪动；截图模式限制在选区所在显示器。
+        var screen = AnnotationOnly
+            ? new Rect(0, 0, Math.Max(Width, 1), Math.Max(Height, 1))
+            : ScreenDipFor(_selection) ?? new Rect(0, 0, Width, Height);
 
         var left = Math.Clamp(
             _toolbarStartPosition.X + (point.X - _toolbarDragStart.X),
@@ -670,6 +679,11 @@ public partial class CaptureWindow
     private void OnActionBarLayoutUpdated(object? sender, EventArgs e)
     {
         if (!ActionBar.IsVisible || _toolbarManual)
+            return;
+
+        // 标注模式：工具条位置由 StartAnnotationMode 给初值、用户拖动调整，
+        // 这里不再跟着「选区外」规则重排。
+        if (AnnotationOnly)
             return;
 
         var size = ActionBar.Bounds.Size;

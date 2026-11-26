@@ -565,17 +565,68 @@ public partial class CaptureWindow
 
     private async void OnPinClick(object? sender, RoutedEventArgs e) => await ActAsync(CaptureAction.Pin);
 
-    private async void OnScrollClick(object? sender, RoutedEventArgs e) => await ActAsync(CaptureAction.Scroll);
+    private void OnScrollClick(object? sender, RoutedEventArgs e)
+    {
+        // 按钮自带 Flyout：点击先弹「自动/方向/速度」二级菜单，
+        // 开始动作交给菜单里的按钮，避免点一下就直接开滚。
+    }
+
+    /// <summary>滚动截图二级菜单里的「开始滚动截图」。</summary>
+    private async void OnStartScrollClick(object? sender, RoutedEventArgs e)
+    {
+        await ActAsync(CaptureAction.Scroll);
+        e.Handled = true;
+    }
+
+    /// <summary>滚动截图设置：从工具条二级菜单读取，宿主创建捕获循环时用。</summary>
+    internal ScrollCaptureControl CreateScrollControl() => new()
+    {
+        AutoScroll = ScrollAutoSwitch.IsChecked == true,
+        Horizontal = ScrollDirectionBox.SelectedIndex == 1,
+        IntervalMs = ScrollSpeedBox.SelectedIndex switch
+        {
+            0 => 420,
+            2 => 120,
+            _ => 240
+        }
+    };
 
     private async void OnRecordClick(object? sender, RoutedEventArgs e)
     {
+        // 非录制状态：按钮自带 Flyout，会先弹出「开始录制 / 录制设置」菜单。
+        if (_recording is null)
+            return;
+
+        await StopRecordingAsync();
+    }
+
+    /// <summary>二级菜单里的「开始录制」：用当前选区和上次设置直接开始。</summary>
+    private async void OnStartRecordingMenuClick(object? sender, RoutedEventArgs e)
+    {
         if (_recording is not null)
+            return;
+
+        await ActAsync(CaptureAction.Record);
+    }
+
+    /// <summary>二级菜单里的「录制设置…」：打开完整面板，确认后仍用当前选区开始。</summary>
+    private void OnOpenRecordingSetupMenuClick(object? sender, RoutedEventArgs e)
+        => RecordingSetupRequested?.Invoke(SelectionRect);
+
+    /// <summary>菜单标题带上当前选区尺寸，避免误录错区域。</summary>
+    private void UpdateRecordMenuHeader()
+    {
+        if (_selection.Width <= 0 || _selection.Height <= 0)
         {
-            await StopRecordingAsync();
+            StartRecordingMenuItem.Header = "开始录制";
             return;
         }
 
-        await ActAsync(CaptureAction.Record);
+        // SelectionRect 要等执行动作时才计算，这里直接用选区 DIP × 缩放换成物理像素。
+        var scale = _scaling > 0 ? _scaling : 1;
+        var width = (int)Math.Round(_selection.Width * scale);
+        var height = (int)Math.Round(_selection.Height * scale);
+        StartRecordingMenuItem.Header = $"开始录制（{width} × {height}）";
     }
 
     private void OnCancelClick(object? sender, RoutedEventArgs e)

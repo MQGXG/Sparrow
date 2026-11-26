@@ -579,4 +579,43 @@ public sealed class ClipboardHistoryStoreTests
 
         notifications.ShouldBe(2);
     }
+
+    [Fact]
+    public void 列表查询只带前2048字符_全文按需读取()
+    {
+        using var temp = new TempStore();
+        var text = new string('a', 3000);
+        temp.Store.AddText(text);
+
+        var listEntry = temp.Store.RecentForList(1)[0];
+        listEntry.Text!.Length.ShouldBe(2048);
+        temp.Store.LoadText(listEntry.Id).ShouldBe(text);
+
+        // 插件走的公开方法行为不变：仍然拿到全文
+        temp.Store.Recent(1)[0].Text.ShouldBe(text);
+    }
+
+    [Fact]
+    public void 预览_换行归一化并截断到80字符()
+    {
+        using var temp = new TempStore();
+        var text = "  " + new string('a', 79) + "\r\n" + new string('b', 10) + "  ";
+        temp.Store.AddText(text);
+
+        var preview = temp.Store.Recent(1)[0].Preview;
+
+        // 79 个 a + 一个空格 = 80，再加省略号
+        preview.Length.ShouldBe(81);
+        preview.ShouldStartWith(new string('a', 79) + " ");
+        preview.ShouldEndWith("…");
+    }
+
+    [Fact]
+    public void 预览_保留内部连续空格()
+    {
+        using var temp = new TempStore();
+        temp.Store.AddText("a\r\nb");
+
+        temp.Store.Recent(1)[0].Preview.ShouldBe("a  b");
+    }
 }

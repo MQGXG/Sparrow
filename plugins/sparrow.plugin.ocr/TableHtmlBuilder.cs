@@ -182,6 +182,32 @@ public static class TableHtmlBuilder
     }
 
     /// <summary>文字进 HTML 前必须转义，否则一个 "&lt;" 就能让表格结构失效。</summary>
-    private static string Escape(string text) =>
-        text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+    private static string Escape(string text)
+    {
+        if (text.AsSpan().IndexOfAny('&', '<', '>') < 0)
+            return text;
+
+        var builder = new StringBuilder(text.Length + 8);
+
+        foreach (var ch in text)
+        {
+            switch (ch)
+            {
+                case '&':
+                    builder.Append("&amp;");
+                    break;
+                case '<':
+                    builder.Append("&lt;");
+                    break;
+                case '>':
+                    builder.Append("&gt;");
+                    break;
+                default:
+                    builder.Append(ch);
+                    break;
+            }
+        }
+
+        return builder.ToString();
+    }
 }

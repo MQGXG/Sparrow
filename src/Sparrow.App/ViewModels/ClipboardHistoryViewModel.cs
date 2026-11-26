@@ -325,8 +325,8 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
             SyncSourceFilters();
 
             var entries = string.IsNullOrWhiteSpace(Query)
-                ? _store.Recent(MaxLoad)
-                : _store.Search(Query, MaxLoad);
+                ? _store.RecentForList(MaxLoad)
+                : _store.SearchForList(Query, MaxLoad);
 
             var filtered = entries
                 .Where(Matches)
@@ -429,16 +429,33 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
         OnPropertyChanged(nameof(CanUndoDelete));
     }
 
+    /// <summary>
+    /// 列表查询只带前 2048 字符，复制/粘贴/详情需要全文时按 id 补齐。
+    /// 短文本一定没有被截断，直接用列表里的值，省一次查询。
+    /// </summary>
+    private string? FullText(ClipboardEntryViewModel item)
+    {
+        if (item.Entry.Kind != ClipboardEntryKind.Text)
+            return item.Entry.Text;
+
+        if (item.Entry.Text is { Length: < ClipboardHistoryStore.ListTextChars } shortText)
+            return shortText;
+
+        return _store.LoadText(item.Id) ?? item.Entry.Text;
+    }
+
     public void Copy(ClipboardEntryViewModel item)
     {
+        var text = FullText(item);
+
         switch (item.Entry.Kind)
         {
-            case ClipboardEntryKind.Text when item.Entry.Text is { } text:
+            case ClipboardEntryKind.Text when text is { } fullText:
                 var (html, rtf) = _store.LoadRichText(item.Id);
                 if (html is not null || rtf is not null)
-                    _clipboard.SetRichText(text, html, rtf);
+                    _clipboard.SetRichText(fullText, html, rtf);
                 else
-                    _clipboard.SetText(text);
+                    _clipboard.SetText(fullText);
                 break;
 
             case ClipboardEntryKind.Image when _store.LoadImage(item.Entry) is { } png:
@@ -454,8 +471,9 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     /// <summary>只复制文本内容，丢掉 HTML / RTF 格式。</summary>
     public void CopyPlainText(ClipboardEntryViewModel item)
     {
-        if (item.Entry.Kind == ClipboardEntryKind.Text && item.Entry.Text is { } text)
-            _clipboard.SetText(text);
+        var text = FullText(item);
+        if (item.Entry.Kind == ClipboardEntryKind.Text && text is { } fullText)
+            _clipboard.SetText(fullText);
         else
             Copy(item);
     }
@@ -463,7 +481,8 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     /// <summary>按指定变换复制文本；非文本条目忽略变换，仍走普通复制。</summary>
     public bool CopyTransformed(ClipboardEntryViewModel item, PasteTransform transform)
     {
-        if (item.Entry.Kind != ClipboardEntryKind.Text || item.Entry.Text is not { Length: > 0 } text)
+        var text = FullText(item);
+        if (item.Entry.Kind != ClipboardEntryKind.Text || text is not { Length: > 0 })
         {
             Copy(item);
             return false;
@@ -510,10 +529,16 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
             Queue.RemoveAt(0);
             RenumberQueue();
 
+            var text = entry.Kind == ClipboardEntryKind.Text
+                ? entry.Text is { Length: < ClipboardHistoryStore.ListTextChars }
+                    ? entry.Text
+                    : _store.LoadText(entry.Id) ?? entry.Text
+                : null;
+
             switch (entry.Kind)
             {
-                case ClipboardEntryKind.Text when entry.Text is { Length: > 0 }:
-                    return new ClipboardPastePayload(entry.Kind, entry.Text, null, []);
+                case ClipboardEntryKind.Text when text is { Length: > 0 }:
+                    return new ClipboardPastePayload(entry.Kind, text, null, []);
 
                 case ClipboardEntryKind.Image when _store.LoadImage(entry) is { Length: > 0 } png:
                     return new ClipboardPastePayload(entry.Kind, null, png, []);
@@ -546,7 +571,9 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     /// <summary>粘贴用载荷：文本带上 HTML / RTF，其余与拖出载荷一致。</summary>
     public ClipboardPastePayload? GetPastePayload(ClipboardEntryViewModel item)
     {
-        if (item.Entry.Kind == ClipboardEntryKind.Text && item.Entry.Text is { Length: > 0 } text)
+        var text = FullText(item);
+
+        if (item.Entry.Kind == ClipboardEntryKind.Text && text is { Length: > 0 })
         {
             var (html, rtf) = _store.LoadRichText(item.Id);
             return new ClipboardPastePayload(item.Entry.Kind, text, null, [], html, rtf);
@@ -556,19 +583,24 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
     }
 
     /// <summary>拖出用：把条目转成临时文件所需的内容。</summary>
-    public ClipboardPastePayload? GetDragPayload(ClipboardEntryViewModel item) => item.Entry.Kind switch
+    public ClipboardPastePayload? GetDragPayload(ClipboardEntryViewModel item)
     {
-        ClipboardEntryKind.Text when item.Entry.Text is { Length: > 0 } =>
-            new ClipboardPastePayload(item.Entry.Kind, item.Entry.Text, null, []),
+        var text = FullText(item);
 
-        ClipboardEntryKind.Image when _store.LoadImage(item.Entry) is { Length: > 0 } png =>
-            new ClipboardPastePayload(item.Entry.Kind, null, png, []),
+        return item.Entry.Kind switch
+        {
+            ClipboardEntryKind.Text when text is { Length: > 0 } =>
+                new ClipboardPastePayload(item.Entry.Kind, text, null, []),
 
-        ClipboardEntryKind.Files when item.Entry.Paths.Count > 0 =>
-            new ClipboardPastePayload(item.Entry.Kind, null, null, item.Entry.Paths),
+            ClipboardEntryKind.Image when _store.LoadImage(item.Entry) is { Length: > 0 } png =>
+                new ClipboardPastePayload(item.Entry.Kind, null, png, []),
 
-        _ => null
-    };
+            ClipboardEntryKind.Files when item.Entry.Paths.Count > 0 =>
+                new ClipboardPastePayload(item.Entry.Kind, null, null, item.Entry.Paths),
+
+            _ => null
+        };
+    }
 
     /// <summary>给当前选中条目加一个手动标签。</summary>
     public void AddTag(string tag)
@@ -766,7 +798,7 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
             ? $"{megabytes:F1} MB / {_store.MaxBytes / (1024.0 * 1024):F0} MB"
             : $"{megabytes:F1} MB";
 
-        StatusBarText = $"{_store.Count} / {_store.MaxEntries} 条 · {quota}";
+        StatusBarText = $"已存 {_store.Count} 条 · {quota}";
 
         CapacityRatio = _store.MaxBytes > 0
             ? Math.Clamp((double)_store.ApproximateBytes / _store.MaxBytes, 0.03, 1.0)
@@ -844,7 +876,9 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
         switch (entry.Kind)
         {
             case ClipboardEntryKind.Text:
-                DetailText = entry.Text ?? "（内容过长，只保留了摘要）";
+                DetailText = entry.Text is { Length: < ClipboardHistoryStore.ListTextChars }
+                    ? entry.Text
+                    : _store.LoadText(entry.Id) ?? entry.Text ?? "（内容过长，只保留了摘要）";
                 break;
 
             case ClipboardEntryKind.Image:

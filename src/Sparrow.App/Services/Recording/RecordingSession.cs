@@ -1,5 +1,6 @@
 using Avalonia;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace Sparrow.App.Services.Recording;
 
@@ -55,6 +56,9 @@ internal sealed class RecordingSession : IDisposable
     public long FramesWritten => Interlocked.Read(ref _framesWritten);
 
     public TimeSpan Elapsed => _clock.Elapsed;
+
+    /// <summary>实际使用的帧率（可能被分辨率上限压低）。</summary>
+    public int FramesPerSecond => _options.FramesPerSecond;
 
     public string OutputPath => _options.OutputPath;
 
@@ -165,6 +169,11 @@ internal sealed class RecordingSession : IDisposable
 
         if (source is null)
             return null;
+
+        // 分辨率越高，能稳定编码的帧率越低：超了会丢帧、视频时长被压缩。
+        var maxFps = MaxFramesPerSecond(source.Width, source.Height);
+        if (options.FramesPerSecond > maxFps)
+            options = options with { FramesPerSecond = maxFps };
 
         // 视频先写临时文件；有音频时等停止再合并成最终文件。
         // 容器跟输出格式走：MKV/MOV 让 ffmpeg 按扩展名选封装器。
@@ -398,8 +407,31 @@ internal sealed class RecordingSession : IDisposable
         return new PixelRect(left - region.X, top - region.Y, right - left, bottom - top);
     }
 
+    /// <summary>把系统定时器精度提到 1ms，否则 Sleep(1) 实际约 15ms，60fps 以上会掉帧。</summary>
+    [DllImport("winmm.dll")]
+    private static extern uint timeBeginPeriod(uint period);
+
+    [DllImport("winmm.dll")]
+    private static extern uint timeEndPeriod(uint period);
+
+    /// <summary>按像素数限制可稳定编码的帧率；超了只会丢帧并压缩视频时长。</summary>
+    private static int MaxFramesPerSecond(int width, int height)
+    {
+        var pixels = (long)width * height;
+
+        return pixels switch
+        {
+            <= 1280L * 720 => 144,
+            <= 1920L * 1080 => 120,
+            <= 2560L * 1440 => 60,
+            // 4K 在常见核显/中端独显上 60fps 会持续掉帧，30 才能保证时长准确。
+            _ => 30
+        };
+    }
+
     private void Run()
     {
+        timeBeginPeriod(1);
         _clock.Start();
         SetState(RecordingState.Recording, null);
 
@@ -477,8 +509,9 @@ internal sealed class RecordingSession : IDisposable
                     Interlocked.Increment(ref _framesWritten);
                     nextDue += interval;
 
-                    // 编码落后超过一帧就跳过去，不补写（补写会让画面突然加速）。
-                    if (nextDue < now - interval)
+                    // 卡顿超过 1 秒才重置时间轴；普通掉帧继续追帧，
+                    // 避免把视频时长压短（高帧率时尤其明显）。
+                    if (nextDue < now - TimeSpan.FromSeconds(1))
                         nextDue = now;
                 }
                 else
@@ -511,6 +544,8 @@ internal sealed class RecordingSession : IDisposable
         }
         finally
         {
+            timeEndPeriod(1);
+
             try
             {
                 _wav?.Complete();
@@ -577,13 +612,15 @@ internal sealed class RecordingSession : IDisposable
             // 停止失败也要尽量释放原生资源。
         }
 
-        _encoder.Abandon();
-        _audio?.Dispose();
-        _wav?.Dispose();
-        _watermark?.Dispose();
-        _camera?.Dispose();
-        _source.Dispose();
-        _cts.Dispose();
+        // 逐项释放：任何一个原生资源抛异常都不能跳过后面的释放，
+        // 尤其是 _source（WGC 帧池 + 33MB LOH 帧缓冲）。
+        DisposeQuietly(_encoder.Abandon);
+        DisposeQuietly(() => { _audio?.Dispose(); });
+        DisposeQuietly(() => { _wav?.Dispose(); });
+        DisposeQuietly(() => { _watermark?.Dispose(); });
+        DisposeQuietly(() => { _camera?.Dispose(); });
+        DisposeQuietly(_source.Dispose);
+        DisposeQuietly(_cts.Dispose);
 
         TryDelete(_videoPath);
         TryDelete(_options.OutputPath + ".wav");
@@ -607,19 +644,36 @@ internal sealed class RecordingSession : IDisposable
 
         // 失败路径不再调 finalize：没有完整帧序时 DoFinalize 可能长时间阻塞。
         if (State == RecordingState.Faulted)
-            _encoder.Abandon();
+            DisposeQuietly(_encoder.Abandon);
         else
-            _encoder.Dispose();
+            DisposeQuietly(_encoder.Dispose);
 
-        _audio?.Dispose();
-        _wav?.Dispose();
-        _watermark?.Dispose();
-        _camera?.Dispose();
-        _source.Dispose();
-        _cts.Dispose();
+        DisposeQuietly(() => { _audio?.Dispose(); });
+        DisposeQuietly(() => { _wav?.Dispose(); });
+        DisposeQuietly(() => { _watermark?.Dispose(); });
+        DisposeQuietly(() => { _camera?.Dispose(); });
+        DisposeQuietly(_source.Dispose);
+        DisposeQuietly(_cts.Dispose);
 
         // 正常完成后 FinalizeOutput 已清理；失败/取消时兜底删除临时文件。
         TryDelete(_videoPath);
         TryDelete(_options.OutputPath + ".wav");
+    }
+
+    /// <summary>
+    /// 单项释放失败不阻断其余项。原实现里 _encoder / _audio 若抛异常，
+    /// 后面的 _source.Dispose() 会被整段跳过，WGC 会话、帧池与 33MB
+    /// 帧缓冲就常驻到进程退出（录屏失败后 LOH 高水位不回落的原因）。
+    /// </summary>
+    private static void DisposeQuietly(Action dispose)
+    {
+        try
+        {
+            dispose();
+        }
+        catch
+        {
+            // 忽略单项失败，继续释放剩余资源。
+        }
     }
 }

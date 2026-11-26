@@ -89,15 +89,15 @@ public partial class App
 
             // 截图工具的「翻译」下拉：覆盖 OCR 上次的选择，本次生效
             if (options.TranslateTarget is { Length: > 0 } target)
-                parameters["translate"] = target;
+                parameters[CaptureOcrParameters.Translate] = target;
 
             // 引擎：auto / ai / local:{模型Id}；空表示沿用参数里保存的值
             if (options.Engine is { Length: > 0 } engine)
-                parameters["engine"] = engine;
+                parameters[CaptureOcrParameters.Engine] = engine;
 
             // 输出模式：text / table-html / table-md
             if (options.Output is { Length: > 0 } output)
-                parameters["output"] = output;
+                parameters[CaptureOcrParameters.Output] = output;
 
             var context = new ToolContext
             {
@@ -118,7 +118,7 @@ public partial class App
                     })
             };
 
-            var result = await entry.Tool.ExecuteAsync(context, cancellationToken);
+            var result = await ToolRunner.ExecuteAsync(entry.Tool, context, cancellationToken);
 
             if (!result.Success)
                 return CaptureOcrResult.Failed(result.Error?.Message ?? "识别失败");

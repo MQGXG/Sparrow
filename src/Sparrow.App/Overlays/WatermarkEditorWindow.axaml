@@ -9,7 +9,8 @@
         Topmost="True"
         CanResize="False"
         Background="#66000000"
-        TransparencyLevelHint="Transparent">
+        TransparencyLevelHint="Transparent"
+        RequestedThemeVariant="Dark">
 
   <Grid>
     <Canvas x:Name="EditorCanvas">

@@ -1,0 +1,20 @@
+root = true
+
+# 仓库统一约定：UTF-8、空格缩进、文件末尾保留换行。
+# 不强制 CRLF/LF，避免不同平台克隆时产生整文件 diff。
+[*]
+charset = utf-8
+end_of_line = unset
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{axaml,xml,csproj,props,targets,json,yml,yaml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.ps1]
+indent_size = 4

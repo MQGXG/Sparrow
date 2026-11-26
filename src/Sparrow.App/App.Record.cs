@@ -50,7 +50,9 @@ public partial class App
             return;
         }
 
-        var panel = new RecordingSetupWindow(_appSettings.RecordEncoder, _appSettings.RecordCamera);
+        var panel = new RecordingSetupWindow(
+            _appSettings.RecordEncoder,
+            cameraEnabled: _appSettings.RecordCamera);
 
         panel.Finished += setup =>
         {
@@ -167,12 +169,32 @@ public partial class App
         var bar = new RecordingBarWindow(session, region);
         _recordingBar = bar;
 
+        // 收尾统一挂在 Closed：停止 / 取消 / Completed / Faulted、以及异常路径
+        //（StopAsync 抛异常、用户直接关控制条）最终都会关闭窗口，保证 WGC 会话、
+        // 帧池、ffmpeg 句柄和 33MB 帧缓冲必达释放。Dispose 内含
+        // _worker.Wait(3s)，必须放到后台线程，否则停止录制时 UI 会冻结数秒。
+        bar.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_recordingBar, bar))
+                _recordingBar = null;
+
+            CameraPreviewHost.Close();
+
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    session.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn($"[record] 释放录制会话失败：{ex.Message}");
+                }
+            });
+        };
+
         bar.Finished += (path, copied) =>
         {
-            _recordingBar = null;
-            CameraPreviewHost.Close();
-            session.Dispose();
-
             if (path is null)
             {
                 _toasts?.Show(
@@ -206,7 +228,7 @@ public partial class App
         _toasts?.Show("开始录制 · Ctrl+Alt+Shift+R 可再次停止", TimeSpan.FromSeconds(3));
         Log.Info(
             $"[record] 开始录制：{session.OutputPath}" +
-            $"（{setup.FramesPerSecond}fps，CRF {setup.Crf}）");
+            $"（{session.FramesPerSecond}fps，CRF {setup.Crf}，编码器 {session.EncoderName}）");
     }
 
     /// <summary>创建录制会话（倒计时 + 路径 + 选项）；不显示任何控制条。</summary>
@@ -298,10 +320,7 @@ public partial class App
             }
 
             var directory = string.IsNullOrWhiteSpace(setup.OutputDirectory)
-                ? Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "Sparrow",
-                    "recordings")
+                ? SparrowPaths.Recordings
                 : setup.OutputDirectory;
 
             var baseName = string.IsNullOrWhiteSpace(setup.BaseName) ? "Sparrow" : setup.BaseName;

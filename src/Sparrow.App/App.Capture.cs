@@ -144,19 +144,25 @@ public partial class App
             CaptureElementApi = _appSettings.CaptureElementApi,
             CaptureFrameApi = _appSettings.CaptureApi,
             CaptureShowCursor = _appSettings.CaptureShowCursor,
-            CaptureRestoreColors = _appSettings.CaptureRestoreColors
+            CaptureRestoreColors = _appSettings.CaptureRestoreColors,
+            SelectionBorderColor = _appSettings.SelectionBorderColor
         };
 
         // 区域录制：录制控制并入截图窗口主工具条（Snow-shot 行为）。
-        capture.RecordingSessionStarter = region =>
+        capture.RecordingSessionStarter = async region =>
         {
             // 已经在录了：不允许再开第二个会话（录制中重新截图/选区时点红点会走到这里）。
             if (_activeCaptureWindow is not null)
             {
                 _toasts?.Show("已经在录制中。");
-                return Task.FromResult<RecordingSession?>(null);
+                return null;
             }
 
+            // 先占位：倒计时 / ffmpeg 下载期间也要挡住重复启动。
+            // 但 CreateRecordingSessionAsync 有 3 条返回 null 的路径（下载取消、
+            // 倒计时取消、TryStart 失败），这些路径下 _recording 从未赋值，关窗时
+            // 就不会触发 RecordingFinished —— 必须在这里自行撤销占位，否则应用级
+            // 字段会永久指向已关闭的窗口（内存泄漏 + 录屏热键永久提示「录制中」）。
             _activeCaptureWindow = capture;
             var setup = _pendingRecordingSetup ?? DefaultRecordingSetup;
 
@@ -172,7 +178,43 @@ public partial class App
             }
 
             _pendingRecordingSetup = null;
-            return CreateRecordingSessionAsync(region, IntPtr.Zero, setup);
+
+            try
+            {
+                var session = await CreateRecordingSessionAsync(region, IntPtr.Zero, setup);
+
+                if (session is null && ReferenceEquals(_activeCaptureWindow, capture))
+                    _activeCaptureWindow = null;
+
+                return session;
+            }
+            catch
+            {
+                if (ReferenceEquals(_activeCaptureWindow, capture))
+                    _activeCaptureWindow = null;
+                throw;
+            }
+        };
+
+        // 区域录制工具条的「录制设置…」：打开完整面板，确认后仍用当前选区开始。
+        capture.RecordingSetupRequested = _ =>
+        {
+            var panel = new RecordingSetupWindow(
+                _appSettings.RecordEncoder,
+                regionOnly: true,
+                cameraEnabled: _appSettings.RecordCamera);
+
+            panel.Finished += setup =>
+            {
+                if (setup is null)
+                    return;
+
+                PersistRecordingPreferences(setup);
+                _pendingRecordingSetup = setup;
+                capture.StartRecordingFromSelection();
+            };
+
+            panel.Show();
         };
 
         capture.RecordingFinished += (path, error, copied) =>
@@ -242,11 +284,24 @@ public partial class App
             _appSettings.CaptureOcrBoxKey));
         Log.Info($"截图窗口已显示：visible={capture.IsVisible}，title={capture.Title}，{MemoryText()}");
 
-        await WaitForClosedAsync(capture);
-        Log.Info($"截图窗口已关闭：{MemoryText()}");
+        try
+        {
+            await WaitForClosedAsync(capture);
+        }
+        finally
+        {
+            // async void 入口没有调用方兜底：无论窗口正常关闭、超时还是异常，
+            // 都要释放预建 UIA 会话，并撤销本窗口留下的录制占位，否则冻结帧 /
+            // Probe / CaptureWindow 会被悬挂的状态机长期持有。只清属于自己的
+            // 占位，避免误清另一个正在录制的窗口。
+            if (ReferenceEquals(_activeCaptureWindow, capture))
+                _activeCaptureWindow = null;
 
-        // 预建的 UIA 会话只在本次截图里用；关窗后立刻还给系统
-        prewarmedProbe?.Dispose();
+            prewarmedProbe?.Dispose();
+            prewarmedProbe = null;
+        }
+
+        Log.Info($"截图窗口已关闭：{MemoryText()}");
 
         // 记住这次的标注样式和尺寸单位，下次截图直接沿用
         SaveCapturePreferences(capture);
@@ -272,7 +327,7 @@ public partial class App
 
         if (capture.Action == CaptureAction.Scroll)
         {
-            await RunScrollCaptureAsync(capture.SelectionRect);
+            await RunScrollCaptureAsync(capture.SelectionRect, capture.CreateScrollControl());
             return;
         }
 

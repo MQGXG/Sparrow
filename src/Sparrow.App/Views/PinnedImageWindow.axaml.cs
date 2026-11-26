@@ -18,6 +18,7 @@ public partial class PinnedImageWindow : Window
     private const double ZoomStep = 0.1;
 
     private Bitmap? _bitmap;
+    private byte[] _png = [];
     private double _baseWidth;
     private double _baseHeight;
     private double _zoom = 1.0;
@@ -28,14 +29,15 @@ public partial class PinnedImageWindow : Window
         InitializeComponent();
         PointerPressed += OnPointerPressed;
         PointerWheelChanged += OnPointerWheelChanged;
-        PointerEntered += (_, _) => CloseButton.Opacity = 1;
-        PointerMoved += (_, _) => CloseButton.Opacity = 1;
-        PointerExited += (_, _) => CloseButton.Opacity = 0.35;
+        PointerEntered += (_, _) => SetChromeOpacity(1);
+        PointerMoved += (_, _) => SetChromeOpacity(1);
+        PointerExited += (_, _) => SetChromeOpacity(0.35);
         DoubleTapped += (_, _) => Close();
     }
 
     public PinnedImageWindow(byte[] png) : this()
     {
+        _png = png;
         using var stream = new MemoryStream(png);
         _bitmap = new Bitmap(stream);
         Preview.Source = _bitmap;
@@ -59,11 +61,36 @@ public partial class PinnedImageWindow : Window
 
     private async Task ShowCloseHintAsync()
     {
-        CloseButton.Opacity = 1;
+        SetChromeOpacity(1);
         await Task.Delay(1500);
 
         if (!IsPointerOver)
-            CloseButton.Opacity = 0.35;
+            SetChromeOpacity(0.35);
+    }
+
+    /// <summary>关闭 / 标注两个悬浮按钮一起淡入淡出。</summary>
+    private void SetChromeOpacity(double opacity)
+    {
+        CloseButton.Opacity = opacity;
+        AnnotateButton.Opacity = opacity;
+    }
+
+    /// <summary>启用标注模式：在标注窗口里画完，合成回钉住的图片。</summary>
+    private async void OnAnnotateClick(object? sender, RoutedEventArgs e)
+    {
+        if (_png.Length == 0)
+            return;
+
+        var result = await ImageAnnotator.AnnotateAsync(this, _png);
+        if (result is null)
+            return;
+
+        _png = result;
+
+        using var stream = new MemoryStream(result);
+        _bitmap?.Dispose();
+        _bitmap = new Bitmap(stream);
+        Preview.Source = _bitmap;
     }
 
     private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();
