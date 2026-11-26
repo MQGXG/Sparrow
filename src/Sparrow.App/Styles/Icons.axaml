@@ -57,8 +57,6 @@
   <StreamGeometry x:Key="IconSparkle">M12 3.9 13.9 8.9 18.6 10.8 13.9 12.7 12 17.7 10.1 12.7 5.4 10.8 10.1 8.9z M18.3 15.5 19.1 17.4 21 18.2 19.1 19 18.3 20.9 17.5 19 15.6 18.2 17.5 17.4z</StreamGeometry>
 
   <!-- ============ 录制控制条（区域条与独立条共用，保证两处一致） ============ -->
-  <StreamGeometry x:Key="IconPause">M9.5 7v10 M14.5 7v10</StreamGeometry>
-  <StreamGeometry x:Key="IconResume">M9 6.6 17.6 12 9 17.4Z</StreamGeometry>
   <StreamGeometry x:Key="IconMic">M12 3.6a2.9 2.9 0 0 1 2.9 2.9v5a2.9 2.9 0 0 1-5.8 0v-5A2.9 2.9 0 0 1 12 3.6z M6.3 11.2a5.7 5.7 0 0 0 11.4 0 M12 17v3.4 M9.2 20.4h5.6</StreamGeometry>
   <StreamGeometry x:Key="IconSpeaker">M4.2 9.6h3.1l4.2-3.6v12l-4.2-3.6H4.2z M14.9 9.3a3.9 3.9 0 0 1 0 5.4 M17.5 6.7a7.4 7.4 0 0 1 0 10.6</StreamGeometry>
   <StreamGeometry x:Key="IconFolder">M3.6 6.7A1.7 1.7 0 0 1 5.3 5h3.4l2.1 2.4h7.9A1.7 1.7 0 0 1 20.4 9.1v8.2a1.7 1.7 0 0 1-1.7 1.7H5.3a1.7 1.7 0 0 1-1.7-1.7z</StreamGeometry>

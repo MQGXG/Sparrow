@@ -40,6 +40,8 @@
     <Style Selector="Button.bar Path">
       <Setter Property="Width" Value="20" />
       <Setter Property="Height" Value="20" />
+      <!-- 和截图条的 Button.tool Path 统一：基准线宽按 20px 目标补偿 -->
+      <Setter Property="StrokeThickness" Value="1.2" />
     </Style>
     <Style Selector="Border.sep">
       <Setter Property="Width" Value="1" />
@@ -82,18 +84,27 @@
                 Background="#FF4D4F" />
       </Button>
 
-      <!-- 暂停 / 继续：两个图标切换可见 -->
+      <!-- 暂停 / 继续：实心圆角条和三角切换可见，与区域条完全一致 -->
       <Button x:Name="PauseButton"
               Classes="bar"
               Click="OnPauseClick"
               ToolTip.Tip="暂停 / 继续">
-        <Grid>
-          <Path x:Name="PauseGlyph"
-                Data="{StaticResource IconPause}"
-                Classes="icon" />
+        <Grid Width="14" Height="14">
+          <StackPanel x:Name="PauseGlyph"
+                      Orientation="Horizontal"
+                      Spacing="4"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center">
+            <Border Width="3.5" Height="12" CornerRadius="1.75"
+                    Background="{DynamicResource TextSecondaryBrush}" />
+            <Border Width="3.5" Height="12" CornerRadius="1.75"
+                    Background="{DynamicResource TextSecondaryBrush}" />
+          </StackPanel>
           <Path x:Name="ResumeGlyph"
-                Data="{StaticResource IconResume}"
-                Classes="icon"
+                Data="M2.6 1 12.6 7 2.6 13Z"
+                Fill="{DynamicResource TextSecondaryBrush}"
+                Width="14" Height="14"
+                Stretch="Uniform"
                 IsVisible="False" />
         </Grid>
       </Button>
@@ -134,7 +145,7 @@
 
       <Border Classes="sep" />
 
-      <!-- 复制录屏 / 打开目录 / 取消 / 保存 -->
+      <!-- 复制录屏 / 打开目录 / 取消 / 保存：直接铺开，不减少功能 -->
       <Button x:Name="CopyRecordingButton"
               Classes="bar"
               Click="OnCopyClick"

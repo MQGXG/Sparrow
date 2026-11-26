@@ -1005,11 +1005,23 @@
                   Margin="2,0,0,0"
                   Click="OnPauseRecordingClick"
                   ToolTip.Tip="暂停 / 继续">
-            <Grid>
-              <Path x:Name="PauseRecordGlyph"
-                    Data="{StaticResource IconPause}" />
+            <!-- 用实心圆角条/三角，避免细线在 Uniform 缩放下显得歪 -->
+            <Grid Width="14" Height="14">
+              <StackPanel x:Name="PauseRecordGlyph"
+                          Orientation="Horizontal"
+                          Spacing="4"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center">
+                <Border Width="3.5" Height="12" CornerRadius="1.75"
+                        Background="{DynamicResource TextSecondaryBrush}" />
+                <Border Width="3.5" Height="12" CornerRadius="1.75"
+                        Background="{DynamicResource TextSecondaryBrush}" />
+              </StackPanel>
               <Path x:Name="ResumeRecordGlyph"
-                    Data="{StaticResource IconResume}"
+                    Data="M2.6 1 12.6 7 2.6 13Z"
+                    Fill="{DynamicResource TextSecondaryBrush}"
+                    Width="14" Height="14"
+                    Stretch="Uniform"
                     IsVisible="False" />
             </Grid>
           </Button>
@@ -1053,19 +1065,18 @@
                   ToolTip.Tip="停止并复制录屏">
             <Path Data="{StaticResource IconCopy}" StrokeThickness="1.161" />
           </Button>
-          <!-- 次要动作：打开保存目录 / 取消录制 -->
-          <Button x:Name="RecordingMoreButton"
+          <!-- 次要动作：打开保存目录 / 取消录制（直接铺开，不用「更多」） -->
+          <Button x:Name="OpenRecordFolderButton"
                   Classes="tool"
-                  ToolTip.Tip="录制选项">
-            <Path Data="{StaticResource IconMore}"
-                  Width="18" Height="18"
-                  StrokeThickness="0.873" />
-            <Button.Flyout>
-              <MenuFlyout Placement="TopEdgeAlignedRight">
-                <MenuItem Header="打开保存目录" Click="OnOpenRecordFolderClick" />
-                <MenuItem Header="取消录制" Click="OnCancelRecordingClick" />
-              </MenuFlyout>
-            </Button.Flyout>
+                  Click="OnOpenRecordFolderClick"
+                  ToolTip.Tip="打开保存目录">
+            <Path Data="{StaticResource IconFolder}" />
+          </Button>
+          <Button x:Name="CancelRecordButton"
+                  Classes="tool"
+                  Click="OnCancelRecordingClick"
+                  ToolTip.Tip="取消并删除本次录制">
+            <Path Data="{StaticResource IconClose}" Stroke="#FF8A8A" />
           </Button>
         </StackPanel>
       </Border>
