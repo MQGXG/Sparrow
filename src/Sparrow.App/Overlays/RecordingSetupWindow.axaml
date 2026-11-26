@@ -41,14 +41,16 @@
       <Setter Property="Foreground" Value="#EEEEEE" />
     </Style>
     <Style Selector="Button.secondary">
-      <Setter Property="Padding" Value="14,6" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="Padding" Value="14,0" />
       <Setter Property="CornerRadius" Value="6" />
       <Setter Property="Background" Value="#1FFFFFFF" />
       <Setter Property="BorderBrush" Value="#2AFFFFFF" />
       <Setter Property="Foreground" Value="#E6E6E6" />
     </Style>
     <Style Selector="Button.primary">
-      <Setter Property="Padding" Value="18,6" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="Padding" Value="18,0" />
       <Setter Property="CornerRadius" Value="6" />
       <Setter Property="Background" Value="#E5484D" />
       <Setter Property="BorderBrush" Value="#E5484D" />
@@ -89,7 +91,7 @@
       <!-- 画面与编码 -->
       <TextBlock Classes="section" Text="画面与编码" />
 
-      <Grid ColumnDefinitions="64,168,64,168,64,*"
+      <Grid ColumnDefinitions="76,160,76,160,76,*"
             RowDefinitions="Auto,Auto,Auto,Auto"
             ColumnSpacing="10"
             RowSpacing="10">
@@ -183,32 +185,36 @@
       <!-- 光标高亮 -->
       <TextBlock Classes="section" Text="光标高亮" />
 
-      <Grid ColumnDefinitions="64,120,64,150,64,180,Auto"
-            ColumnSpacing="10">
-        <TextBlock Grid.Column="0" Classes="caption" Text="半径" />
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+      <StackPanel Orientation="Horizontal" Spacing="18">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Classes="caption" Text="半径" />
           <TextBox x:Name="CursorRadiusBox" Classes="field" Text="22" Width="84" />
-          <TextBlock Classes="caption" Text="px" VerticalAlignment="Center" />
+          <TextBlock Classes="caption" Text="px" />
         </StackPanel>
 
-        <TextBlock Grid.Column="2" Classes="caption" Text="颜色" />
-        <ComboBox Grid.Column="3" x:Name="CursorColorBox" SelectedIndex="0">
-          <ComboBoxItem>琥珀</ComboBoxItem>
-          <ComboBoxItem>白色</ComboBoxItem>
-          <ComboBoxItem>红色</ComboBoxItem>
-          <ComboBoxItem>绿色</ComboBoxItem>
-          <ComboBoxItem>蓝色</ComboBoxItem>
-        </ComboBox>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Classes="caption" Text="颜色" />
+          <ComboBox x:Name="CursorColorBox" SelectedIndex="0" Width="110">
+            <ComboBoxItem>琥珀</ComboBoxItem>
+            <ComboBoxItem>白色</ComboBoxItem>
+            <ComboBoxItem>红色</ComboBoxItem>
+            <ComboBoxItem>绿色</ComboBoxItem>
+            <ComboBoxItem>蓝色</ComboBoxItem>
+          </ComboBox>
+        </StackPanel>
 
-        <TextBlock Grid.Column="4" Classes="caption" Text="透明度" />
-        <Slider Grid.Column="5"
-                x:Name="CursorOpacitySlider"
-                Minimum="50"
-                Maximum="255"
-                Value="210" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Classes="caption" Text="透明度" />
+          <Slider x:Name="CursorOpacitySlider"
+                  Minimum="50"
+                  Maximum="255"
+                  Value="210"
+                  Width="150"
+                  VerticalAlignment="Center" />
+        </StackPanel>
 
-        <CheckBox Grid.Column="6" x:Name="CursorShadowCheck" Content="阴影" />
-      </Grid>
+        <CheckBox x:Name="CursorShadowCheck" Content="阴影" />
+      </StackPanel>
 
       <Border Height="1" Background="#1FFFFFFF" />
 
@@ -216,7 +222,7 @@
       <TextBlock Classes="section" Text="输出" />
 
       <StackPanel Spacing="10">
-        <Grid ColumnDefinitions="64,*,Auto" ColumnSpacing="10">
+        <Grid ColumnDefinitions="76,*,Auto" ColumnSpacing="10">
           <TextBlock Grid.Column="0" Classes="caption" Text="保存到" />
           <TextBox Grid.Column="1"
                    x:Name="OutputDirectoryBox"
@@ -227,7 +233,7 @@
                   Click="OnPickOutputDirectory" />
         </Grid>
 
-        <Grid ColumnDefinitions="64,*,Auto" ColumnSpacing="10">
+        <Grid ColumnDefinitions="76,*,Auto" ColumnSpacing="10">
           <TextBlock Grid.Column="0" Classes="caption" Text="文件名" />
           <TextBox Grid.Column="1"
                    x:Name="BaseNameBox"
@@ -240,7 +246,7 @@
 
         <!-- GIF / APNG 专用：视频格式时隐藏 -->
         <Grid x:Name="AnimationOptions"
-              ColumnDefinitions="64,168,64,168"
+              ColumnDefinitions="76,160,76,160"
               ColumnSpacing="10">
           <TextBlock Grid.Column="0" Classes="caption" Text="动画帧率" />
           <ComboBox Grid.Column="1"
@@ -262,23 +268,21 @@
             <ComboBoxItem>1080 px</ComboBoxItem>
           </ComboBox>
         </Grid>
+
+        <!-- 水印：和输出放同一段，减少一个孤立分区 -->
+        <Grid ColumnDefinitions="76,*,Auto" ColumnSpacing="10">
+          <TextBlock Grid.Column="0" Classes="caption" Text="水印" />
+          <TextBlock Grid.Column="1"
+                     x:Name="WatermarkSummary"
+                     Text="未设置"
+                     Classes="caption"
+                     TextTrimming="CharacterEllipsis" />
+          <Button Grid.Column="2"
+                  Classes="secondary"
+                  Content="编辑水印…"
+                  Click="OnEditWatermarkClick" />
+        </Grid>
       </StackPanel>
-
-      <Border Height="1" Background="#1FFFFFFF" />
-
-      <!-- 水印 -->
-      <TextBlock Classes="section" Text="水印" />
-      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-        <Button Grid.Column="0"
-                Classes="secondary"
-                Content="编辑水印…"
-                Click="OnEditWatermarkClick" />
-        <TextBlock Grid.Column="1"
-                   x:Name="WatermarkSummary"
-                   Text="未设置"
-                   Classes="caption"
-                   TextTrimming="CharacterEllipsis" />
-      </Grid>
 
       <!-- 音频：GIF / APNG 没有音轨，整段隐藏 -->
       <StackPanel x:Name="AudioSection" Spacing="12">
