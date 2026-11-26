@@ -1,266 +1,206 @@
 # Sparrow · 麻雀
 
-> 麻雀虽小，五脏俱全。一个热键，唤起你需要的全部工具。
+> 一个热键，唤起你需要的那件小事。
 
-**本地优先的桌面上下文工具集合。**
+**本地优先的 Windows 桌面工具集合。** 截图标注、屏幕录制、OCR 翻译、剪贴板历史，以及一个可以自由增删的插件工具台。
+
+[![.NET](https://img.shields.io/badge/.NET-10-512BD4)](https://dotnet.microsoft.com/)
+[![Avalonia](https://img.shields.io/badge/Avalonia-12-8B44AC)](https://avaloniaui.net/)
+[![Tests](https://img.shields.io/badge/tests-835%20passing-3DD68C)](#从源码构建)
+[![License](https://img.shields.io/badge/License-MIT-4C9AFF)](#协议)
 
 ---
 
-## 它是什么
+## 功能
 
-Sparrow 是一个软件，里面装着一组小工具。
+### 截图与标注
 
-不是「一个功能很大的软件」，而是「**一个入口 + 一组互不相干的小工具**」：
+`Ctrl+Alt+C` 唤起全屏取景 → 框选 → 标注 → 复制 / 保存 / 固定 / 识别 / 滚动长截图。
 
-```text
-剪贴板里有一段 JSON    → 热键 → 格式化 → 复制走
-屏幕上有一张截图        → 热键 → 圈选 → 识别文字 → 复制走
-剪贴板里有一段乱文本    → 热键 → 去重排序 → 复制走
-```
+- **冻结帧框选**：先冻结整屏再选，拖动时画面稳定不闪
+- **智能候选**：悬停自动框出窗口 / 控件（按钮、输入框、列表项），单击选中，`Tab` 切层级
+- **完整标注**：形状、箭头、画笔、高亮、文字、序号、马赛克、聚光灯、放大镜、橡皮
+- **取色器**：跟随光标显示像素放大图 + HEX / RGB / HSL，`I` 复制
+- **滚动截图**：自动滚动逐屏拼接，或手动滚轮；右侧缩略图实时预览，可裁掉头尾
+- **OCR / 翻译**：框选即识别，支持 12 组语言；译文直接覆盖原图（对照 / 原文 / 译文三态）
+- **标注模式**：固定到屏幕的图、滚动长图都能再次进入标注，工具条可自由拖动
+- **多屏**：覆盖整个虚拟桌面，跨屏框选
 
-三个工具互不知道对方存在，但它们共享三样东西：
+### 屏幕录制
 
-| 共享的是什么 | 具体指 |
+`Ctrl+Alt+Shift+R` 打开录制面板：区域 / 窗口 / 全屏。
+
+- **区域录制**：截图工具条下方多一条录制条（停止 / 暂停 / 计时 / 麦克风 / 系统声 / 复制），录制中可直接在屏幕上标注，标注会录进视频
+- **点击穿透**：选区外和未选工具时的选区内，鼠标直接落到下层应用，录制时电脑可以正常操作
+- **窗口录制**：WGC 直接抓窗口表面，被其他窗口遮挡也能完整录到
+- **硬件编码**：自动探测 NVENC / AMF / QSV / MediaFoundation，逐个试编后回退 `libx264`
+- **格式**：MP4 / MKV / MOV / GIF / APNG
+- **画质**：6 档 CRF（16–30）、编码级别、GOP 可调
+- **帧率**：30 / 60 / 90 / 120 / 144，按分辨率自动限制上限，避免掉帧压时长
+- **音频**：WASAPI 系统声音 + 麦克风，可分别开关
+- **其他**：延时开始、定时停止、光标高亮（半径 / 颜色 / 透明度 / 阴影）、图文水印、一键复制录屏文件
+
+### OCR 与翻译
+
+- 进程内插件 + PP-OCRv5，一张卡支持剪贴板单图、拖入多图、选图
+- 翻译可走在线 API 或本地模型（TranslateGemma 4B，首次使用自动下载）
+- 识别结果按行框显示，可逐行 / 逐字选择复制，支持表格转 HTML / Markdown
+
+### 剪贴板
+
+- SQLite（WAL + FTS5）存储，文本保留 HTML / RTF 原格式，复制时一并写回
+- 收藏、自定义标签、自动分类（链接 / 图片 / 文件）、时间分叠、来源应用筛选
+- 顺序粘贴队列：`Ctrl+Alt+V` 逐条写入并模拟 `Ctrl+V`
+- 尊重 `Clipboard Viewer Ignore`，可按应用「不记录」
+- 拖出到其他应用（文本 / 位图 / 文件，`Shift` / `Ctrl` 可强制单格式）
+- 保留天数与容量上限可配，收藏不受任何清理
+
+### 工具台与插件
+
+- `Ctrl+Alt+S` 命令面板：搜工具名，回车执行，输入直接取自剪贴板
+- 工作区窗口：工具墙 / 最近使用 / 工具台三态
+- **每个工具都是插件**：一个目录 = 一个程序集 + 一份 `plugin.json`，删掉目录宿主照常启动
+- 已内置 13 个插件：Base64、JSON 格式化、文件哈希、翻译、SVG 提示词、OCR、图片转换、图片缩放、窗口置顶、视频裁剪、视频压缩、视频转 GIF、视频抽帧
+
+### 系统集成
+
+- 全局热键，任意工具都能单独挂一个（按下直接执行，不经过面板）
+- 系统托盘常驻，菜单可完全自定义
+- 开机自启（只启动到托盘）
+- Velopack 安装包 + 增量更新
+
+---
+
+## 下载安装
+
+从 [Releases](https://github.com/MQXGXG/Sparrow/releases) 下载最新安装包。
+
+首次使用屏幕录制时，如果本机没有 FFmpeg，会自动下载到 `%LOCALAPPDATA%\Sparrow\ffmpeg`（约 80 MB，仅一次）。
+
+---
+
+## 快捷键
+
+| 操作 | 默认快捷键 |
 |---|---|
-| **同一个入口** | 一个全局热键唤起的命令面板，搜工具名直接执行 |
-| **同一种上下文** | 剪贴板 / 选区 / 截图 / 文件 / 手输，统一成同一个输入对象 |
-| **同一套结果动作** | 复制 / 保存 / 固定 / 发送给其他工具 / 打开所在位置 |
+| 命令面板 | `Ctrl+Alt+S` |
+| 截图 / 标注 | `Ctrl+Alt+C` |
+| 屏幕录制 | `Ctrl+Alt+Shift+R` |
+| 剪贴板面板 | `Ctrl+Alt+B` |
+| 顺序粘贴队列 | `Ctrl+Alt+V` |
 
-这三样是「集合」，第四样不是——**工具本身必须能独立存在**。
+全部可在 **设置 → 热键** 里改；输入框点一下直接按组合键即可录制。
 
-## 每个工具都是一个插件
+---
 
-这是硬性架构约束，不是口号：
+## 数据与隐私
 
-```text
-一个工具 = 一个插件目录 = 一个独立程序集 + 一份清单
-```
+**所有处理都在本机完成，数据默认不出机器。**
+
+| 数据 | 默认位置 |
+|---|---|
+| 配置、日志 | `%LOCALAPPDATA%\Sparrow` |
+| 剪贴板历史 | `%LOCALAPPDATA%\Sparrow\clipboard.db` |
+| 离线模型 | `%LOCALAPPDATA%\Sparrow\models` |
+| 录制文件 | `%LOCALAPPDATA%\Sparrow\recordings` |
+
+**设置 → 数据** 里可以把数据根目录、模型目录、录制目录分别换到其他盘。
+
+联网只发生在你显式触发时：AI 翻译 / 在线 OCR / 更新检查 / 首次下载 FFmpeg。
+
+---
+
+## 插件开发
 
 ```text
 plugins/
-├─ sparrow.plugin.dev-base64/
-├─ sparrow.plugin.json-format/
-└─ sparrow.plugin.files-hash/
+└─ sparrow.plugin.json-format/
+   ├─ plugin.json
+   └─ Sparrow.Plugin.JsonFormat.dll
 ```
 
-由此得到三个能力：
+宿主不做「内置工具特殊处理」，随包分发的插件和你自己写的走同一条加载路径：
 
-| 能力 | 表现 |
-|---|---|
-| **能删** | 删掉一个插件目录，宿主照常启动，面板里就没有这个工具了，不留死代码 |
-| **能禁用** | 禁用后不加载、不占内存、不进搜索结果 |
-| **能独立演进** | 一个工具升级依赖（比如 SVG 库换版本）不影响其他任何工具 |
+- 删目录 → 工具消失，不留死代码
+- 禁用 → 不加载、不占内存、不进搜索
+- 独立依赖 → 一个工具换库版本不影响其他工具
 
-**宿主里没有「内置工具」这个概念**——随包分发的工具和用户自己放的工具走完全同一条加载路径。否则半年内必然出现「这个功能特殊，我直接写进宿主吧」，边界一破，集合就退化成单体。
+`Sparrow.Plugin.Sdk` 提供 `IToolPlugin`、`IAiClient`、`IWindowOverlay` 等能力，输入 / 结果 / 运行时归宿主，工具一律插件。
 
-代价是每个插件有几个样板文件，用 `dotnet new sparrow-tool` 一条命令抹平。
-
-细节见 [`docs/plugin-model.md`](docs/plugin-model.md)（含「十二、宿主能力边界」：输入/结果/运行时归宿主，工具一律插件）。
+详见 [`docs/plugin-model.md`](docs/plugin-model.md) 与 [`docs/tool-development.md`](docs/tool-development.md)。
 
 ---
 
-## 它不是什么
-
-- 不是 AI 应用。不配任何模型也能完整使用。
-- 不是 SaaS。没有账号、没有云同步、没有订阅。
-- 不是平台。不做插件市场、不做脚本运行时、不做工作流编排。
-- 不是「大而全的瑞士军刀」。**工具多不等于好用，一次热键解决一件事才算。**
-
----
-
-## 现状
-
-| 项 | 状态 |
-|---|---|
-| 设计文档 | ✅ 完成（本目录 `docs/`） |
-| 契约 `Sparrow.Plugin.Sdk` | ✅ 完成，编译 0 警告 |
-| 插件 `JsonFormat` | ✅ 完成 |
-| 插件 `Base64` | ✅ 完成（第二个插件，验证「加插件不改宿主」） |
-| 插件 `Translate` | ✅ 完成：AI 翻译；宿主统一 provider / 密钥，插件只拿 `IAiClient` |
-| 插件 `SVG Prompt` | ✅ 完成：提示词 → SVG；宿主清洗后用 Svg.Skia 渲染预览 |
-| 最小可运行壳 | ✅ 完成：托盘 + `Ctrl+Alt+S` + 命令面板 + 剪贴板闭环 |
-| 插件扫描 + ALC 隔离 | ✅ 完成：`plugins/` 目录发现、懒加载、独立加载上下文 |
-| 设置 / 禁用 / 卸载 | ✅ 完成：`settings.json`、`disabledPlugins`、ALC 回收断言 |
-| 宿主能力注入 | ✅ 完成：`ToolContext.Host`、`PluginDirectory`、网络默认关闭、`IAiClient` |
-| 剪贴板图片 | ✅ 完成：`CF_DIB` → PNG（SkiaSharp） |
-| 插件 `OCR` | ✅ 完成：进程插件 + PP-OCRv5 真实识别（12 组语言，~2.1–2.7s/张）；一张卡支持剪贴板单图 / 拖入多图 / 选图，工具页缩略图预览，多张按文件名分节 |
-| 工作区窗口 | ✅ 完成：工具墙 / 最近使用 / 工具台三态 + 分类分组折叠 + 自动参数 + 设置页（插件开关、模型） |
-| 界面 | ✅ 完成：统一设计 token（`Styles/Theme.axaml`），深色冷灰 + 单一琥珀强调色；应用内 toast 统一提示 |
-| 截图识别 | ✅ 完成：`Ctrl+Alt+C` 先冻结整屏再框选 → 动作栏（识别文字 / 复制图片 / 保存 / 固定 / 滚动 / 取消），可全程键盘，覆盖整个虚拟桌面；鼠标悬停先框窗口，控件树按层缓存、无固定等待（端到端 1.4–1.8ms）细化到按钮 / 输入框 / 列表项 / 文档区并标出类型，单击选中、Tab 切层，自由拖选保留；识别框可切悬停 / 全部 / 关闭 |
-| 滚动截图 | ✅ 完成：选区滚动拼接，1200×1000 选区实测拼出 1200×3100，无重复无断层 |
-| 执行历史 | ✅ 完成：JSONL 落盘，工作区右栏显示最近 20 条 + 清空 |
-| 热键设置 | ✅ 完成：`settings.json` 可改，格式 `Ctrl+Alt+S`，重启生效；`toolHotkeys` 可给任意工具挂热键（按下直接执行，不弹面板） |
-| 开机自启 | ✅ 完成：HKCU Run 项，只启动到托盘 |
-| M1 验收 | ✅ 完成：9 条出口条件全部达标（见 `docs/acceptance.md`） |
-| 测试 | ✅ 434 个通过（含 headless 键盘路由、真实剪贴板取图/写图、真实子进程 OCR（单张 + 多帧）、滚动拼接、工具墙 ViewModel、AI 请求/密钥加密、SVG 清洗/渲染、剪贴板历史 SQLite/迁移/收藏/标签/分类/队列/撤销/保留策略、剪贴板详情页内覆盖层、面板队列条/类型计数/复制变换/空分类隐藏/链接与文件卡片/搜索隔离、插件边界守护（宿主零工具 ID、插件零宿主引用）、OCR 整理模式、图片转换/缩放、窗口置顶流程、覆盖窗加载、toast、受控文件读取、文件哈希、表格/文件列表渲染、工具热键解析与录制、托盘菜单配置） |
-| 剪贴板页 | ✅ 完成：SQLite（WAL + FTS5 trigram）存储，旧 JSONL 自动迁移；收藏 / 自定义标签 / 自动分类 / 时间分叠 / 来源应用筛选与「不记录」/ 缩略图 / 页内详情覆盖层（与快捷键面板一致，图片可整屏查看）/ 删除与撤销 / 保留天数与容量；收藏不受任何清理；尊重 `Clipboard Viewer Ignore`；文本条目同时保留 HTML / RTF 原格式，复制时一并写回，右键可「复制为纯文本」；行内提供查看 / 复制 / 打开 / 队列 / 收藏 / 删除，并挂与快捷面板同一套右键菜单（工作区不提供「粘贴到刚才的应用」）；拖出同时提供文本/位图与文件（Shift/Ctrl 可强制单格式），支持顺序粘贴队列 |
-| 插件 `Images Convert` | ✅ 完成（M2.1）：PNG / JPEG / WebP 转换；工作区图片结果预览 + 保存/复制 |
-| 插件 `Images Resize` | ✅ 完成（M2.1）：按最长边 / 按百分比缩放，输出 PNG |
-| 插件 `Files Hash` | ✅ 完成：MD5 / SHA1 / SHA256 / SHA512；多文件按表输出，流式读取，单个失败不中断 |
-| 插件 `Window Pin` | ✅ 完成：DeskPins 式窗口置顶——全屏拾取 + 图钉光标 + 标题栏图钉点击取消；拾取/图钉是宿主通用 `IWindowOverlay` 能力 |
-| 插件 `Video Trim` | ✅ 完成：按起止时间裁剪视频，`ffmpeg -c copy`，多文件 |
-| 插件 `Video Compress` | ✅ 完成：质量（低/均衡/高）+ 分辨率（原尺寸/1080p/720p），ffmpeg 重编码 |
-| 插件 `Video to GIF` | ✅ 完成：palettegen/paletteuse 两遍调色板，帧率/最长边可选 |
-| 插件 `Video Frames` | ✅ 完成：按固定间隔导出 PNG 帧 |
-| 屏幕录制 | 🚧 MVP：`Ctrl+Alt+Shift+R`（设置页可改）/ 托盘「屏幕录制」→ 设置面板（区域/窗口/全屏、MP4/MKV/MOV/GIF/APNG、6 档画质、编码级别、GOP、帧率、延时开始、录制时长、保存目录/文件名、光标半径/颜色/透明度/阴影、系统声音/麦克风、图文水印）→ 区域录制：截图工具条保持原样，录制中在其下方多一条紧凑录制条（停止/暂停/计时/麦克风/系统声/复制/更多；开始仍用截图条上的红点），录制条可随工具条一起拖动并自动移到选区外，录制中画笔/矩形/箭头/文字等标注可实时画在屏幕上并录进视频，OCR/翻译在录制中隐藏（对齐 Snow-shot），停止后可一键把录屏文件复制到剪贴板（CF_HDROP），自动按显卡选择硬件编码（QSV/NVENC/AMF/MF，逐个试编后回退 libx264），录制面板也可手动指定编码器（自动记录到 settings.json），选区外点击用 `WM_NCHITTEST → HTTRANSPARENT` 穿透（录制中可正常操作电脑），全屏/窗口用底部控制条（同样支持停止并复制）+ ffmpeg H.264/AAC + GIF；摄像头画中画需设备 |
-| 工作区图片结果 | ✅ 完成（M2.1）：ImagePayload 渲染预览；复制回剪贴板；保存弹文件对话框（落盘是宿主的事） |
-
-当前阶段：**M1 完成**——插件基础设施、截图链路、剪贴板历史都已闭环。
-下一步进入 M2：图片 → SVG 描摹（产品起源闭环）。见 [`docs/roadmap.md`](docs/roadmap.md)。
-
----
-
-## 文档地图
-
-给不同目的的人看不同的文档：
-
-| 你想… | 看这份 |
-|---|---|
-| 知道这软件到底做哪些工具 | [`docs/tool-catalog.md`](docs/tool-catalog.md) |
-| 知道这一版做什么、不做什么 | [`docs/scope.md`](docs/scope.md) |
-| **搞清楚插件怎么加载、怎么隔离** | [`docs/plugin-model.md`](docs/plugin-model.md) |
-| 动手写代码 | [`docs/architecture.md`](docs/architecture.md) |
-| 加一个新工具 | [`docs/tool-development.md`](docs/tool-development.md) |
-| 搞清楚「上下文」怎么统一 | [`docs/context-model.md`](docs/context-model.md) |
-| 改界面 | [`docs/ui-spec.md`](docs/ui-spec.md) |
-| 排查内存、优化流畅度 | [`docs/performance.md`](docs/performance.md) |
-| 知道什么时候能发版 | [`docs/release-checklist.md`](docs/release-checklist.md) |
-
----
-
-## 技术栈
-
-```text
-C# 14 + .NET 10 LTS (2028-11 支持到期)
-Avalonia 12.1.6        跨平台桌面 UI
-CommunityToolkit.Mvvm  MVVM 源生成器
-SQLite + Serilog       本地存储与日志
-SkiaSharp 3.119.4      图像解码 / 栅格化（版本跟随 Avalonia，勿升 4.x）
-Svg.Skia 5.1.1         SVG 渲染（勿升 5.2.x，会撞 SkiaSharp 4.x）
-Velopack               安装与增量更新
-```
-
-版本为什么钉死、哪些包不能升，见 [`docs/architecture.md`](docs/architecture.md#版本钉死)。
-
----
-
-## 跑起来
+## 从源码构建
 
 ```bash
+dotnet build Sparrow.slnx
 dotnet run --project src/Sparrow.App
 ```
 
-App 的 csproj 里有一组**构建期**插件引用（glob，`ReferenceOutputAssembly=false`），
-构建 App 时会先构建 `plugins/`，插件再把产物复制到
-`src/Sparrow.App/bin/<配置>/net10.0/plugins/`。所以正常 `dotnet run` 就能看到所有工具。
+构建 App 时会先构建 `plugins/`，插件产物自动复制到 `src/Sparrow.App/bin/<配置>/net10.0/plugins/`。
 
-发版或需要 Release 一次建全时：
+一次构建全部（含 Release）：
 
 ```powershell
 ./build/run.ps1
 ```
 
-> 如果工作区里看不到「翻译」「提示词生成 SVG」，先确认
-> `src/Sparrow.App/bin/<配置>/net10.0/plugins/sparrow.plugin.translate/` 是否存在。
-> 不存在就执行一次 `dotnet build Sparrow.slnx`，不要继续用旧的 `bin`。
-> 也不要使用 `artifacts/` 里的旧 zip。
+运行测试：
 
-插件产物会被自动同步到 `src/Sparrow.App/bin/<配置>/net10.0/plugins/`，
-每个插件一个目录，目录名等于它的 `plugin.json` 里的 `id`。
-
-分类显示名支持自定义：新建 `%LOCALAPPDATA%\Sparrow\categories.json`，
-写入 `{"labels": {"json": "JSON 处理"}}`，重启生效（只改展示名，不动插件分类键）。
-细节见 [`docs/ui-spec.md`](docs/ui-spec.md#30-分类显示名自定义categoriesjson)。
-
-工具也能挂全局热键（按下直接执行，不经过面板）：在 `settings.json` 里加
-
-```json
-"toolHotkeys": { "sparrow.window.pin": "Ctrl+Alt+P" }
+```bash
+dotnet test tests/Sparrow.Tests/Sparrow.Tests.csproj
 ```
 
-也可以直接在 **设置 → 热键 → 工具热键** 里编辑：点输入框后**直接按组合键**即可录制（Backspace 清空；单一字母/数字必须带修饰键，重复组合会被拒绝）。
-配置了热键的工具会作为**一级菜单项**出现在托盘右键菜单里（如「窗口置顶…  Ctrl+Alt+P」），点一下即执行。
-
-剪贴板顺序粘贴也走全局热键，默认 `Ctrl+Alt+V`：
-
-```json
-"queuePasteHotkey": "Ctrl+Alt+V"
-```
-
-在「剪贴板」页把条目加入队列（行内「＋」或 Ctrl+点击），切到目标应用按这个热键，
-Sparrow 会写入下一条并模拟 `Ctrl+V`，队列自动前进；也可以点「复制下一条」自己按 `Ctrl+V`。
-
-剪贴板列表也能单独呼出，不用打开主窗。默认 `Ctrl+Alt+B`（设置 → 热键可改）：
-
-```json
-"clipboardPanelHotkey": "Ctrl+Alt+B"
-```
-
-小窗默认 440×720（可拖到 380 宽），小窗为无边框圆角悬浮窗（自绘圆角 14 + 阴影，Windows 10 没有 DWM 圆角属性只能自绘），顶部标题行可拖动、右侧有关闭按钮；搜索框带放大镜，紧凑操作位（撤销 / 清空 / 取消 / 复制下一条 / 查看）统一为 24 网格、1.5 线宽的线性图标，只有「确认清空」这类危险确认保留文字；保留搜索、筛选、粘贴队列和列表；类型 chip 带当前数量，数量为 0 的分类自动隐藏；列表是卡片式（圆角 10、行间 5、1px 描边），元信息常驻在内容上方（类型 · 字数/尺寸 · 时间 · 来源）；文本预览最多两行，链接显示首字母色块 + 域名 + URL，文件显示文件名与剩余数量，图片显示按比例缩略图（限高 120）；行内的「查看 / 复制 / 粘贴 / 打开 / 队列 / 收藏 / 删除」默认隐藏，悬停或选中才浮出（打开按条目类型条件显示）；右键菜单与工具条同能力，另有「复制为 ▸」6 种变换与「打开所在位置」。单击选中，`Ctrl+点击` 加入或移出队列，双击或回车复制并收起。列表行可以直接拖到其他应用（同时提供文本/位图与文件，`Shift` 只给内容、`Ctrl` 只给文件）。底部状态栏显示「条数 / 配额 · 已用 / 总量」，右侧是随队列状态变化的快捷键提示，最底部一条容量进度条；「不记录此应用」收在 `⋯` 菜单里。「查看」会把详情覆盖在面板上，`←` / `Esc` 回到列表；在详情里点「复制」会连同面板一起收起，直接回到刚才的应用。面板呼出时清空搜索，收起后恢复原搜索词，不会打断主窗里的查找。
-
-剪贴板记录范围与保留策略也可以直接写配置（设置页同样能改）：
-
-```json
-"ClipboardExcludedApps": ["1Password", "chrome"],
-"ClipboardHistoryRetentionDays": 30,
-"ClipboardHistoryMaxBytes": 536870912
-```
-
-`ClipboardExcludedApps` 是进程名（来源下拉里显示的名字）；`ClipboardHistoryRetentionDays` 为 0 表示永久；
-`ClipboardHistoryMaxBytes` 为 0 表示不限制。收藏条目不参与条数 / 天数 / 容量任何一项清理。
-
-截图 OCR 的识别框显示方式也存在配置里（工具栏「框」按钮或 `B` 切换后自动写入）：
-
-```json
-"CaptureOcrBoxMode": "hover"
-```
-
-取值 `hover`（悬停行高亮）/ `all`（全部显示）/ `off`（关闭，不参与点行复制）。
-
-剪贴板数据存放在 `%LOCALAPPDATA%\Sparrow\clipboard.db`（SQLite，WAL 模式），图片仍在 `clipboard-images\`。
-首次启动会把旧的 `clipboard-history.jsonl` 自动迁移；迁移成功后原文件改名为 `.bak` 保留，可用于回滚。
-
-托盘菜单本身也能整体自定义（`settings.json` 的 `trayMenu`，空数组 = 内置默认）：
-
-```json
-"trayMenu": [
-  { "action": "palette", "label": "搜索工具" },
-  { "action": "capture" },
-  { "action": "workspace" },
-  { "tool": "sparrow.window.pin" },
-  { "separator": true },
-  { "action": "exit" }
-]
-```
-
-`action` 支持 `palette` / `capture` / `workspace` / `exit`；`tool` 填工具 ID；
-工具已配置热键时会自动把快捷键显示在标签后。改完重启生效。
-
-启动后没有主窗口，托盘出现麻雀图标：
-
-1. 按 `Ctrl+Alt+S`（或点托盘）唤起面板
-2. 输入 `json` 过滤工具
-3. 回车执行，输入取自剪贴板
-4. `Ctrl+C` 或点「复制」把结果写回剪贴板
-5. `Esc` 关闭面板
-
-> 中文输入法下要按**两次**回车：第一次让输入法把 `json` 上屏，第二次才是执行。
-> 原因见 [`docs/ui-spec.md` 6.1](docs/ui-spec.md#61-中文输入法下的-enter实测踩到的坑)。
-
-M0 的面板是**只读结果**：不编辑、不保存、不发到其他工具，只负责「看一眼、复制走」。
+技术栈：C# 14 / .NET 10、Avalonia 12、CommunityToolkit.Mvvm、SQLite + FTS5、SkiaSharp、Svg.Skia、Velopack。
 
 ---
 
-## 三条不可违背的原则
+## 常见问题
 
-1. **一次热键闭环** —— 任何工具，从唤起到拿到结果，不超过一次热键 + 一次确认。
-2. **本地默认** —— 数据不出本机；联网必须是用户显式触发的可选增强。
-3. **每个工具都是插件** —— 加工具是加一个插件目录，不改宿主；删工具是删一个目录，不留死代码。
+**识别 / 翻译 / 提示词插件没出现？**
+先执行一次 `dotnet build Sparrow.slnx`，确认 `src/Sparrow.App/bin/<配置>/net10.0/plugins/` 里有对应目录。
 
+**录制提示找不到 FFmpeg？**
+首次录制会自动下载；也可以运行 `scripts/fetch-ffmpeg.ps1` 手动拉到 `tools/ffmpeg/`。
 
+**为什么录制时屏幕边缘有一圈黄色高亮？**
+这是 Windows Graphics Capture 的捕获指示器，系统隐私提示。Windows 11 22H2+ 会自动关闭，Windows 10 上系统强制显示。
 
+**中文输入法下按回车不执行？**
+第一次回车让输入法上屏，第二次才是执行。
 
+---
 
+## 协议
 
+本项目使用 **MIT License**：可以自由使用、修改、分发，包括商业用途，保留版权声明即可。
 
+**第三方组件：**
 
+- [Avalonia](https://avaloniaui.net/)、[SkiaSharp](https://github.com/mono/SkiaSharp)、[Svg.Skia](https://github.com/wieslawsoltes/Svg.Skia)、[CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet) 均为 MIT
+- [FFmpeg](https://ffmpeg.org/) 以**独立进程**方式调用，不链接、不修改。项目本身下载的构建为 GPL 版，其许可与源码获取方式见 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)
+- 如果二次分发包含 `ffmpeg.exe` 的安装包，需要同时遵守 FFmpeg 的 GPL 条款
+
+---
+
+## 文档
+
+| 想了解 | 看这份 |
+|---|---|
+| 有哪些工具、做到什么程度 | [`docs/tool-catalog.md`](docs/tool-catalog.md) |
+| 插件如何加载与隔离 | [`docs/plugin-model.md`](docs/plugin-model.md) |
+| 整体架构 | [`docs/architecture.md`](docs/architecture.md) |
+| 加一个新工具 | [`docs/tool-development.md`](docs/tool-development.md) |
+| 界面规范 | [`docs/ui-spec.md`](docs/ui-spec.md) |
+| 发布检查清单 | [`docs/release-checklist.md`](docs/release-checklist.md) |
+
+---
+
+## 三条原则
+
+1. **一次热键闭环** —— 从唤起到拿到结果，不超过一次热键 + 一次确认。
+2. **本地默认** —— 数据不出本机；联网必须是显式触发的可选增强。
+3. **每个工具都是插件** —— 加工具是加一个目录，删工具是删一个目录。
+
+> 麻雀虽小，五脏俱全。
