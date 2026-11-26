@@ -7,5 +7,6 @@ public enum SettingsSection
     Model,
     Hotkeys,
     General,
+    Data,
     About
 }

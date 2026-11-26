@@ -61,27 +61,64 @@ public partial class SettingsView : UserControl
         OpenFolder(path);
     }
 
-    /// <summary>选择新的数据目录；只写设置，重启后生效（不搬旧文件）。</summary>
-    private async void OnChangeDataDirectoryClick(object? sender, RoutedEventArgs e)
+    /// <summary>数据 tab 的「选择」：按 Tag 区分根目录 / 模型 / 录制。</summary>
+    private async void OnChangeDirectoryClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is not SettingsViewModel viewModel)
+        if (DataContext is not SettingsViewModel viewModel
+            || sender is not Button { Tag: string kind })
+        {
+            return;
+        }
+
+        var path = await PickFolderAsync();
+        if (string.IsNullOrWhiteSpace(path))
             return;
 
-        if (TopLevel.GetTopLevel(this)?.StorageProvider is not { CanPickFolder: true } storage)
+        switch (kind)
+        {
+            case "Data":
+                viewModel.DataDirectory = path;
+                break;
+            case "Model":
+                viewModel.ModelDirectory = path;
+                break;
+            case "Record":
+                viewModel.RecordDirectory = path;
+                break;
+        }
+    }
+
+    /// <summary>数据 tab 的「打开」：按 Tag 打开对应目录。</summary>
+    private void OnOpenDirectoryClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not SettingsViewModel viewModel
+            || sender is not Button { Tag: string kind })
+        {
             return;
+        }
+
+        OpenFolder(kind switch
+        {
+            "Data" => viewModel.DataDirectoryDisplay,
+            "Model" => viewModel.ModelDirectoryDisplay,
+            "Record" => viewModel.RecordDirectoryDisplay,
+            "Logs" => viewModel.LogDirectoryDisplay,
+            _ => SparrowPaths.DataRoot
+        });
+    }
+
+    private async Task<string?> PickFolderAsync()
+    {
+        if (TopLevel.GetTopLevel(this)?.StorageProvider is not { CanPickFolder: true } storage)
+            return null;
 
         var folders = await storage.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = "选择 Sparrow 数据目录",
+            Title = "选择目录",
             AllowMultiple = false
         });
 
-        if (folders.Count == 0)
-            return;
-
-        var path = folders[0].TryGetLocalPath();
-        if (!string.IsNullOrWhiteSpace(path))
-            viewModel.DataDirectory = path;
+        return folders.Count == 0 ? null : folders[0].TryGetLocalPath();
     }
 
     private void OnOpenPluginsClick(object? sender, RoutedEventArgs e) =>

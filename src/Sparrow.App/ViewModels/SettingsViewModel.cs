@@ -65,6 +65,8 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
             .FirstOrDefault(option => option.Key == settings.SelectionBorderColor)
             ?? SelectionBorderColorOptions[0];
         _dataDirectory = settings.DataDirectory;
+        _modelDirectory = settings.ModelDirectory;
+        _recordDirectory = settings.RecordDirectory;
         _startWithWindows = startup.IsEnabled;
         _historyMaxEntries = settings.HistoryMaxEntries;
         _historyRetentionDays = settings.HistoryRetentionDays;
@@ -310,8 +312,47 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _settings = _settings with { DataDirectory = value };
         _store.Save(_settings);
         OnPropertyChanged(nameof(DataDirectoryDisplay));
+        OnPropertyChanged(nameof(ModelDirectoryDisplay));
+        OnPropertyChanged(nameof(RecordDirectoryDisplay));
         StatusMessage = "数据目录已更改，重启后生效";
     }
+
+    /// <summary>离线模型目录；空 = 数据目录下的 models。</summary>
+    [ObservableProperty]
+    private string _modelDirectory = string.Empty;
+
+    public string ModelDirectoryDisplay =>
+        string.IsNullOrWhiteSpace(ModelDirectory)
+            ? Path.Combine(DataDirectoryDisplay, "models")
+            : ModelDirectory;
+
+    partial void OnModelDirectoryChanged(string value)
+    {
+        _settings = _settings with { ModelDirectory = value };
+        _store.Save(_settings);
+        OnPropertyChanged(nameof(ModelDirectoryDisplay));
+        StatusMessage = "模型目录已更改，重启后生效";
+    }
+
+    /// <summary>录制文件目录；空 = 数据目录下的 recordings。</summary>
+    [ObservableProperty]
+    private string _recordDirectory = string.Empty;
+
+    public string RecordDirectoryDisplay =>
+        string.IsNullOrWhiteSpace(RecordDirectory)
+            ? Path.Combine(DataDirectoryDisplay, "recordings")
+            : RecordDirectory;
+
+    partial void OnRecordDirectoryChanged(string value)
+    {
+        _settings = _settings with { RecordDirectory = value };
+        _store.Save(_settings);
+        OnPropertyChanged(nameof(RecordDirectoryDisplay));
+        StatusMessage = "录制目录已更改，重启后生效";
+    }
+
+    /// <summary>日志目录固定：启动早期就要写日志，不能依赖设置。</summary>
+    public string LogDirectoryDisplay => SparrowPaths.Logs;
 
     [ObservableProperty]
     private string _clipboardPanelHotkey = "Ctrl+Alt+B";
@@ -388,6 +429,8 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
     public bool IsGeneralSelected => SelectedSection == SettingsSection.General;
 
+    public bool IsDataSelected => SelectedSection == SettingsSection.Data;
+
     public bool IsAboutSelected => SelectedSection == SettingsSection.About;
 
     partial void OnSelectedSectionChanged(SettingsSection value)
@@ -396,6 +439,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         OnPropertyChanged(nameof(IsModelSelected));
         OnPropertyChanged(nameof(IsHotkeysSelected));
         OnPropertyChanged(nameof(IsGeneralSelected));
+        OnPropertyChanged(nameof(IsDataSelected));
         OnPropertyChanged(nameof(IsAboutSelected));
 
         // 工具热键列表才需要工具注册表：切到热键分段时才加载插件，冷启动路径保持零加载

@@ -102,7 +102,10 @@ public partial class App : Application
         }
 
         // 可变数据（剪贴板/模型/录制/历史）跟随用户设置的数据目录。
-        SparrowPaths.ApplyDataRoot(settings.DataDirectory);
+        SparrowPaths.Apply(
+            settings.DataDirectory,
+            settings.ModelDirectory,
+            settings.RecordDirectory);
 
         // 面板的置顶状态要写回同一份 settings
         _settingsStore = settingsStore;

@@ -69,10 +69,16 @@ public sealed record AppSettings
     public int ClipboardHistoryMaxEntries { get; init; } = 1000;
 
     /// <summary>
-    /// 数据目录：剪贴板、模型、录制、历史等可变数据放这里；空 = %LOCALAPPDATA%\Sparrow。
-    /// 配置和日志仍固定在默认位置。
+    /// 默认数据目录（剪贴板历史、历史记录）；模型和录制可各自覆盖。
+    /// 空 = %LOCALAPPDATA%\Sparrow。配置和日志仍固定在默认位置。
     /// </summary>
     public string DataDirectory { get; init; } = string.Empty;
+
+    /// <summary>离线模型目录；空 = 数据目录下的 models。</summary>
+    public string ModelDirectory { get; init; } = string.Empty;
+
+    /// <summary>录制文件目录；空 = 数据目录下的 recordings。</summary>
+    public string RecordDirectory { get; init; } = string.Empty;
 
     /// <summary>剪贴板历史保留天数；0 表示不按天数清理。</summary>
     public int ClipboardHistoryRetentionDays { get; init; }

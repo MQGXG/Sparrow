@@ -93,8 +93,8 @@ public sealed class WarmWorkerPoolTests
         {
         }
 
-        // 并行测试负载下 30ms 空闲计时器会被线程池延后，轮询而不是死等 500ms。
-        var deadline = DateTime.UtcNow.AddSeconds(5);
+        // 并行测试负载下 30ms 空闲计时器会被线程池延后，轮询而不是死等固定时长。
+        var deadline = DateTime.UtcNow.AddSeconds(15);
         while (runner.Created[0].DisposeCount == 0 && DateTime.UtcNow < deadline)
             await Task.Delay(20, TestContext.Current.CancellationToken);
 

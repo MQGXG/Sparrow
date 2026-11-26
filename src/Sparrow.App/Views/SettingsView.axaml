@@ -53,6 +53,16 @@
           </StackPanel>
         </Button>
         <Button Classes="hud-tab"
+                Classes.selected="{Binding IsDataSelected}"
+                Tag="Data"
+                ToolTip.Tip="模型、录制、剪贴板历史的存放位置"
+                Click="OnSectionClick">
+          <StackPanel>
+            <TextBlock Text="数据" />
+            <Border Classes="tick" />
+          </StackPanel>
+        </Button>
+        <Button Classes="hud-tab"
                 Classes.selected="{Binding IsAboutSelected}"
                 Tag="About"
                 ToolTip.Tip="版本、日志与数据目录"
@@ -965,6 +975,170 @@
           </StackPanel>
         </Border>
 
+        <!-- ============ 数据与缓存 ============ -->
+        <Border Classes="panel" Padding="0" IsVisible="{Binding IsDataSelected}">
+          <StackPanel>
+            <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,14">
+              <Border Classes="hud-icon">
+                <Path Data="{StaticResource IconStorage}" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="3" Margin="12,0,12,0" VerticalAlignment="Center">
+                <TextBlock Text="数据与缓存"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="模型、录制、剪贴板历史可以分别放到不同的盘；更改后重启生效，不会自动搬运旧文件"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}"
+                           TextWrapping="Wrap" />
+              </StackPanel>
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <!-- 默认数据根目录 -->
+            <Grid ColumnDefinitions="*,Auto" Margin="20,14" ColumnSpacing="16">
+              <StackPanel Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="数据根目录"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="{Binding DataDirectoryDisplay}"
+                           FontFamily="{StaticResource MonoFont}"
+                           FontSize="11"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{StaticResource TextSecondaryBrush}" />
+                <TextBlock Text="剪贴板历史、历史记录"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <StackPanel Grid.Column="1"
+                          Orientation="Horizontal"
+                          Spacing="8"
+                          VerticalAlignment="Center">
+                <Button Classes="ghost" Tag="Data" Click="OnChangeDirectoryClick" ToolTip.Tip="选择新的数据根目录">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Data="{StaticResource IconFolder}" Classes="icon icon-xs" />
+                    <TextBlock Text="选择" />
+                  </StackPanel>
+                </Button>
+                <Button Tag="Data" Click="OnOpenDirectoryClick" ToolTip.Tip="在资源管理器中打开">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Data="{StaticResource IconOpen}" Classes="icon icon-xs" />
+                    <TextBlock Text="打开" />
+                  </StackPanel>
+                </Button>
+              </StackPanel>
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <!-- 离线模型 -->
+            <Grid ColumnDefinitions="*,Auto" Margin="20,14" ColumnSpacing="16">
+              <StackPanel Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="模型目录"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="{Binding ModelDirectoryDisplay}"
+                           FontFamily="{StaticResource MonoFont}"
+                           FontSize="11"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{StaticResource TextSecondaryBrush}" />
+                <TextBlock Text="离线模型文件（OCR / 翻译等）"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <StackPanel Grid.Column="1"
+                          Orientation="Horizontal"
+                          Spacing="8"
+                          VerticalAlignment="Center">
+                <Button Classes="ghost" Tag="Model" Click="OnChangeDirectoryClick" ToolTip.Tip="选择新的模型目录">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Data="{StaticResource IconFolder}" Classes="icon icon-xs" />
+                    <TextBlock Text="选择" />
+                  </StackPanel>
+                </Button>
+                <Button Tag="Model" Click="OnOpenDirectoryClick" ToolTip.Tip="在资源管理器中打开">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Data="{StaticResource IconOpen}" Classes="icon icon-xs" />
+                    <TextBlock Text="打开" />
+                  </StackPanel>
+                </Button>
+              </StackPanel>
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <!-- 录制输出 -->
+            <Grid ColumnDefinitions="*,Auto" Margin="20,14" ColumnSpacing="16">
+              <StackPanel Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="录制目录"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="{Binding RecordDirectoryDisplay}"
+                           FontFamily="{StaticResource MonoFont}"
+                           FontSize="11"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{StaticResource TextSecondaryBrush}" />
+                <TextBlock Text="屏幕录制的输出文件"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <StackPanel Grid.Column="1"
+                          Orientation="Horizontal"
+                          Spacing="8"
+                          VerticalAlignment="Center">
+                <Button Classes="ghost" Tag="Record" Click="OnChangeDirectoryClick" ToolTip.Tip="选择新的录制目录">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Data="{StaticResource IconFolder}" Classes="icon icon-xs" />
+                    <TextBlock Text="选择" />
+                  </StackPanel>
+                </Button>
+                <Button Tag="Record" Click="OnOpenDirectoryClick" ToolTip.Tip="在资源管理器中打开">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Data="{StaticResource IconOpen}" Classes="icon icon-xs" />
+                    <TextBlock Text="打开" />
+                  </StackPanel>
+                </Button>
+              </StackPanel>
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <!-- 日志（固定） -->
+            <Grid ColumnDefinitions="*,Auto" Margin="20,14" ColumnSpacing="16">
+              <StackPanel Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="日志目录"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="{Binding LogDirectoryDisplay}"
+                           FontFamily="{StaticResource MonoFont}"
+                           FontSize="11"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{StaticResource TextSecondaryBrush}" />
+                <TextBlock Text="固定在程序数据目录：启动早期就要写日志，不跟随上面的设置"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}"
+                           TextWrapping="Wrap" />
+              </StackPanel>
+              <StackPanel Grid.Column="1"
+                          Orientation="Horizontal"
+                          Spacing="8"
+                          VerticalAlignment="Center">
+                <Button Tag="Logs" Click="OnOpenDirectoryClick" ToolTip.Tip="在资源管理器中打开">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Data="{StaticResource IconOpen}" Classes="icon icon-xs" />
+                    <TextBlock Text="打开" />
+                  </StackPanel>
+                </Button>
+              </StackPanel>
+            </Grid>
+          </StackPanel>
+        </Border>
+
         <!-- ============ 关于：身份卡 ============ -->
         <Border Classes="panel" Padding="0" IsVisible="{Binding IsAboutSelected}">
           <StackPanel>
@@ -1038,44 +1212,6 @@
                         Content="检查更新"
                         IsEnabled="{Binding IsNotCheckingUpdate}"
                         Click="OnCheckUpdateClick" />
-              </StackPanel>
-            </Grid>
-
-            <Border Classes="hud-line" />
-
-            <Grid ColumnDefinitions="*,Auto" Margin="20,14" ColumnSpacing="16">
-              <StackPanel Spacing="3" VerticalAlignment="Center">
-                <TextBlock Text="数据目录"
-                           FontSize="13"
-                           FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
-                <TextBlock Text="{Binding DataDirectoryDisplay}"
-                           FontFamily="{StaticResource MonoFont}"
-                           FontSize="11"
-                           TextTrimming="CharacterEllipsis"
-                           Foreground="{StaticResource TextSecondaryBrush}" />
-                <TextBlock Text="剪贴板历史、离线模型、录制文件和历史记录会存到这里；更改后重启生效"
-                           FontSize="11"
-                           MaxWidth="520"
-                           TextWrapping="Wrap"
-                           Foreground="{StaticResource TextMutedBrush}" />
-              </StackPanel>
-              <StackPanel Grid.Column="1"
-                          Orientation="Horizontal"
-                          Spacing="8"
-                          VerticalAlignment="Center">
-                <Button Classes="ghost" Click="OnChangeDataDirectoryClick" ToolTip.Tip="选择新的数据目录">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <Path Data="{StaticResource IconFolder}" Classes="icon icon-xs" />
-                    <TextBlock Text="选择目录" />
-                  </StackPanel>
-                </Button>
-                <Button Click="OnOpenDataClick" ToolTip.Tip="在资源管理器中打开">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <Path Data="{StaticResource IconOpen}" Classes="icon icon-xs" />
-                    <TextBlock Text="打开" />
-                  </StackPanel>
-                </Button>
               </StackPanel>
             </Grid>
 
