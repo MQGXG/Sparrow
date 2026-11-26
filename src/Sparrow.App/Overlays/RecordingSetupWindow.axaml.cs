@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Sparrow.App.Services.Recording;
@@ -75,6 +76,13 @@ public partial class RecordingSetupWindow : Window
         _ = DetectCameraAsync();
         _ = LoadEncodersAsync(savedEncoder);
         UpdateFormatVisibility();
+    }
+
+    /// <summary>无边框窗口：拖标题栏移动窗口。</summary>
+    private void OnTitlePointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            BeginMoveDrag(e);
     }
 
     /// <summary>GIF / APNG 才需要动画帧率与尺寸；视频格式下隐藏。</summary>

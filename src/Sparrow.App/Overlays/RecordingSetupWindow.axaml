@@ -64,10 +64,14 @@
           BoxShadow="0 14 40 0 #99000000">
     <StackPanel Spacing="12">
 
-      <TextBlock Text="屏幕录制"
-                 FontSize="18"
-                 FontWeight="SemiBold"
-                 Foreground="White" />
+      <Border Background="Transparent"
+              Cursor="SizeAll"
+              PointerPressed="OnTitlePointerPressed">
+        <TextBlock Text="屏幕录制"
+                   FontSize="18"
+                   FontWeight="SemiBold"
+                   Foreground="White" />
+      </Border>
 
       <!-- 模式 -->
       <StackPanel Orientation="Horizontal" Spacing="22">
