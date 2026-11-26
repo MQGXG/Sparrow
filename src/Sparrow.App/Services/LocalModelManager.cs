@@ -24,10 +24,7 @@ public sealed class LocalModelManager : ILocalModels
     {
         _log = log;
         _http = http ?? new HttpClient { Timeout = TimeSpan.FromHours(2) };
-        _root = root ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Sparrow",
-            "models");
+        _root = root ?? SparrowPaths.Models;
     }
 
     /// <summary>

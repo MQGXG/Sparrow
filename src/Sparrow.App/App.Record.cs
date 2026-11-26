@@ -232,10 +232,7 @@ public partial class App
         }
 
         var directory = string.IsNullOrWhiteSpace(setup.OutputDirectory)
-            ? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Sparrow",
-                "recordings")
+            ? SparrowPaths.Recordings
             : setup.OutputDirectory;
 
         var baseName = string.IsNullOrWhiteSpace(setup.BaseName) ? "Sparrow" : setup.BaseName;

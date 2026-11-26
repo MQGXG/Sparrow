@@ -16,10 +16,7 @@ internal static class FfmpegLocator
     public const string DownloadUrl =
         "https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip";
 
-    public static string LocalDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Sparrow",
-        "ffmpeg");
+    public static string LocalDirectory => SparrowPaths.FfmpegCache;
 
     /// <summary>查找可用的 ffmpeg.exe；找不到返回 null。</summary>
     public static string? Find()

@@ -766,7 +766,7 @@ public sealed partial class ClipboardHistoryViewModel : ObservableObject
             ? $"{megabytes:F1} MB / {_store.MaxBytes / (1024.0 * 1024):F0} MB"
             : $"{megabytes:F1} MB";
 
-        StatusBarText = $"{_store.Count} / {_store.MaxEntries} 条 · {quota}";
+        StatusBarText = $"已存 {_store.Count} 条 · {quota}";
 
         CapacityRatio = _store.MaxBytes > 0
             ? Math.Clamp((double)_store.ApproximateBytes / _store.MaxBytes, 0.03, 1.0)

@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Sparrow.App.Services;
 using Sparrow.App.Services.Recording;
 using Windows.Devices.Enumeration;
 
@@ -68,10 +69,7 @@ public partial class RecordingSetupWindow : Window
     {
         InitializeComponent();
 
-        OutputDirectoryBox.Text = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Sparrow",
-            "recordings");
+        OutputDirectoryBox.Text = SparrowPaths.Recordings;
 
         // 从截图工具条打开时区域已经由选区决定，不再给窗口/全屏选项。
         if (regionOnly)

@@ -20,7 +20,7 @@ namespace Sparrow.App.Services;
 /// </summary>
 public sealed partial class ClipboardHistoryStore : IClipboardHistory
 {
-    private const int DefaultMaxEntries = 200;
+    private const int DefaultMaxEntries = 1000;
 
     /// <summary>超过 32MB 的图片不记录：占盘且几乎不会还原使用。</summary>
     private const long MaxImageBytes = 32 * 1024 * 1024;

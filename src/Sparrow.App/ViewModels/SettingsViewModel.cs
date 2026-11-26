@@ -64,6 +64,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _selectionBorderColor = SelectionBorderColorOptions
             .FirstOrDefault(option => option.Key == settings.SelectionBorderColor)
             ?? SelectionBorderColorOptions[0];
+        _dataDirectory = settings.DataDirectory;
         _startWithWindows = startup.IsEnabled;
         _historyMaxEntries = settings.HistoryMaxEntries;
         _historyRetentionDays = settings.HistoryRetentionDays;
@@ -295,6 +296,21 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _settings = _settings with { SelectionBorderColor = value.Key };
         _store.Save(_settings);
         StatusMessage = $"选区边框颜色：{value.Label}";
+    }
+
+    /// <summary>数据目录：剪贴板/模型/录制/历史；空 = 默认的 %LOCALAPPDATA%\Sparrow。</summary>
+    [ObservableProperty]
+    private string _dataDirectory = string.Empty;
+
+    public string DataDirectoryDisplay =>
+        string.IsNullOrWhiteSpace(DataDirectory) ? SparrowPaths.ConfigRoot : DataDirectory;
+
+    partial void OnDataDirectoryChanged(string value)
+    {
+        _settings = _settings with { DataDirectory = value };
+        _store.Save(_settings);
+        OnPropertyChanged(nameof(DataDirectoryDisplay));
+        StatusMessage = "数据目录已更改，重启后生效";
     }
 
     [ObservableProperty]

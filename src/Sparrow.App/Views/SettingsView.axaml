@@ -69,17 +69,44 @@
       <StackPanel Margin="24,4,24,24" Spacing="14">
 
         <!-- ============ 插件 ============ -->
-        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,4,0,10" IsVisible="{Binding IsPluginsSelected}">
-          <Border Classes="hud-tick" />
-          <TextBlock Grid.Column="1"
-                     Text="插件"
-                     FontSize="12"
-                     FontWeight="SemiBold"
-                     Margin="10,0,0,0"
-                     VerticalAlignment="Center" />
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto"
+              ColumnSpacing="8"
+              Margin="0,4,0,10"
+              IsVisible="{Binding IsPluginsSelected}">
+          <Border Classes="hud-icon">
+            <Path Data="{StaticResource IconSparkle}" />
+          </Border>
+          <StackPanel Grid.Column="1" Spacing="3" Margin="12,0,12,0" VerticalAlignment="Center">
+            <TextBlock Text="插件"
+                       FontSize="13"
+                       FontWeight="SemiBold"
+                       Foreground="{StaticResource TextPrimaryBrush}" />
+            <TextBlock Text="插件目录里的工具；复制新插件后点「重新扫描」即可生效"
+                       FontSize="11"
+                       Foreground="{StaticResource TextMutedBrush}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
           <TextBlock Grid.Column="2"
                      Classes="num"
-                     Text="{Binding Plugins.Count, StringFormat='{}{0} 个'}" />
+                     Text="{Binding Plugins.Count, StringFormat='{}{0} 个'}"
+                     VerticalAlignment="Center" />
+          <Button Grid.Column="3"
+                  Classes="ghost"
+                  Click="OnOpenPluginsClick"
+                  ToolTip.Tip="打开插件目录">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Path Data="{StaticResource IconFolder}" Classes="icon icon-xs" />
+              <TextBlock Text="打开目录" />
+            </StackPanel>
+          </Button>
+          <Button Grid.Column="4"
+                  Click="OnRescanClick"
+                  ToolTip.Tip="重新扫描插件目录">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Path Data="{StaticResource IconRefresh}" Classes="icon icon-xs" />
+              <TextBlock Text="重新扫描" />
+            </StackPanel>
+          </Button>
         </Grid>
 
         <Border Classes="panel" Padding="8" IsVisible="{Binding IsPluginsSelected}">
@@ -131,11 +158,6 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
-
-            <StackPanel Orientation="Horizontal" Spacing="8" Margin="6,8,6,2">
-              <Button Classes="ghost" Content="打开插件目录" Click="OnOpenPluginsClick" />
-              <Button Content="重新扫描" Click="OnRescanClick" />
-            </StackPanel>
           </StackPanel>
         </Border>
 
@@ -1021,6 +1043,44 @@
 
             <Border Classes="hud-line" />
 
+            <Grid ColumnDefinitions="*,Auto" Margin="20,14" ColumnSpacing="16">
+              <StackPanel Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="数据目录"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="{Binding DataDirectoryDisplay}"
+                           FontFamily="{StaticResource MonoFont}"
+                           FontSize="11"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{StaticResource TextSecondaryBrush}" />
+                <TextBlock Text="剪贴板历史、离线模型、录制文件和历史记录会存到这里；更改后重启生效"
+                           FontSize="11"
+                           MaxWidth="520"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <StackPanel Grid.Column="1"
+                          Orientation="Horizontal"
+                          Spacing="8"
+                          VerticalAlignment="Center">
+                <Button Classes="ghost" Click="OnChangeDataDirectoryClick" ToolTip.Tip="选择新的数据目录">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Data="{StaticResource IconFolder}" Classes="icon icon-xs" />
+                    <TextBlock Text="选择目录" />
+                  </StackPanel>
+                </Button>
+                <Button Click="OnOpenDataClick" ToolTip.Tip="在资源管理器中打开">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Data="{StaticResource IconOpen}" Classes="icon icon-xs" />
+                    <TextBlock Text="打开" />
+                  </StackPanel>
+                </Button>
+              </StackPanel>
+            </Grid>
+
+            <Border Classes="hud-line" />
+
             <Grid ColumnDefinitions="*,Auto" Margin="20,14">
               <TextBlock Text="所有工具在本地执行，数据不出机器。Bug、建议和使用问题见应用目录下的日志。"
                          FontSize="11"
@@ -1029,8 +1089,18 @@
                          MaxWidth="420"
                          VerticalAlignment="Center" />
               <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                <Button Classes="ghost" Content="打开日志目录" Click="OnOpenLogsClick" />
-                <Button Content="打开数据目录" Click="OnOpenDataClick" />
+                <Button Classes="ghost" Click="OnOpenLogsClick" ToolTip.Tip="打开日志目录">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Data="{StaticResource IconFile}" Classes="icon icon-xs" />
+                    <TextBlock Text="打开日志目录" />
+                  </StackPanel>
+                </Button>
+                <Button Click="OnOpenDataClick" ToolTip.Tip="打开数据目录">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Data="{StaticResource IconFolder}" Classes="icon icon-xs" />
+                    <TextBlock Text="打开数据目录" />
+                  </StackPanel>
+                </Button>
               </StackPanel>
             </Grid>
           </StackPanel>

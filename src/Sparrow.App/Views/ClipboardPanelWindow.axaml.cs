@@ -162,6 +162,14 @@ public partial class ClipboardPanelWindow : Window
         Settings = Settings with { ClipboardPanelTopmost = Topmost };
         SettingsStore?.Save(Settings);
 
+        // Windows 有时不会立刻刷新 Z 序（尤其面板刚打开还没激活）：
+        // 重新激活并把置顶状态再压一次，避免「点了没反应」。
+        if (Topmost)
+        {
+            Activate();
+            Topmost = true;
+        }
+
         e.Handled = true;
     }
 

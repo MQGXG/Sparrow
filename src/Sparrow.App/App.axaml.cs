@@ -93,6 +93,17 @@ public partial class App : Application
         var isFirstRun = !File.Exists(settingsPath);
         var settings = settingsStore.Load();
 
+        // 旧版本剪贴板只留 200 条：容量才用几个百分点就开始丢历史。
+        // 升级时抬到 1000，用户手动改成别的值不动。
+        if (settings.ClipboardHistoryMaxEntries == 200)
+        {
+            settings = settings with { ClipboardHistoryMaxEntries = 1000 };
+            settingsStore.Save(settings);
+        }
+
+        // 可变数据（剪贴板/模型/录制/历史）跟随用户设置的数据目录。
+        SparrowPaths.ApplyDataRoot(settings.DataDirectory);
+
         // 面板的置顶状态要写回同一份 settings
         _settingsStore = settingsStore;
         _appSettings = settings;
@@ -119,10 +130,7 @@ public partial class App : Application
         _ai = ai;
 
         // 剪贴板历史：监听 + 落盘都是宿主能力，插件经 IToolHost.ClipboardHistory 只读
-        var clipboardHistoryPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Sparrow",
-            "clipboard.db");
+        var clipboardHistoryPath = SparrowPaths.ClipboardDb;
         var clipboardHistory = new ClipboardHistoryStore(
             clipboardHistoryPath,
             log,
@@ -142,10 +150,7 @@ public partial class App : Application
         _localTranslation = new LocalTranslationService(_localModels, log);
         _catalog = new ToolCatalog(pluginsRoot, log, settings, ai, clipboardHistory, _windowOverlay, _localModels, _localTranslation);
 
-        var historyPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Sparrow",
-            "history.jsonl");
+        var historyPath = SparrowPaths.HistoryFile;
         var history = new JsonlHistoryStore(
             historyPath,
             log,

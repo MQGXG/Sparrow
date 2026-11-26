@@ -65,7 +65,14 @@ public sealed record AppSettings
     public bool ClipboardHistoryEnabled { get; init; } = true;
 
     /// <summary>剪贴板历史最多保留多少条；图片另存为 PNG 文件。</summary>
-    public int ClipboardHistoryMaxEntries { get; init; } = 200;
+    /// <summary>剪贴板历史最多保留条数；容量上限内尽量多留。</summary>
+    public int ClipboardHistoryMaxEntries { get; init; } = 1000;
+
+    /// <summary>
+    /// 数据目录：剪贴板、模型、录制、历史等可变数据放这里；空 = %LOCALAPPDATA%\Sparrow。
+    /// 配置和日志仍固定在默认位置。
+    /// </summary>
+    public string DataDirectory { get; init; } = string.Empty;
 
     /// <summary>剪贴板历史保留天数；0 表示不按天数清理。</summary>
     public int ClipboardHistoryRetentionDays { get; init; }

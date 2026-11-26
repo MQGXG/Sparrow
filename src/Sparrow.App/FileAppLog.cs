@@ -1,4 +1,5 @@
 using System.Text;
+using Sparrow.App.Services;
 
 namespace Sparrow.App;
 
@@ -14,10 +15,7 @@ public sealed class FileAppLog : IAppLog
 
     public FileAppLog()
     {
-        var directory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Sparrow",
-            "logs");
+        var directory = SparrowPaths.Logs;
         Directory.CreateDirectory(directory);
         _path = Path.Combine(directory, $"sparrow-{DateTime.Now:yyyyMMdd}.log");
     }

@@ -2,6 +2,8 @@ using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
+using Sparrow.App.Services;
 using Sparrow.App.Settings;
 using Sparrow.App.ViewModels;
 
@@ -48,10 +50,39 @@ public partial class SettingsView : UserControl
     }
 
     private void OnOpenLogsClick(object? sender, RoutedEventArgs e) =>
-        OpenFolder(Path.Combine(LocalAppData, "Sparrow", "logs"));
+        OpenFolder(SparrowPaths.Logs);
 
-    private void OnOpenDataClick(object? sender, RoutedEventArgs e) =>
-        OpenFolder(Path.Combine(LocalAppData, "Sparrow"));
+    private void OnOpenDataClick(object? sender, RoutedEventArgs e)
+    {
+        var path = DataContext is SettingsViewModel viewModel
+            ? viewModel.DataDirectoryDisplay
+            : SparrowPaths.DataRoot;
+
+        OpenFolder(path);
+    }
+
+    /// <summary>选择新的数据目录；只写设置，重启后生效（不搬旧文件）。</summary>
+    private async void OnChangeDataDirectoryClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not SettingsViewModel viewModel)
+            return;
+
+        if (TopLevel.GetTopLevel(this)?.StorageProvider is not { CanPickFolder: true } storage)
+            return;
+
+        var folders = await storage.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "选择 Sparrow 数据目录",
+            AllowMultiple = false
+        });
+
+        if (folders.Count == 0)
+            return;
+
+        var path = folders[0].TryGetLocalPath();
+        if (!string.IsNullOrWhiteSpace(path))
+            viewModel.DataDirectory = path;
+    }
 
     private void OnOpenPluginsClick(object? sender, RoutedEventArgs e) =>
         OpenFolder(Path.Combine(AppContext.BaseDirectory, "plugins"));
@@ -108,9 +139,6 @@ public partial class SettingsView : UserControl
         if (DataContext is SettingsViewModel viewModel)
             await viewModel.CheckForUpdatesAsync();
     }
-
-    private static string LocalAppData =>
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
     private static void OpenFolder(string path)
     {
