@@ -74,6 +74,22 @@ public partial class RecordingSetupWindow : Window
 
         _ = DetectCameraAsync();
         _ = LoadEncodersAsync(savedEncoder);
+        UpdateFormatVisibility();
+    }
+
+    /// <summary>GIF / APNG 才需要动画帧率与尺寸；视频格式下隐藏。</summary>
+    private void OnFormatChanged(object? sender, SelectionChangedEventArgs e) =>
+        UpdateFormatVisibility();
+
+    private void UpdateFormatVisibility()
+    {
+        // 初始化阶段控件可能还没赋值，等构造末尾再统一刷新一次。
+        if (AnimationOptions is null || AudioSection is null)
+            return;
+
+        var gifLike = FormatBox.SelectedIndex is 3 or 4;
+        AnimationOptions.IsVisible = gifLike;
+        AudioSection.IsVisible = !gifLike;
     }
 
     /// <summary>
