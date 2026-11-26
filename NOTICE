@@ -1,0 +1,33 @@
+Sparrow
+Copyright 2026 MQXGXG
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+--------------------------------------------------------------------------
+
+This product includes software developed by third parties.
+The full list, licenses and source-code locations are in
+THIRD-PARTY-NOTICES.md. Notable components:
+
+  - Avalonia UI            MIT       https://avaloniaui.net/
+  - SkiaSharp              MIT       https://github.com/mono/SkiaSharp
+  - Svg.Skia               MIT       https://github.com/wieslawsoltes/Svg.Skia
+  - CommunityToolkit.Mvvm  MIT       https://github.com/CommunityToolkit/dotnet
+  - Microsoft.Data.Sqlite  MIT
+  - Serilog                Apache-2.0 https://serilog.net/
+  - Velopack               MIT       https://velopack.io/
+  - FFmpeg                 GPL/LGPL  https://ffmpeg.org/
+
+FFmpeg is invoked as a separate executable process and is not linked
+into this software. See THIRD-PARTY-NOTICES.md for how to obtain its
+source code and the terms that apply when redistributing it.

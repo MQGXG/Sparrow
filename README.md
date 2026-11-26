@@ -7,7 +7,7 @@
 [![.NET](https://img.shields.io/badge/.NET-10-512BD4)](https://dotnet.microsoft.com/)
 [![Avalonia](https://img.shields.io/badge/Avalonia-12-8B44AC)](https://avaloniaui.net/)
 [![Tests](https://img.shields.io/badge/tests-835%20passing-3DD68C)](#从源码构建)
-[![License](https://img.shields.io/badge/License-MIT-4C9AFF)](#协议)
+[![License](https://img.shields.io/badge/License-Apache--2.0-4C9AFF)](#协议)
 
 ---
 
@@ -174,11 +174,17 @@ dotnet test tests/Sparrow.Tests/Sparrow.Tests.csproj
 
 ## 协议
 
-本项目使用 **MIT License**：可以自由使用、修改、分发，包括商业用途，保留版权声明即可。
+本项目使用 **Apache License 2.0**，完整条款见 [`LICENSE`](LICENSE)。
+
+- 可以自由使用、修改、分发，包括商业用途
+- 提供明确的**专利授权**：贡献者不会用专利反诉使用者
+- 分发修改版时，需要在改过的文件里注明「已修改」，并保留 [`LICENSE`](LICENSE) 和 [`NOTICE`](NOTICE)
+- 不使用 Sparrow 的名称或 Logo 为衍生作品背书
 
 **第三方组件：**
 
-- [Avalonia](https://avaloniaui.net/)、[SkiaSharp](https://github.com/mono/SkiaSharp)、[Svg.Skia](https://github.com/wieslawsoltes/Svg.Skia)、[CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet) 均为 MIT
+- [Avalonia](https://avaloniaui.net/)、[SkiaSharp](https://github.com/mono/SkiaSharp)、[Svg.Skia](https://github.com/wieslawsoltes/Svg.Skia)、[CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet)、[Velopack](https://velopack.io/) 均为 MIT
+- [Serilog](https://serilog.net/) 为 Apache-2.0
 - [FFmpeg](https://ffmpeg.org/) 以**独立进程**方式调用，不链接、不修改。项目本身下载的构建为 GPL 版，其许可与源码获取方式见 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)
 - 如果二次分发包含 `ffmpeg.exe` 的安装包，需要同时遵守 FFmpeg 的 GPL 条款
 
