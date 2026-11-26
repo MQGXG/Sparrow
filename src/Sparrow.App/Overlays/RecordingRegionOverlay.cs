@@ -21,6 +21,10 @@ internal sealed class RecordingRegionOverlay : Window
 {
     private const int RgnOr = 2;
 
+    private const int GwlExStyle = -20;
+    private const long WsExNoActivate = 0x08000000L;
+    private const long WsExToolWindow = 0x00000080L;
+
     /// <summary>红框与选区之间的空隙（DIP）。</summary>
     private const double FrameGap = 2;
 
@@ -118,6 +122,14 @@ internal sealed class RecordingRegionOverlay : Window
             return;
         }
 
+        // 覆盖层只是画红框：不抢前台、不出现在 Alt+Tab，
+        // 否则录制开始时焦点会被它拿走，下层应用第一次点击只用来激活窗口。
+        var exStyle = GetWindowLongPtr(hwnd, GwlExStyle).ToInt64();
+        SetWindowLongPtr(
+            hwnd,
+            GwlExStyle,
+            new IntPtr(exStyle | WsExNoActivate | WsExToolWindow));
+
         var frame = _frameRect;
 
         if (frame.Width <= 0 || frame.Height <= 0)
@@ -177,4 +189,10 @@ internal sealed class RecordingRegionOverlay : Window
 
     [DllImport("user32.dll")]
     private static extern int SetWindowRgn(IntPtr hwnd, IntPtr region, bool redraw);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+    private static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+    private static extern IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr value);
 }

@@ -1,4 +1,5 @@
 // CaptureWindow 分部类：录制控制并入主工具条，选区层由穿透红框负责。
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -105,10 +106,18 @@ public partial class CaptureWindow
 
         _recordTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
         _recordTimer.Tick += (_, _) =>
+        {
             RecordElapsed.Text = _recording?.Elapsed.ToString(@"hh\:mm\:ss") ?? "00:00:00";
+
+            // 工具条被拖动、浮层开合后区域会变：定时兜底刷新，保证点击穿透跟着走。
+            UpdateRecordingWindowRegion();
+        };
         _recordTimer.Start();
 
         await Task.Yield();
+
+        // 布局稳定后再裁剪窗口：只有工具条（和标注中的选区）接收鼠标。
+        UpdateRecordingWindowRegion();
 
         var toolbar = ToolbarRect(ActionBar.DesiredSize);
         App.Log.Info(
@@ -138,6 +147,7 @@ public partial class CaptureWindow
         _regionOverlay?.Close();
         _regionOverlay = null;
 
+        RestoreWindowRegion();
         Close();
         RecordingFinished?.Invoke(path, error, copied);
     }
@@ -170,6 +180,7 @@ public partial class CaptureWindow
         _regionOverlay?.Close();
         _regionOverlay = null;
 
+        RestoreWindowRegion();
         Close();
         RecordingFinished?.Invoke(null, null, false);
     }
@@ -341,4 +352,114 @@ public partial class CaptureWindow
     private bool CanAnnotateDuringRecording(Point point) =>
         _recording is null
         || (_tool != AnnotationTool.None && _selection.Contains(point));
+
+    // ==== 录制中的窗口区域裁剪 ====
+    // WM_NCHITTEST 返回 HTTRANSPARENT 只在同一线程的窗口之间转发，
+    // 跨进程时下层应用拿不到点击（表现为「页面点不动」）。
+    // 所以这里把窗口区域裁剪成「工具条 + 选中标注工具时的选区」：
+    // 区域外的点击系统根本不会派发给截图窗口，录制中电脑可以正常操作。
+
+    private const int RgnOr = 2;
+
+    /// <summary>上一次设置的窗口区域（物理像素），相同就跳过，避免反复重绘。</summary>
+    private PixelRect[]? _recordingRegionRects;
+
+    /// <summary>按工具条/浮层/工具状态重设窗口区域；结束录制后调用 <see cref="RestoreWindowRegion"/>。</summary>
+    private void UpdateRecordingWindowRegion()
+    {
+        if (_recording is null || _captureHandle == IntPtr.Zero)
+            return;
+
+        var scale = RenderScaling <= 0 ? 1.0 : RenderScaling;
+        var rects = new List<PixelRect>();
+
+        // 工具条有圆角和阴影，留一点余量，别把边缘裁掉。
+        const double padding = 10;
+
+        void AddRect(Rect rect)
+        {
+            if (rect.Width <= 0 || rect.Height <= 0)
+                return;
+
+            var left = (int)Math.Floor((rect.X - padding) * scale);
+            var top = (int)Math.Floor((rect.Y - padding) * scale);
+            var right = (int)Math.Ceiling((rect.Right + padding) * scale);
+            var bottom = (int)Math.Ceiling((rect.Bottom + padding) * scale);
+
+            rects.Add(new PixelRect(left, top, right - left, bottom - top));
+        }
+
+        void AddControl(Control control)
+        {
+            if (!control.IsVisible || control.Bounds.Width <= 0 || control.Bounds.Height <= 0)
+                return;
+
+            if (control.TranslatePoint(new Point(0, 0), this) is not { } origin)
+                return;
+
+            AddRect(new Rect(origin, control.Bounds.Size));
+        }
+
+        AddControl(ActionBar);
+
+        // 选了标注工具：选区内部要能画；没选工具时选区内也穿透，页面才点得动。
+        if (_tool != AnnotationTool.None)
+            AddRect(_selection);
+
+        if (ToolGroupPopover.IsVisible)
+            AddControl(ToolGroupPopover);
+
+        if (CustomColorPanel.IsVisible)
+            AddControl(CustomColorPanel);
+
+        if (rects.Count == 0)
+            return;
+
+        if (_recordingRegionRects is { } previous
+            && previous.Length == rects.Count
+            && previous.SequenceEqual(rects))
+            return;
+
+        _recordingRegionRects = [.. rects];
+
+        App.Log.Info(
+            $"[record] 窗口区域：scale={scale:0.##} pos={Position} " +
+            $"origin={_origin} rects={string.Join(" ", rects.Select(r => $"{r.X},{r.Y},{r.Width}x{r.Height}"))}");
+
+        var region = CreateRectRgn(0, 0, 0, 0);
+
+        foreach (var rect in rects)
+        {
+            var piece = CreateRectRgn(rect.X, rect.Y, rect.Right, rect.Bottom);
+            CombineRgn(region, region, piece, RgnOr);
+            DeleteObject(piece);
+        }
+
+        // SetWindowRgn 成功后区域归系统所有，不能删；失败才自己释放。
+        if (SetWindowRgn(_captureHandle, region, true) == 0)
+            DeleteObject(region);
+    }
+
+    /// <summary>结束录制：恢复整窗区域，否则之后截图窗口只有工具条能画。</summary>
+    private void RestoreWindowRegion()
+    {
+        _recordingRegionRects = null;
+
+        if (_captureHandle == IntPtr.Zero)
+            return;
+
+        SetWindowRgn(_captureHandle, IntPtr.Zero, true);
+    }
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateRectRgn(int left, int top, int right, int bottom);
+
+    [DllImport("gdi32.dll")]
+    private static extern int CombineRgn(IntPtr dest, IntPtr source1, IntPtr source2, int mode);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(IntPtr handle);
+
+    [DllImport("user32.dll")]
+    private static extern int SetWindowRgn(IntPtr hwnd, IntPtr region, bool redraw);
 }

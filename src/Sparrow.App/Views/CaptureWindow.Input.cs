@@ -457,6 +457,14 @@ public partial class CaptureWindow
     /// <summary>有选区（或当前识别到的控件区域）时自动显示取色器，不需要先按 I。</summary>
     private void UpdateAutoColorProbe(Point point)
     {
+        // 录制中不显示取色器：这是选区阶段的辅助 UI，
+        // 录制时鼠标本来就应该落到下层应用，出现取色卡片会误导用户。
+        if (_recording is not null)
+        {
+            ColorProbe.IsVisible = false;
+            return;
+        }
+
         var inArea = _hasSelection && _selection.Contains(point);
 
         // 自动识别控件 / 窗口：还没有选区时，按当前候选高亮区域取色
