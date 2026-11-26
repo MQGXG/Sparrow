@@ -5,6 +5,23 @@
              x:Class="Sparrow.App.Views.SettingsView"
              x:DataType="vm:SettingsViewModel">
 
+  <UserControl.Styles>
+    <!-- 关于页的链接卡片：整块可点，悬停时描边变琥珀 -->
+    <Style Selector="Button.link-card">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="14,12" />
+    </Style>
+    <Style Selector="Button.link-card:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+  </UserControl.Styles>
+
   <Grid RowDefinitions="Auto,*">
 
     <!-- 分段导航：插件 / 模型 / 热键 / 通用 / 关于（HUD tab：文字 + 琥珀刻度线） -->
@@ -1231,6 +1248,32 @@
 
             <Border Classes="hud-line" />
 
+            <!-- 当前版本 + 复制版本号 -->
+            <Grid ColumnDefinitions="*,Auto" Margin="24,16">
+              <StackPanel Spacing="4" VerticalAlignment="Center">
+                <TextBlock Classes="section" Text="当前版本" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Classes="stat"
+                             FontSize="22"
+                             Text="{Binding VersionText}" />
+                  <TextBlock Classes="num"
+                             Text="本地优先 · 数据不出机器"
+                             VerticalAlignment="Bottom"
+                             Margin="0,0,0,4" />
+                </StackPanel>
+              </StackPanel>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <Button Classes="ghost" Click="OnCopyVersionClick" ToolTip.Tip="复制版本号，反馈问题时用">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Data="{StaticResource IconCopy}" Classes="icon icon-xs" />
+                    <TextBlock Text="复制版本号" />
+                  </StackPanel>
+                </Button>
+              </StackPanel>
+            </Grid>
+
+            <Border Classes="hud-line" />
+
             <!-- 更新：Velopack 安装版才可用 -->
             <Grid ColumnDefinitions="*,Auto" Margin="24,16" RowDefinitions="Auto,Auto" RowSpacing="8">
               <StackPanel Spacing="3">
@@ -1269,7 +1312,55 @@
 
             <Border Classes="hud-line" />
 
-            <!-- 签名：一句本地优先的立场 -->
+            <!-- 项目来源：源码 / 反馈 / 本地优先说明 -->
+            <Grid ColumnDefinitions="*,*,*" Margin="24,16" ColumnSpacing="10">
+              <Button Classes="link-card" Tag="https://github.com/MQXGXG/Sparrow" Click="OnOpenLinkClick">
+                <StackPanel Spacing="6">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Path Data="{StaticResource IconLink}" Classes="icon icon-xs" />
+                    <TextBlock Text="GitHub" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}" />
+                  </StackPanel>
+                  <TextBlock Text="查看源码，一起改进"
+                             FontSize="11"
+                             Foreground="{StaticResource TextMutedBrush}" />
+                </StackPanel>
+              </Button>
+
+              <Button Grid.Column="1"
+                      Classes="link-card"
+                      Tag="https://github.com/MQXGXG/Sparrow/issues"
+                      Click="OnOpenLinkClick">
+                <StackPanel Spacing="6">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Path Data="{StaticResource IconText}" Classes="icon icon-xs" />
+                    <TextBlock Text="问题反馈" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}" />
+                  </StackPanel>
+                  <TextBlock Text="Bug 与建议，附上版本号和日志"
+                             FontSize="11"
+                             Foreground="{StaticResource TextMutedBrush}" />
+                </StackPanel>
+              </Button>
+
+              <Button Grid.Column="2"
+                      Classes="link-card"
+                      Tag="logs"
+                      Click="OnOpenLinkClick">
+                <StackPanel Spacing="6">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Path Data="{StaticResource IconFile}" Classes="icon icon-xs" />
+                    <TextBlock Text="本地日志" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}" />
+                  </StackPanel>
+                  <TextBlock Text="完整的启动与执行记录"
+                             FontSize="11"
+                             Foreground="{StaticResource TextMutedBrush}" />
+                </StackPanel>
+              </Button>
+            </Grid>
+
+            <Border Classes="hud-line" />
             <Border Margin="24,18"
                     Padding="16,12"
                     Background="{StaticResource AccentSoftBrush}"
@@ -1311,6 +1402,54 @@
                   </StackPanel>
                 </Button>
               </StackPanel>
+            </Grid>
+
+            <Border Classes="hud-line" />
+
+            <!-- 作者 / 打赏：二维码图片存在时才显示 -->
+            <Grid ColumnDefinitions="*,Auto" Margin="24,16" ColumnSpacing="20">
+              <StackPanel Spacing="6" VerticalAlignment="Center">
+                <TextBlock Classes="num" Text="AUTHOR / 作者" />
+                <TextBlock Text="MQXGXG"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="Sparrow 是一个本地优先的桌面工具台：处理都在本机完成，源码开源在 GitHub。"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}"
+                           TextWrapping="Wrap"
+                           MaxWidth="480" />
+              </StackPanel>
+
+              <Border x:Name="DonatePanel"
+                      Grid.Column="1"
+                      IsVisible="False"
+                      Background="#FFFFFFFF"
+                      BorderBrush="{StaticResource AccentBrush}"
+                      BorderThickness="1"
+                      CornerRadius="6"
+                      Padding="6"
+                      VerticalAlignment="Center"
+                      ToolTip.Tip="微信扫码打赏作者">
+                <StackPanel Spacing="4">
+                  <Image x:Name="DonateImage"
+                         Width="112"
+                         Height="112"
+                         Stretch="Uniform" />
+                  <TextBlock Text="微信打赏"
+                             FontSize="10"
+                             HorizontalAlignment="Center"
+                             Foreground="#FF333333" />
+                </StackPanel>
+              </Border>
+            </Grid>
+
+            <Border Classes="hud-line" />
+
+            <!-- 版权 -->
+            <Grid ColumnDefinitions="*,Auto" Margin="24,12,24,16">
+              <TextBlock Classes="num" Text="© 2026 MQXGXG · 本地优先，数据不出机器" />
+              <TextBlock Grid.Column="1" Classes="num" Text="SPARROW / END" />
             </Grid>
           </StackPanel>
         </Border>

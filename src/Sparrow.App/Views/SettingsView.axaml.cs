@@ -2,6 +2,8 @@ using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Sparrow.App.Services;
 using Sparrow.App.Settings;
@@ -17,6 +19,9 @@ public partial class SettingsView : UserControl
 
         // 隧道阶段拦截：热键框是只读的，普通 KeyDown 可能先被 TextBox 处理掉
         AddHandler(KeyDownEvent, OnHotkeyKeyDown, RoutingStrategies.Tunnel);
+
+        // 打赏二维码是可选资源：有图才显示，缺图不影响关于页
+        Loaded += (_, _) => EnsureDonateImage();
     }
 
     /// <summary>
@@ -175,6 +180,59 @@ public partial class SettingsView : UserControl
     {
         if (DataContext is SettingsViewModel viewModel)
             await viewModel.CheckForUpdatesAsync();
+    }
+
+    /// <summary>关于页的链接卡片：Tag 是 URL，特殊值 logs 打开日志目录。</summary>
+    private void OnOpenLinkClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string target })
+            return;
+
+        if (target == "logs")
+        {
+            OpenFolder(SparrowPaths.Logs);
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
+        }
+        catch
+        {
+            // 打不开浏览器不是致命问题
+        }
+    }
+
+    /// <summary>复制版本号，反馈问题时用。</summary>
+    private void OnCopyVersionClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not SettingsViewModel viewModel)
+            return;
+
+        var text = $"Sparrow {viewModel.VersionText}";
+        viewModel.StatusMessage = new Win32Clipboard().SetText(text)
+            ? $"已复制：{text}"
+            : "复制失败，请手动选择版本号";
+    }
+
+    /// <summary>可选资源：Assets/wechat-pay.png 存在才显示打赏二维码。</summary>
+    private void EnsureDonateImage()
+    {
+        var uri = new Uri("avares://Sparrow.App/Assets/wechat-pay.png");
+
+        try
+        {
+            if (!AssetLoader.Exists(uri))
+                return;
+
+            DonateImage.Source = new Bitmap(AssetLoader.Open(uri));
+            DonatePanel.IsVisible = true;
+        }
+        catch
+        {
+            // 二维码缺失或损坏：保持隐藏
+        }
     }
 
     private static void OpenFolder(string path)
