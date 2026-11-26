@@ -681,10 +681,12 @@ public partial class CaptureWindow
         if (!ActionBar.IsVisible || _toolbarManual)
             return;
 
-        // 标注模式：工具条位置由 StartAnnotationMode 给初值、用户拖动调整，
-        // 这里不再跟着「选区外」规则重排。
+        // 标注模式：工具条贴在图片下方；首帧布局完成后再按真实尺寸校正一次。
         if (AnnotationOnly)
+        {
+            PlaceAnnotationToolbar();
             return;
+        }
 
         var size = ActionBar.Bounds.Size;
         if (size.Width <= 0 || size.Height <= 0)

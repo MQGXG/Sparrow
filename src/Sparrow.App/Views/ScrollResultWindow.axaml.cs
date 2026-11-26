@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -13,7 +14,7 @@ namespace Sparrow.App.Views;
 /// 由 App 统一执行，这样「识别 / 复制 / 保存 / 固定」只有一套实现。
 /// 右侧缩略图上的两个手柄可以裁掉长图头尾，动作执行前按行裁剪。
 /// </summary>
-public partial class ScrollResultWindow : Window
+public partial class ScrollResultWindow : Window, IAnnotationImageHost
 {
     /// <summary>手柄拖动的最小间隔（缩略图上的像素）。</summary>
     private const double MinimumHandleGap = 8;
@@ -229,6 +230,26 @@ public partial class ScrollResultWindow : Window
     }
 
     private void OnRecognizeClick(object? sender, RoutedEventArgs e) => CloseWith(CaptureAction.Recognize);
+
+    /// <summary>标注时贴着预览区展开，不铺满整个屏幕。</summary>
+    PixelRect IAnnotationImageHost.AnnotationImageRect
+    {
+        get
+        {
+            var scale = RenderScaling > 0 ? RenderScaling : 1;
+            var origin = PreviewViewport.TranslatePoint(new Point(0, 0), this) ?? default;
+            var size = PreviewViewport.Bounds.Size;
+
+            if (size.Width <= 0 || size.Height <= 0)
+                size = ClientSize;
+
+            return new PixelRect(
+                Position.X + (int)Math.Round(origin.X * scale),
+                Position.Y + (int)Math.Round(origin.Y * scale),
+                Math.Max(1, (int)Math.Round(size.Width * scale)),
+                Math.Max(1, (int)Math.Round(size.Height * scale)));
+        }
+    }
 
     /// <summary>打开标注窗口，把结果合成回当前 PNG（尺寸不变，裁剪比例保持）。</summary>
     private async void OnAnnotateClick(object? sender, RoutedEventArgs e)

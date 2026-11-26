@@ -69,7 +69,8 @@
                 ClipToBounds="True">
           <Panel>
             <Border Background="{DynamicResource DotGridBrush}" IsHitTestVisible="False" />
-            <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+            <ScrollViewer x:Name="PreviewViewport"
+                          HorizontalScrollBarVisibility="Disabled"
                           VerticalScrollBarVisibility="Auto">
               <Image x:Name="Preview"
                      Stretch="Uniform"

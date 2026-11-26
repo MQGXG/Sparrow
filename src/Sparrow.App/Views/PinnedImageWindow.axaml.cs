@@ -11,7 +11,7 @@ namespace Sparrow.App.Views;
 /// 贴图：把截图钉在屏幕上，置顶、可拖动、Esc 关闭。
 /// 可以同时打开多个，由 App 负责持有引用。
 /// </summary>
-public partial class PinnedImageWindow : Window
+public partial class PinnedImageWindow : Window, IAnnotationImageHost
 {
     private const double MinZoom = 0.5;
     private const double MaxZoom = 2.0;
@@ -73,6 +73,21 @@ public partial class PinnedImageWindow : Window
     {
         CloseButton.Opacity = opacity;
         AnnotateButton.Opacity = opacity;
+    }
+
+    /// <summary>图片铺满整个窗口，窗口矩形就是图片在屏幕上的位置。</summary>
+    PixelRect IAnnotationImageHost.AnnotationImageRect
+    {
+        get
+        {
+            var scale = RenderScaling > 0 ? RenderScaling : 1;
+
+            return new PixelRect(
+                Position.X,
+                Position.Y,
+                Math.Max(1, (int)Math.Round(ClientSize.Width * scale)),
+                Math.Max(1, (int)Math.Round(ClientSize.Height * scale)));
+        }
     }
 
     /// <summary>启用标注模式：在标注窗口里画完，合成回钉住的图片。</summary>

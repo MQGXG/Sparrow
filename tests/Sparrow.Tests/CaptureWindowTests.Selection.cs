@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Shouldly;
+using SkiaSharp;
 using Sparrow.App.Services;
 using Sparrow.App.Views;
 using Sparrow.Plugin.Sdk.Payloads;
@@ -241,6 +242,110 @@ public sealed partial class CaptureWindowTests
         window.Selection.IsVisible.ShouldBeFalse();
         window.HandleLayer.IsVisible.ShouldBeFalse();
         window.SizeBadge.IsVisible.ShouldBeFalse();
+
+        window.Close();
+    }
+
+    /// <summary>
+    /// 贴图标注层必须有压暗背景：标注层如果全透明，桌面和后面的贴图窗口会一起露出来，
+    /// 看起来就像同一张图被复制了一份。工具条也要贴在图片下方、跟随图片移动。
+    /// </summary>
+    [AvaloniaFact]
+    public void 标注模式_背景压暗且工具条跟随图片()
+    {
+        var window = new CaptureWindow
+        {
+            AnnotationOnly = true,
+            AnnotationSource = AnnotationModePng,
+            FreezeOnOpen = false
+        };
+        window.Show();
+
+        window.DimLayer.IsVisible.ShouldBeTrue();
+
+        var imageLeft = Canvas.GetLeft(window.FrozenFrame);
+        var imageTop = Canvas.GetTop(window.FrozenFrame);
+        var barTop = Canvas.GetTop(window.ActionBar);
+
+        window.MouseDown(new Point(imageLeft + 20, imageTop + 20), MouseButton.Left);
+        window.MouseMove(new Point(imageLeft + 60, imageTop + 45));
+        window.MouseUp(new Point(imageLeft + 60, imageTop + 45), MouseButton.Left);
+
+        // 图片整体下移 25，工具条跟着下移同样的距离
+        Canvas.GetTop(window.ActionBar).ShouldBe(barTop + 25, 0.01);
+
+        window.Close();
+    }
+
+    /// <summary>
+    /// 贴图标注只展开成一个小窗：不铺满屏幕、不遮罩桌面，图片保持原比例。
+    /// </summary>
+    [AvaloniaFact]
+    public void 标注模式_指定图片区域时只展开小窗()
+    {
+        var window = new CaptureWindow
+        {
+            AnnotationOnly = true,
+            AnnotationSource = CreatePng(320, 200),
+            FreezeOnOpen = false,
+            AnnotationBounds = new PixelRect(200, 120, 320, 200)
+        };
+
+        // 与 ImageAnnotator 一致：先摆到图片位置并给一个初始尺寸
+        window.Position = new PixelPoint(200, 120);
+        window.Width = CaptureWindow.AnnotationMinContentWidth + 16;
+        window.Height = 272;
+
+        window.Show();
+
+        window.DimLayer.IsVisible.ShouldBeFalse();
+        window.Width.ShouldBeLessThan(1200);
+        window.Height.ShouldBeLessThan(800);
+
+        (window.FrozenFrame.Width / window.FrozenFrame.Height).ShouldBe(1.6, 0.001);
+
+        // 工具条贴在图片下方
+        Canvas.GetTop(window.ActionBar).ShouldBeGreaterThan(
+            Canvas.GetTop(window.FrozenFrame) + window.FrozenFrame.Height);
+
+        window.Close();
+    }
+
+    private static byte[] CreatePng(int width, int height)
+    {
+        using var bitmap = new SKBitmap(width, height);
+        bitmap.Erase(SKColors.White);
+
+        using var image = SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
+    }
+
+    /// <summary>
+    /// 滚动长图：标注时按原始比例完整显示。旧实现给宽/高分别设最小 160/120，
+    /// 细长图会被横向拉宽，标注合成回原图时就会错位。
+    /// </summary>
+    [AvaloniaFact]
+    public void 标注模式_长图保持原始比例()
+    {
+        const int width = 120;
+        const int height = 4000;
+
+        var window = new CaptureWindow
+        {
+            AnnotationOnly = true,
+            AnnotationSource = CreatePng(width, height),
+            FreezeOnOpen = false
+        };
+        window.Show();
+
+        var shownWidth = window.FrozenFrame.Width;
+        var shownHeight = window.FrozenFrame.Height;
+
+        (shownWidth / shownHeight).ShouldBe((double)width / height, 0.001);
+
+        // 不能超出窗口高度，否则工具条也没地方放
+        shownHeight.ShouldBeLessThanOrEqualTo(window.Height);
 
         window.Close();
     }

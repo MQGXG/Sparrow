@@ -516,15 +516,30 @@ public partial class CaptureWindow : Window
     /// <summary>纯标注模式：窗口显示一张现成图片，只保留标注工具条，不进入截图流程。</summary>
     internal bool AnnotationOnly { get; set; }
 
+    /// <summary>标注模式的目标图片屏幕矩形（物理像素）；有值时窗口贴着图片，不铺满屏幕。</summary>
+    internal PixelRect? AnnotationBounds { get; set; }
+
+    /// <summary>标注窗口内容的最小宽度：保证工具条不被挤成多行。</summary>
+    internal const double AnnotationMinContentWidth = 700;
+
     /// <summary>标注模式的原图（PNG）。</summary>
     internal byte[]? AnnotationSource { get; set; }
 
     /// <summary>标注完成后的 PNG；取消或没有标注时为 null。</summary>
     internal byte[]? AnnotationResult { get; private set; }
 
+    /// <summary>标注结束时图片所在的屏幕矩形；只有拖动过小窗时才记录，宿主据此让贴图落到新位置。</summary>
+    internal PixelRect? AnnotationImageScreenRect { get; private set; }
+
     private byte[]? _annotationBasePng;
     private Bitmap? _annotationBitmap;
     private double _annotationImageHeight;
+
+    /// <summary>标注窗口是否贴着图片（true = 小窗，不遮罩桌面）。</summary>
+    private bool _annotationSnug;
+
+    /// <summary>标注过程中是否拖动过小窗；只有拖过才在完成后把贴图挪到新位置。</summary>
+    private bool _annotationWindowMoved;
 
     /// <summary>是否还原放大镜全屏颜色滤镜。</summary>
     public bool CaptureRestoreColors { get; set; } = true;
@@ -863,8 +878,9 @@ public partial class CaptureWindow : Window
     }
 
     /// <summary>
-    /// 纯标注模式初始化：窗口铺满屏幕（透明），图片居中显示、工具条可自由拖动，
-    /// 不把图片和工具条绑在同一个范围内。
+    /// 纯标注模式初始化：
+    /// 宿主给了图片屏幕矩形时贴着图片展开小窗（不遮罩桌面）；
+    /// 否则兜底铺满屏幕、压暗背景、图片居中。
     /// </summary>
     private void StartAnnotationMode()
     {
@@ -879,27 +895,44 @@ public partial class CaptureWindow : Window
         using var stream = new MemoryStream(png);
         _annotationBitmap = new Bitmap(stream);
 
-        // 窗口铺满虚拟屏幕，图片居中；工具条默认放图片下方，之后可以拖到任意位置
-        ApplyVirtualScreenBounds();
-
         ActionBar.IsVisible = true;
         HintBar.IsVisible = false;
+
+        // 宿主提供了图片的屏幕矩形：贴着图片展开，不铺满屏幕。
+        if (AnnotationBounds is { Width: > 0, Height: > 0 } bounds)
+        {
+            StartSnugAnnotation(bounds);
+            return;
+        }
+
+        // 没有目标区域时的兜底：窗口铺满虚拟屏幕，图片居中。
+        ApplyVirtualScreenBounds();
         MeasureActionBar();
-        var toolbarSize = ActionBar.DesiredSize;
 
         var screen = Screens.Primary?.WorkingArea ?? new PixelRect(0, 0, 1920, 1080);
         var renderScale = RenderScaling > 0 ? RenderScaling : 1;
         var maxWidth = Math.Max(240, screen.Width / renderScale * 0.8);
         var maxHeight = Math.Max(180, screen.Height / renderScale * 0.8);
 
+        var pixelWidth = Math.Max(1, _annotationBitmap.PixelSize.Width);
+        var pixelHeight = Math.Max(1, _annotationBitmap.PixelSize.Height);
+
         var ratio = Math.Min(
-            Math.Min(
-                maxWidth / _annotationBitmap.PixelSize.Width,
-                maxHeight / _annotationBitmap.PixelSize.Height),
+            Math.Min(maxWidth / pixelWidth, maxHeight / pixelHeight),
             1.0);
 
-        var imageWidth = Math.Max(160, _annotationBitmap.PixelSize.Width * ratio);
-        var imageHeight = Math.Max(120, _annotationBitmap.PixelSize.Height * ratio);
+        // 小图放大到至少 160 宽；但滚动长图这种极度细长的图不能硬拉宽度，
+        // 否则显示比例和导出比例不一致，标注会错位。
+        if (pixelWidth * ratio < 160)
+        {
+            var boost = 160.0 / pixelWidth;
+
+            if (pixelHeight * boost <= maxHeight)
+                ratio = boost;
+        }
+
+        var imageWidth = Math.Max(1, pixelWidth * ratio);
+        var imageHeight = Math.Max(1, pixelHeight * ratio);
 
         var imageLeft = Math.Max(8, (Width - imageWidth) / 2);
         var imageTop = Math.Max(8, (Height - imageHeight) / 2);
@@ -917,24 +950,161 @@ public partial class CaptureWindow : Window
         _scaling = imageWidth > 0 ? _annotationBitmap.PixelSize.Width / imageWidth : 1;
         _colorSampling = false;
 
+        // 标注模式不做圆角选区；遮罩的洞要和图片边缘对齐
+        _cornerRadius = 0;
+
         HideAnnotationChrome();
 
-        // 工具条先放图片下方；下方放不下就放上方
-        var toolbarTop = imageTop + imageHeight + 10;
+        // 标注层铺满全屏。如果完全透明，桌面和后面的贴图窗口都会露出来，
+        // 看起来就像同一张图被复制了一份；用接近不透明的遮罩压掉背景，
+        // 只给图片留一个透光的洞。
+        DimLayer.Fill = new SolidColorBrush(Color.Parse("#E6000000"));
+        DimLayer.IsVisible = true;
+        UpdateDim();
 
-        if (toolbarTop + toolbarSize.Height > Height - 8)
-            toolbarTop = Math.Max(8, imageTop - toolbarSize.Height - 10);
-
-        Canvas.SetLeft(ActionBar, Math.Max(8, (Width - toolbarSize.Width) / 2));
-        Canvas.SetTop(ActionBar, toolbarTop);
+        // 工具条默认贴在图片下方；图片可以拖动，工具条跟着走
+        PlaceAnnotationToolbar();
     }
+
+    /// <summary>
+    /// 贴着图片展开的标注窗口：只包住图片和工具条，图片尽量停在原来的屏幕位置，
+    /// 周围不铺遮罩，不影响用户同时操作其他程序。
+    /// </summary>
+    private void StartSnugAnnotation(PixelRect bounds)
+    {
+        const double pad = 8;
+        const double gap = 10;
+
+        var scale = RenderScaling > 0 ? RenderScaling : 1;
+
+        // 先按完整工具条测量，避免首帧被挤成多行
+        MeasureActionBar();
+        var toolbar = ActionBar.DesiredSize;
+
+        var imageWidth = Math.Max(1, bounds.Width / scale);
+        var imageHeight = Math.Max(1, bounds.Height / scale);
+
+        var barWidth = toolbar.Width > 0 ? toolbar.Width : AnnotationMinContentWidth;
+        var barHeight = toolbar.Height > 0 ? toolbar.Height : 44;
+
+        var contentWidth = Math.Max(Math.Max(imageWidth, AnnotationMinContentWidth), barWidth);
+        var windowWidth = contentWidth + pad * 2;
+        var windowHeight = imageHeight + gap + barHeight + pad * 2;
+
+        var screen = Screens.ScreenFromPoint(new PixelPoint(bounds.X, bounds.Y)) ?? Screens.Primary;
+        var work = screen?.WorkingArea ?? new PixelRect(0, 0, 1920, 1080);
+
+        var physicalWidth = windowWidth * scale;
+        var physicalHeight = windowHeight * scale;
+
+        // 水平：图片尽量停在原位，窗口多出来的宽度往有空间的一侧展开
+        double left = bounds.X;
+
+        if (left + physicalWidth > work.Right)
+            left = bounds.X + bounds.Width - physicalWidth;
+
+        left = Math.Clamp(left, work.X, Math.Max(work.X, work.Right - physicalWidth));
+
+        var imageLeft = Math.Max(0, (bounds.X - left) / scale);
+
+        // 垂直：默认工具条在图片下方；下方放不下就翻到上方
+        var imageTop = pad;
+        double top = bounds.Y - pad * scale;
+
+        if (top + physicalHeight > work.Bottom)
+        {
+            imageTop = barHeight + gap + pad;
+            top = bounds.Y - (barHeight + gap + pad) * scale;
+        }
+
+        top = Math.Clamp(top, work.Y, Math.Max(work.Y, work.Bottom - physicalHeight));
+
+        Position = new PixelPoint((int)Math.Round(left), (int)Math.Round(top));
+        Width = windowWidth;
+        Height = windowHeight;
+
+        FrozenFrame.Source = _annotationBitmap;
+        FrozenFrame.IsVisible = true;
+        FrozenFrame.Width = imageWidth;
+        FrozenFrame.Height = imageHeight;
+        Canvas.SetLeft(FrozenFrame, imageLeft);
+        Canvas.SetTop(FrozenFrame, imageTop);
+
+        _annotationImageHeight = imageHeight;
+        _selection = new Rect(imageLeft, imageTop, imageWidth, imageHeight);
+        _hasSelection = true;
+        _scaling = imageWidth > 0 && _annotationBitmap is not null
+            ? _annotationBitmap.PixelSize.Width / imageWidth
+            : 1;
+        _colorSampling = false;
+        _cornerRadius = 0;
+        _annotationSnug = true;
+
+        HideAnnotationChrome();
+
+        // 不遮罩：窗口只覆盖图片和工具条，桌面照常可见、可操作
+        DimLayer.IsVisible = false;
+
+        PlaceAnnotationToolbar();
+
+        // 布局完成后再显示，避免先闪一下默认位置
+        Opacity = 1;
+    }
+
+    /// <summary>当前图片在屏幕上的物理像素矩形（小窗模式用，宿主据此让贴图跟着走）。</summary>
+    private PixelRect? GetAnnotationImageScreenRect()
+    {
+        if (!_annotationSnug || _selection.Width <= 0 || _selection.Height <= 0)
+            return null;
+
+        var scale = RenderScaling > 0 ? RenderScaling : 1;
+
+        return new PixelRect(
+            Position.X + (int)Math.Round(_selection.X * scale),
+            Position.Y + (int)Math.Round(_selection.Y * scale),
+            Math.Max(1, (int)Math.Round(_selection.Width * scale)),
+            Math.Max(1, (int)Math.Round(_selection.Height * scale)));
+    }
+
+    /// <summary>标注模式下把工具条贴在图片正下方（放不下就放上方），并水平对齐图片。</summary>
+    private void PlaceAnnotationToolbar()
+    {
+        if (!ActionBar.IsVisible || _selection.Width <= 0 || Width <= 0)
+            return;
+
+        var size = ActionBar.DesiredSize;
+
+        if (size.Width <= 0 || size.Height <= 0)
+            size = ActionBar.Bounds.Size;
+
+        if (size.Width > 0)
+        {
+            var left = _selection.X + (_selection.Width - size.Width) / 2;
+            left = Math.Clamp(left, 8, Math.Max(8, Width - size.Width - 8));
+
+            if (!IsClose(Canvas.GetLeft(ActionBar), left))
+                Canvas.SetLeft(ActionBar, left);
+        }
+
+        // 垂直位置不依赖工具条宽度：即使首帧还没量出尺寸也能先贴到图片下方，
+        // 布局完成后的回调会再按真实高度校正一次。
+        var top = _selection.Bottom + 10;
+
+        if (size.Height > 0 && top + size.Height > Height - 8)
+            top = Math.Max(8, _selection.Y - size.Height - 10);
+
+        if (!IsClose(Canvas.GetTop(ActionBar), top))
+            Canvas.SetTop(ActionBar, top);
+    }
+
+    private static bool IsClose(double current, double target) =>
+        !double.IsNaN(current) && Math.Abs(current - target) < 0.01;
 
     /// <summary>标注模式只保留标注工具：隐藏选区、角标、遮罩和截图动作。</summary>
     private void HideAnnotationChrome()
     {
         Selection.IsVisible = false;
         SelectionHalo.IsVisible = false;
-        DimLayer.IsVisible = false;
         CrosshairLayer.IsVisible = false;
         CandidateBox.IsVisible = false;
         CandidateBadge.IsVisible = false;
