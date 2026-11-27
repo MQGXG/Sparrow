@@ -58,12 +58,32 @@ public static class VolumeHelper
         return null;
     }
 
-    public static List<string> DetectIndexableLocalDrives() => DriveInfo.GetDrives()
-        .Where(d => d.IsReady && d.DriveType != DriveType.Network && d.Name.Length >= 2)
-        .Select(d => d.Name.Split(':')[0].ToUpperInvariant())
-        .Distinct(StringComparer.OrdinalIgnoreCase)
-        .OrderBy(d => d, StringComparer.OrdinalIgnoreCase)
-        .ToList();
+    public static List<string> DetectIndexableLocalDrives()
+    {
+        // subst / 同一卷的多个盘符会返回相同的卷序列号；
+        // 只保留第一个，避免服务对同一个卷重复建索引、反复失败。
+        var seenSerials = new HashSet<uint>();
+        var result = new List<string>();
+
+        foreach (var drive in DriveInfo.GetDrives())
+        {
+            if (!drive.IsReady || drive.DriveType == DriveType.Network || drive.Name.Length < 2)
+                continue;
+
+            var letter = drive.Name.Split(':')[0].ToUpperInvariant();
+            var identity = GetVolumeIdentity(letter);
+
+            if (identity.HasValue && !seenSerials.Add(identity.Value.SerialNumber))
+                continue;
+
+            result.Add(letter);
+        }
+
+        return result
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(drive => drive, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
 
     public static string GetFileSystemType(string driveLetter)
     {

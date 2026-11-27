@@ -440,8 +440,15 @@ public partial class App : Application
         }
         else if (desktop.Args?.Contains("--quick-search") == true)
         {
-            // 快捷方式/自动化入口：直接打开文件搜索。
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => _quickSearch?.Toggle());
+            // 快捷方式/自动化入口：直接打开文件搜索，并保持窗口不因失焦自动隐藏。
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (_quickSearch is null)
+                    return;
+
+                _quickSearch.AutoHide = false;
+                _quickSearch.Toggle();
+            });
         }
         else if (desktop.Args?.Contains("--setup") == true)
         {

@@ -51,6 +51,10 @@
     <ProjectReference Include="..\Sparrow.Plugin.Sdk\Sparrow.Plugin.Sdk.csproj" />
     <!-- 来源：Lertaro (MIT)。只用于 MFT 索引 / 列式 Snapshot / 查询。 -->
     <ProjectReference Include="..\third_party\Lertaro\Core\Core.csproj" />
+    <!-- 索引服务是独立 exe：只保证构建顺序，不作为运行时程序集引用。 -->
+    <ProjectReference Include="..\Sparrow.IndexService\Sparrow.IndexService.csproj"
+                      ReferenceOutputAssembly="false"
+                      Private="false" />
   </ItemGroup>
 
   <!--
@@ -133,6 +137,20 @@
 
     <!-- 只删文件：MSBuild 的通配符不返回目录，空目录留着不占空间 -->
     <Delete Files="@(_ForeignRuntimeFiles)" ContinueOnError="true" />
+  </Target>
+
+  <!--
+    索引服务是独立 exe：构建后复制到 $(OutDir)index-service/，
+    设置页从这里安装/卸载。服务负责 MFT + USN，宿主只读它写出的 .idx。
+  -->
+  <Target Name="CopyIndexServiceOutput" AfterTargets="Build">
+    <ItemGroup>
+      <_IndexServiceFiles Include="$(MSBuildProjectDirectory)\..\Sparrow.IndexService\bin\$(Configuration)\net10.0-windows\**\*.*" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(_IndexServiceFiles)"
+          DestinationFolder="$(OutDir)index-service\%(RecursiveDir)"
+          SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

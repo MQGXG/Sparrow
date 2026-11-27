@@ -430,6 +430,17 @@
               </ItemsControl.ItemTemplate>
             </ItemsControl>
 
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="20,0,20,10">
+              <Button Classes="ghost"
+                      Content="安装索引服务"
+                      Click="OnInstallIndexServiceClick"
+                      ToolTip.Tip="安装并启动 Windows 索引服务（需要管理员权限）" />
+              <Button Classes="ghost"
+                      Content="卸载索引服务"
+                      Click="OnUninstallIndexServiceClick"
+                      ToolTip.Tip="停止并删除 Windows 索引服务（需要管理员权限）" />
+            </StackPanel>
+
             <Border Classes="hud-line" Margin="20,0" />
 
             <Grid ColumnDefinitions="*,Auto" Margin="20,14">

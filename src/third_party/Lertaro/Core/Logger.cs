@@ -15,25 +15,21 @@ public static class Logger
     private static readonly InstallationMode CurrentInstallationMode = InstallationDetector.Detect();
 
     /// <summary>
-    /// System-wide shared data directory: %ProgramData%\Lertaro for an installed copy, or Data\Machine
-    /// beside a portable copy. A portable copy without Data reuses existing installed data for compatibility.
-    /// Used by the service for logs, index cache, etc.
+    /// System-wide shared data directory: %ProgramData%\Sparrow.
+    /// 原实现跟随 Lertaro 的安装模式；Sparrow 固定用自己的目录，
+    /// 让索引服务和宿主读写同一份索引/设置。
     /// </summary>
-    public static readonly string SharedDataDir = DataDirectoryResolver.ResolveShared(
-        CurrentInstallationMode,
-        AppContext.BaseDirectory,
-        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData));
+    public static readonly string SharedDataDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+        "Sparrow");
 
     /// <summary>
-    /// Per-user data directory. A verified portable copy keeps its data under Data\Users\&lt;SID hash&gt;
-    /// so settings, history, certificates, and per-user caches travel with it without exposing the
-    /// account SID in a path. Without Data it reuses existing %LocalAppData%\Lertaro data for compatibility.
+    /// Per-user data directory: %LocalAppData%\Sparrow。
+    /// 原实现跟随 Lertaro 的便携/安装模式；Sparrow 固定用自己的目录。
     /// </summary>
-    public static readonly string UserDataDir = DataDirectoryResolver.ResolveUser(
-        CurrentInstallationMode,
-        AppContext.BaseDirectory,
+    public static readonly string UserDataDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        CurrentUserIdentity.SidHash);
+        "Sparrow");
 
     private static string _logDir = string.Empty;
     private static string _logPath = string.Empty;

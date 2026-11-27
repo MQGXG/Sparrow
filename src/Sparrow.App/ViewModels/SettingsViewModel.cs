@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using Avalonia;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Sparrow.App.Plugins;
@@ -386,6 +387,72 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         {
             return $"{drive}:";
         }
+    }
+
+    /// <summary>安装索引服务（需要管理员权限，会弹 UAC）。</summary>
+    public void InstallIndexService() => RunIndexServiceCommand("--install", "安装");
+
+    /// <summary>卸载索引服务（需要管理员权限，会弹 UAC）。</summary>
+    public void UninstallIndexService() => RunIndexServiceCommand("--uninstall", "卸载");
+
+    private void RunIndexServiceCommand(string argument, string action)
+    {
+        var exe = FindIndexServiceExe();
+
+        if (exe is null)
+        {
+            StatusMessage = "未找到索引服务程序（index-service\\Sparrow.IndexService.exe）";
+            return;
+        }
+
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo(exe, argument)
+            {
+                Verb = "runas",
+                UseShellExecute = true,
+                CreateNoWindow = true
+            });
+
+            process?.WaitForExit();
+
+            if (process is { ExitCode: 0 })
+            {
+                StatusMessage = $"索引服务{action}成功";
+                _fileIndex?.Rebuild();
+            }
+            else
+            {
+                StatusMessage = $"索引服务{action}返回 {process?.ExitCode}";
+            }
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            // 1223 = 用户在 UAC 里点了“否”
+            StatusMessage = $"索引服务{action}已取消或被拒绝：{ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"索引服务{action}失败：{ex.Message}";
+        }
+    }
+
+    private static string? FindIndexServiceExe()
+    {
+        var candidates = new[]
+        {
+            Path.Combine(
+                AppContext.BaseDirectory,
+                "index-service",
+                "Sparrow.IndexService.exe"),
+            Path.GetFullPath(Path.Combine(
+                AppContext.BaseDirectory,
+                "..", "..", "..", "..",
+                "Sparrow.IndexService", "bin", "Release", "net10.0-windows",
+                "Sparrow.IndexService.exe"))
+        };
+
+        return candidates.FirstOrDefault(File.Exists);
     }
 
     [ObservableProperty]

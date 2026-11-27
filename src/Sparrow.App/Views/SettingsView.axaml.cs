@@ -24,11 +24,23 @@ public partial class SettingsView : UserControl
         Loaded += (_, _) => EnsureDonateImage();
     }
 
-    /// <summary>设置页「重建索引」：删除 snapshot 并重新走一次提权扫描。</summary>
+    /// <summary>设置页「重建索引」：重新读取服务写出的索引文件。</summary>
     private void OnRebuildIndexClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is SettingsViewModel viewModel)
             viewModel.RebuildIndex();
+    }
+
+    private void OnInstallIndexServiceClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is SettingsViewModel viewModel)
+            viewModel.InstallIndexService();
+    }
+
+    private void OnUninstallIndexServiceClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is SettingsViewModel viewModel)
+            viewModel.UninstallIndexService();
     }
 
     /// <summary>

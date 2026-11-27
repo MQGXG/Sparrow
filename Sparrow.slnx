@@ -18,6 +18,7 @@
   <Folder Name="/src/">
     <Project Path="src/Sparrow.App/Sparrow.App.csproj" />
     <Project Path="src/Sparrow.Plugin.Sdk/Sparrow.Plugin.Sdk.csproj" />
+    <Project Path="src/Sparrow.IndexService/Sparrow.IndexService.csproj" />
   </Folder>
   <Folder Name="/third_party/">
     <Project Path="src/third_party/Lertaro/Core/Core.csproj" />

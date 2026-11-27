@@ -22,6 +22,9 @@ public partial class QuickSearchWindow : Window
 
     private DateTime _shownAt;
 
+    /// <summary>失焦时是否自动隐藏；--quick-search 调试/快捷方式入口会关掉。</summary>
+    public bool AutoHide { get; set; } = true;
+
     /// <summary>设计器需要的无参构造。</summary>
     public QuickSearchWindow()
     {
@@ -79,6 +82,9 @@ public partial class QuickSearchWindow : Window
 
     private void OnWindowDeactivated(object? sender, EventArgs e)
     {
+        if (!AutoHide)
+            return;
+
         if ((DateTime.UtcNow - _shownAt).TotalMilliseconds < DeactivateGraceMilliseconds)
             return;
 
