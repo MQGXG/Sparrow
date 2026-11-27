@@ -340,23 +340,67 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
     /// <summary>设置页的索引盘选项。</summary>
     public ObservableCollection<IndexDriveOptionViewModel> IndexDriveOptions { get; } = [];
 
-    /// <summary>用户勾选/取消索引盘后保存；重启生效。</summary>
+    /// <summary>用户勾选/取消索引盘后保存，并同步给索引服务。</summary>
     private void SaveIndexedDrives()
     {
         if (_initializingIndexDrives)
             return;
 
-        var selected = IndexDriveOptions
+        var selectedDrives = IndexDriveOptions
             .Where(option => option.IsSelected)
             .Select(option => option.Drive)
             .ToArray();
 
-        _settings = _settings with { IndexedDrives = selected };
+        _settings = _settings with { IndexedDrives = selectedDrives };
         _store.Save(_settings);
 
-        StatusMessage = selected.Length == 0
-            ? "索引磁盘已清空；重启 Sparrow 后生效"
-            : $"索引磁盘已更新：{string.Join("、", selected)}；重启 Sparrow 后生效";
+        StatusMessage = ApplyDriveSelectionToService(selectedDrives);
+    }
+
+    /// <summary>
+    /// 把盘符选择交给服务：服务返回的 SetMachineSettings 只接受管理员调用，
+    /// 所以这里用管理员权限启动服务 exe 的 --set-drives 入口。
+    /// </summary>
+    private static string ApplyDriveSelectionToService(IReadOnlyList<string> selectedDrives)
+    {
+        var serviceExe = FindIndexServiceExe();
+
+        if (serviceExe is null)
+            return "未找到索引服务程序；索引盘设置已保存";
+
+        try
+        {
+            var drives = string.Join(",", selectedDrives);
+
+            using var process = Process.Start(new ProcessStartInfo(
+                serviceExe,
+                $"--set-drives \"{drives}\"")
+            {
+                Verb = "runas",
+                UseShellExecute = true,
+                CreateNoWindow = true
+            });
+
+            if (process is null)
+                return "索引盘设置已保存，但无法启动索引服务";
+
+            process.WaitForExit();
+
+            return process.ExitCode == 0
+                ? selectedDrives.Count == 0
+                    ? "已停止索引所有磁盘"
+                    : $"索引磁盘已更新：{string.Join("、", selectedDrives)}"
+                : "索引盘设置已保存，但服务应用失败";
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            // 1223 = 用户在 UAC 里点了“否”
+            return $"索引盘设置已保存；服务同步已取消：{ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            return $"索引盘设置已保存，但同步到服务失败：{ex.Message}";
+        }
     }
 
     /// <summary>删除现有索引并重建；首次会弹出管理员确认。</summary>

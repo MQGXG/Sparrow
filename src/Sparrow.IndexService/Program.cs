@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.ServiceProcess;
 using Lertaro.Core;
+using Lertaro.Core.Indexer.Usn;
 
 namespace Sparrow.IndexService;
 
@@ -33,6 +34,10 @@ internal static class Program
             probe.StopConsole();
             return 0;
         }
+
+        var setDrives = GetStringArg(args, "--set-drives");
+        if (!string.IsNullOrWhiteSpace(setDrives))
+            return SetDrives(setDrives);
 
         if (HasFlag(args, "--console"))
         {
@@ -117,6 +122,77 @@ internal static class Program
 
     private static bool HasFlag(string[] args, string flag) =>
         args.Any(arg => arg.Equals(flag, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// 管理员入口：写入机器级索引盘配置，删除未选盘缓存，然后重启服务让配置生效。
+    /// 不走管道，因为服务的 SetMachineSettings 只认 Lertaro.App.exe（Sparrow 进程名不同）。
+    /// </summary>
+    private static int SetDrives(string value)
+    {
+        var drives = value
+            .Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(drive => drive.TrimEnd('\\', ':', '/').ToUpperInvariant())
+            .Where(drive => drive.Length == 1)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var volumeIds = drives
+            .Select(VolumeHelper.GetVolumeId)
+            .OfType<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var settings = new MachineSettings
+        {
+            LocalDrives = volumeIds,
+            LocalDriveSelectionConfigured = true
+        };
+
+        settings.Save();
+
+        // 先停服务，否则 .idx 还被 mmap 占用，删除会失败
+        Run("sc.exe", "stop SparrowIndexService");
+
+        try
+        {
+            using var controller = new ServiceController("SparrowIndexService");
+            controller.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(15));
+        }
+        catch
+        {
+            // 服务可能本来就没有运行
+        }
+
+        // 取消的盘：删掉索引缓存，释放磁盘和后续加载
+        var cacheDir = Path.Combine(Logger.SharedDataDir, "indexes");
+
+        try
+        {
+            foreach (var cached in LocalDriveCacheLocator.ListCachedDrives(cacheDir))
+            {
+                if (!drives.Contains(cached.Drive, StringComparer.OrdinalIgnoreCase))
+                    LocalDriveCacheLocator.Delete(cacheDir, cached.Drive);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"清理未选盘索引失败：{ex.Message}");
+        }
+
+        // 重启服务，让服务按新的盘列表重新加载/构建
+        return Run("sc.exe", "start SparrowIndexService");
+    }
+
+    private static string? GetStringArg(string[] args, string name)
+    {
+        for (var i = 0; i < args.Length - 1; i++)
+        {
+            if (args[i].Equals(name, StringComparison.OrdinalIgnoreCase))
+                return args[i + 1];
+        }
+
+        return null;
+    }
 
     private static int GetIntArg(string[] args, string name)
     {

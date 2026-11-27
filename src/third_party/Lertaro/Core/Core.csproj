@@ -28,6 +28,7 @@
     <!-- Sparrow 宿主与提权索引进程需要直接调用 MFT / Snapshot 的内部 API -->
     <InternalsVisibleTo Include="Sparrow.App" />
     <InternalsVisibleTo Include="Sparrow.IndexBuilder" />
+    <InternalsVisibleTo Include="Sparrow.IndexService" />
   </ItemGroup>
 
   <ItemGroup>
