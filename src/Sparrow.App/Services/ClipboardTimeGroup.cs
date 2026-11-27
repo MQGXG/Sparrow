@@ -11,7 +11,9 @@ public static class ClipboardTimeGroup
 
     public static string Resolve(DateTimeOffset createdAt, DateTimeOffset now)
     {
-        if (createdAt.LocalDateTime.Date == now.LocalDateTime.Date)
+        // 【修改】以调用方传入的 now 偏移判定“今天”，而不是进程本地时区。
+        // CI 通常运行在 UTC，若用 LocalDateTime，+08 时区凌晨的条目会被算成昨天。
+        if (createdAt.ToOffset(now.Offset).Date == now.Date)
             return Today;
 
         var age = now - createdAt;

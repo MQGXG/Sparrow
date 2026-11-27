@@ -84,12 +84,20 @@ public sealed partial class CaptureWindowTests
     {
         var window = CreateWithSelection();
 
+        // 原选区右边 = 100 + 200，拉伸左边时它必须钉住
+        var right = Canvas.GetLeft(window.Selection) + window.Selection.Width;
+
         window.MouseDown(new Point(100, 175), MouseButton.Left);
         window.MouseMove(new Point(50, 175));
         window.MouseUp(new Point(50, 175), MouseButton.Left);
 
-        Canvas.GetLeft(window.Selection).ShouldBe(50, 0.01);
-        window.Selection.Width.ShouldBe(250, 0.01);
+        // 【修改】左边可能被吸附参考线拉近（真实桌面的窗口边/屏幕中线，
+        // 最多 SnapGuides.Tolerance），因此左边和宽度按吸附阈值断言；
+        // 这条测试真正要守住的是“右边不动”。
+        Canvas.GetLeft(window.Selection).ShouldBe(50, SnapGuides.Tolerance);
+        window.Selection.Width.ShouldBe(250, SnapGuides.Tolerance);
+        (Canvas.GetLeft(window.Selection) + window.Selection.Width)
+            .ShouldBe(right, 0.01);
 
         window.Close();
     }

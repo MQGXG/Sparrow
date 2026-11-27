@@ -27,9 +27,8 @@ public sealed class OcrBatchIntegrationTests
     [Fact]
     public async Task 真实worker_一次会话识别多张()
     {
-        var repoRoot = FindRepoRoot();
-        var pluginDirectory = Path.Combine(
-            repoRoot, "plugins", "sparrow.plugin.ocr", "bin", "Debug", "net10.0");
+        // 【修改】按当前测试程序集的构建配置找插件，避免 CI 的 Release 构建去 Debug 目录找。
+        var pluginDirectory = TestRepoPaths.PluginOutput("sparrow.plugin.ocr", "net10.0");
 
         Directory.Exists(pluginDirectory).ShouldBeTrue(
             $"OCR 插件没有构建：{pluginDirectory}");
@@ -77,20 +76,6 @@ public sealed class OcrBatchIntegrationTests
                 // 临时目录留给系统清理
             }
         }
-    }
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (directory is not null &&
-               !File.Exists(Path.Combine(directory.FullName, "Sparrow.slnx")))
-        {
-            directory = directory.Parent;
-        }
-
-        return directory?.FullName
-            ?? throw new InvalidOperationException("找不到仓库根目录（Sparrow.slnx）");
     }
 
     private static byte[] CreatePng(string word)
