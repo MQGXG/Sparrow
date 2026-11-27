@@ -13,16 +13,25 @@ internal static class RecordingClipboard
     private const uint GmemMoveable = 0x0002;
 
     /// <summary>复制文件到剪贴板；文件不存在或系统拒绝时返回 false。</summary>
-    public static bool CopyFile(string path)
+    public static bool CopyFile(string path) => CopyPaths([path]);
+
+    /// <summary>复制多个文件/文件夹到剪贴板，资源管理器里可以直接粘贴。</summary>
+    public static bool CopyPaths(IEnumerable<string> paths)
     {
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        var existing = paths
+            .Where(path =>
+                !string.IsNullOrWhiteSpace(path)
+                && (File.Exists(path) || Directory.Exists(path)))
+            .ToArray();
+
+        if (existing.Length == 0)
             return false;
 
         byte[] payload;
 
         try
         {
-            payload = BuildDropFiles(path);
+            payload = BuildDropFiles(existing);
         }
         catch
         {
@@ -75,11 +84,11 @@ internal static class RecordingClipboard
         }
     }
 
-    /// <summary>DROPFILES 头 + 双 null 结尾的 UTF-16 路径。</summary>
-    private static byte[] BuildDropFiles(string path)
+    /// <summary>DROPFILES 头 + 双 null 结尾的 UTF-16 路径列表。</summary>
+    private static byte[] BuildDropFiles(IReadOnlyList<string> paths)
     {
         const int headerSize = 20;
-        var file = Encoding.Unicode.GetBytes(path + "\0\0");
+        var file = Encoding.Unicode.GetBytes(string.Join("\0", paths) + "\0\0");
         var buffer = new byte[headerSize + file.Length];
 
         BitConverter.GetBytes(headerSize).CopyTo(buffer, 0); // pFiles：路径相对本结构的偏移

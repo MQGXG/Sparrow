@@ -1,12 +1,13 @@
 using System.Collections.ObjectModel;
-using CommunityToolkit.Mvvm.ComponentModel;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using CommunityToolkit.Mvvm.ComponentModel;
 using Sparrow.App.Services;
 
 namespace Sparrow.App.ViewModels;
 
 /// <summary>文件搜索结果的一行。</summary>
-public sealed class FileSearchItemViewModel
+public partial class FileSearchItemViewModel : ObservableObject
 {
     public FileSearchItemViewModel(FileSearchItem item, string highlightTerm)
     {
@@ -28,6 +29,14 @@ public sealed class FileSearchItemViewModel
     public string HighlightTerm { get; }
 
     public bool IsFile => !IsDirectory;
+
+    /// <summary>Shell 文件类型图标；后台加载，未完成时为 null（显示几何占位）。</summary>
+    [ObservableProperty]
+    private Bitmap? _icon;
+
+    public bool HasIcon => Icon is not null;
+
+    partial void OnIconChanged(Bitmap? value) => OnPropertyChanged(nameof(HasIcon));
 }
 
 /// <summary>
@@ -114,12 +123,38 @@ public partial class QuickSearchViewModel : ObservableObject
 
         Items.Clear();
 
+        var views = new List<FileSearchItemViewModel>(results.Count);
+
         foreach (var item in results)
-            Items.Add(new FileSearchItemViewModel(item, query));
+        {
+            var view = new FileSearchItemViewModel(item, query);
+            views.Add(view);
+            Items.Add(view);
+        }
 
         Selected = Items.FirstOrDefault();
         IsEmpty = Items.Count == 0;
         StatusText = BuildStatus(results.Count);
+
+        // 图标在后台按扩展名加载；同一类型命中缓存后几乎无开销
+        _ = LoadIconsAsync(views);
+    }
+
+    private static async Task LoadIconsAsync(
+        IReadOnlyList<FileSearchItemViewModel> items)
+    {
+        await Task.Run(() =>
+        {
+            foreach (var item in items)
+            {
+                var icon = ShellIconProvider.GetIcon(item.FullPath, item.IsDirectory);
+
+                if (icon is null)
+                    continue;
+
+                Dispatcher.UIThread.Post(() => item.Icon = icon);
+            }
+        });
     }
 
     private string BuildStatus(int shown)

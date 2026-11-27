@@ -1,10 +1,12 @@
 using System.Diagnostics;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Sparrow.App.Services;
+using Sparrow.App.Services.Recording;
 using Sparrow.App.ViewModels;
 
 namespace Sparrow.App.Views;
@@ -24,6 +26,15 @@ public partial class QuickSearchWindow : Window
 
     /// <summary>失焦时是否自动隐藏；--quick-search 调试/快捷方式入口会关掉。</summary>
     public bool AutoHide { get; set; } = true;
+
+    // 结果项拖拽：按下记录起点，移动超过阈值才启动，避免普通点击被当成拖拽
+    private PointerPressedEventArgs? _dragPress;
+    private FileSearchItemViewModel? _dragItem;
+    private Point _dragOrigin;
+    private bool _dragStarted;
+
+    // 复制完整路径用宿主现有的 Win32 剪贴板实现（Avalonia 12 的 IClipboard 没有 SetTextAsync）
+    private readonly Win32Clipboard _clipboard = new();
 
     /// <summary>设计器需要的无参构造。</summary>
     public QuickSearchWindow()
@@ -128,6 +139,19 @@ public partial class QuickSearchWindow : Window
                 MoveSelection(10);
                 e.Handled = true;
                 return;
+
+            case Key.C when e.KeyModifiers.HasFlag(KeyModifiers.Control):
+                // 搜索框聚焦时，Ctrl+C 保留给输入框复制文本
+                if (SearchBox.IsFocused && !e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+                    return;
+
+                if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+                    CopySelectedPath();
+                else
+                    CopySelectedFile();
+
+                e.Handled = true;
+                return;
         }
     }
 
@@ -141,6 +165,106 @@ public partial class QuickSearchWindow : Window
         var index = Math.Clamp(ResultList.SelectedIndex + delta, 0, count - 1);
         ResultList.SelectedIndex = index;
         ResultList.ScrollIntoView(index);
+    }
+
+    /// <summary>Ctrl+C：把选中的文件/文件夹放进剪贴板，资源管理器可直接粘贴。</summary>
+    private void CopySelectedFile()
+    {
+        if (DataContext is not QuickSearchViewModel { Selected: { } selected } viewModel)
+            return;
+
+        var copied = RecordingClipboard.CopyPaths([selected.FullPath]);
+
+        viewModel.StatusText = copied
+            ? $"已复制：{selected.Name}"
+            : "复制失败（文件可能已不存在）";
+    }
+
+    /// <summary>Ctrl+Shift+C：复制完整路径文本。</summary>
+    private void CopySelectedPath()
+    {
+        if (DataContext is not QuickSearchViewModel { Selected: { } selected } viewModel)
+            return;
+
+        var copied = _clipboard.SetText(selected.FullPath);
+        viewModel.StatusText = copied ? "已复制完整路径" : "复制路径失败";
+    }
+
+    private void OnResultPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(ResultList).Properties.IsLeftButtonPressed)
+            return;
+
+        if (e.Source is not Control { DataContext: FileSearchItemViewModel item })
+            return;
+
+        _dragPress = e;
+        _dragItem = item;
+        _dragOrigin = e.GetPosition(this);
+        _dragStarted = false;
+    }
+
+    private async void OnResultPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_dragPress is null || _dragItem is null || _dragStarted)
+            return;
+
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            ResetDrag();
+            return;
+        }
+
+        var position = e.GetPosition(this);
+        if (Math.Abs(position.X - _dragOrigin.X) < 8
+            && Math.Abs(position.Y - _dragOrigin.Y) < 8)
+        {
+            return;
+        }
+
+        _dragStarted = true;
+
+        var press = _dragPress;
+        var item = _dragItem;
+
+        try
+        {
+            var drag = await ClipboardDragService.CreateFilesAsync(
+                [item.FullPath],
+                StorageProvider,
+                ClipboardDragMode.FileOnly);
+
+            if (drag is null)
+                return;
+
+            try
+            {
+                await DragDrop.DoDragDropAsync(
+                    press, drag.Transfer, DragDropEffects.Copy);
+            }
+            finally
+            {
+                drag.Lifetime?.Dispose();
+            }
+        }
+        catch
+        {
+            // 目标应用拒绝拖放，不影响搜索
+        }
+        finally
+        {
+            ResetDrag();
+        }
+    }
+
+    private void OnResultPointerReleased(object? sender, PointerReleasedEventArgs e) =>
+        ResetDrag();
+
+    private void ResetDrag()
+    {
+        _dragPress = null;
+        _dragItem = null;
+        _dragStarted = false;
     }
 
     /// <summary>回车打开文件/文件夹；Ctrl+Enter 在资源管理器中定位。</summary>

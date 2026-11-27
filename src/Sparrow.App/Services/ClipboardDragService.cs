@@ -171,10 +171,14 @@ public static class ClipboardDragService
         return new ClipboardDragData(transfer, bitmap);
     }
 
-    private static async Task<ClipboardDragData?> CreateFilesAsync(
+    /// <summary>
+    /// 把一组文件/文件夹打包成拖拽数据。
+    /// 文件夹用 TryGetFolderFromPathAsync，否则资源管理器会把它当成文件。
+    /// </summary>
+    public static async Task<ClipboardDragData?> CreateFilesAsync(
         IReadOnlyList<string> paths,
         IStorageProvider? storage,
-        ClipboardDragMode mode)
+        ClipboardDragMode mode = ClipboardDragMode.All)
     {
         // 文件条目没有「内联内容」形态，任何模式下都按文件拖
         if (storage is null)
@@ -185,14 +189,17 @@ public static class ClipboardDragService
 
         foreach (var path in paths)
         {
-            if (!File.Exists(path))
+            IStorageItem? item = null;
+
+            if (File.Exists(path))
+                item = await storage.TryGetFileFromPathAsync(path);
+            else if (Directory.Exists(path))
+                item = await storage.TryGetFolderFromPathAsync(path);
+
+            if (item is null)
                 continue;
 
-            var file = await storage.TryGetFileFromPathAsync(path);
-            if (file is null)
-                continue;
-
-            transfer.Add(DataTransferItem.CreateFile(file));
+            transfer.Add(DataTransferItem.CreateFile(item));
             added = true;
         }
 
