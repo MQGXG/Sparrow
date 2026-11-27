@@ -182,11 +182,64 @@ internal sealed class ScrollStitcher : IScrollStitcher
         if (newRows <= 0)
             return AppendOutcome.Duplicate;
 
+        // 和 snow-shot 的 Append 一样：先用新帧覆盖尾部重叠区，再追加新增行。
+        // 只追加新增行时，相邻帧的亚像素 / 抗锯齿差异会在接缝处留下一条横线。
+        var fixedTop = ScrollOffsetMatcher.DetectFixedLeading(
+            _previousHashes, hashes, _frameHeight);
+
+        OverwriteTrailingRows(frame, offset, contentBottom, fixedTop);
+
         var before = TotalRows;
         AppendRows(frame, firstNewRow, contentBottom);
         _previousHashes = hashes;
         addedRows = TotalRows - before;
         return AppendOutcome.Added;
+    }
+
+    /// <summary>
+    /// 用新帧覆盖画布尾部的重叠区。
+    /// 覆盖量取 snow-shot 的 band 策略：至少半屏，滚动量大时用四分之一屏 + 位移；
+    /// 同时不能越过固定页眉，避免把页眉写进内容区。
+    /// </summary>
+    private void OverwriteTrailingRows(
+        byte[] frame, int offset, int contentBottom, int fixedTop)
+    {
+        // 与 snow-shot 的 band_height 一致：至少半个内容区，
+        // 滚动量大时用四分之一内容区 + 位移
+        var band = Math.Max(contentBottom / 2, contentBottom / 4 + offset);
+
+        // 覆盖量受三方面限制：画布已有行数、新帧可用的重叠行数、固定页眉
+        var available = Math.Min(contentBottom - offset - fixedTop, band - offset);
+        var rows = Math.Min(TotalRows, available);
+
+        if (rows <= 0)
+            return;
+
+        var sourceStart = contentBottom - rows - offset;
+        var canvasStart = TotalRows - rows;
+
+        for (var i = 0; i < rows; i++)
+        {
+            WriteRow(
+                canvasStart + i,
+                frame.AsSpan((sourceStart + i) * _stride, _stride));
+        }
+    }
+
+    /// <summary>把一行写到画布指定位置：覆盖已有行，不改变 TotalRows。</summary>
+    private void WriteRow(int index, ReadOnlySpan<byte> row)
+    {
+        if (index < 0 || index >= TotalRows)
+            return;
+
+        if (_file is not null)
+        {
+            RandomAccess.Write(_file, row, (long)index * _stride);
+            return;
+        }
+
+        if (index < _rows.Count)
+            row.CopyTo(_rows[index].AsSpan(0, _stride));
     }
 
     /// <summary>把累积的行编码成 PNG。没有内容时返回 null。</summary>

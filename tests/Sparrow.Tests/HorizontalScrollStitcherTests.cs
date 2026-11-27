@@ -103,6 +103,21 @@ public sealed class HorizontalScrollStitcherTests
         return frame;
     }
 
+    /// <summary>把某一列改成灰色，模拟帧间渲染差异。</summary>
+    private static void RecolorColumn(byte[] frame, int x)
+    {
+        var stride = FrameWidth * 4;
+
+        for (var y = 0; y < Height; y++)
+        {
+            var i = y * stride + x * 4;
+            frame[i] = 0x7F;
+            frame[i + 1] = 0x7F;
+            frame[i + 2] = 0x7F;
+            frame[i + 3] = 255;
+        }
+    }
+
     private static void PaintFixedColumn(byte[] frame, int x, byte tag, int factor)
     {
         var stride = FrameWidth * 4;
@@ -115,6 +130,33 @@ public sealed class HorizontalScrollStitcherTests
             frame[i + 2] = (byte)((x * factor) % 256);
             frame[i + 3] = 255;
         }
+    }
+
+    [Fact]
+    public void 重叠区用新帧覆盖_避免接缝竖线()
+    {
+        var canvas = Canvas();
+        var stitcher = new HorizontalScrollStitcher(FrameWidth, Height);
+
+        stitcher.Append(Frame(canvas, 0), out _).ShouldBe(AppendOutcome.Added);
+
+        // 第二帧向右滚 30 列，同时把重叠区的一列改成灰色，模拟两帧之间的
+        // 亚像素 / 抗锯齿差异。只追加新增列时，这一列会留在旧帧里形成接缝。
+        var next = Frame(canvas, 30);
+        RecolorColumn(next, 50);
+
+        stitcher.Append(next, out _).ShouldBe(AppendOutcome.Added);
+
+        var png = stitcher.BuildPng();
+        png.ShouldNotBeNull();
+
+        using var bitmap = SKBitmap.Decode(png);
+
+        // 新帧 x=50 对应页面第 80 列；覆盖生效后画布第 80 列应来自新帧
+        var pixel = bitmap.GetPixel(80, 0);
+        ((int)pixel.Red).ShouldBe(0x7F);
+        ((int)pixel.Green).ShouldBe(0x7F);
+        ((int)pixel.Blue).ShouldBe(0x7F);
     }
 
     [Fact]

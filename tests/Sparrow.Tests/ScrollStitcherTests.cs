@@ -122,6 +122,33 @@ public sealed class ScrollStitcherTests
     }
 
     [Fact]
+    public void 重叠区用新帧覆盖_避免接缝横线()
+    {
+        var canvas = Canvas(400);
+        var stitcher = new ScrollStitcher(Width, FrameHeight);
+
+        stitcher.Append(Frame(canvas, 0), out _).ShouldBe(AppendOutcome.Added);
+
+        // 第二帧滚动 30 行，同时把重叠区的一行改成灰色，模拟两帧之间的
+        // 亚像素 / 抗锯齿差异。只追加新增行时，这一行会留在旧帧里形成接缝。
+        var next = Frame(canvas, 30);
+        RecolorRow(next, 50);
+
+        stitcher.Append(next, out _).ShouldBe(AppendOutcome.Added);
+
+        var png = stitcher.BuildPng();
+        png.ShouldNotBeNull();
+
+        using var bitmap = SKBitmap.Decode(png);
+
+        // 新帧 y=50 对应页面第 80 行；覆盖生效后画布第 80 行应来自新帧
+        var pixel = bitmap.GetPixel(0, 80);
+        ((int)pixel.Red).ShouldBe(0x7F);
+        ((int)pixel.Green).ShouldBe(0x7F);
+        ((int)pixel.Blue).ShouldBe(0x7F);
+    }
+
+    [Fact]
     public void 连续滚动_按新增部分拼接()
     {
         var canvas = Canvas(400);

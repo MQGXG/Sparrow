@@ -120,11 +120,40 @@ internal sealed class HorizontalScrollStitcher : IScrollStitcher
         if (newColumns <= 0)
             return AppendOutcome.Duplicate;
 
+        // 和纵向一致：先用新帧覆盖尾部重叠区，再追加新增列，避免接缝竖线
+        var fixedLeft = ScrollOffsetMatcher.DetectFixedLeading(
+            _previousHashes, hashes, _frameWidth);
+
+        OverwriteTrailingColumns(frame, offset, contentRight, fixedLeft);
+
         var before = TotalRows;
         AppendColumns(frame, firstNewColumn, contentRight);
         _previousHashes = hashes;
         addedRows = TotalRows - before;
         return AppendOutcome.Added;
+    }
+
+    /// <summary>
+    /// 用新帧覆盖画布尾部的重叠区，覆盖量与纵向的 band 策略一致。
+    /// 同时不能越过固定左栏，避免把固定栏写进内容区。
+    /// </summary>
+    private void OverwriteTrailingColumns(
+        byte[] frame, int offset, int contentRight, int fixedLeft)
+    {
+        // 与纵向一致：至少半个内容区，滚动量大时用四分之一内容区 + 位移
+        var band = Math.Max(contentRight / 2, contentRight / 4 + offset);
+
+        var available = Math.Min(contentRight - offset - fixedLeft, band - offset);
+        var columns = Math.Min(_columns.Count, available);
+
+        if (columns <= 0)
+            return;
+
+        var sourceStart = contentRight - columns - offset;
+        var canvasStart = _columns.Count - columns;
+
+        for (var i = 0; i < columns; i++)
+            _columns[canvasStart + i] = ExtractColumn(frame, sourceStart + i);
     }
 
     /// <summary>把累积的列编码成 PNG。没有内容时返回 null。</summary>
@@ -274,22 +303,28 @@ internal sealed class HorizontalScrollStitcher : IScrollStitcher
                 return;
             }
 
-            var column = new byte[columnBytes];
-
-            for (var y = 0; y < _height; y++)
-            {
-                var source = y * _stride + x * 4;
-                var target = y * 4;
-
-                column[target] = frame[source];
-                column[target + 1] = frame[source + 1];
-                column[target + 2] = frame[source + 2];
-                column[target + 3] = 255;
-            }
-
-            _columns.Add(column);
+            _columns.Add(ExtractColumn(frame, x));
             _pixelBytes += columnBytes;
         }
+    }
+
+    /// <summary>把帧里的某一列取出来，存成独立的一块像素。</summary>
+    private byte[] ExtractColumn(byte[] frame, int x)
+    {
+        var column = new byte[_height * 4];
+
+        for (var y = 0; y < _height; y++)
+        {
+            var source = y * _stride + x * 4;
+            var target = y * 4;
+
+            column[target] = frame[source];
+            column[target + 1] = frame[source + 1];
+            column[target + 2] = frame[source + 2];
+            column[target + 3] = 255;
+        }
+
+        return column;
     }
 
     /// <summary>把第 index 行从各列里拼出来，交给流式 PNG 编码器。</summary>
