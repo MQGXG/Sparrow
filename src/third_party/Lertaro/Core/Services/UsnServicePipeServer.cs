@@ -1,12 +1,8 @@
 using System.IO.Pipes;
 
-using Lertaro.Core.Services.HookLaunch;
-
 using Lertaro.Core.Services.Pipe;
 
 using Lertaro.Core.Services.Search;
-
-using Lertaro.Core.Services.Update;
 
 using Lertaro.Core.Wire;
 namespace Lertaro.Core.Services;
@@ -121,22 +117,6 @@ public sealed class UsnServicePipeServer : IDisposable
                     if (request.Id == SearchRequestId.SubscribeDirectoryChanges)
                     {
                         await DirectoryChangeSubscription.ServeAsync(pipe, _engine, request.Directories, visibility, token).ConfigureAwait(false);
-                        continue;
-                    }
-
-                    if (request.Id == SearchRequestId.LaunchHook)
-                    {
-                        var hookResponse = HookLaunchRequestHandler.Handle(pipe, request.RequestElevation);
-                        await WriteControlResponseAsync(pipe, hookResponse, token);
-                        if (verboseLog)
-                            Logger.Log("[PipeServer] Response sent.", LogLevel.Debug);
-                        continue;
-                    }
-
-                    if (request.Id == SearchRequestId.ApplyUpdate)
-                    {
-                        var updateResponse = UpdateApplyRequestHandler.Handle(pipe, request.UpdateSourceDir);
-                        await WriteControlResponseAsync(pipe, updateResponse, token);
                         continue;
                     }
 

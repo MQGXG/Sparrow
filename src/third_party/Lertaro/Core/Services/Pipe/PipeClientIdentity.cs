@@ -3,7 +3,6 @@ using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.Security.Principal;
 using Microsoft.Win32.SafeHandles;
-using Lertaro.Core.Services.HookLaunch;
 
 namespace Lertaro.Core.Services.Pipe;
 
@@ -16,11 +15,49 @@ internal static partial class PipeClientIdentity
     {
         try
         {
-            if (!TryGetClientProcessId(pipe, out var pid) || !HookLaunchRequestHandler.IsGenuineAppProcess(pid))
+            if (!TryGetClientProcessId(pipe, out var pid) || !IsGenuineAppProcess(pid))
                 return false;
             return !administrator || IsAdministratorAccount(pid);
         }
         catch { return false; }
+    }
+
+    /// <summary>
+    /// 调用方必须是 Sparrow 宿主：进程名 Sparrow.App.exe，且位于服务目录的父目录
+    /// （安装布局：App 在根目录，服务在 index-service 子目录）。
+    /// </summary>
+    private static bool IsGenuineAppProcess(int pid)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            var callerPath = process.MainModule?.FileName;
+
+            if (string.IsNullOrEmpty(callerPath) ||
+                !Path.GetFileName(callerPath).Equals("Sparrow.App.exe", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var servicePath = Process.GetCurrentProcess().MainModule?.FileName;
+            var serviceDir = string.IsNullOrEmpty(servicePath)
+                ? null
+                : Path.GetDirectoryName(Path.GetFullPath(servicePath));
+            var callerDir = Path.GetDirectoryName(Path.GetFullPath(callerPath));
+
+            if (serviceDir is null || callerDir is null)
+                return false;
+
+            return string.Equals(serviceDir, callerDir, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(
+                    serviceDir,
+                    Path.Combine(callerDir, "index-service"),
+                    StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     internal static bool IsAdministratorAccount(int pid)

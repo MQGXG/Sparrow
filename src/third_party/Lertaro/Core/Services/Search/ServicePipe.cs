@@ -1,6 +1,6 @@
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
-using Lertaro.Core.Hook.Ipc;
+using Microsoft.Win32.SafeHandles;
 
 namespace Lertaro.Core.Services.Search;
 
@@ -24,7 +24,7 @@ namespace Lertaro.Core.Services.Search;
 internal static class ServicePipe
 {
     public const string Name = "LertaroPipe";
-    private const string ServiceName = "LertaroService";
+    private const string ServiceName = "SparrowIndexService";
 
     // ponytail: a debug build also talks to the service run from a console (Service\Program.cs's fallback),
     // which the SCM knows nothing about. It is accepted only while the SCM reports no running service, so
@@ -46,7 +46,7 @@ internal static class ServicePipe
         try
         {
             await pipe.ConnectAsync(timeoutMs, token).ConfigureAwait(false);
-            var serverPid = HookPipePeer.TryGetServerProcessId(pipe);
+            var serverPid = TryGetServerProcessId(pipe);
             var servicePid = QueryServiceProcessId();
             if (!IsTrustedServer(serverPid, servicePid, AllowUnregisteredServer))
             {
@@ -92,6 +92,16 @@ internal static class ServicePipe
         }
         return false;
     }
+
+    private static int? TryGetServerProcessId(NamedPipeClientStream pipe)
+    {
+        return GetNamedPipeServerProcessId(pipe.SafePipeHandle, out var pid)
+            ? (int)pid
+            : null;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetNamedPipeServerProcessId(SafeHandle pipe, out uint serverProcessId);
 
     private static ServiceStatusProcess QueryServiceState()
     {
