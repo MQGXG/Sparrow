@@ -1,0 +1,257 @@
+namespace Lertaro.Core;
+
+public class UserSettings
+{
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public Dictionary<string, System.Text.Json.JsonElement>? AdditionalSettings { get; set; }
+    public List<NetworkDriveSetting> NetworkDrives { get; set; } = new();
+    public List<WslSetting> WslSettings { get; set; } = new();
+    public List<FolderIndexSetting> FolderIndexes { get; set; } = new();
+    public DefaultFileManagerSetting DefaultFileManager { get; set; } = new();
+    public List<FavoriteItemSetting> Favorites { get; set; } = new();
+    public List<string> ExcludedPaths { get; set; } = new()
+    {
+        "%SystemDrive%\\Windows.old",
+        "%ProgramData%",
+        "%SystemRoot%",
+        "%ProgramW6432%",
+        "%USERPROFILE%\\AppData",
+        "%ProgramFiles(x86)%"
+    };
+    public List<string> IgnoredPathGlobs { get; set; } = new()
+    {
+        ".*",
+        "~*",
+        "\\$*",
+        "node_modules"
+    };
+    public List<string> IgnoredPathRegexes { get; set; } = new();
+
+    /// <summary>
+    /// The unified index rules. Null means "this settings file predates the field" and is the migration
+    /// signal: <see cref="IndexRuleMigration.Ensure"/> derives the list from the three legacy fields
+    /// above exactly once, in memory. An empty list is a deliberate "no rules" and is never remigrated.
+    /// The legacy fields are kept and rewritten on save so an older build still excludes what it can.
+    /// </summary>
+    public List<IndexRuleSetting>? IndexRules { get; set; }
+    public int IndexRuleDefaultsVersion { get; set; }
+    public List<string> BlacklistedProcesses { get; set; } = new();
+    public bool EnableHistory { get; set; } = true;
+
+    /// <summary>
+    /// Offers the quick-window "export this page's ranking details" action. The trace is kept in memory
+    /// only; enabling this never writes a log file.
+    /// </summary>
+    public bool EnableRankingDetailsExport { get; set; } = true;
+    public bool EnableKeywordHistory { get; set; } = true;
+    public bool StartWithWindows { get; set; } = true;
+
+    /// <summary>
+    /// Whether the App asks the service for an elevated hook at all. Off by default, because the elevation is
+    /// handed over without ever showing a prompt -- the service swaps in the session's UAC-linked admin token
+    /// -- and an ordinary-integrity hook does everything except touch programs that themselves run as
+    /// administrator, whose keystrokes it cannot see and whose Open/Save dialogs it cannot write a path into.
+    /// Read once per hook launch, so changing it takes effect when the hook is relaunched, not on restart.
+    /// </summary>
+    public bool RequestElevatedHook { get; set; } = false;
+    public bool AutoCheckUpdates { get; set; } = true;
+    public bool AutoSilentUpdate { get; set; } = false;
+    /// <summary>
+    /// Prefixes a GitHub release download is tried through, in order, before its own address. Empty means
+    /// straight to GitHub. A release resolved from GitLab never uses these. Persistence normalizes the
+    /// list to at most <see cref="UpdateMirrorSettings.MaxMirrors"/> prefixes, each ending in one '/'.
+    /// </summary>
+    public List<string> GitHubUpdateMirrors { get; set; } = new();
+    /// <summary>
+    /// The personal access token GitLab's API is asked with. Empty means "not set", and then the GitLab
+    /// release line is not polled at all -- see UpdateChecker -- so the only updates on offer are the
+    /// GitHub line's. Persistence trims it; it is never logged.
+    /// </summary>
+    public string GitLabUpdateToken { get; set; } = string.Empty;
+    // Bookkeeping rather than a preference: the release tag whose last startup install attempt failed, and
+    // when. Without it a startup that cannot update (service not running, download failed) re-downloads a
+    // full release zip on every single launch. Only UpdateCheckService reads or writes these; the About
+    // page's own update button ignores them, because a request that was just clicked is not a retry.
+    public string LastFailedUpdateTag { get; set; } = "";
+    public long LastFailedUpdateUtcTicks { get; set; }
+    // The newest silent-update verdict already shown to this user. The updater's own result file sits beside
+    // the installation and cannot be deleted from here (that directory is closed to Users for writing), so
+    // "shown once" has to be remembered somewhere the App owns.
+    public long LastReportedUpdateResultUtcTicks { get; set; }
+    // Applied only to QuickSearchWindow (in SourceInitialized, before the first render pass), not
+    // process-wide -- see GitHub issue #82
+    // (NVIDIA Advanced Optimus GPU hot-switch blocked by this window's persistent DirectX composition
+    // surface, since it's created once at startup and only ever hidden, never closed). Requires a
+    // restart to take effect, since the window's HwndTarget.RenderMode is only set once at load.
+    public bool EnableHardwareAcceleration { get; set; } = true;
+
+    // Off makes every bare query term a contiguous-substring match instead of a subsequence one
+    // (fzf's own --exact mode). Default on, so an upgrade never changes what a query matches.
+    public bool EnableFuzzyMatch { get; set; } = true;
+
+    // How spaces and the pipe '|' bind when a query mixes the two.
+    //
+    // false (default) is AND-first: the space binds tighter, so a query of "report | summary 2024"
+    // means report OR (summary AND 2024) -- the usual boolean reading, and what a user who types a
+    // few alternatives and then narrows them expects.
+    //
+    // true switches to OR-first, where the pipe binds tighter and that same query means
+    // (report OR summary) AND 2024. That was Lertaro's only behavior before this option existed, so
+    // anyone who wants the old reading back opts into it explicitly.
+    public bool OrFirstPrecedence { get; set; } = false;
+    // The Quick window's tray-menu capsule button (only shown while this is true) is the replacement
+    // entry point for Settings/Exit/etc., so hiding the tray icon never strands the user -- see
+    // QuickSearchWindow's BtnTrayMenu and TrayIconService.ShowMenuAt.
+    public bool HideTrayIcon { get; set; } = false;
+    public bool EnableEverythingIpc { get; set; } = false;
+    public bool ShowOpenedFoldersInInlineSearch { get; set; } = true;
+    // The inline card's width as a percent of the window it docks to. Null means the user never chose one,
+    // which keeps the wider default floor that a plain 40% would not reach on a small window -- the rule
+    // itself lives with the rest of the card's geometry in App's InlineCardMetrics.ResolveDockedWidth.
+    public int? InlineSearchWindowWidthPercent { get; set; }
+    // How many result rows the inline card may show, section titles not counted. The two boxes are the two
+    // contexts the card is docked in: an ordinary window, and a file dialog it covers. Both default to the
+    // count the card has always used there, both are clamped by App's InlineCardMetrics.ResolveRowCap because
+    // user-settings.json is hand-editable, and a screen too short for the count gives fewer rows either way.
+    public int InlineSearchWindowMaxRows { get; set; } = 10;
+    public int InlineSearchDialogMaxRows { get; set; } = 4;
+    public string GlobalTokenPrefix { get; set; } = ":";
+    public string LogLevel { get; set; } = "Info";
+    public string PreferredLanguage { get; set; } = GetDefaultSystemLanguage();
+    public string Theme { get; set; } = "Light";
+    public bool ThemeFollowSystem { get; set; } = false;
+    // Empty means "unset"; ThemeManager.ResolveLightDarkThemeId falls back to the first available theme,
+    // including the host's Light/Dark resources when the theme plugins are disabled.
+    public string LightThemeId { get; set; } = string.Empty;
+    public string DarkThemeId { get; set; } = string.Empty;
+    // Ordered UI font fallback list: each family covers glyphs the previous one lacks, and the app's
+    // built-in Segoe UI/Global User Interface pair remains the final fallback. Empty means default.
+    public List<string> UiFontFamilies { get; set; } = new();
+    public HotkeyPageSettings Hotkeys { get; set; } = new();
+    public SearchWindowSettings SearchWindow { get; set; } = new();
+    public bool EnableQuickSearchClipboardAutoFill { get; set; } = false;
+    public PreviewWindowSettings PreviewWindow { get; set; } = new();
+    public MainWindowSettings MainWindow { get; set; } = new();
+    public QuickPanelSettings QuickPanel { get; set; } = new();
+    public QuickLaunchSettings QuickLaunch { get; set; } = new();
+    public LocalSendSettingsModel LocalSend { get; set; } = new();
+
+    private static string GetDefaultSystemLanguage()
+    {
+        try
+        {
+            return System.Globalization.CultureInfo.CurrentUICulture.Name;
+        }
+        catch
+        {
+            return "en-US";
+        }
+    }
+
+    /// <summary>
+    /// Stores IDs of disabled plugin sub-components (actions, dynamic providers, instant providers,
+    /// full-search file result providers, filter providers, column providers).
+    /// Format: "{PluginDllFileName}::{ComponentType}::{ComponentName}"
+    /// </summary>
+    public List<string> DisabledPluginComponents { get; set; } = new();
+
+    /// <summary>Whole plugin DLL filenames excluded before loading. Changes take effect after restart.</summary>
+    public List<string> DisabledPluginAssemblies { get; set; } = new();
+
+    /// <summary>
+    /// User-chosen display order for IQuickNavigationProvider entries in the quick-navigation menu's
+    /// root level, most-preferred first. Same id format as DisabledPluginComponents. A provider whose
+    /// id isn't present here yet (newly installed, or never reordered) falls back to its original
+    /// discovery order, appended after every listed provider -- see PluginManager.QuickNavigationProviders.
+    /// </summary>
+    public List<string> QuickNavigationProviderOrder { get; set; } = new();
+
+    /// <summary>
+    /// User-chosen display order for the full SearchWindow's sidebar filter groups (Type/Date/Size/any
+    /// third-party ISidebarFilterProvider), most-preferred first. Same id format as
+    /// DisabledPluginComponents, one id per PROVIDER (not per group -- a provider contributing multiple
+    /// groups moves them together as a unit). A provider whose id isn't present here yet falls back to
+    /// its own SortOrder, same convention QuickNavigationProviderOrder above uses for discovery order.
+    /// </summary>
+    public List<string> SidebarGroupOrder { get; set; } = new();
+
+    /// <summary>
+    /// User-chosen left-to-right display order for the full SearchWindow's results grid columns
+    /// (built-in "Name"/"Path"/"DateModified" plus any third-party IResultColumnProvider's own
+    /// ColumnId), most-preferred first. Purely which columns show in which position -- NOT which
+    /// column the rows are currently sorted by (see SearchResultSortMemory, deliberately in-memory-
+    /// only and not settings-backed). A column whose id isn't present here yet falls back to its
+    /// natural discovery position, same convention QuickNavigationProviderOrder above uses.
+    /// </summary>
+    public List<string> ColumnOrder { get; set; } = new();
+
+    /// <summary>
+    /// Quick-window type order. The four built-in types break ties after section, match grade,
+    /// priority, history, and match placement, but before coverage and reading tier. Other types
+    /// share a rank after the built-ins. An older order without Folders inserts it after Files.
+    /// The inline and full windows do not use this setting.
+    /// </summary>
+    public List<string> ResultTypeOrder { get; set; } = new();
+
+    /// <summary>
+    /// User-chosen display order for the Actions menu's own sections -- the built-in group ("__builtin__",
+    /// or "static::{GroupName}" for a static action that sets a custom GroupName) plus one id per
+    /// IDynamicActionProvider (e.g. the Custom Actions/自定义动作 group), most-preferred first. A section
+    /// whose id isn't listed here yet falls back to its natural position: built-in first, then dynamic
+    /// providers by ascending Priority -- see ActionMenuBuilder's own ordering.
+    /// </summary>
+    public List<string> ActionMenuGroupOrder { get; set; } = new();
+
+    /// <summary>
+    /// User-chosen priority order for IFilePreviewProvider (built-in image/text/media/PE previewers plus
+    /// any third-party plugin's own), most-preferred first. Same id format as DisabledPluginComponents.
+    /// A provider whose id isn't present here yet falls back to its own Priority (higher first), same
+    /// convention QuickNavigationProviderOrder above uses for discovery order -- see
+    /// PluginManager.FilePreviewProviders.
+    /// </summary>
+    public List<string> FilePreviewProviderOrder { get; set; } = new();
+
+    /// <summary>
+    /// User-chosen priority order for IThumbnailProvider (the built-in shell thumbnail provider plus
+    /// any third-party plugin's own), most-preferred first. Same id format as DisabledPluginComponents.
+    /// A provider whose id isn't present here yet falls back to its own Priority (higher first), same
+    /// convention FilePreviewProviderOrder above uses -- see PluginManager.ThumbnailProviders.
+    /// </summary>
+    public List<string> ThumbnailProviderOrder { get; set; } = new();
+
+    /// <summary>
+    /// Per-type trigger character for the quick window's exclusive result-type filter -- key is the
+    /// same type-id ResultTypeOrder above uses, value is a single character (an entry is only present
+    /// when the user actually configured one). When the FIRST character the user types matches a
+    /// configured trigger, only that type's candidates enter the ranked competition in
+    /// SearchResultMapper.BuildQuickResults -- Favorites/history are unaffected, since they're
+    /// hardcoded top-priority regardless of any of this. See SearchResultTypePriority.ResolveTrigger.
+    /// Quick window only, same scope as ResultTypeOrder.
+    /// </summary>
+    public Dictionary<string, string> ResultTypeTriggers { get; set; } = new();
+
+    public int? PluginSettingsStorageVersion { get; set; }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Dictionary<string, Dictionary<string, object>> PluginSettings { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public bool SavePluginSettings() => UserSettingsPersistence.SavePluginSettings(this);
+
+    public T GetPluginSetting<T>(string pluginId, string key, T defaultValue) =>
+        UserSettingsPluginSupport.GetPluginSetting(this, pluginId, key, defaultValue);
+
+    public void SetPluginSetting(string pluginId, string key, object? value) =>
+        UserSettingsPluginSupport.SetPluginSetting(this, pluginId, key, value);
+
+    public static string SettingsPath => UserSettingsPersistence.SettingsPath;
+    public static UserSettings Load() => UserSettingsPersistence.Load();
+    public static UserSettings ForceReload() => UserSettingsPersistence.ForceReload();
+    internal static UserSettings? TryParse(string json) => UserSettingsPersistence.TryParse(json);
+    internal static void NormalizeHotkeys(UserSettings settings) => UserSettingsPersistence.NormalizeHotkeys(settings);
+    public bool Save() => UserSettingsPersistence.Save(this);
+    internal static void RotateBackups(string filePath, int maxBackups = 5) => UserSettingsPersistence.RotateBackups(filePath, maxBackups);
+    public static void RestoreFrom(string sourcePath) => UserSettingsPersistence.RestoreFrom(sourcePath);
+    internal static UserSettings WriteRestored(string sourcePath, string settingsPath, int backupCount, out string json)
+        => UserSettingsPersistence.WriteRestored(sourcePath, settingsPath, backupCount, out json);
+
+}

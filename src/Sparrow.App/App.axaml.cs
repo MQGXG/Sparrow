@@ -1,10 +1,13 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
+using Lertaro.Core.Indexer.Usn.Journal;
+using Lertaro.Core.IndexV2.Persistence;
 using Sparrow.App.History;
 using Sparrow.App.Overlays;
 using Sparrow.App.Plugins;
@@ -55,6 +58,9 @@ public partial class App : Application
     private int _toolHotkeyRunning;
     private ClipboardPasteService? _pasteService;
     private SettingsViewModel? _settingsViewModel;
+    private IFileIndex? _fileIndex;
+    private QuickSearchWindow? _quickSearch;
+    private DoubleCtrlHotkey? _doubleCtrl;
 
     // 贴图窗口需要宿主一直持有引用，否则会被 GC 回收
     private readonly List<PinnedImageWindow> _pins = [];
@@ -66,6 +72,13 @@ public partial class App : Application
         if (ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
         {
             base.OnFrameworkInitializationCompleted();
+            return;
+        }
+
+        // 提权索引子进程：只扫描 $MFT 并写 snapshot，不初始化托盘/热键/窗口
+        if (TryGetIndexBuildArgs(desktop.Args, out var indexDrive, out var indexOutput))
+        {
+            RunIndexBuilder(indexDrive, indexOutput);
             return;
         }
 
@@ -187,6 +200,18 @@ public partial class App : Application
         // 传方法组而不是实例：第一次搜索时才真正扫描 + 加载插件
         _paletteViewModel = new PaletteViewModel(_catalog.GetRegistry, clipboard, log, history, _parameterStore);
         _palette = new PaletteWindow { DataContext = _paletteViewModel };
+
+        // 双击 Ctrl 的本机文件搜索：优先用 MFT 索引，首次缺 snapshot 时提权建立
+        _fileIndex = new MftFileIndex(log);
+        _fileIndex.Start();
+        _quickSearch = new QuickSearchWindow(_fileIndex);
+
+        _doubleCtrl = new DoubleCtrlHotkey(
+            () => Avalonia.Threading.Dispatcher.UIThread.Post(() => _quickSearch?.Toggle()),
+            log);
+
+        if (!_doubleCtrl.Start())
+            log.Warn("双击 Ctrl 未能启用（低级键盘钩子安装失败）");
 
         // 工作区与面板共用同一个 ToolCatalog：插件只加载一次
         var startup = new StartupService(log);
@@ -377,6 +402,9 @@ public partial class App : Application
             _toasts?.Dispose();
             _windowOverlay?.Dispose();
             _hotkey?.Dispose();
+            _doubleCtrl?.Dispose();
+            _quickSearch?.Close();
+            _fileIndex?.Dispose();
             _catalog?.Dispose();
             clipboardMonitor.Dispose();
         };
@@ -470,6 +498,90 @@ public partial class App : Application
             Avalonia.Threading.DispatcherPriority.Background);
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>提权索引子进程的参数：--build-index C --index-output path。</summary>
+    private static bool TryGetIndexBuildArgs(
+        string[]? args, out string drive, out string output)
+    {
+        drive = string.Empty;
+        output = string.Empty;
+
+        if (args is null)
+            return false;
+
+        var parsed = GetArg(args, "--build-index");
+
+        if (parsed is null)
+            return false;
+
+        drive = parsed;
+        output = GetArg(args, "--index-output")
+                 ?? Path.Combine(Path.GetTempPath(), $"sparrow-index-{drive}.snapshot");
+
+        return true;
+    }
+
+    /// <summary>
+    /// 提权实例的索引构建入口：扫描 $MFT，写列式 snapshot，然后立即退出。
+    /// 这个进程没有托盘、热键和窗口，只做一件事。
+    /// </summary>
+    private static void RunIndexBuilder(string drive, string output)
+    {
+        var statusPath = output + ".status";
+
+        try
+        {
+            var directory = Path.GetDirectoryName(output);
+
+            if (!string.IsNullOrEmpty(directory))
+                Directory.CreateDirectory(directory);
+
+            var reader = new JournalReader();
+            var result = reader.IndexDrive(drive, null, null, null, CancellationToken.None);
+
+            if (result is null)
+            {
+                File.WriteAllText(
+                    statusPath,
+                    "error 扫描失败（缺少管理员权限或卷不支持）",
+                    Encoding.UTF8);
+
+                Environment.Exit(5);
+            }
+
+            SnapshotWriter.Write(result.Store, output);
+            File.WriteAllText(
+                statusPath,
+                $"ok records={result.Store.Records.Count}",
+                Encoding.UTF8);
+
+            Environment.Exit(0);
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                File.WriteAllText(statusPath, "error " + ex.Message, Encoding.UTF8);
+            }
+            catch
+            {
+                // 状态文件写不了也不影响退出码
+            }
+
+            Environment.Exit(1);
+        }
+    }
+
+    private static string? GetArg(string[] args, string name)
+    {
+        for (var i = 0; i < args.Length - 1; i++)
+        {
+            if (args[i].Equals(name, StringComparison.OrdinalIgnoreCase))
+                return args[i + 1];
+        }
+
+        return null;
     }
 
 }

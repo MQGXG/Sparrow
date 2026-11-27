@@ -49,6 +49,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Sparrow.Plugin.Sdk\Sparrow.Plugin.Sdk.csproj" />
+    <!-- 来源：Lertaro (MIT)。只用于 MFT 索引 / 列式 Snapshot / 查询。 -->
+    <ProjectReference Include="..\third_party\Lertaro\Core\Core.csproj" />
   </ItemGroup>
 
   <!--

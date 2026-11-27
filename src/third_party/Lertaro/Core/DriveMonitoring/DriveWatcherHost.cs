@@ -1,0 +1,166 @@
+using Lertaro.Core.Indexer.NetworkDrive.Walk;
+namespace Lertaro.Core.DriveMonitoring;
+
+internal sealed class DriveWatcherHost : IDisposable
+{
+    private readonly string _name;
+    private readonly string _drive;
+    private readonly string _rootPath;
+    private readonly Func<string, bool> _exists;
+    private readonly Func<FileSystemWatcher, string, Action, Action, Action<string>, bool> _configure;
+    private readonly Action<string, LogLevel> _onLog;
+    private readonly Action? _onStarted;
+    private readonly Action? _onUnavailable;
+    private readonly TimeSpan _retryDelay;
+    private readonly object _gate = new();
+    private FileSystemWatcher? _watcher;
+    private bool _starting;
+    private bool _retryInFlight;
+    private volatile bool _disposed;
+
+    public DriveWatcherHost(string name, string drive, Func<string, bool> exists,
+        Func<FileSystemWatcher, string, Action, Action, Action<string>, bool> configure, Action<string, LogLevel> onLog,
+        TimeSpan? retryDelay = null, Action? onStarted = null, Action? onUnavailable = null)
+    {
+        _name = name;
+        _drive = drive;
+        // A bare drive letter ("C") needs ":\" appended. A UNC path just needs a trailing separator.
+        // Anything else (a folder-index target, e.g. "Z:\Archive") is already a full path -- the old
+        // UNC-or-append-colon check appended ":\" there too, producing "Z:\Archive:\", a path that can never
+        // exist -- so Directory.Exists(_rootPath) always failed and the watcher silently never started.
+        _rootPath = PathHelpers.BuildSourceRoot(drive);
+        _exists = exists;
+        _configure = configure;
+        _onLog = onLog;
+        _onStarted = onStarted;
+        _onUnavailable = onUnavailable;
+        _retryDelay = retryDelay ?? TimeSpan.FromSeconds(10);
+    }
+
+    public void Start() => EnsureWatcher();
+
+    // Gives up the live watcher but keeps this host polling, for owners that have to answer a Windows
+    // removal request before a volume can be ejected. Monitoring comes back on the next retry, whether the
+    // volume stayed (the eject was vetoed elsewhere) or left and was re-inserted.
+    public void Release() => RestartWatcher();
+
+    public void Dispose()
+    {
+        _disposed = true;
+        lock (_gate)
+        {
+            _watcher?.Dispose();
+            _watcher = null;
+        }
+    }
+
+    private void EnsureWatcher()
+    {
+        lock (_gate)
+        {
+            if (_disposed || _watcher != null || _starting)
+                return;
+            _starting = true;
+        }
+
+        var started = false;
+        var unavailable = false;
+        FileSystemWatcher? watcher = null;
+        try
+        {
+            // A remote probe may block in Windows. Keep it outside the lock so removing this
+            // root can dispose the host immediately and discard any late probe result.
+            if (!_exists(_rootPath))
+                unavailable = true;
+            else
+            {
+                lock (_gate)
+                {
+                    if (_disposed)
+                        return;
+                    watcher = new FileSystemWatcher(_rootPath);
+                    if (_configure(watcher, _drive, RestartWatcher, ScheduleRetry, LogError))
+                    {
+                        watcher.EnableRaisingEvents = true;
+                        _watcher = watcher;
+                        started = true;
+                        _onLog($"[{_name}] Started monitoring {_drive}: via FileSystemWatcher.", LogLevel.Info);
+                    }
+                    else
+                    {
+                        watcher.Dispose();
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            watcher?.Dispose();
+            LogError($"Failed to start monitoring {_drive}: {ex.Message}");
+            unavailable = true;
+        }
+        finally
+        {
+            lock (_gate)
+                _starting = false;
+        }
+
+        if (unavailable && !_disposed)
+        {
+            _onUnavailable?.Invoke();
+            ScheduleRetry();
+        }
+        // Reconciliation must start after events are enabled, closing the gap during the outage.
+        if (started && !_disposed) _onStarted?.Invoke();
+    }
+
+    private void RestartWatcher()
+    {
+        lock (_gate)
+        {
+            if (_disposed)
+                return;
+
+            _watcher?.Dispose();
+            _watcher = null;
+        }
+
+        ScheduleRetry();
+    }
+
+    private void ScheduleRetry()
+    {
+        lock (_gate)
+        {
+            if (_retryInFlight || _disposed)
+                return;
+            _retryInFlight = true;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (!_disposed)
+                {
+                    await Task.Delay(_retryDelay).ConfigureAwait(false);
+                    if (_disposed)
+                        return;
+                    EnsureWatcher();
+                    lock (_gate)
+                    {
+                        if (_watcher != null)
+                            return;
+                    }
+                }
+            }
+            finally
+            {
+                lock (_gate)
+                    _retryInFlight = false;
+            }
+        });
+    }
+
+    private void LogError(string message) => _onLog($"[{_name}] {message}", LogLevel.Warn);
+}

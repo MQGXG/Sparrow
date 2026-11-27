@@ -1,0 +1,147 @@
+using System.Runtime.InteropServices;
+
+namespace Lertaro.Core.Hook.InlineSearch;
+
+public class MouseHookService : IDisposable
+{
+    private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelMouseProc lpfn, IntPtr hMod, uint dwThreadId);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
+    private static extern IntPtr GetModuleHandle(string? lpModuleName);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int x;
+        public int y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MSLLHOOKSTRUCT
+    {
+        public POINT pt;
+        public uint mouseData;
+        public uint flags;
+        public uint time;
+        public IntPtr dwExtraInfo;
+    }
+
+    private const int WH_MOUSE_LL = 14;
+    private const int WM_LBUTTONDOWN = 0x0201;
+    private const int WM_RBUTTONDOWN = 0x0204;
+    private const int WM_MBUTTONDOWN = 0x0207;
+
+    private const int SM_CXDOUBLECLK = 36;
+    private const int SM_CYDOUBLECLK = 37;
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDoubleClickTime();
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int nIndex);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(POINT point);
+
+    private IntPtr _hookId = IntPtr.Zero;
+    private LowLevelMouseProc? _proc;
+
+    private readonly QuickNavDoubleClick _doubleClick = new(ExplorerBackgroundHitTest.Begin);
+    internal Func<bool> DoubleClickEnabled { get; init; } = () => true;
+
+    public event Action<int, int>? OnMouseClick;
+    public event Action<int, int, IntPtr>? OnMouseDoubleClick;
+    public event Action<int, int>? OnMouseMiddleClick;
+    // Separate from OnMouseClick (which also fires for this same button, for the existing
+    // click-outside-closes-menu wiring) -- carries the raw hook timestamp so KeyboardHookService can
+    // measure real elapsed time against a keystroke's own timestamp, not our processing latency.
+    public event Action<uint>? OnRightButtonDown;
+
+    public event Action? OnMouseButtonOrWheel;
+
+    public void Start()
+    {
+        if (_hookId != IntPtr.Zero) return;
+        _proc = HookCallback;
+        var hMod = GetModuleHandle(null);
+        _hookId = SetWindowsHookEx(WH_MOUSE_LL, _proc, hMod, 0);
+        if (_hookId == IntPtr.Zero)
+        {
+            Logger.Log($"[MouseHookService] Failed to install mouse hook! Error={Marshal.GetLastWin32Error()}", LogLevel.Error);
+        }
+    }
+
+    public void Stop()
+    {
+        _doubleClick.Clear();
+        if (_hookId != IntPtr.Zero)
+        {
+            UnhookWindowsHookEx(_hookId);
+            _hookId = IntPtr.Zero;
+        }
+    }
+
+    private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+    {
+        // Catch-all around the whole callback: an exception escaping a native low-level hook callback
+        // terminates the process (taking every global hook down with it), and the handlers invoked
+        // here include disk/IPC-adjacent work. Log and keep the hook chain flowing either way.
+        try
+        {
+            if (nCode >= 0)
+            {
+                NotifyButtonOrWheel((int)wParam);
+                if (wParam == (IntPtr)WM_LBUTTONDOWN)
+                {
+                    var hookStruct = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
+                    if (DoubleClickEnabled())
+                    {
+                        var view = WindowFromPoint(hookStruct.pt);
+                        if (_doubleClick.Press(view, hookStruct.pt.x, hookStruct.pt.y, hookStruct.time, GetDoubleClickTime(),
+                            GetSystemMetrics(SM_CXDOUBLECLK), GetSystemMetrics(SM_CYDOUBLECLK)))
+                            OnMouseDoubleClick?.Invoke(hookStruct.pt.x, hookStruct.pt.y, view);
+                    }
+                    else _doubleClick.Clear();
+                    OnMouseClick?.Invoke(hookStruct.pt.x, hookStruct.pt.y);
+                }
+                else if (wParam == (IntPtr)WM_MBUTTONDOWN)
+                {
+                    _doubleClick.Clear();
+                    var hookStruct = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
+                    OnMouseMiddleClick?.Invoke(hookStruct.pt.x, hookStruct.pt.y);
+                }
+                else if (wParam == (IntPtr)WM_RBUTTONDOWN)
+                {
+                    _doubleClick.Clear();
+                    var hookStruct = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
+                    OnRightButtonDown?.Invoke(hookStruct.time);
+                    OnMouseClick?.Invoke(hookStruct.pt.x, hookStruct.pt.y);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Log($"[MouseHookService] Hook callback error: {ex.Message}", LogLevel.Error);
+        }
+
+        return CallNextHookEx(_hookId, nCode, wParam, lParam);
+    }
+
+    public void Dispose() => Stop();
+
+    internal void NotifyButtonOrWheel(int message)
+    {
+        // Button down/up (including X buttons), vertical wheel, and horizontal wheel. Motion is harmless.
+        if (message is >= 0x0201 and <= 0x020E) OnMouseButtonOrWheel?.Invoke();
+    }
+}

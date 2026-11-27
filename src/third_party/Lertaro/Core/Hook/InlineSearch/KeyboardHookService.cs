@@ -1,0 +1,326 @@
+using System.Runtime.InteropServices;
+using System.Text;
+namespace Lertaro.Core.Hook.InlineSearch;
+
+// KeyboardHookServiceInlineSearchExtensions maps key codes to inline-search events. Its access to
+// settings, tracker, and context-menu grace state requires those members to be internal.
+public class KeyboardHookService : IDisposable
+{
+    private IntPtr _hookId = IntPtr.Zero;
+    private KeyboardNativeMethods.LowLevelKeyboardProc? _proc;
+    internal readonly ExplorerTracker _explorerTracker;
+
+    internal UserSettings _settings = UserSettings.Load();
+    internal GlobalHotkeyDetector _hotkeyDetector;
+
+    internal bool _hasPendingContextMenuTrigger;
+    internal uint _lastContextMenuTriggerTime;
+    internal const uint ContextMenuGraceMs = 400;
+
+    public event Action? OnDoubleCtrl;
+    public event Action? OnQuickPanelHotkey;
+    public event Action? OnQuickNavigationHotkey;
+    /// <summary>A recognized Quick Switch, carrying the dialog it was aimed at. The subscriber must not do the
+    /// navigation on this thread: see <see cref="QuickSwitchNavigator"/>.</summary>
+    public event Action<IntPtr>? OnQuickSwitchRequested;
+    public event Action<char>? OnCharacterTyped;
+    public event Action? OnBackspacePressed;
+    public event Action? OnEscapePressed;
+    public event Action? OnEnterPressed;
+    public event Action? OnUpPressed;
+    public event Action? OnDownPressed;
+    public event Action? OnLeftPressed;
+    public event Action? OnRightPressed;
+    public event Action<int>? OnCtrlNumberPressed;
+
+    // Trampolines letting KeyboardHookServiceInlineSearchExtensions raise these events on this
+    // instance's behalf -- C# event accessors can only be invoked from the declaring class itself, even
+    // for an `internal` event, so a caller outside it needs one of these. Matches ExplorerTracker's own
+    // RaiseExplorerActivated/RaisePathCaptured/RaiseError trampolines.
+    internal void RaiseCharacterTyped(char ch) => OnCharacterTyped?.Invoke(ch);
+    internal void RaiseBackspacePressed() => OnBackspacePressed?.Invoke();
+    internal void RaiseEscapePressed() => OnEscapePressed?.Invoke();
+    internal void RaiseEnterPressed() => OnEnterPressed?.Invoke();
+    internal void RaiseUpPressed() => OnUpPressed?.Invoke();
+    internal void RaiseDownPressed() => OnDownPressed?.Invoke();
+    internal void RaiseLeftPressed() => OnLeftPressed?.Invoke();
+    internal void RaiseRightPressed() => OnRightPressed?.Invoke();
+    internal void RaiseCtrlNumberPressed(int num) => OnCtrlNumberPressed?.Invoke(num);
+
+    public bool IsQuickSearchWindowVisible { get; set; }
+    public bool IsInlineSearchVisible { get; set; }
+
+    // "The inline window is on screen", which stays true after IsInlineSearchVisible is cleared by the
+    // window taking focus for itself. Suppressions that must last as long as the window is up use this.
+    public bool IsInlineWindowOnScreen { get; set; }
+    public uint AppProcessId { get; set; }
+    private volatile bool _isHotkeysDisabledTemporarily;
+    private int _cancelPendingDoubleTaps;
+    public bool IsHotkeysDisabledTemporarily
+    {
+        get => _isHotkeysDisabledTemporarily;
+        set
+        {
+            _isHotkeysDisabledTemporarily = value;
+            // IPC can change this on another thread. The hook owns the gesture state.
+            if (value) Interlocked.Exchange(ref _cancelPendingDoubleTaps, 1);
+        }
+    }
+
+    public KeyboardHookService(ExplorerTracker explorerTracker)
+    {
+        _explorerTracker = explorerTracker;
+        _hotkeyDetector = new GlobalHotkeyDetector(_settings, _explorerTracker, RequestQuickSwitch);
+    }
+
+    // The hook callback only recognizes the gesture and raises this: both halves of the work -- the tracker
+    // lock and the cross-process navigation -- belong to whoever subscribes.
+    private void RequestQuickSwitch(IntPtr dialogHwnd) => OnQuickSwitchRequested?.Invoke(dialogHwnd);
+
+    public void ReloadSettings()
+    {
+        _settings = UserSettings.ForceReload();
+        _hotkeyDetector = new GlobalHotkeyDetector(_settings, _explorerTracker, RequestQuickSwitch);
+        Logger.Log("[KeyboardHookService] Hotkey settings reloaded.", LogLevel.Info);
+    }
+    // Wired from MouseHookService.OnRightButtonDown, and also called directly below for the VK_APPS
+    // (Menu) key. Windows needs real, non-zero time to build a context menu (shell extension
+    // IContextMenu handlers, etc.), so either trigger immediately followed by a menu mnemonic keypress
+    // can beat GUI_INMENUMODE becoming true -- this records the trigger so HandleInlineSearchKeys can
+    // give it a short grace window regardless.
+    public void NotifyRightButtonDown(uint time) => MarkPendingContextMenuTrigger(time);
+
+    public void NotifyMouseButtonOrWheel() => _hotkeyDetector.CancelDoubleTaps();
+
+    private void MarkPendingContextMenuTrigger(uint time)
+    {
+        _hasPendingContextMenuTrigger = true;
+        _lastContextMenuTriggerTime = time;
+    }
+    public void Start()
+    {
+        if (_hookId != IntPtr.Zero) return;
+        _proc = HookCallback;
+        var hMod = KeyboardNativeMethods.GetModuleHandle(null);
+        _hookId = KeyboardNativeMethods.SetWindowsHookEx(KeyboardNativeMethods.WH_KEYBOARD_LL, _proc, hMod, 0);
+        if (_hookId == IntPtr.Zero)
+        {
+            Logger.Log($"[KeyboardHookService] Failed to install keyboard hook! Error={Marshal.GetLastWin32Error()}", LogLevel.Error);
+        }
+    }
+    public void Stop()
+    {
+        _hotkeyDetector.ResetDoubleTaps();
+        if (_hookId != IntPtr.Zero)
+        {
+            KeyboardNativeMethods.UnhookWindowsHookEx(_hookId);
+            _hookId = IntPtr.Zero;
+        }
+    }
+    private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+    {
+        // Catch-all around the whole callback: an exception escaping a native low-level hook callback
+        // terminates the process (taking every global hook down with it). The body includes plugin
+        // reclassification and other fallible work -- log and let the keystroke pass through instead.
+        try
+        {
+            if (nCode >= 0)
+            {
+                var hookStruct = Marshal.PtrToStructure<KeyboardNativeMethods.KBDLLHOOKSTRUCT>(lParam);
+                _hotkeyDetector.SynchronizeModifierState((int)hookStruct.vkCode);
+            }
+            return HookCallbackCore(nCode, wParam, lParam);
+        }
+        catch (Exception ex)
+        {
+            Logger.Log($"[KeyboardHookService] Hook callback error: {ex.Message}", LogLevel.Error);
+            return KeyboardNativeMethods.CallNextHookEx(_hookId, nCode, wParam, lParam);
+        }
+    }
+
+    internal IntPtr HookCallbackCore(int nCode, IntPtr wParam, IntPtr lParam)
+    {
+        if (Interlocked.Exchange(ref _cancelPendingDoubleTaps, 0) != 0) _hotkeyDetector.CancelDoubleTaps();
+        var hookStruct = nCode >= 0 ? Marshal.PtrToStructure<KeyboardNativeMethods.KBDLLHOOKSTRUCT>(lParam) : default;
+        var isKeyUp = wParam == (IntPtr)KeyboardNativeMethods.WM_KEYUP || wParam == (IntPtr)KeyboardNativeMethods.WM_SYSKEYUP;
+        if (nCode >= 0 && (isKeyUp || wParam == (IntPtr)KeyboardNativeMethods.WM_KEYDOWN || wParam == (IntPtr)KeyboardNativeMethods.WM_SYSKEYDOWN))
+        {
+            var vkCode = (int)hookStruct.vkCode;
+            var time = hookStruct.time;
+            // Remote input is injected too (#567). Track all transitions; purity is decided on release.
+            if (isKeyUp) _hotkeyDetector.OnKeyUp(vkCode);
+            else _hotkeyDetector.OnKeyDown(vkCode);
+            if (isKeyUp && !_hotkeyDetector.IsDoubleTapKey(vkCode))
+                return KeyboardNativeMethods.CallNextHookEx(_hookId, nCode, wParam, lParam);
+
+            // The physical Menu/context-menu key, and Shift+F10, both open a context menu just like a
+            // right-click does, with the same real, non-zero construction delay -- covered
+            // unconditionally here (not gated by shouldDisableAllHooks below), matching how the
+            // independent mouse hook's own right-click detection is never gated either. F10 arrives as
+            // WM_SYSKEYDOWN, which this outer condition already includes alongside WM_KEYDOWN.
+            // GetAsyncKeyState, not GetKeyState: the LL hook owner's thread has no per-thread key
+            // state of its own (same reasoning as the LLKHF_ALTDOWN comment in KeyboardNativeMethods),
+            // so only the async, process-global state answers usefully here.
+            var isShiftF10 = vkCode == KeyboardNativeMethods.VK_F10
+                && (KeyboardNativeMethods.GetAsyncKeyState(KeyboardNativeMethods.VK_SHIFT) & 0x8000) != 0;
+            if (!isKeyUp && (vkCode == KeyboardNativeMethods.VK_APPS || isShiftF10))
+            {
+                MarkPendingContextMenuTrigger(time);
+            }
+
+            // Suppress Alt+Space and Alt+F4 while the inline card is on screen. The host dialog may retain
+            // foreground focus, so the card's own SystemMenuBlocker cannot intercept these keys.
+            //
+            // Allow Alt+Space through when configured as a summon hotkey; detection below consumes it and
+            // performs the focus handoff or opens the quick panel. Other Alt+Space presses remain blocked.
+            //
+            // IsInlineWindowOnScreen also covers a focused card, whereas IsInlineSearchVisible only requests
+            // key forwarding. Read Alt from this event's flags because GetKeyState reflects the hook thread.
+            var isAltDown = (hookStruct.flags & KeyboardNativeMethods.LLKHF_ALTDOWN) != 0;
+            if (!isKeyUp && IsInlineWindowOnScreen && isAltDown
+                && (vkCode == KeyboardNativeMethods.VK_SPACE || vkCode == KeyboardNativeMethods.VK_F4)
+                && !_hotkeyDetector.IsToggleWindowComboDown(vkCode)
+                && !_hotkeyDetector.IsQuickPanelComboDown(vkCode))
+            {
+                return (IntPtr)1;
+            }
+
+            // 1. Detect Toggle Window Hotkey
+            // Fullscreen apps share the same gate as the process blacklist: it only suppresses the
+            // quick-window toggle, Quick Switch, and inline-search invocation below, and still yields
+            // to an active file dialog (IsActiveWindowDialog) same as the blacklist does. Key-up
+            // tracking and Explorer-tracker bookkeeping run unconditionally either way.
+            var isFullscreenBlocking = !_settings.Hotkeys.AllowHotkeysInFullscreen && FullscreenHelper.IsForegroundWindowFullScreen();
+            var shouldDisableAllHooks = (IsHotkeysDisabledTemporarily || ForegroundProcessGate.IsForegroundProcessBlacklisted(_settings.BlacklistedProcesses) || isFullscreenBlocking)
+                                         && !_explorerTracker.IsActiveWindowDialog;
+            if (shouldDisableAllHooks)
+            {
+                _hotkeyDetector.CancelDoubleTaps();
+                if (isKeyUp) _hotkeyDetector.ResetDoubleTaps();
+            }
+            // The quick panel first: a plain combination with no bare-modifier form, so nothing below
+            // is waiting to see whether this key turns out to be part of a tap.
+            //
+            // While the inline card is up, its own summon chord belongs to the focus handoff even when
+            // the panel is bound to the same combination -- the card is what is on screen, and that key
+            // is what moves focus into it there. A chord only the panel claims still reaches it.
+            var inlineCardOwnsThisChord = IsInlineWindowOnScreen && _hotkeyDetector.IsToggleWindowComboDown(vkCode);
+            if (!isKeyUp && !shouldDisableAllHooks && !inlineCardOwnsThisChord && _hotkeyDetector.CheckQuickPanelHotkey(vkCode, out var consumeQuickPanel))
+            {
+                OnQuickPanelHotkey?.Invoke();
+                if (consumeQuickPanel) return (IntPtr)1;
+            }
+            if (!shouldDisableAllHooks && _hotkeyDetector.CheckToggleWindowHotkey(vkCode, time, out var consumeToggleKey, OnDoubleCtrl, isKeyUp))
+            {
+                if (consumeToggleKey)
+                {
+                    return (IntPtr)1;
+                }
+            }
+            // 2. Filter key inputs for Inline Search
+            if (IsQuickSearchWindowVisible)
+            {
+                return KeyboardNativeMethods.CallNextHookEx(_hookId, nCode, wParam, lParam);
+            }
+            var fgHwnd = KeyboardNativeMethods.GetForegroundWindow();
+            if (fgHwnd != IntPtr.Zero)
+            {
+                KeyboardNativeMethods.GetWindowThreadProcessId(fgHwnd, out var fgPid);
+                if (fgPid == AppProcessId || fgPid == (uint)Environment.ProcessId)
+                {
+                    var sbClass = new StringBuilder(256);
+                    ExplorerNativeHooks.GetClassName(fgHwnd, sbClass, sbClass.Capacity);
+                    if (!sbClass.ToString().Equals("#32770", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return KeyboardNativeMethods.CallNextHookEx(_hookId, nCode, wParam, lParam);
+                    }
+                }
+                var rootFg = ExplorerNativeHooks.GetAncestor(fgHwnd, ExplorerNativeHooks.GA_ROOTOWNER);
+                if (rootFg == IntPtr.Zero) rootFg = fgHwnd;
+                if (_explorerTracker.ActiveHwnd != IntPtr.Zero && rootFg != _explorerTracker.ActiveHwnd)
+                {
+                    if (!IsDescendantOrOwned(_explorerTracker.ActiveHwnd, fgHwnd) && !IsImeWindow(fgHwnd))
+                    {
+                        // Re-derive state for whatever's actually foreground now (fgHwnd), not just wipe
+                        // to "nothing is active" -- the tracker's own async WinEvent-based tracking can
+                        // lag behind real foreground changes (e.g. a dialog re-gaining focus right after
+                        // Explorer briefly lost it to nothing), and this runs synchronously on the very
+                        // same keystroke Quick Switch (Ctrl+G) reads IsActiveWindowDialog from a few
+                        // lines below -- blindly deactivating here could clear that flag to false right
+                        // before Quick Switch's own check saw it, on the keystroke that was supposed to
+                        // trigger it in the first place.
+                        // Bounded variant: this runs inside the LL keyboard hook callback, where any
+                        // stall past LowLevelHooksTimeout gets the hook silently dropped -- see
+                        // ReclassifyActiveWindowBounded.
+                        _explorerTracker.ReclassifyActiveWindowBounded(fgHwnd);
+                    }
+                }
+            }
+
+            // File dialogs and recognized file managers remain eligible even when their process is on the
+            // blacklist or the window is fullscreen. Other foreground processes honor both protections.
+            var shouldDisableQuickNavigation = QuickNavigationHotkeyGate.ShouldSuppress(_explorerTracker, _settings, IsHotkeysDisabledTemporarily, isFullscreenBlocking);
+            if (!isKeyUp && !shouldDisableQuickNavigation && _hotkeyDetector.CheckQuickNavigationHotkey(vkCode, out var consumeQuickNavigation))
+            {
+                OnQuickNavigationHotkey?.Invoke();
+                if (consumeQuickNavigation) return (IntPtr)1;
+            }
+            // 3. Detect and handle Quick Switch Hotkey
+            if (!shouldDisableAllHooks && _hotkeyDetector.CheckAndHandleQuickSwitch(vkCode, time, out var consumeQuickSwitchKey, isKeyUp))
+            {
+                if (consumeQuickSwitchKey)
+                {
+                    return (IntPtr)1;
+                }
+            }
+            if (isKeyUp)
+                return KeyboardNativeMethods.CallNextHookEx(_hookId, nCode, wParam, lParam);
+            // If text input is focused, bypass
+            if (fgHwnd != IntPtr.Zero && InputFocusEvaluator.IsForegroundTextInputFocused(fgHwnd))
+            {
+                return KeyboardNativeMethods.CallNextHookEx(_hookId, nCode, wParam, lParam);
+            }
+            if (_explorerTracker.IsActiveWindowDialog)
+            {
+                return KeyboardNativeMethods.CallNextHookEx(_hookId, nCode, wParam, lParam);
+            }
+            // 4. Handle Inline Search key events
+            if (!shouldDisableAllHooks && this.HandleInlineSearchKeys(vkCode, hookStruct, fgHwnd))
+            {
+                return (IntPtr)1;
+            }
+        }
+        return KeyboardNativeMethods.CallNextHookEx(_hookId, nCode, wParam, lParam);
+    }
+    public void Dispose() => Stop();
+
+    private bool IsDescendantOrOwned(IntPtr parent, IntPtr child)
+    {
+        if (parent == IntPtr.Zero || child == IntPtr.Zero) return false;
+        if (parent == child) return true;
+
+        var current = child;
+        while (current != IntPtr.Zero)
+        {
+            if (current == parent) return true;
+            var temp = ExplorerNativeHooks.GetParent(current);
+            if (temp == IntPtr.Zero || temp == current) break;
+            current = temp;
+        }
+        var rootOwner = ExplorerNativeHooks.GetAncestor(child, ExplorerNativeHooks.GA_ROOTOWNER);
+        if (rootOwner == parent) return true;
+
+        return false;
+    }
+    private bool IsImeWindow(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero) return false;
+        var sbClass = new StringBuilder(256);
+        ExplorerNativeHooks.GetClassName(hwnd, sbClass, sbClass.Capacity);
+        var fgClass = sbClass.ToString();
+        return fgClass.Contains("IME", StringComparison.OrdinalIgnoreCase) ||
+               fgClass.Contains("Candidate", StringComparison.OrdinalIgnoreCase) ||
+               fgClass.Contains("InputTip", StringComparison.OrdinalIgnoreCase) ||
+               fgClass.Contains("InputSwitch", StringComparison.OrdinalIgnoreCase);
+    }
+}

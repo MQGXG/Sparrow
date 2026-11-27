@@ -1,0 +1,404 @@
+using System.IO;
+using System.Runtime.InteropServices;
+
+namespace Lertaro.PluginSdk.Helpers;
+
+/// <summary>
+/// Utility class for resolving Windows shell folders, localized paths, and virtual folders.
+/// Shared with plugins via the SDK.
+/// </summary>
+public static class ShellPathHelper
+{
+    // Offline, plus FILE_ATTRIBUTE_RECALL_ON_OPEN (0x40000) and FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS
+    // (0x400000), which FileAttributes has no names for. Any one of them means "reading this fetches it".
+    private const FileAttributes CloudOnlyAttributes =
+        FileAttributes.Offline | (FileAttributes)0x40000 | (FileAttributes)0x400000;
+
+    /// <summary>
+    /// True for a cloud-only placeholder (OneDrive Files On-Demand and the like): a file that exists here as
+    /// far as File.Exists knows, but whose contents a read would make the sync client download in full.
+    /// </summary>
+    /// <remarks>
+    /// The attributes come from the directory entry, so asking never triggers the download itself. Anything
+    /// that only wants to decorate a row -- a version string, an embedded icon, a thumbnail -- should check
+    /// this first and settle for less on a file the user never asked to bring down. False for a path that
+    /// does not exist or cannot be read.
+    /// </remarks>
+    public static bool IsCloudOnly(string path)
+    {
+        try
+        {
+            return (File.GetAttributes(path) & CloudOnlyAttributes) != 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private struct SHFILEINFO
+    {
+        public IntPtr hIcon;
+        public int iIcon;
+        public uint dwAttributes;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+        public string szDisplayName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)]
+        public string szTypeName;
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Auto)]
+    private static extern IntPtr SHGetFileInfo(string pszPath, uint dwFileAttributes, ref SHFILEINFO psfi, uint cbFileInfo, uint uFlags);
+
+    [DllImport("shell32.dll", EntryPoint = "SHGetFileInfo", CharSet = CharSet.Auto)]
+    private static extern IntPtr SHGetFileInfoPidl(IntPtr pidl, uint dwFileAttributes, ref SHFILEINFO psfi, uint cbFileInfo, uint uFlags);
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern int SHParseDisplayName([MarshalAs(UnmanagedType.LPWStr)] string pszName, IntPtr pbc, out IntPtr ppidl, uint sfgaoIn, out uint psfgaoOut);
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern int SHGetNameFromIDList(IntPtr pidl, int sigdnName, out IntPtr ppszName);
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern int SHGetKnownFolderPath(ref Guid rfid, uint dwFlags, IntPtr hToken, out IntPtr ppszPath);
+
+    // FOLDERID_Downloads, taken from what the shell answers rather than from memory: this id returns the folder's
+    // path on a real desktop, while the spelling quoted around the web (…-9164-10657C5941FD) fails with
+    // ERROR_FILE_NOT_FOUND, and both share the whole leading prefix that makes them look alike.
+    private static readonly Guid DownloadsFolderId = new("374DE290-123F-4565-9164-39C4925E467B");
+
+    /// <summary>The shell's own answer for where a known folder lives, redirection included.</summary>
+    /// <remarks>
+    /// <c>Environment.SpecialFolder</c> has no Downloads member, and there is no legacy CSIDL for it either --
+    /// which is why the profile-relative guess existed. That guess is wrong wherever the folder is redirected:
+    /// measured on the reporting machine, Downloads is F:\Downloads and <c>C:\Users\&lt;name&gt;\Downloads</c>
+    /// does not exist at all. Private so the resolution below is the only caller that needs it.
+    /// </remarks>
+    private static string? GetKnownFolderPath(in Guid folderId)
+    {
+        var id = folderId;
+        if (SHGetKnownFolderPath(ref id, 0, IntPtr.Zero, out var path) != 0 || path == IntPtr.Zero) return null;
+        try
+        {
+            return Marshal.PtrToStringUni(path);
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(path);
+        }
+    }
+
+    // Gets the PIDL from any Shell COM object (FolderItem, IShellItem, etc.).
+    [DllImport("shell32.dll")]
+    private static extern int SHGetIDListFromObject([MarshalAs(UnmanagedType.IUnknown)] object punk, out IntPtr ppidl);
+
+    // GDI/User32 for HICON → HBITMAP conversion
+    [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+    [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleDC(IntPtr hdc);
+    [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleBitmap(IntPtr hdc, int w, int h);
+    [DllImport("gdi32.dll")] private static extern IntPtr SelectObject(IntPtr hdc, IntPtr h);
+    [DllImport("gdi32.dll")] private static extern bool DeleteDC(IntPtr hdc);
+    [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr h);
+    [DllImport("user32.dll")] private static extern bool DrawIconEx(IntPtr hdc, int x, int y, IntPtr hIcon, int cx, int cy, uint step, IntPtr hbr, uint flags);
+    [DllImport("user32.dll")] private static extern bool DestroyIcon(IntPtr hIcon);
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern uint ExtractIconEx(string lpszFile, int nIconIndex, IntPtr[]? phiconLarge, IntPtr[]? phiconSmall, uint nIcons);
+
+    private const uint SHGFI_DISPLAYNAME = 0x000000200;
+    private const uint SHGFI_PIDL = 0x000000008;
+    private const uint SHGFI_ICON = 0x000000100;
+    private const uint SHGFI_LARGEICON = 0x000000000;
+
+    // Name forms for SHGetNameFromIDList: where the item lives on disk, and its canonical absolute parsing
+    // name ("::{CLSID}"), which is the form every spelling of one virtual folder collapses onto.
+    private const int SIGDN_DESKTOPABSOLUTEPARSING = unchecked((int)0x80028000);
+    private const int SIGDN_FILESYSPATH = unchecked((int)0x80058000);
+
+    private static readonly Environment.SpecialFolder[] _trackedSpecialFolders = new[]
+    {
+        Environment.SpecialFolder.Desktop,
+        Environment.SpecialFolder.MyDocuments,
+        Environment.SpecialFolder.MyPictures,
+        Environment.SpecialFolder.MyMusic,
+        Environment.SpecialFolder.MyVideos,
+        Environment.SpecialFolder.UserProfile
+    };
+
+    /// <summary>
+    /// Retrieves the localized user-friendly display name of a physical folder.
+    /// </summary>
+    public static string GetLocalizedFolderName(string physicalPath)
+    {
+        try
+        {
+            var shfi = new SHFILEINFO();
+            var res = SHGetFileInfo(physicalPath, 0, ref shfi, (uint)Marshal.SizeOf(shfi), SHGFI_DISPLAYNAME);
+            if (res != IntPtr.Zero && !string.IsNullOrEmpty(shfi.szDisplayName))
+            {
+                return shfi.szDisplayName.Trim();
+            }
+        }
+        catch { }
+        return Path.GetFileName(physicalPath) ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Resolves a localized folder name (e.g. "Desktop", "Downloads") to its absolute physical path.
+    /// </summary>
+    public static string ResolveSpecialFolder(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return name;
+        name = name.Trim();
+        foreach (var folderType in _trackedSpecialFolders)
+        {
+            try
+            {
+                var specialPath = Environment.GetFolderPath(folderType);
+                if (!string.IsNullOrEmpty(specialPath) &&
+                    (string.Equals(name, Path.GetFileName(specialPath), StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(name, GetLocalizedFolderName(specialPath), StringComparison.OrdinalIgnoreCase)))
+                    return specialPath;
+            }
+            catch { }
+        }
+        // Downloads last, and asked of the shell rather than guessed from the profile: the address bar of a file
+        // dialog names this folder by its DISPLAY name ("下载" on zh-CN), and the only way to turn that back into
+        // a path is to know where the folder really is and what the shell calls it there. Building it as
+        // UserProfile\Downloads and then requiring Directory.Exists on that guess produced nothing on a machine
+        // where Downloads is redirected, so a dialog opened on 下载 reported no path at all and the inline card
+        // searched an empty scope -- the report this answers.
+        var shellDownloads = GetKnownFolderPath(DownloadsFolderId);
+        if (!string.IsNullOrEmpty(shellDownloads) &&
+            (string.Equals(name, Path.GetFileName(shellDownloads), StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(name, GetLocalizedFolderName(shellDownloads), StringComparison.OrdinalIgnoreCase)))
+            return shellDownloads;
+
+        return name;
+    }
+
+    /// <summary>
+    /// Whether a path is a Windows shell namespace token rather than a filesystem path: a virtual folder
+    /// (<c>shell:Downloads</c>) or a shell item id (<c>::{CLSID}</c>).
+    /// </summary>
+    /// <remarks>
+    /// The one definition of "virtual", shared with <c>UserPathResolver.IsVirtualPath</c> so the two cannot
+    /// answer differently -- they did, and it mattered: only this side compared the token prefix
+    /// case-sensitively, so <c>SHELL:Downloads</c> was reported as virtual by one API and left unresolved
+    /// by the other. Surrounding whitespace is ignored here for the same reason (<c>Expand</c> trims
+    /// before resolving, and <c>IsVirtualPath</c> trims before testing).
+    /// </remarks>
+    public static bool IsVirtualShellPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+
+        var trimmed = path.Trim();
+        return trimmed.StartsWith("::", StringComparison.Ordinal)
+            || trimmed.StartsWith("shell:", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Resolves a Shell path to its physical folder or, for virtual-only folders such as AppsFolder, its
+    /// canonical ::{CLSID} name. Return the original path if Shell parsing fails. Canonical names support
+    /// comparison and deduplication but remain virtual paths.
+    ///
+    /// Use SHGetNameFromIDList's allocated string so long physical paths are not limited by a fixed
+    /// MAX_PATH buffer.
+    /// </summary>
+    public static string TryResolveVirtualPath(string path)
+    {
+        if (!IsVirtualShellPath(path)) return path;
+
+        var token = path.Trim();
+        var pidl = IntPtr.Zero;
+        try
+        {
+            if (SHParseDisplayName(token, IntPtr.Zero, out pidl, 0, out _) != 0 || pidl == IntPtr.Zero)
+                return path;
+
+            var physical = NameFromPidl(pidl, SIGDN_FILESYSPATH);
+            if (!string.IsNullOrEmpty(physical))
+                return physical;
+
+            var canonical = NameFromPidl(pidl, SIGDN_DESKTOPABSOLUTEPARSING);
+            return string.IsNullOrEmpty(canonical) ? path : canonical;
+        }
+        catch
+        {
+            return path;
+        }
+        finally
+        {
+            if (pidl != IntPtr.Zero)
+                Marshal.FreeCoTaskMem(pidl);
+        }
+    }
+
+    /// <summary>The shell's name for one item id, in the requested form, or null when it has none.</summary>
+    /// <remarks>
+    /// SIGDN_FILESYSPATH fails with ERROR_FILE_NOT_FOUND for an item that lives only in the shell
+    /// namespace, which is a normal answer here rather than an error, hence the null.
+    /// </remarks>
+    private static string? NameFromPidl(IntPtr pidl, int sigdn)
+    {
+        if (SHGetNameFromIDList(pidl, sigdn, out var value) != 0 || value == IntPtr.Zero)
+            return null;
+
+        try
+        {
+            return Marshal.PtrToStringUni(value);
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(value);
+        }
+    }
+
+    /// <summary>
+    /// Dynamically retrieves the localized user-friendly display name of a Windows shell virtual folder.
+    /// </summary>
+    public static string GetVirtualFolderDisplayName(string path, string fallback)
+    {
+        if (string.IsNullOrEmpty(path)) return fallback;
+        var pidl = IntPtr.Zero;
+        try
+        {
+            if (SHParseDisplayName(path, IntPtr.Zero, out pidl, 0, out _) == 0 && pidl != IntPtr.Zero)
+            {
+                var shfi = new SHFILEINFO();
+                var res = SHGetFileInfoPidl(pidl, 0, ref shfi, (uint)Marshal.SizeOf(shfi), SHGFI_DISPLAYNAME | SHGFI_PIDL);
+                if (res != IntPtr.Zero && !string.IsNullOrEmpty(shfi.szDisplayName))
+                    return shfi.szDisplayName.Trim();
+            }
+        }
+        catch { }
+        finally { if (pidl != IntPtr.Zero) Marshal.FreeCoTaskMem(pidl); }
+        return fallback;
+    }
+
+    private static IntPtr HIconToHBitmap(IntPtr hIcon, int size)
+    {
+        if (hIcon == IntPtr.Zero) return IntPtr.Zero;
+        var hdc = IntPtr.Zero;
+        var hMemDC = IntPtr.Zero;
+        var hBmp = IntPtr.Zero;
+        var hOld = IntPtr.Zero;
+        try
+        {
+            hdc = GetDC(IntPtr.Zero);
+            hMemDC = CreateCompatibleDC(hdc);
+            hBmp = CreateCompatibleBitmap(hdc, size, size);
+            hOld = SelectObject(hMemDC, hBmp);
+            DrawIconEx(hMemDC, 0, 0, hIcon, size, size, 0, IntPtr.Zero, 0x0003 /* DI_NORMAL */);
+            SelectObject(hMemDC, hOld);
+            return hBmp;
+        }
+        catch
+        {
+            // A bitmap still selected into its DC cannot be deleted -- DeleteObject would fail
+            // silently and leak the GDI object. Restore the old selection before deleting.
+            if (hBmp != IntPtr.Zero)
+            {
+                if (hMemDC != IntPtr.Zero && hOld != IntPtr.Zero) SelectObject(hMemDC, hOld);
+                DeleteObject(hBmp);
+            }
+            return IntPtr.Zero;
+        }
+        finally
+        {
+            DestroyIcon(hIcon);
+            if (hMemDC != IntPtr.Zero) DeleteDC(hMemDC);
+            if (hdc != IntPtr.Zero) ReleaseDC(IntPtr.Zero, hdc);
+        }
+    }
+
+    /// <summary>
+    /// Gets an icon HBITMAP for a Shell.Application FolderItem COM object via its PIDL.
+    /// Works for virtual Shell namespace items (e.g. GodMode, Control Panel applets) whose
+    /// path strings cannot be parsed by SHParseDisplayName.
+    /// Caller must free the returned HBITMAP with DeleteObject when no longer needed.
+    /// Returns IntPtr.Zero if the icon cannot be retrieved.
+    /// </summary>
+    public static IntPtr TryGetIconHBitmapForShellItem(object comObj, int size = 96)
+    {
+        if (comObj == null) return IntPtr.Zero;
+        var pidl = IntPtr.Zero;
+        try
+        {
+            if (SHGetIDListFromObject(comObj, out pidl) != 0 || pidl == IntPtr.Zero) return IntPtr.Zero;
+            var direct = ShellImageListNative.GetShellHBitmapFromPidl(pidl, size);
+            if (direct != IntPtr.Zero) return direct;
+            return HIconToHBitmap(ShellImageListNative.GetHiResHIcon(pidl, size), size);
+        }
+        catch { return IntPtr.Zero; }
+        finally { if (pidl != IntPtr.Zero) Marshal.FreeCoTaskMem(pidl); }
+    }
+
+    /// <summary>
+    /// Gets an icon HBITMAP for a physical file or directory path.
+    /// Caller must free the returned HBITMAP with DeleteObject when no longer needed.
+    /// </summary>
+    public static IntPtr GetIconHBitmapForPath(string path, int size = 96)
+    {
+        if (string.IsNullOrEmpty(path)) return IntPtr.Zero;
+        if (path.EndsWith(".msc", StringComparison.OrdinalIgnoreCase) && File.Exists(path))
+        {
+            try
+            {
+                var hIcon = ExtractMscHIcon(path, size);
+                if (hIcon != IntPtr.Zero)
+                    return HIconToHBitmap(hIcon, size);
+            }
+            catch { }
+        }
+        var direct = ShellImageListNative.GetShellHBitmap(path, size);
+        if (direct != IntPtr.Zero) return direct;
+        try
+        {
+            var hIcon = ShellImageListNative.GetHiResHIcon(path, size);
+            return HIconToHBitmap(hIcon, size);
+        }
+        catch { return IntPtr.Zero; }
+    }
+
+    public static IntPtr ExtractMscHIcon(string mscPath, int size)
+    {
+        try
+        {
+            var content = File.ReadAllText(mscPath);
+            var start = content.IndexOf("<Icon ", StringComparison.OrdinalIgnoreCase);
+            if (start < 0) return IntPtr.Zero;
+            var end = content.IndexOf(">", start);
+            if (end < 0) return IntPtr.Zero;
+            var tag = content.Substring(start, end - start);
+            var fileMatch = System.Text.RegularExpressions.Regex.Match(tag, @"File\s*=\s*""([^""]+)""", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var indexMatch = System.Text.RegularExpressions.Regex.Match(tag, @"Index\s*=\s*""([^""]+)""", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (fileMatch.Success)
+            {
+                var iconPath = Environment.ExpandEnvironmentVariables(fileMatch.Groups[1].Value);
+                if (!File.Exists(iconPath))
+                {
+                    var winIdx = iconPath.IndexOf(@"\Windows\", StringComparison.OrdinalIgnoreCase);
+                    if (winIdx >= 0)
+                    {
+                        var sysRoot = Environment.GetEnvironmentVariable("SystemRoot") ?? @"C:\Windows";
+                        var altPath = Path.Combine(sysRoot, iconPath.Substring(winIdx + 9));
+                        if (File.Exists(altPath)) iconPath = altPath;
+                    }
+                }
+                var iconIndex = (indexMatch.Success && int.TryParse(indexMatch.Groups[1].Value, out var parsed)) ? parsed : 0;
+                if (File.Exists(iconPath))
+                {
+                    var largeIcons = new IntPtr[1];
+                    if (ExtractIconEx(iconPath, iconIndex, largeIcons, null, 1) > 0 && largeIcons[0] != IntPtr.Zero)
+                        return largeIcons[0];
+                }
+            }
+        }
+        catch { }
+        return IntPtr.Zero;
+    }
+}

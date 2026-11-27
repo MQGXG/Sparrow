@@ -1,0 +1,140 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sparrow.App.ViewModels"
+        x:Class="Sparrow.App.Views.QuickSearchWindow"
+        x:DataType="vm:QuickSearchViewModel"
+        Title="Sparrow 文件搜索"
+        Width="720"
+        MaxHeight="620"
+        SizeToContent="Height"
+        WindowDecorations="None"
+        CanResize="False"
+        ShowInTaskbar="False"
+        Topmost="True"
+        WindowStartupLocation="CenterScreen"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent">
+
+  <!-- 与命令面板保持同一套浮层视觉：渐变底 + 阴影 + 点阵底纹 -->
+  <Border x:Name="Shell"
+          Background="{DynamicResource SurfaceGradientBrush}"
+          BorderBrush="{DynamicResource LineStrongBrush}"
+          BorderThickness="1"
+          CornerRadius="14"
+          BoxShadow="0 24 64 0 #99000000"
+          ClipToBounds="True">
+
+    <Border.RenderTransform>
+      <TranslateTransform Y="0">
+        <TranslateTransform.Transitions>
+          <Transitions>
+            <DoubleTransition Property="Y" Duration="0:0:0.16" Easing="CubicEaseOut" />
+          </Transitions>
+        </TranslateTransform.Transitions>
+      </TranslateTransform>
+    </Border.RenderTransform>
+
+    <Border.Transitions>
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+      </Transitions>
+    </Border.Transitions>
+
+    <Panel>
+      <Border Background="{DynamicResource DotGridBrush}"
+              IsHitTestVisible="False"
+              Opacity="0.6" />
+
+      <StackPanel>
+
+        <!-- 搜索行 -->
+        <Grid ColumnDefinitions="Auto,*,Auto" Margin="16,16,16,12">
+          <Path Grid.Column="0"
+                Classes="icon icon-sm"
+                Margin="0,0,12,0"
+                VerticalAlignment="Center"
+                Stroke="{DynamicResource TextMutedBrush}"
+                Data="{StaticResource IconSearch}" />
+
+          <TextBox x:Name="SearchBox"
+                   Grid.Column="1"
+                   Classes="bare"
+                   PlaceholderText="搜索本机文件…"
+                   Text="{Binding Query, Mode=TwoWay}"
+                   VerticalAlignment="Center" />
+
+          <Border Grid.Column="2" Classes="kbd" Margin="10,0,0,0" VerticalAlignment="Center">
+            <TextBlock Text="Esc" />
+          </Border>
+        </Grid>
+
+        <Border Height="1" Background="{DynamicResource LineBrush}" />
+
+        <!-- 结果列表：固定一个最小高度，空结果时窗口不会缩成一条 -->
+        <Panel MinHeight="160">
+          <ListBox x:Name="ResultList"
+                   Margin="6,6"
+                   MaxHeight="420"
+                   ItemsSource="{Binding Items}"
+                   SelectedItem="{Binding Selected, Mode=TwoWay}"
+                   Background="Transparent"
+                   BorderThickness="0">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:FileSearchItemViewModel">
+                <Grid ColumnDefinitions="Auto,*" Margin="12,8">
+                  <Panel Grid.Column="0"
+                         Width="18"
+                         Height="18"
+                         Margin="0,1,10,0"
+                         VerticalAlignment="Top">
+                    <Path Data="{StaticResource IconFolder}"
+                          IsVisible="{Binding IsDirectory}"
+                          Classes="icon icon-md" />
+                    <Path Data="{StaticResource IconFile}"
+                          IsVisible="{Binding IsFile}"
+                          Classes="icon icon-md" />
+                  </Panel>
+
+                  <StackPanel Grid.Column="1" Spacing="3">
+                    <TextBlock Text="{Binding Name}"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryBrush}"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding DirectoryPath}"
+                               FontSize="11"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Panel>
+
+        <!-- 状态 + 快捷键 -->
+        <Grid ColumnDefinitions="*,Auto" Margin="16,10,16,12">
+          <TextBlock Text="{Binding StatusText}"
+                     FontSize="11"
+                     Foreground="{DynamicResource TextMutedBrush}"
+                     VerticalAlignment="Center"
+                     TextTrimming="CharacterEllipsis" />
+
+          <StackPanel Grid.Column="1"
+                      Orientation="Horizontal"
+                      Spacing="6">
+            <Border Classes="kbd"><TextBlock Text="↑ ↓" /></Border>
+            <TextBlock Text="选择" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
+
+            <Border Classes="kbd" Margin="8,0,0,0"><TextBlock Text="Enter" /></Border>
+            <TextBlock Text="打开" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
+
+            <Border Classes="kbd" Margin="8,0,0,0"><TextBlock Text="Ctrl+Enter" /></Border>
+            <TextBlock Text="定位" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
+          </StackPanel>
+        </Grid>
+
+      </StackPanel>
+    </Panel>
+  </Border>
+</Window>

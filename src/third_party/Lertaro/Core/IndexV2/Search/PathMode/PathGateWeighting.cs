@@ -1,0 +1,235 @@
+using System.Text;
+using Lertaro.Core.SearchIndex;
+using Lertaro.Core.SearchIndex.Fzf;
+
+using Lertaro.Core.IndexV2.Delta;
+
+using Lertaro.Core.IndexV2.Persistence;
+namespace Lertaro.Core.IndexV2.Search.PathMode;
+
+// Computes path-segment coverage × contiguity, multiplied across segments. Rewalks PathGate's ancestor
+// chain and uses HighlightMask, so call only on PathSearchFuzzy's bounded refinement candidates, outside
+// the hot scan. Results are not memoized.
+internal sealed class PathGateWeighting
+{
+    private readonly Snapshot _snapshot;
+    private readonly DeltaOverlay _delta;
+    private readonly string[] _querySegments;
+    private readonly FzfPattern[] _segmentPatterns;
+    private readonly FzfBytePattern[] _segmentBytePatterns;
+    // The alias-side readings of the same segments: aliases are found through these (each term as a run if
+    // it can be, as a subsequence otherwise -- see FzfPatternAliasReading), while the arrays above keep
+    // matching the segment's own name and keep answering the alignment rule.
+    private readonly FzfPattern[] _segmentAliasPatterns;
+    private readonly FzfBytePattern[] _segmentAliasBytePatterns;
+    private readonly string[] _rootSegments;
+
+    public PathGateWeighting(Snapshot snapshot, DeltaOverlay delta, string[] querySegments, FzfPattern[] segmentPatterns, FzfBytePattern[] segmentBytePatterns, FzfPattern[] segmentAliasPatterns, FzfBytePattern[] segmentAliasBytePatterns, string[] rootSegments)
+    {
+        _snapshot = snapshot;
+        _delta = delta;
+        _querySegments = querySegments;
+        _segmentPatterns = segmentPatterns;
+        _segmentBytePatterns = segmentBytePatterns;
+        _segmentAliasPatterns = segmentAliasPatterns;
+        _segmentAliasBytePatterns = segmentAliasBytePatterns;
+        _rootSegments = rootSegments;
+    }
+
+    public double ComputeWeight(int parentRow, SearchMatcher.Worker worker)
+    {
+        var q = _querySegments.Length - 1;
+        var weight = 1.0;
+        var current = parentRow;
+        for (var depth = 0; depth < 512 && current >= 0 && q >= 0; depth++)
+        {
+            if (_delta.IsSuperseded(current))
+            {
+                var parentPath = _delta.GetFullPath(parentRow);
+                return weight * ComputeWeightForPath(parentPath, worker);
+            }
+
+            var uid = (int)_snapshot.NameIds[current];
+            var nameUtf8 = _snapshot.UniqueNameUtf8(uid);
+            if (nameUtf8.Length > 0 && TryMatchSegmentRowWeight(uid, nameUtf8, q, worker, out var segWeight))
+            {
+                weight *= segWeight;
+                q--;
+            }
+
+            var parent = _snapshot.ParentIndexes[current];
+            if (parent == current)
+                break;
+            current = parent;
+        }
+
+        for (var i = _rootSegments.Length - 1; i >= 0 && q >= 0; i--)
+        {
+            if (TryMatchSegmentTextWeight(_rootSegments[i], q, worker, out var segWeight))
+            {
+                weight *= segWeight;
+                q--;
+            }
+        }
+
+        return weight;
+    }
+
+    public double ComputeWeightForPath(string path, SearchMatcher.Worker worker)
+    {
+        var pathSegments = path.Split(new[] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries);
+        var qIdx = _querySegments.Length - 1;
+        var pIdx = pathSegments.Length - 1;
+        var weight = 1.0;
+
+        while (qIdx >= 0 && pIdx >= 0)
+        {
+            if (TryMatchSegmentTextWeight(pathSegments[pIdx], qIdx, worker, out var segWeight))
+            {
+                weight *= segWeight;
+                qIdx--;
+            }
+            pIdx--;
+        }
+        return weight;
+    }
+
+    // Mirrors PathGate.TryMatchSegmentRow's match-finding exactly, but only needs the winning branch's
+    // weight -- re-running TryMatch here (rather than threading weight through the score-only method)
+    // keeps the hot Verify/TryMatchSegmentRow path free of any HighlightMask reference at all.
+    private bool TryMatchSegmentRowWeight(int uid, ReadOnlySpan<byte> nameUtf8, int q, SearchMatcher.Worker worker, out double weight)
+    {
+        weight = 1.0;
+        var pattern = _segmentPatterns[q];
+        if (_snapshot.IsUniqueAscii(uid))
+        {
+            if (_segmentBytePatterns[q].TryMatch(nameUtf8, out _, FzfScoringScheme.Default, worker.Slab, worker.ByteBuffers))
+            {
+                weight = FzfBytePattern.ComputeWeight(nameUtf8, pattern);
+                return true;
+            }
+        }
+        else
+        {
+            if (worker.Scratch.Length < nameUtf8.Length)
+                worker.Scratch = new char[Math.Max(nameUtf8.Length, worker.Scratch.Length * 2)];
+            var written = Encoding.UTF8.GetChars(nameUtf8, worker.Scratch);
+            var name = worker.Scratch.AsSpan(0, written);
+            var normalizedBuffer = worker.NormalizedScratch;
+            var normalizedLength = SearchTextNormalizer.NormalizeInto(name, ref normalizedBuffer, out _);
+            if (normalizedBuffer != null)
+                worker.NormalizedScratch = normalizedBuffer;
+            if (normalizedLength > 0 && normalizedBuffer is { } normalized)
+                name = normalized.AsSpan(0, normalizedLength);
+            if (pattern.TryMatch(name, out _, FzfScoringScheme.Default, worker.Slab))
+            {
+                weight = HighlightMask.ComputeWeight(name, pattern);
+                return true;
+            }
+
+            // Same live reading tier PathGate answers with; the weight still comes from the segment's
+            // own name through the shared mask computation.
+            var live = PinyinNameEvaluator.ForPattern(pattern);
+            if (live.HasProviders && live.TryScore(name, worker.Slab, out _))
+            {
+                weight = ComputeSegmentNameWeight(uid, nameUtf8, worker, pattern);
+                return true;
+            }
+        }
+
+        var disabledIds = SearchContext.DisabledAliasIds;
+        var (start, end) = _snapshot.AliasEntryRange(uid);
+        for (var e = start; e < end; e++)
+        {
+            if (disabledIds != null && disabledIds.Contains(_snapshot.AliasProviderId(e)))
+                continue;
+            var aliasUtf8 = _snapshot.AliasUtf8(e);
+            if (aliasUtf8.Length == 0)
+                continue;
+            // Same reading choice PathGate makes for the same entry: both readings for a structured
+            // provider's transliteration, the strict one for an alias that rewrites the segment's own script.
+            var separator = AliasProviderRegistry.GetSyllableSeparator(_snapshot.AliasProviderId(e));
+            var isAsciiAlias = Ascii.IsValid(aliasUtf8);
+            var aliasPattern = isAsciiAlias && separator != '\0' ? _segmentAliasPatterns[q] : pattern;
+            var isMatch = isAsciiAlias
+                ? (separator == '\0' ? _segmentBytePatterns[q] : _segmentAliasBytePatterns[q])
+                    .TryMatchSegmented(aliasUtf8, out _, FzfScoringScheme.Default, worker.Slab, worker.ByteBuffers)
+                : MatchesAliasChars(aliasPattern, aliasUtf8, worker);
+            if (isMatch)
+            {
+                // Weight is measured against the segment's own display name, not the alias string --
+                // mirrors HighlightMask, which maps alias-matched positions back onto the source name.
+                weight = ComputeSegmentNameWeight(uid, nameUtf8, worker, pattern);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool MatchesAliasChars(FzfPattern pattern, ReadOnlySpan<byte> aliasUtf8, SearchMatcher.Worker worker)
+    {
+        if (worker.AliasScratch.Length < aliasUtf8.Length)
+            worker.AliasScratch = new char[Math.Max(aliasUtf8.Length, worker.AliasScratch.Length * 2)];
+        var written = Encoding.UTF8.GetChars(aliasUtf8, worker.AliasScratch);
+        return pattern.TryMatch(worker.AliasScratch.AsSpan(0, written), out _, FzfScoringScheme.Default, worker.Slab);
+    }
+
+    private double ComputeSegmentNameWeight(int uid, ReadOnlySpan<byte> nameUtf8, SearchMatcher.Worker worker, FzfPattern pattern)
+    {
+        if (_snapshot.IsUniqueAscii(uid))
+            return FzfBytePattern.ComputeWeight(nameUtf8, pattern);
+
+        if (worker.Scratch.Length < nameUtf8.Length)
+            worker.Scratch = new char[Math.Max(nameUtf8.Length, worker.Scratch.Length * 2)];
+        var written = Encoding.UTF8.GetChars(nameUtf8, worker.Scratch);
+        return HighlightMask.ComputeWeight(worker.Scratch.AsSpan(0, written), pattern);
+    }
+
+    private bool TryMatchSegmentTextWeight(string segment, int q, SearchMatcher.Worker worker, out double weight)
+    {
+        weight = 1.0;
+        var pattern = _segmentPatterns[q];
+        var normalized = SearchTextNormalizer.Normalize(segment);
+        if (pattern.TryMatch(normalized, out _, FzfScoringScheme.Default, worker.Slab))
+        {
+            weight = pattern.IsEmpty ? 1.0 : HighlightMask.ComputeWeight(normalized, pattern);
+            return true;
+        }
+        if (!AliasProviderRegistry.HasNonAscii(segment))
+            return false;
+
+        // Same live reading tier PathGate answers with; the weight still comes from the segment's own text.
+        var segmentLive = PinyinNameEvaluator.ForPattern(pattern);
+        if (segmentLive.HasProviders && segmentLive.TryScore(segment, worker.Slab, out _))
+        {
+            weight = HighlightMask.ComputeWeight(segment, pattern);
+            return true;
+        }
+
+        var disabledIds = SearchContext.DisabledAliasIds;
+        foreach (var provider in AliasProviderRegistry.GetActiveProviders())
+        {
+            try
+            {
+                if (disabledIds != null && disabledIds.Contains(AliasProviderRegistry.GetProviderId(provider)))
+                    continue;
+                if (!provider.CanHandle(segment))
+                    continue;
+
+                foreach (var alias in provider.GetAliases(segment))
+                {
+                    if (pattern.ReadingFor(provider.SyllableSeparator, alias)
+                        .TryMatch(alias, out _, FzfScoringScheme.Default, worker.Slab))
+                    {
+                        weight = HighlightMask.ComputeWeight(segment, pattern);
+                        return true;
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+        return false;
+    }
+}
