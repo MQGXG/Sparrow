@@ -392,26 +392,54 @@
 
             <Border Classes="hud-line" Margin="20,0" />
 
+            <!-- 文件搜索：触发方式 -->
             <Grid ColumnDefinitions="*,Auto" Margin="20,14">
               <StackPanel Spacing="3" VerticalAlignment="Center">
-                <TextBlock Text="双击 Ctrl 搜索文件"
+                <TextBlock Text="文件搜索"
                            FontSize="13"
                            FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimaryBrush}" />
-                <TextBlock Text="连续按两次 Ctrl 唤出本机文件搜索；首次需要管理员权限建立索引"
+                <TextBlock Text="唤出本机文件搜索；首次需要管理员权限建立索引"
                            FontSize="11"
-                           MaxWidth="520"
+                           HorizontalAlignment="Left"
                            TextWrapping="Wrap"
                            Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
-              <ToggleSwitch Grid.Column="1"
-                            OnContent="开"
-                            OffContent="关"
-                            IsChecked="{Binding DoubleCtrlSearchEnabled, Mode=TwoWay}"
-                            VerticalAlignment="Center" />
+
+              <StackPanel Grid.Column="1"
+                          Spacing="8"
+                          HorizontalAlignment="Right"
+                          VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                  <TextBlock Text="双击 Ctrl"
+                             FontSize="11"
+                             Foreground="{DynamicResource TextSecondaryBrush}"
+                             VerticalAlignment="Center" />
+                  <ToggleSwitch OnContent="开"
+                                OffContent="关"
+                                IsChecked="{Binding DoubleCtrlSearchEnabled, Mode=TwoWay}"
+                                VerticalAlignment="Center" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                  <TextBlock Text="快捷键"
+                             FontSize="11"
+                             Foreground="{DynamicResource TextSecondaryBrush}"
+                             VerticalAlignment="Center" />
+                  <TextBox Width="180"
+                           IsReadOnly="True"
+                           Tag="hotkey"
+                           PlaceholderText="点击后按组合键"
+                           ToolTip.Tip="留空表示只使用双击 Ctrl"
+                           Text="{Binding FileSearchHotkey, Mode=TwoWay}" />
+                </StackPanel>
+              </StackPanel>
             </Grid>
 
-            <Grid ColumnDefinitions="*,Auto" Margin="20,0,20,6">
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <!-- 索引磁盘 -->
+            <Grid ColumnDefinitions="*,Auto" Margin="20,14">
               <StackPanel Spacing="3" VerticalAlignment="Center">
                 <TextBlock Text="索引磁盘"
                            FontSize="13"
@@ -419,7 +447,7 @@
                            Foreground="{DynamicResource TextPrimaryBrush}" />
                 <TextBlock Text="选择要建立文件索引的固定盘；修改后重启 Sparrow 生效"
                            FontSize="11"
-                           MaxWidth="520"
+                           HorizontalAlignment="Left"
                            TextWrapping="Wrap"
                            Foreground="{DynamicResource TextMutedBrush}" />
               </StackPanel>
@@ -430,26 +458,49 @@
                       ToolTip.Tip="删除现有索引并重新扫描，会弹出管理员确认" />
             </Grid>
 
-            <ItemsControl ItemsSource="{Binding IndexDriveOptions}" Margin="20,0,20,10">
+            <ItemsControl ItemsSource="{Binding IndexDriveOptions}" Margin="20,0,20,12">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:IndexDriveOptionViewModel">
                   <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
                             Content="{Binding Label}"
-                            Margin="0,2" />
+                            Margin="0,2,20,2" />
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <StackPanel Orientation="Horizontal" Spacing="8" Margin="20,0,20,10">
-              <Button Classes="ghost"
-                      Content="安装索引服务"
-                      Click="OnInstallIndexServiceClick"
-                      ToolTip.Tip="安装并启动 Windows 索引服务（需要管理员权限）" />
-              <Button Classes="ghost"
-                      Content="卸载索引服务"
-                      Click="OnUninstallIndexServiceClick"
-                      ToolTip.Tip="停止并删除 Windows 索引服务（需要管理员权限）" />
-            </StackPanel>
+            <!-- 索引服务 -->
+            <Grid ColumnDefinitions="*,Auto" Margin="20,0,20,14">
+              <StackPanel Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="索引服务"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                <TextBlock Text="安装后才能实时监听文件变化；需要管理员权限"
+                           FontSize="11"
+                           HorizontalAlignment="Left"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextMutedBrush}" />
+              </StackPanel>
+
+              <StackPanel Grid.Column="1"
+                          Orientation="Horizontal"
+                          Spacing="8"
+                          VerticalAlignment="Center">
+                <Button Classes="ghost"
+                        Content="安装索引服务"
+                        Click="OnInstallIndexServiceClick"
+                        ToolTip.Tip="安装并启动 Windows 索引服务（需要管理员权限）" />
+                <Button Classes="ghost"
+                        Content="卸载索引服务"
+                        Click="OnUninstallIndexServiceClick"
+                        ToolTip.Tip="停止并删除 Windows 索引服务（需要管理员权限）" />
+              </StackPanel>
+            </Grid>
 
             <Border Classes="hud-line" Margin="20,0" />
 

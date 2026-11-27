@@ -26,6 +26,9 @@ public sealed record AppSettings
     /// <summary>搜索面板热键，格式 "Ctrl+Alt+S"。</summary>
     public string SearchHotkey { get; init; } = "Ctrl+Alt+S";
 
+    /// <summary>本机文件搜索热键；空字符串表示只使用双击 Ctrl。默认 Ctrl+Alt+F。</summary>
+    public string FileSearchHotkey { get; init; } = "Ctrl+Alt+F";
+
     /// <summary>截图识别热键，格式 "Ctrl+Alt+C"。</summary>
     public string CaptureHotkey { get; init; } = "Ctrl+Alt+C";
 

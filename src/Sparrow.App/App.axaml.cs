@@ -276,6 +276,12 @@ public partial class App : Application
         var (queueModifiers, queueKey) = ResolveHotkey(settings.QueuePasteHotkey, "Ctrl+Alt+V");
         var (panelModifiers, panelKey) = ResolveHotkey(settings.ClipboardPanelHotkey, "Ctrl+Alt+B");
 
+        // 文件搜索热键允许留空（只保留双击 Ctrl）；空或格式错误时不注册
+        uint fileSearchModifiers = 0;
+        uint fileSearchKey = 0;
+        var hasFileSearchHotkey = !string.IsNullOrWhiteSpace(settings.FileSearchHotkey)
+            && HotkeyText.TryParse(settings.FileSearchHotkey, out fileSearchModifiers, out fileSearchKey);
+
         if (_pasteService is not null)
             _pasteService.TriggerModifiers = queueModifiers;
 
@@ -377,6 +383,17 @@ public partial class App : Application
                 () => Avalonia.Threading.Dispatcher.UIThread.Post(ToggleScreenRecording),
                 "屏幕录制")
         };
+
+        if (hasFileSearchHotkey)
+        {
+            hotkeyBindings.Add(new HotkeyBinding(
+                0x5A5F,
+                fileSearchModifiers | HotkeyService.ModNoRepeat,
+                fileSearchKey,
+                () => Avalonia.Threading.Dispatcher.UIThread.Post(
+                    () => _quickSearch?.Toggle()),
+                "文件搜索"));
+        }
 
         // 工具热键：按下直接执行，不打开面板
         foreach (var plan in toolHotkeyPlans)

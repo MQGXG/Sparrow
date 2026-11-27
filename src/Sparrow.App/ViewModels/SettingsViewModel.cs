@@ -49,6 +49,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _fileIndex = fileIndex;
 
         _searchHotkey = settings.SearchHotkey;
+        _fileSearchHotkey = settings.FileSearchHotkey;
         _captureHotkey = settings.CaptureHotkey;
         _recordHotkey = settings.RecordHotkey;
         _clipboardPanelHotkey = settings.ClipboardPanelHotkey;
@@ -234,6 +235,10 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
     [ObservableProperty]
     private string _searchHotkey = "Ctrl+Alt+S";
+
+    /// <summary>本机文件搜索热键；空字符串表示不绑定（只保留双击 Ctrl）。</summary>
+    [ObservableProperty]
+    private string _fileSearchHotkey = "Ctrl+Alt+F";
 
     [ObservableProperty]
     private string _captureHotkey = "Ctrl+Alt+C";
@@ -895,6 +900,20 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         var recordText = HotkeyText.Format(recordModifiers, recordKey);
         var panelText = HotkeyText.Format(panelModifiers, panelKey);
 
+        // 文件搜索热键允许留空（只保留双击 Ctrl）
+        var fileSearchText = string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(FileSearchHotkey))
+        {
+            if (!HotkeyText.TryParse(FileSearchHotkey, out var fileSearchModifiers, out var fileSearchKey))
+            {
+                StatusMessage = "文件搜索热键格式不正确，示例：Ctrl+Alt+F";
+                return;
+            }
+
+            fileSearchText = HotkeyText.Format(fileSearchModifiers, fileSearchKey);
+        }
+
         // 同一组合被注册两次时 RegisterHotKey 会静默失败，这里先拦下来
         if (string.Equals(searchText, captureText, StringComparison.OrdinalIgnoreCase))
         {
@@ -916,6 +935,12 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
             recordText,
             panelText
         };
+
+        if (fileSearchText.Length > 0 && !used.Add(fileSearchText))
+        {
+            StatusMessage = $"热键重复：{fileSearchText}";
+            return;
+        }
 
         var recognizeKey = string.Empty;
         var translateKey = string.Empty;
@@ -966,6 +991,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _settings = _settings with
         {
             SearchHotkey = searchText,
+            FileSearchHotkey = fileSearchText,
             CaptureHotkey = captureText,
             RecordHotkey = recordText,
             ClipboardPanelHotkey = panelText,
