@@ -1,6 +1,6 @@
 using System.IO.Pipes;
 using System.Security.Principal;
-using Lertaro.Core.Services.Installation;
+using Microsoft.Win32;
 
 namespace Lertaro.Core.Services.Search;
 
@@ -109,6 +109,28 @@ internal sealed class CallerVisibility : IDisposable
     /// The visibility for <paramref name="caller"/> given every profile on the machine (SID to profile
     /// folder). An unknown caller (null) is treated as nobody's profile owner and sees none of them.
     /// </summary>
+    /// <summary>本机所有用户配置目录：SID → 路径。用于非管理员调用方隐藏其他用户目录。</summary>
+    private static Dictionary<string, string> ReadProfiles()
+    {
+        var profiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        using var list = Registry.LocalMachine.OpenSubKey(
+            @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList");
+
+        if (list is null)
+            return profiles;
+
+        foreach (var sid in list.GetSubKeyNames())
+        {
+            using var profile = list.OpenSubKey(sid);
+
+            if (profile?.GetValue("ProfileImagePath") is string { Length: > 0 } folder)
+                profiles[sid] = folder;
+        }
+
+        return profiles;
+    }
+
     internal static CallerVisibility For(SecurityIdentifier? caller, bool isElevatedAdmin, IReadOnlyDictionary<string, string> profiles) =>
         isElevatedAdmin
             ? Everything
@@ -129,7 +151,7 @@ internal sealed class CallerVisibility : IDisposable
             pipe.RunAsClient(() => caller = WindowsIdentity.GetCurrent());
             if (caller?.User == null) throw new UnauthorizedAccessException("The pipe client has no user SID.");
             var profileVisibility = For(caller.User,
-                new WindowsPrincipal(caller).IsInRole(WindowsBuiltInRole.Administrator), UserProfiles.Read());
+                new WindowsPrincipal(caller).IsInRole(WindowsBuiltInRole.Administrator), ReadProfiles());
             // Everything is shared; keep the disposable caller token on a connection-owned instance.
             return new CallerVisibility(profileVisibility._hiddenRoots) { _caller = caller };
         }

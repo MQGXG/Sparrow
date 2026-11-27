@@ -1,5 +1,3 @@
-using Lertaro.Core.Services.Installation;
-
 namespace Lertaro.Core;
 
 public enum LogLevel
@@ -12,8 +10,6 @@ public enum LogLevel
 
 public static class Logger
 {
-    private static readonly InstallationMode CurrentInstallationMode = InstallationDetector.Detect();
-
     /// <summary>
     /// System-wide shared data directory: %ProgramData%\Sparrow.
     /// 原实现跟随 Lertaro 的安装模式；Sparrow 固定用自己的目录，

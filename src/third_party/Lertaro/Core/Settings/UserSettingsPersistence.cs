@@ -6,13 +6,8 @@ namespace Lertaro.Core;
 // Manages persistence for the supplied UserSettings instance.
 internal static class UserSettingsPersistence
 {
-    private static readonly Lazy<string> UserDataDirectory = new(() =>
-    {
-        SettingsDataDirectoryMigrator.Migrate(Logger.UserDataDir, updateUserSettings: true);
-        return Logger.UserDataDir;
-    });
-
-    public static string SettingsPath => Path.Combine(UserDataDirectory.Value, "user-settings.json");
+    // Sparrow 固定使用自己的用户数据目录，不再做安装目录迁移。
+    public static string SettingsPath => Path.Combine(Logger.UserDataDir, "user-settings.json");
     private const int BackupCount = 5;
 
     /// <summary>
