@@ -25,6 +25,38 @@ public partial class SettingsView : UserControl
     }
 
     /// <summary>设置页「重建索引」：重新读取服务写出的索引文件。</summary>
+    /// <summary>局域网互传：选择接收目录。</summary>
+    private async void OnPickLanShareFolderClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not SettingsViewModel viewModel)
+            return;
+
+        var storage = TopLevel.GetTopLevel(this)?.StorageProvider;
+
+        if (storage is null)
+            return;
+
+        var folders = await storage.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "选择接收目录",
+            AllowMultiple = false
+        });
+
+        if (folders.Count == 0)
+            return;
+
+        var path = folders[0].TryGetLocalPath();
+        if (!string.IsNullOrEmpty(path))
+            viewModel.LanShareReceiveDirectory = path;
+    }
+
+    /// <summary>局域网互传：设备名/端口/目录改完后重启服务。</summary>
+    private void OnApplyLanShareClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is SettingsViewModel viewModel)
+            viewModel.ApplyLanShareSettings();
+    }
+
     private void OnRebuildIndexClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is SettingsViewModel viewModel)
@@ -37,8 +69,7 @@ public partial class SettingsView : UserControl
             viewModel.InstallIndexService();
     }
 
-    private void OnUninstallIndexServiceClick(object? sender, RoutedEventArgs e)
-    {
+    private void OnUninstallIndexServiceClick(object? sender, RoutedEventArgs e)    {
         if (DataContext is SettingsViewModel viewModel)
             viewModel.UninstallIndexService();
     }

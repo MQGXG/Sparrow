@@ -1,0 +1,38 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Sparrow.App.Views.LanShareConfirmWindow"
+        Title="接收文件确认"
+        Width="480"
+        Height="420"
+        MinWidth="420"
+        MinHeight="320"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource SurfaceGradientBrush}">
+
+  <Grid RowDefinitions="Auto,*,Auto" Margin="18" RowSpacing="12">
+    <StackPanel Grid.Row="0" Spacing="4">
+      <TextBlock Text="有人想发送文件"
+                 FontSize="16"
+                 FontWeight="SemiBold"
+                 Foreground="{DynamicResource TextPrimaryBrush}" />
+      <TextBlock x:Name="SenderText"
+                 FontSize="12"
+                 Foreground="{DynamicResource TextSecondaryBrush}"
+                 TextWrapping="Wrap" />
+    </StackPanel>
+
+    <ListBox x:Name="FileList"
+             Grid.Row="1"
+             Background="{DynamicResource SurfaceRaisedBrush}"
+             BorderBrush="{DynamicResource LineBrush}"
+             BorderThickness="1" />
+
+    <StackPanel Grid.Row="2"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="8">
+      <Button Content="拒绝" Click="OnDeclineClick" />
+      <Button Classes="accent" Content="接收" Click="OnAcceptClick" />
+    </StackPanel>
+  </Grid>
+</Window>

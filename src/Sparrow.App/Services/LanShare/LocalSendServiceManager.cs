@@ -40,6 +40,43 @@ public sealed class LocalSendServiceManager : IDisposable
     public Task ValidateDiscoveredDevicesAsync() => _discoveryService?.ValidateDiscoveredDevicesAsync() ?? Task.CompletedTask;
 
     /// <summary>
+    /// 手动连接：按 IP（可带端口）读取对方设备信息。
+    /// 先试 HTTPS，失败再回退 HTTP，兼容关闭 TLS 的设备。
+    /// </summary>
+    public async Task<LocalSendDeviceInfo?> ResolveDeviceAsync(
+        string host,
+        int port = LocalSendDiscoveryService.DefaultPort,
+        CancellationToken token = default)
+    {
+        if (string.IsNullOrWhiteSpace(host))
+            return null;
+
+        var target = host.Trim();
+        var targetPort = port;
+
+        // 只处理 ip:port 这一种写法；IPv6 里本来就有冒号，交给调用方直接传 IP
+        var colon = target.LastIndexOf(':');
+        if (colon > 0
+            && target.IndexOf(':') == colon
+            && int.TryParse(target[(colon + 1)..], out var parsedPort)
+            && parsedPort is > 0 and <= 65535)
+        {
+            targetPort = parsedPort;
+            target = target[..colon];
+        }
+
+        using var client = new LocalSendClient(_server, null, _createChecksums);
+
+        var info = await client
+            .GetDeviceInfoAsync(target, targetPort, https: true, token)
+            .ConfigureAwait(false);
+
+        return info ?? await client
+            .GetDeviceInfoAsync(target, targetPort, https: false, token)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// 应用设置：首次启动时补齐设备指纹和 ShowToken，然后按 Enabled 启停。
     ///
     /// 搬迁修改：原实现接收 Lertaro 的 UserSettings 并顺手 Save()；

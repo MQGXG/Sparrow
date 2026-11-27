@@ -114,6 +114,54 @@ public partial class LanShareWindow : Window
     private void OnDeviceSelectionChanged(object? sender, SelectionChangedEventArgs e) =>
         SendButton.IsEnabled = DeviceList.SelectedItem is LocalSendDeviceInfo;
 
+    private async void OnConnectClick(object? sender, RoutedEventArgs e)
+    {
+        var host = IpBox.Text?.Trim();
+
+        if (string.IsNullOrEmpty(host))
+            return;
+
+        ConnectButton.IsEnabled = false;
+        StatusText.Text = $"正在连接 {host}…";
+
+        try
+        {
+            var port = _settings.Port > 0 ? _settings.Port : 53317;
+            var device = await _manager.ResolveDeviceAsync(host, port);
+
+            if (device is null)
+            {
+                StatusText.Text = "连接失败：没有响应，确认对方已开启 LocalSend/Sparrow 互传";
+                return;
+            }
+
+            var existing = _devices.FirstOrDefault(item => item.DiscoveryKey == device.DiscoveryKey);
+
+            if (existing is null)
+            {
+                _devices.Add(device);
+                DeviceList.SelectedItem = device;
+            }
+            else
+            {
+                existing.IpAddress = device.IpAddress;
+                existing.Port = device.Port;
+                existing.LastSeen = DateTime.UtcNow;
+                DeviceList.SelectedItem = existing;
+            }
+
+            StatusText.Text = $"已连接：{device.Alias}";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"连接失败：{ex.Message}";
+        }
+        finally
+        {
+            ConnectButton.IsEnabled = true;
+        }
+    }
+
     private async void OnRefreshClick(object? sender, RoutedEventArgs e)
     {
         RefreshButton.IsEnabled = false;

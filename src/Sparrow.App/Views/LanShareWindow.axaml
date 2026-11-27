@@ -28,25 +28,36 @@
                  TextWrapping="Wrap" />
     </StackPanel>
 
-    <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="8">
       <TextBlock Text="附近的设备"
                  VerticalAlignment="Center"
                  FontSize="13"
                  Foreground="{DynamicResource TextSecondaryBrush}" />
 
-      <TextBox x:Name="PinBox"
+      <TextBox x:Name="IpBox"
                Grid.Column="1"
-               Width="130"
+               Width="150"
+               PlaceholderText="IP 或 IP:端口"
+               VerticalAlignment="Center" />
+
+      <Button x:Name="ConnectButton"
+              Grid.Column="2"
+              Content="连接"
+              Click="OnConnectClick" />
+
+      <TextBox x:Name="PinBox"
+               Grid.Column="3"
+               Width="110"
                PlaceholderText="PIN（可选）"
                VerticalAlignment="Center" />
 
       <Button x:Name="RefreshButton"
-              Grid.Column="2"
+              Grid.Column="4"
               Content="刷新"
               Click="OnRefreshClick" />
 
       <Button x:Name="SendButton"
-              Grid.Column="3"
+              Grid.Column="5"
               Content="发送文件…"
               IsEnabled="False"
               Click="OnSendClick" />

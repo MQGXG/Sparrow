@@ -7,6 +7,7 @@ public enum SettingsSection
     Model,
     Hotkeys,
     General,
+    LanShare,
     Data,
     About
 }

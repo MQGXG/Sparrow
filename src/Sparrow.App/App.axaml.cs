@@ -135,6 +135,7 @@ public partial class App : Application
 
         // 局域网互传：App 常驻托盘时保持接收；证书/指纹由 LanShare 自己维护
         LocalSendServiceManager.Instance.ApplySettings(settings.LanShare);
+        LocalSendServiceManager.Instance.UploadRequested += OnLanShareUploadRequested;
 
         // 外观要在创建任何窗口之前应用，避免启动时先深后浅闪一下。
         // 默认 dark，与历史版本外观一致。
@@ -460,6 +461,16 @@ public partial class App : Application
         {
             // 快捷方式/自动化入口：直接打开局域网互传窗口。
             Avalonia.Threading.Dispatcher.UIThread.Post(ShowLanShare);
+        }
+        else if (desktop.Args?.Contains("--settings-lanshare") == true)
+        {
+            // 开发/自动化入口：打开工作区并定位到「互传」设置分段。
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                ShowWorkspace();
+                _workspaceViewModel?.ShowSettings();
+                _workspaceViewModel?.Settings.SelectSection(SettingsSection.LanShare);
+            });
         }
         else if (desktop.Args?.Contains("--setup") == true)
         {

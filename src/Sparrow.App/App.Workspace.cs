@@ -10,6 +10,8 @@ using Sparrow.App.History;
 using Sparrow.App.Overlays;
 using Sparrow.App.Plugins;
 using Sparrow.App.Services;
+using Sparrow.App.Services.LanShare;
+using Sparrow.App.Services.LanShare.Models;
 using Sparrow.App.Settings;
 using Sparrow.App.Shell;
 using Sparrow.App.ViewModels;
@@ -73,6 +75,58 @@ public partial class App
             _workspaceViewModel.Clipboard?.Refresh();
 
         _ = _workspaceViewModel.ReloadAsync();
+    }
+
+    /// <summary>
+    /// 收到上传请求：免确认模式直接接收；否则弹确认框。
+    /// 事件来自后台线程，弹窗必须切回 UI 线程。
+    /// </summary>
+    private void OnLanShareUploadRequested(object? sender, LocalSendUploadRequestArgs e)
+    {
+        if (_appSettings.LanShare.QuickSave)
+        {
+            e.Respond(true);
+            return;
+        }
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
+        {
+            try
+            {
+                var files = e.Dto.Files.Values
+                    .Select(file => file.FileName)
+                    .ToArray();
+
+                var dialog = new LanShareConfirmWindow(e.Dto.Info.Alias, files);
+
+                Window? owner = _lanShare is { IsVisible: true } ? _lanShare
+                    : _workspace is { IsVisible: true } ? _workspace
+                    : _quickSearch is { IsVisible: true } ? _quickSearch
+                    : null;
+
+                bool accepted;
+
+                if (owner is not null)
+                {
+                    accepted = await dialog.ShowDialog<bool>(owner);
+                }
+                else
+                {
+                    // 没有任何窗口可当 owner 时独立显示，关闭即视为拒绝
+                    var completion = new TaskCompletionSource<bool>();
+                    dialog.Closed += (_, _) => completion.TrySetResult(dialog.Accepted);
+                    dialog.Show();
+                    accepted = await completion.Task;
+                }
+
+                e.Respond(accepted);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn($"局域网互传确认失败：{ex.Message}");
+                e.Respond(false);
+            }
+        });
     }
 
     /// <summary>从托盘打开局域网互传窗口；第一次打开时创建，之后复用。</summary>

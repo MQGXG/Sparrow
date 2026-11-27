@@ -17,10 +17,10 @@ public sealed class LocalSendSettingsModel
     public int Port { get; set; } = 53317;
 
     /// <summary>
-    /// 免确认接收；false 时每个上传都要用户点确认。
-    /// MVP 默认 true：宿主还没有接收确认弹窗，先保证能直接收文件。
+    /// 免确认接收；false 时每个上传都要在确认框里点「接收」。
+    /// 默认 false：局域网里任何设备都能推文件，先让用户确认一次更安全。
     /// </summary>
-    public bool QuickSave { get; set; } = true;
+    public bool QuickSave { get; set; }
 
     public bool QuickSaveFromFavorites { get; set; } = true;
 

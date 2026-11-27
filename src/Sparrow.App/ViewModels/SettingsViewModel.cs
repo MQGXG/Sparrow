@@ -4,6 +4,7 @@ using Avalonia;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Sparrow.App.Plugins;
 using Sparrow.App.Services;
+using Sparrow.App.Services.LanShare;
 using Sparrow.App.Settings;
 using Sparrow.Plugin.Sdk;
 
@@ -660,9 +661,139 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
     public bool IsGeneralSelected => SelectedSection == SettingsSection.General;
 
+    public bool IsLanShareSelected => SelectedSection == SettingsSection.LanShare;
+
     public bool IsDataSelected => SelectedSection == SettingsSection.Data;
 
     public bool IsAboutSelected => SelectedSection == SettingsSection.About;
+
+    // ---- 局域网互传 ----
+
+    public bool LanShareEnabled
+    {
+        get => _settings.LanShare.Enabled;
+        set
+        {
+            if (_settings.LanShare.Enabled == value)
+                return;
+
+            _settings.LanShare.Enabled = value;
+            SaveLanShare(apply: true);
+            OnPropertyChanged();
+        }
+    }
+
+    public string LanShareAlias
+    {
+        get => _settings.LanShare.DeviceAlias;
+        set
+        {
+            if (_settings.LanShare.DeviceAlias == value)
+                return;
+
+            _settings.LanShare.DeviceAlias = value;
+            SaveLanShare(apply: false);
+            OnPropertyChanged();
+        }
+    }
+
+    public string LanSharePortText
+    {
+        get => _settings.LanShare.Port.ToString();
+        set
+        {
+            if (!int.TryParse(value, out var port) || port is < 1 or > 65535)
+                return;
+
+            if (_settings.LanShare.Port == port)
+                return;
+
+            _settings.LanShare.Port = port;
+            SaveLanShare(apply: false);
+            OnPropertyChanged();
+        }
+    }
+
+    public string LanShareReceiveDirectory
+    {
+        get => _settings.LanShare.DownloadDirectory;
+        set
+        {
+            if (_settings.LanShare.DownloadDirectory == value)
+                return;
+
+            _settings.LanShare.DownloadDirectory = value;
+            SaveLanShare(apply: false);
+            OnPropertyChanged();
+        }
+    }
+
+    public string LanSharePin
+    {
+        get => _settings.LanShare.ReceivePin ?? string.Empty;
+        set
+        {
+            var pin = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+            if (_settings.LanShare.ReceivePin == pin)
+                return;
+
+            _settings.LanShare.ReceivePin = pin;
+            SaveLanShare(apply: true);
+            OnPropertyChanged();
+        }
+    }
+
+    public bool LanShareQuickSave
+    {
+        get => _settings.LanShare.QuickSave;
+        set
+        {
+            if (_settings.LanShare.QuickSave == value)
+                return;
+
+            _settings.LanShare.QuickSave = value;
+            SaveLanShare(apply: true);
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>当前互传服务的运行状态，展示在设置页。</summary>
+    public string LanShareStatusText
+    {
+        get
+        {
+            var manager = LocalSendServiceManager.Instance;
+
+            if (!manager.IsRunning)
+                return "未运行";
+
+            var info = manager.DiscoveryService?.LocalInfo;
+            return info is null
+                ? "运行中"
+                : $"运行中 · {info.Alias} · 端口 {info.Port}";
+        }
+    }
+
+    private void SaveLanShare(bool apply)
+    {
+        _store.Save(_settings);
+
+        if (apply)
+        {
+            LocalSendServiceManager.Instance.ApplySettings(_settings.LanShare);
+            OnPropertyChanged(nameof(LanShareStatusText));
+            StatusMessage = LocalSendServiceManager.Instance.IsRunning
+                ? "局域网互传已启动"
+                : "局域网互传未启动";
+        }
+    }
+
+    /// <summary>设备名/端口/接收目录改完后点「应用并重启」。</summary>
+    public void ApplyLanShareSettings()
+    {
+        SaveLanShare(apply: true);
+        StatusMessage = LanShareStatusText;
+    }
 
     /// <summary>全部插件注册的工具总数（关于页指标用）。</summary>
     public int ToolCount => Plugins.Sum(plugin => plugin.ToolCount);
@@ -673,12 +804,16 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         OnPropertyChanged(nameof(IsModelSelected));
         OnPropertyChanged(nameof(IsHotkeysSelected));
         OnPropertyChanged(nameof(IsGeneralSelected));
+        OnPropertyChanged(nameof(IsLanShareSelected));
         OnPropertyChanged(nameof(IsDataSelected));
         OnPropertyChanged(nameof(IsAboutSelected));
 
         // 工具热键列表才需要工具注册表：切到热键分段时才加载插件，冷启动路径保持零加载
         if (value == SettingsSection.Hotkeys && !_toolHotkeysLoaded)
             ReloadToolHotkeys();
+
+        if (value == SettingsSection.LanShare)
+            OnPropertyChanged(nameof(LanShareStatusText));
     }
 
     public void SelectSection(SettingsSection section) => SelectedSection = section;
