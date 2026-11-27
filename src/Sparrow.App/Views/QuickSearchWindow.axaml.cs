@@ -33,6 +33,9 @@ public partial class QuickSearchWindow : Window
     private Point _dragOrigin;
     private bool _dragStarted;
 
+    // 原生 Shell 菜单打开期间不要因失焦隐藏窗口
+    private bool _menuOpen;
+
     // 复制完整路径用宿主现有的 Win32 剪贴板实现（Avalonia 12 的 IClipboard 没有 SetTextAsync）
     private readonly Win32Clipboard _clipboard = new();
 
@@ -44,6 +47,13 @@ public partial class QuickSearchWindow : Window
 
         // 隧道阶段拦：TextBox 会吃掉上下键（移动光标）和 Enter
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
+
+        // ListBoxItem 会处理掉右键的 PointerPressed，用 ContextRequested 才能在隧道阶段拿到
+        AddHandler(
+            ContextRequestedEvent,
+            OnResultContextRequested,
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
     }
 
     public QuickSearchWindow(IFileIndex index) : this()
@@ -93,7 +103,7 @@ public partial class QuickSearchWindow : Window
 
     private void OnWindowDeactivated(object? sender, EventArgs e)
     {
-        if (!AutoHide)
+        if (!AutoHide || _menuOpen)
             return;
 
         if ((DateTime.UtcNow - _shownAt).TotalMilliseconds < DeactivateGraceMilliseconds)
@@ -202,6 +212,58 @@ public partial class QuickSearchWindow : Window
         _dragItem = item;
         _dragOrigin = e.GetPosition(this);
         _dragStarted = false;
+    }
+
+    /// <summary>右键结果项：弹原生 Shell 上下文菜单。</summary>
+    private void OnResultContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (e.Source is not Control { DataContext: FileSearchItemViewModel item })
+            return;
+
+        App.Log.Info($"右键菜单：{item.FullPath}");
+
+        if (DataContext is QuickSearchViewModel viewModel)
+            viewModel.Selected = item;
+
+        ShowShellMenu(item);
+        e.Handled = true;
+    }
+
+    /// <summary>在鼠标位置弹出原生 Shell 上下文菜单；菜单关闭后刷新结果。</summary>
+    private void ShowShellMenu(FileSearchItemViewModel item)
+    {
+        var handle = TryGetPlatformHandle();
+
+        if (handle is null || handle.Handle == IntPtr.Zero)
+            return;
+
+        var cursor = WheelScroller.GetCursorPosition();
+
+        if (cursor is null)
+            return;
+
+        App.Log.Info($"原生菜单：hwnd={handle.Handle} cursor={cursor.Value.X},{cursor.Value.Y} path={item.FullPath}");
+
+        _menuOpen = true;
+
+        try
+        {
+            var shown = ShellContextMenu.Show(item.FullPath, cursor.Value.X, cursor.Value.Y);
+            App.Log.Info($"原生菜单返回：{shown}");
+        }
+        finally
+        {
+            _menuOpen = false;
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                Activate();
+                SearchBox.Focus();
+
+                if (DataContext is QuickSearchViewModel viewModel)
+                    viewModel.Refresh();
+            });
+        }
     }
 
     private async void OnResultPointerMoved(object? sender, PointerEventArgs e)

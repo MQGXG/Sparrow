@@ -113,6 +113,9 @@ public partial class QuickSearchViewModel : ObservableObject
         RefreshAsync();
     }
 
+    /// <summary>重新执行当前查询；右键菜单执行删除/重命名后刷新结果。</summary>
+    public void Refresh() => RefreshAsync();
+
     partial void OnQueryChanged(string value)
     {
         _debounce.Stop();
