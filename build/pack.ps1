@@ -50,6 +50,7 @@ New-Item -ItemType Directory -Force $releasesDir | Out-Null
     --mainExe Sparrow.App.exe `
     --packTitle 'Sparrow' `
     --packAuthors 'Sparrow' `
+    --icon (Join-Path $root 'src/Sparrow.App/Assets/sparrow.ico') `
     --outputDir $releasesDir
 
 if ($LASTEXITCODE -ne 0) { throw 'Velopack 打包失败' }
