@@ -141,7 +141,9 @@ public partial class App
                     rect.Height,
                     control,
                     rows => Avalonia.Threading.Dispatcher.UIThread.Post(
-                        () => overlay.SetCaptured(rows, rect.Height)),
+                        () => overlay.SetCaptured(
+                            rows,
+                            control.Horizontal ? rect.Width : rect.Height)),
                     preview => Avalonia.Threading.Dispatcher.UIThread.Post(
                         () => overlay.SetPreview(preview)),
                     cts.Token),

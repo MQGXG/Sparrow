@@ -43,12 +43,12 @@ public partial class ScrollCaptureWindow : Window
     /// <summary>用户点了「取消」，丢弃结果。</summary>
     public event EventHandler? Cancelled;
 
-    /// <summary>更新已捕获的屏数。</summary>
-    public void SetCaptured(int rows, int frameHeight)
+    /// <summary>更新已捕获的屏数；纵向按高度、横向按宽度算。</summary>
+    public void SetCaptured(int extent, int frameExtent)
     {
-        var height = frameHeight > 0 ? frameHeight : _frameHeight;
-        var screens = rows / (double)height;
-        ProgressText.Text = $"已捕获 {screens:F1} 屏（{rows} px）";
+        var size = frameExtent > 0 ? frameExtent : _frameHeight;
+        var screens = extent / (double)size;
+        ProgressText.Text = $"已捕获 {screens:F1} 屏（{extent} px）";
     }
 
     /// <summary>更新拼接结果的缩略图；解码失败就保持上一张。</summary>

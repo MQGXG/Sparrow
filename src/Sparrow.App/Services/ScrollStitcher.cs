@@ -4,7 +4,7 @@ using Microsoft.Win32.SafeHandles;
 
 namespace Sparrow.App.Services;
 
-/// <summary>追加一帧的结果。</summary>
+/// <summary>查找重叠的结论。</summary>
 internal enum AppendOutcome
 {
     /// <summary>找到了重叠，已完成追加。</summary>
@@ -17,18 +17,54 @@ internal enum AppendOutcome
     LostTracking
 }
 
+/// <summary>位移估计的结论。</summary>
+internal enum OffsetOutcome
+{
+    /// <summary>找到了可用的滚动量。</summary>
+    Moved,
+
+    /// <summary>确认页面没有滚动。</summary>
+    Still,
+
+    /// <summary>无法判断（滚动过快、内容变化太大）。</summary>
+    Lost
+}
+
 /// <summary>
-/// 滚动截图拼接器。
+/// 滚动截图拼接器：纵向按行、横向按列。
+/// 捕获循环只关心这几个操作，不关心具体轴向。
+/// </summary>
+internal interface IScrollStitcher : IDisposable
+{
+    /// <summary>已拼出的总行数（纵向）或总列数（横向）；用于进度显示。</summary>
+    int TotalRows { get; }
+
+    /// <summary>追加一帧；added 是新增的行数（横向为列数）。</summary>
+    AppendOutcome Append(byte[] frame, out int added);
+
+    /// <summary>生成最终 PNG；没有内容时返回 null。</summary>
+    byte[]? BuildPng();
+
+    /// <summary>生成缩略图 PNG。</summary>
+    byte[]? BuildPreviewPng(int maxWidth, int maxHeight);
+}
+
+/// <summary>
+/// 纵向滚动截图拼接器（按行拼接）。
 ///
 /// 只接收原始 BGRA 帧（top-down，stride = width*4），不碰 UI。
-/// 做法：用上一帧最后 T 行作为模板，在下一帧里找它出现的位置；
-/// 找到后把模板之后的行追加到结果里。
+/// 做法：先用上一帧最后 T 行作为模板，在下一帧里找它出现的位置；
+/// 模板失配或看起来没动时，再把上一帧切成多段分别匹配、按段投票，
+/// 避免固定页眉 / 底栏把帧底模板钉在原位导致提前停止。
+/// 找到滚动量后，把内容区底部新增的行追加到结果里。
+///
+/// 横向滚动用 <see cref="HorizontalScrollStitcher"/>，算法对称、按列处理。
 ///
 /// 长图不把每一行都留在内存：先用内存攒到 8 MB，超过后自动落到临时文件，
 /// 生成 PNG 时再从文件按行读、边压边写 IDAT。临时文件是 DeleteOnClose，
 /// 进程异常退出也会被系统清掉。
 /// </summary>
-internal sealed class ScrollStitcher : IDisposable
+internal sealed class ScrollStitcher : IScrollStitcher
 {
     /// <summary>内存里最多攒多少行数据；超过就转存磁盘。</summary>
     private const long DefaultMemoryBudget = 8L * 1024 * 1024;
@@ -61,6 +97,12 @@ internal sealed class ScrollStitcher : IDisposable
     private bool _disposed;
     private ulong[]? _previousHashes;
 
+    /// <summary>校准出的固定底栏行数；0 表示没有（或还没校准）。</summary>
+    private int _fixedBottomRows;
+
+    /// <summary>固定底栏只校准一次：拿到第一段真实滚动后才可信。</summary>
+    private bool _fixedCalibrated;
+
     public ScrollStitcher(int width, int height)
         : this(width, height, DefaultMemoryBudget, Path.GetTempPath())
     {
@@ -75,8 +117,10 @@ internal sealed class ScrollStitcher : IDisposable
         _memoryBudget = Math.Max(0, memoryBudget);
         _tempDirectory = tempDirectory;
 
-        // 模板太短容易误匹配，太长则限制单次可滚动的距离
-        _templateRows = Math.Clamp(height / 4, 40, 160);
+        // 模板太短容易误匹配，太长则限制单次可滚动的距离；
+        // 小选区（几十像素高）要按帧高收缩，否则模板会超过帧高。
+        var minimumTemplateRows = Math.Min(40, Math.Max(1, height / 2));
+        _templateRows = Math.Clamp(height / 4, minimumTemplateRows, 160);
     }
 
     /// <summary>当前已拼出的总行数。</summary>
@@ -106,24 +150,40 @@ internal sealed class ScrollStitcher : IDisposable
             return AppendOutcome.Added;
         }
 
-        var (bestY, bestScore) = FindBestMatch(_previousHashes, hashes);
+        var resolved = ResolveOffset(_previousHashes, hashes, out var offset, out var fromBands);
 
-        // 允许极少数行不同：光标闪烁、局部动画
-        if (bestScore < _templateRows - 2)
+        if (resolved == OffsetOutcome.Lost)
             return AppendOutcome.LostTracking;
 
-        // 模板仍然落在帧底 = 页面没动
-        if (bestY >= _frameHeight - _templateRows)
+        if (resolved == OffsetOutcome.Still)
             return AppendOutcome.Duplicate;
 
-        var firstNewRow = bestY + _templateRows;
-        var newRows = _frameHeight - firstNewRow;
+        // 多段投票给出的结果先用重叠区交叉验证，避免重复内容误判；
+        // 验证通过后再校准固定底栏，避免用错误的滚动量做一次性校准。
+        if (fromBands
+            && !ScrollOffsetMatcher.Verify(_previousHashes, hashes, offset, _frameHeight))
+        {
+            return AppendOutcome.LostTracking;
+        }
+
+        // 第一段真实滚动到手后校准固定底栏：固定底栏会随每一帧被重复拼进去，
+        // 而且会把「帧底模板」永远钉在原位，是滚动截图提前停住的主要原因。
+        CalibrateFixedBottom(offset, hashes);
+
+        var contentBottom = _frameHeight - _fixedBottomRows;
+
+        // 内容区已经整屏滚过去了，没有重叠可以验证
+        if (offset >= contentBottom)
+            return AppendOutcome.LostTracking;
+
+        var firstNewRow = contentBottom - offset;
+        var newRows = contentBottom - firstNewRow;
 
         if (newRows <= 0)
             return AppendOutcome.Duplicate;
 
         var before = TotalRows;
-        AppendRows(frame, firstNewRow, _frameHeight);
+        AppendRows(frame, firstNewRow, contentBottom);
         _previousHashes = hashes;
         addedRows = TotalRows - before;
         return AppendOutcome.Added;
@@ -184,35 +244,99 @@ internal sealed class ScrollStitcher : IDisposable
     }
 
     /// <summary>
-    /// 从下往上扫，优先选「滚动量最小」的匹配：
-    /// 页面里出现重复内容时，避免一次跳很远拼进重复片段。
+    /// 先试「内容区底部模板」，失败或看起来没动时再用多段投票确认。
+    ///
+    /// 固定底栏会让帧底模板一直匹配到原位（误判 Duplicate），
+    /// 或者因为模板里混入固定行而完全匹配不上（误判 LostTracking）。
     /// </summary>
-    private (int Y, int Score) FindBestMatch(ulong[] previous, ulong[] current)
+    private OffsetOutcome ResolveOffset(
+        ulong[] previous, ulong[] current, out int offset, out bool fromBands)
     {
-        var templateStart = _frameHeight - _templateRows;
-        var bestY = -1;
-        var bestScore = 0;
+        offset = 0;
+        fromBands = false;
 
-        for (var y = templateStart; y >= 0; y--)
+        // 校准出固定底栏后，模板要避开它，从真正的内容区底部往上取
+        var templateStart = Math.Max(0, _frameHeight - _fixedBottomRows - _templateRows);
+        var (bestPosition, bestScore) = ScrollOffsetMatcher.FindBestMatch(
+            previous, current, templateStart, _templateRows);
+
+        // 允许极少数行不同：光标闪烁、局部动画
+        if (bestPosition >= 0 && bestScore >= _templateRows - 2)
         {
-            var score = 0;
-            for (var i = 0; i < _templateRows; i++)
+            offset = templateStart - bestPosition;
+
+            if (offset > 0)
+                return OffsetOutcome.Moved;
+
+            // 模板命中帧底不等于没滚动：固定底栏也会这样。
+            // 用内容区分段投票再确认一次。
+            var confirmed = ScrollOffsetMatcher.EstimateOffset(previous, current, _frameHeight);
+            if (confirmed is > 0)
             {
-                if (current[y + i] == previous[templateStart + i])
-                    score++;
+                offset = confirmed.Value;
+                fromBands = true;
+                return OffsetOutcome.Moved;
             }
 
-            if (score > bestScore)
-            {
-                bestScore = score;
-                bestY = y;
-
-                if (score == _templateRows)
-                    break;
-            }
+            return OffsetOutcome.Still;
         }
 
-        return (bestY, bestScore);
+        var estimated = ScrollOffsetMatcher.EstimateOffset(previous, current, _frameHeight);
+        if (estimated is null)
+            return OffsetOutcome.Lost;
+
+        if (estimated.Value <= 0)
+            return OffsetOutcome.Still;
+
+        offset = estimated.Value;
+        fromBands = true;
+        return OffsetOutcome.Moved;
+    }
+
+    /// <summary>
+    /// 校准固定底栏。只在第一段真实滚动后做一次：
+    /// 此时画布还只有首帧，回退掉底栏不会破坏内容顺序。
+    /// </summary>
+    private void CalibrateFixedBottom(int offset, ulong[] current)
+    {
+        if (_fixedCalibrated || offset < 8 || _previousHashes is null)
+            return;
+
+        _fixedCalibrated = true;
+
+        var rows = ScrollOffsetMatcher.DetectFixedTrailing(
+            _previousHashes, current, _frameHeight);
+
+        if (rows < 8 || rows > _frameHeight / 2)
+            return;
+
+        // 纯色区域可能只是页面底部的空白内容，不能当成固定底栏裁掉
+        if (ScrollOffsetMatcher.DistinctCount(current, _frameHeight - rows, rows)
+            < Math.Max(3, rows / 4))
+        {
+            return;
+        }
+
+        TrimTrailingRows(rows);
+        _fixedBottomRows = rows;
+    }
+
+    /// <summary>回退画布末尾的若干行（校准固定底栏时用）。</summary>
+    private void TrimTrailingRows(int count)
+    {
+        if (count <= 0 || count > TotalRows)
+            return;
+
+        if (_file is not null)
+        {
+            TotalRows -= count;
+            return;
+        }
+
+        var remove = Math.Min(count, _rows.Count);
+        _rows.RemoveRange(_rows.Count - remove, remove);
+        _memoryBytes -= (long)remove * _stride;
+        TotalRows -= remove;
     }
 
     private void AppendRows(byte[] frame, int from, int to)

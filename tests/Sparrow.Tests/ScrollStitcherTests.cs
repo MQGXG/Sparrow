@@ -44,6 +44,83 @@ public sealed class ScrollStitcherTests
         return frame;
     }
 
+    /// <summary>造一帧：内容从 canvas 的 offset 行开始，底部 footerRows 行固定不动。</summary>
+    private static byte[] FrameWithFooter(byte[] canvas, int offset, int footerRows)
+    {
+        var stride = Width * 4;
+        var frame = new byte[stride * FrameHeight];
+        var contentHeight = FrameHeight - footerRows;
+
+        Array.Copy(canvas, offset * stride, frame, 0, contentHeight * stride);
+
+        // 底栏每行特征都不同，避免被「纯色段无信息」过滤掉
+        for (var y = contentHeight; y < FrameHeight; y++)
+        {
+            for (var x = 0; x < Width; x++)
+            {
+                var i = y * stride + x * 4;
+                frame[i] = 0xFE;
+                frame[i + 1] = (byte)(y % 256);
+                frame[i + 2] = (byte)((y * 11) % 256);
+                frame[i + 3] = 255;
+            }
+        }
+
+        return frame;
+    }
+
+    /// <summary>
+    /// 造一帧：顶部 headerRows 行固定页眉，底部 footerRows 行固定底栏，
+    /// 中间内容从 canvas 的 offset 行开始滚动（真实网页最常见的布局）。
+    /// </summary>
+    private static byte[] FrameWithHeaderFooter(
+        byte[] canvas, int offset, int headerRows, int footerRows)
+    {
+        var stride = Width * 4;
+        var frame = new byte[stride * FrameHeight];
+        var contentRows = FrameHeight - headerRows - footerRows;
+
+        Array.Copy(canvas, offset * stride, frame, headerRows * stride, contentRows * stride);
+
+        // 页眉 / 底栏都做成每行特征不同，避免被「纯色段」规则跳过
+        for (var y = 0; y < headerRows; y++)
+            PaintFixedRow(frame, y, 0xFD, 3);
+
+        for (var y = FrameHeight - footerRows; y < FrameHeight; y++)
+            PaintFixedRow(frame, y, 0xFE, 11);
+
+        return frame;
+    }
+
+    private static void PaintFixedRow(byte[] frame, int y, byte tag, int factor)
+    {
+        var stride = Width * 4;
+
+        for (var x = 0; x < Width; x++)
+        {
+            var i = y * stride + x * 4;
+            frame[i] = tag;
+            frame[i + 1] = (byte)(y % 256);
+            frame[i + 2] = (byte)((y * factor) % 256);
+            frame[i + 3] = 255;
+        }
+    }
+
+    /// <summary>把某一行改成灰色，模拟光标闪烁 / 局部动画。</summary>
+    private static void RecolorRow(byte[] frame, int y)
+    {
+        var stride = Width * 4;
+
+        for (var x = 0; x < Width; x++)
+        {
+            var i = y * stride + x * 4;
+            frame[i] = 0x7F;
+            frame[i + 1] = 0x7F;
+            frame[i + 2] = 0x7F;
+            frame[i + 3] = 255;
+        }
+    }
+
     [Fact]
     public void 连续滚动_按新增部分拼接()
     {
@@ -77,6 +154,115 @@ public sealed class ScrollStitcherTests
 
         added.ShouldBe(0);
         stitcher.TotalRows.ShouldBe(FrameHeight);
+    }
+
+    [Fact]
+    public void 固定底栏_滚动时仍能继续拼接()
+    {
+        const int footerRows = 40;
+        var canvas = Canvas(400);
+        var stitcher = new ScrollStitcher(Width, FrameHeight);
+
+        stitcher.Append(FrameWithFooter(canvas, 0, footerRows), out var first)
+            .ShouldBe(AppendOutcome.Added);
+        first.ShouldBe(FrameHeight);
+
+        // 连续 4 次向下滚 30 行：固定底栏以前会让帧底模板一直命中原位，
+        // 从第二次开始就被判成 Duplicate / LostTracking。
+        for (var step = 1; step <= 4; step++)
+        {
+            stitcher.Append(FrameWithFooter(canvas, step * 30, footerRows), out var added)
+                .ShouldBe(AppendOutcome.Added, $"第 {step} 次滚动应继续拼接");
+
+            added.ShouldBe(30);
+        }
+
+        // 首帧 100 行，校准后裁掉 40 行固定底栏，再追加 4 × 30 行
+        stitcher.TotalRows.ShouldBe(60 + 30 * 4);
+    }
+
+    [Fact]
+    public void 固定页眉和底栏_小选区滚动时仍能继续拼接()
+    {
+        // 常见网页布局：顶部导航固定、底部工具栏固定，中间只剩 40 行内容。
+        // 小选区下重叠区很窄，之前固定区域投出的 0 票会压掉内容票。
+        const int headerRows = 20;
+        const int footerRows = 40;
+        const int step = 20;
+
+        var canvas = Canvas(400);
+        var stitcher = new ScrollStitcher(Width, FrameHeight);
+
+        stitcher.Append(FrameWithHeaderFooter(canvas, 0, headerRows, footerRows), out var first)
+            .ShouldBe(AppendOutcome.Added);
+        first.ShouldBe(FrameHeight);
+
+        for (var round = 1; round <= 4; round++)
+        {
+            stitcher.Append(
+                    FrameWithHeaderFooter(canvas, round * step, headerRows, footerRows),
+                    out var added)
+                .ShouldBe(AppendOutcome.Added, $"第 {round} 次滚动应继续拼接");
+
+            added.ShouldBe(step);
+        }
+
+        // 首帧 100 行，裁掉 40 行固定底栏后是 60 行，再追加 4 × 20 行
+        stitcher.TotalRows.ShouldBe(60 + step * 4);
+    }
+
+    [Fact]
+    public void 固定页眉和底栏_页面没滚动仍判重复()
+    {
+        const int headerRows = 20;
+        const int footerRows = 40;
+
+        var canvas = Canvas(400);
+        var stitcher = new ScrollStitcher(Width, FrameHeight);
+
+        stitcher.Append(FrameWithHeaderFooter(canvas, 0, headerRows, footerRows), out _)
+            .ShouldBe(AppendOutcome.Added);
+
+        stitcher.Append(FrameWithHeaderFooter(canvas, 0, headerRows, footerRows), out var added)
+            .ShouldBe(AppendOutcome.Duplicate);
+
+        added.ShouldBe(0);
+        stitcher.TotalRows.ShouldBe(FrameHeight);
+    }
+
+    [Fact]
+    public void 固定底栏_页面没滚动仍判重复()
+    {
+        const int footerRows = 40;
+        var canvas = Canvas(400);
+        var stitcher = new ScrollStitcher(Width, FrameHeight);
+
+        stitcher.Append(FrameWithFooter(canvas, 0, footerRows), out _)
+            .ShouldBe(AppendOutcome.Added);
+
+        stitcher.Append(FrameWithFooter(canvas, 0, footerRows), out var added)
+            .ShouldBe(AppendOutcome.Duplicate);
+
+        added.ShouldBe(0);
+        stitcher.TotalRows.ShouldBe(FrameHeight);
+    }
+
+    [Fact]
+    public void 局部动画_少量行不同仍能继续拼接()
+    {
+        var canvas = Canvas(400);
+        var stitcher = new ScrollStitcher(Width, FrameHeight);
+
+        stitcher.Append(Frame(canvas, 0), out _).ShouldBe(AppendOutcome.Added);
+
+        // 滚动 35 行，同时有 5 行在变化（光标 / 局部重绘）。
+        // 帧底模板会有几行对不上，需要多段投票接手。
+        var next = Frame(canvas, 35);
+        foreach (var y in new[] { 30, 40, 50, 60, 70 })
+            RecolorRow(next, y);
+
+        stitcher.Append(next, out var added).ShouldBe(AppendOutcome.Added);
+        added.ShouldBe(35);
     }
 
     [Fact]
