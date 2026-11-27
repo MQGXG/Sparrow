@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Sparrow.App.ViewModels"
+        xmlns:controls="using:Sparrow.App.Controls"
         x:Class="Sparrow.App.Views.QuickSearchWindow"
         x:DataType="vm:QuickSearchViewModel"
         Title="Sparrow 文件搜索"
@@ -96,11 +97,12 @@
                   </Panel>
 
                   <StackPanel Grid.Column="1" Spacing="3">
-                    <TextBlock Text="{Binding Name}"
-                               FontSize="13"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextPrimaryBrush}"
-                               TextTrimming="CharacterEllipsis" />
+                    <controls:HighlightTextBlock SourceText="{Binding Name}"
+                                                 Term="{Binding HighlightTerm}"
+                                                 FontSize="13"
+                                                 FontWeight="SemiBold"
+                                                 Foreground="{DynamicResource TextPrimaryBrush}"
+                                                 TextTrimming="CharacterEllipsis" />
                     <TextBlock Text="{Binding DirectoryPath}"
                                FontSize="11"
                                Foreground="{DynamicResource TextSecondaryBrush}"

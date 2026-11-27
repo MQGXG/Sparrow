@@ -438,6 +438,11 @@ public partial class App : Application
             // 开发/自动化入口：直接打开截图窗口，用于验证选区工具条。
             Avalonia.Threading.Dispatcher.UIThread.Post(CaptureAndRecognize);
         }
+        else if (desktop.Args?.Contains("--quick-search") == true)
+        {
+            // 快捷方式/自动化入口：直接打开文件搜索。
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => _quickSearch?.Toggle());
+        }
         else if (desktop.Args?.Contains("--setup") == true)
         {
             // 开发/自动化入口：直接打开录制设置面板。

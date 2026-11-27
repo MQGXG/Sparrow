@@ -8,12 +8,13 @@ namespace Sparrow.App.ViewModels;
 /// <summary>文件搜索结果的一行。</summary>
 public sealed class FileSearchItemViewModel
 {
-    public FileSearchItemViewModel(FileSearchItem item)
+    public FileSearchItemViewModel(FileSearchItem item, string highlightTerm)
     {
         Name = item.Name;
         DirectoryPath = item.DirectoryPath;
         FullPath = item.FullPath;
         IsDirectory = item.IsDirectory;
+        HighlightTerm = highlightTerm;
     }
 
     public string Name { get; }
@@ -23,6 +24,8 @@ public sealed class FileSearchItemViewModel
     public string FullPath { get; }
 
     public bool IsDirectory { get; }
+
+    public string HighlightTerm { get; }
 
     public bool IsFile => !IsDirectory;
 }
@@ -112,7 +115,7 @@ public partial class QuickSearchViewModel : ObservableObject
         Items.Clear();
 
         foreach (var item in results)
-            Items.Add(new FileSearchItemViewModel(item));
+            Items.Add(new FileSearchItemViewModel(item, query));
 
         Selected = Items.FirstOrDefault();
         IsEmpty = Items.Count == 0;
