@@ -31,8 +31,4 @@
     <InternalsVisibleTo Include="Sparrow.IndexService" />
   </ItemGroup>
 
-  <ItemGroup>
-    <EmbeddedResource Include="Services\LocalSend\MimeTypes.json" />
-  </ItemGroup>
-
 </Project>
