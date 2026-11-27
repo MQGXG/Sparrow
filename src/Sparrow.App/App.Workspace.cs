@@ -75,6 +75,20 @@ public partial class App
         _ = _workspaceViewModel.ReloadAsync();
     }
 
+    /// <summary>从托盘打开局域网互传窗口；第一次打开时创建，之后复用。</summary>
+    private void ShowLanShare()
+    {
+        if (_lanShare is { IsVisible: true })
+        {
+            _lanShare.Activate();
+            return;
+        }
+
+        _lanShare ??= new LanShareWindow();
+        _lanShare.Show();
+        _lanShare.Activate();
+    }
+
     /// <summary>工作台隐藏 60 秒后释放剪贴板条目/详情图和图片缓存；输入与结果保留。</summary>
     private void ScheduleWorkspaceRelease()
     {

@@ -12,6 +12,7 @@ using Sparrow.App.History;
 using Sparrow.App.Overlays;
 using Sparrow.App.Plugins;
 using Sparrow.App.Services;
+using Sparrow.App.Services.LanShare;
 using Sparrow.App.Services.Recording;
 using Sparrow.App.Settings;
 using Sparrow.App.Shell;
@@ -40,6 +41,7 @@ public partial class App : Application
     private WorkspaceViewModel? _workspaceViewModel;
     private CancellationTokenSource? _workspaceRelease;
     private ClipboardPanelWindow? _clipboardPanel;
+    private LanShareWindow? _lanShare;
     private SettingsStore? _settingsStore;
     private AppSettings _appSettings = new();
     private LocalModelManager? _localModels;
@@ -130,6 +132,9 @@ public partial class App : Application
         // 面板的置顶状态要写回同一份 settings
         _settingsStore = settingsStore;
         _appSettings = settings;
+
+        // 局域网互传：App 常驻托盘时保持接收；证书/指纹由 LanShare 自己维护
+        LocalSendServiceManager.Instance.ApplySettings(settings.LanShare);
 
         // 外观要在创建任何窗口之前应用，避免启动时先深后浅闪一下。
         // 默认 dark，与历史版本外观一致。
@@ -308,7 +313,8 @@ public partial class App : Application
             () => StartScreenRecording(),
             trayEntries,
             toolId => Avalonia.Threading.Dispatcher.UIThread.Post(
-                () => _ = ExecuteToolHotkeyAsync(toolId)));
+                () => _ = ExecuteToolHotkeyAsync(toolId)),
+            ShowLanShare);
         _tray.Initialize();
 
         // 录制热键可配置；解析失败时退回默认 Ctrl+Alt+Shift+R。
@@ -449,6 +455,11 @@ public partial class App : Application
                 _quickSearch.AutoHide = false;
                 _quickSearch.Toggle();
             });
+        }
+        else if (desktop.Args?.Contains("--lan-share") == true)
+        {
+            // 快捷方式/自动化入口：直接打开局域网互传窗口。
+            Avalonia.Threading.Dispatcher.UIThread.Post(ShowLanShare);
         }
         else if (desktop.Args?.Contains("--setup") == true)
         {

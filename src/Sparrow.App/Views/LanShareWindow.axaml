@@ -1,0 +1,96 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:lan="using:Sparrow.App.Services.LanShare.Models"
+        x:Class="Sparrow.App.Views.LanShareWindow"
+        Title="局域网互传"
+        Width="640"
+        Height="600"
+        MinWidth="520"
+        MinHeight="460"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource SurfaceGradientBrush}">
+
+  <!--
+    局域网互传：LocalSend 协议。
+    左边发现附近设备，右边发送文件；接收由后台服务常驻完成，落盘到设置的接收目录。
+    MVP 只做发现 / 发送 / 接收状态，PIN 输入先放在发送栏。
+  -->
+  <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" Margin="18" RowSpacing="12">
+
+    <StackPanel Grid.Row="0" Spacing="4">
+      <TextBlock Text="局域网互传"
+                 FontSize="18"
+                 FontWeight="SemiBold"
+                 Foreground="{DynamicResource TextPrimaryBrush}" />
+      <TextBlock x:Name="LocalInfoText"
+                 FontSize="12"
+                 Foreground="{DynamicResource TextSecondaryBrush}"
+                 TextWrapping="Wrap" />
+    </StackPanel>
+
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+      <TextBlock Text="附近的设备"
+                 VerticalAlignment="Center"
+                 FontSize="13"
+                 Foreground="{DynamicResource TextSecondaryBrush}" />
+
+      <TextBox x:Name="PinBox"
+               Grid.Column="1"
+               Width="130"
+               PlaceholderText="PIN（可选）"
+               VerticalAlignment="Center" />
+
+      <Button x:Name="RefreshButton"
+              Grid.Column="2"
+              Content="刷新"
+              Click="OnRefreshClick" />
+
+      <Button x:Name="SendButton"
+              Grid.Column="3"
+              Content="发送文件…"
+              IsEnabled="False"
+              Click="OnSendClick" />
+    </Grid>
+
+    <ListBox x:Name="DeviceList"
+             Grid.Row="2"
+             Background="{DynamicResource SurfaceRaisedBrush}"
+             BorderBrush="{DynamicResource LineBrush}"
+             BorderThickness="1"
+             SelectionChanged="OnDeviceSelectionChanged">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="lan:LocalSendDeviceInfo">
+          <StackPanel Spacing="2" Margin="4,6">
+            <TextBlock Text="{Binding Alias}"
+                       FontSize="13"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimaryBrush}"
+                       TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding IpAddress}"
+                       FontSize="11"
+                       Foreground="{DynamicResource TextMutedBrush}" />
+          </StackPanel>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+
+    <StackPanel Grid.Row="3" Spacing="6">
+      <ProgressBar x:Name="SendProgress"
+                   Height="6"
+                   Minimum="0"
+                   Maximum="100" />
+      <TextBlock x:Name="StatusText"
+                 FontSize="12"
+                 Foreground="{DynamicResource TextSecondaryBrush}"
+                 TextWrapping="Wrap"
+                 Text="等待设备…" />
+    </StackPanel>
+
+    <TextBlock x:Name="ReceiveDirectoryText"
+               Grid.Row="4"
+               FontSize="11"
+               Foreground="{DynamicResource TextMutedBrush}"
+               TextTrimming="CharacterEllipsis"
+               TextWrapping="Wrap" />
+  </Grid>
+</Window>

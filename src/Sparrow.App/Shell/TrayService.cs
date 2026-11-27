@@ -16,6 +16,7 @@ public sealed class TrayService
     private readonly Action _showWorkspace;
     private readonly Action _capture;
     private readonly Action _record;
+    private readonly Action? _lanShare;
     private readonly IReadOnlyList<TrayMenuEntry> _menuEntries;
     private readonly Action<string> _executeToolHotkey;
     private TrayIcon? _icon;
@@ -26,12 +27,14 @@ public sealed class TrayService
         Action capture,
         Action record,
         IReadOnlyList<TrayMenuEntry> menuEntries,
-        Action<string> executeToolHotkey)
+        Action<string> executeToolHotkey,
+        Action? showLanShare = null)
     {
         _palette = palette;
         _showWorkspace = showWorkspace;
         _capture = capture;
         _record = record;
+        _lanShare = showLanShare;
         _menuEntries = menuEntries;
         _executeToolHotkey = executeToolHotkey;
     }
@@ -58,6 +61,11 @@ public sealed class TrayService
 
                 case TrayMenuActionKind.Record:
                     menu.Add(CreateItem(entry.Label, _record));
+                    break;
+
+                case TrayMenuActionKind.LanShare:
+                    if (_lanShare is not null)
+                        menu.Add(CreateItem(entry.Label, _lanShare));
                     break;
 
                 case TrayMenuActionKind.Workspace:
