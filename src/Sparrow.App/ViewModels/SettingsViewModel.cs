@@ -61,6 +61,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
             ?? CaptureApiOptions[0];
         _captureShowCursor = settings.CaptureShowCursor;
         _captureUiInScroll = settings.CaptureUiInScroll;
+        _doubleCtrlSearchEnabled = settings.DoubleCtrlSearchEnabled;
         _captureRestoreColors = settings.CaptureRestoreColors;
 
         _selectionBorderColor = SelectionBorderColorOptions
@@ -107,6 +108,9 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
     /// <summary>外观三态变化时通知宿主即时换肤（设置页与顶栏快捷按钮共用）。</summary>
     public event Action<string>? AppearanceChanged;
+
+    /// <summary>双击 Ctrl 文件搜索开关变化时通知宿主，立即安装/卸载全局钩子。</summary>
+    public event Action<bool>? DoubleCtrlSearchEnabledChanged;
 
     private string _appearance;
 
@@ -300,6 +304,16 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
     {
         _settings = _settings with { CaptureUiInScroll = value };
         _store.Save(_settings);
+    }
+
+    [ObservableProperty]
+    private bool _doubleCtrlSearchEnabled = true;
+
+    partial void OnDoubleCtrlSearchEnabledChanged(bool value)
+    {
+        _settings = _settings with { DoubleCtrlSearchEnabled = value };
+        _store.Save(_settings);
+        DoubleCtrlSearchEnabledChanged?.Invoke(value);
     }
 
     [ObservableProperty]

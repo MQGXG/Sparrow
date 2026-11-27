@@ -76,9 +76,9 @@ public partial class App : Application
         }
 
         // 提权索引子进程：只扫描 $MFT 并写 snapshot，不初始化托盘/热键/窗口
-        if (TryGetIndexBuildArgs(desktop.Args, out var indexDrive, out var indexOutput))
+        if (TryGetIndexBuildArgs(desktop.Args, out var indexDrives, out var indexDirectory))
         {
-            RunIndexBuilder(indexDrive, indexOutput);
+            RunIndexBuilder(indexDrives, indexDirectory);
             return;
         }
 
@@ -206,17 +206,22 @@ public partial class App : Application
         _fileIndex.Start();
         _quickSearch = new QuickSearchWindow(_fileIndex);
 
-        _doubleCtrl = new DoubleCtrlHotkey(
-            () => Avalonia.Threading.Dispatcher.UIThread.Post(() => _quickSearch?.Toggle()),
-            log);
-
-        if (!_doubleCtrl.Start())
-            log.Warn("双击 Ctrl 未能启用（低级键盘钩子安装失败）");
+        if (settings.DoubleCtrlSearchEnabled)
+            StartDoubleCtrl();
 
         // 工作区与面板共用同一个 ToolCatalog：插件只加载一次
         var startup = new StartupService(log);
         var settingsViewModel = new SettingsViewModel(_catalog, settingsStore, startup, settings, ai, aiSecrets, _localModels);
         _settingsViewModel = settingsViewModel;
+
+        // 设置页禁用双击 Ctrl 时立即卸载钩子，重新打开时再安装
+        settingsViewModel.DoubleCtrlSearchEnabledChanged += enabled =>
+        {
+            if (enabled)
+                StartDoubleCtrl();
+            else
+                StopDoubleCtrl();
+        };
 
         // 设置页 / 顶栏切换外观：即时换肤，并同步宿主持有的设置快照
         settingsViewModel.AppearanceChanged += appearance =>
@@ -500,12 +505,32 @@ public partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    /// <summary>提权索引子进程的参数：--build-index C --index-output path。</summary>
-    private static bool TryGetIndexBuildArgs(
-        string[]? args, out string drive, out string output)
+    /// <summary>安装双击 Ctrl 钩子；重复调用会先卸载旧钩子。</summary>
+    private void StartDoubleCtrl()
     {
-        drive = string.Empty;
-        output = string.Empty;
+        StopDoubleCtrl();
+
+        _doubleCtrl = new DoubleCtrlHotkey(
+            () => Avalonia.Threading.Dispatcher.UIThread.Post(() => _quickSearch?.Toggle()),
+            Log);
+
+        if (!_doubleCtrl.Start())
+            Log.Warn("双击 Ctrl 未能启用（低级键盘钩子安装失败）");
+    }
+
+    /// <summary>卸载双击 Ctrl 钩子。</summary>
+    private void StopDoubleCtrl()
+    {
+        _doubleCtrl?.Dispose();
+        _doubleCtrl = null;
+    }
+
+    /// <summary>提权索引子进程的参数：--build-index "C,D" --index-directory path。</summary>
+    private static bool TryGetIndexBuildArgs(
+        string[]? args, out string[] drives, out string indexDirectory)
+    {
+        drives = Array.Empty<string>();
+        indexDirectory = string.Empty;
 
         if (args is null)
             return false;
@@ -515,48 +540,73 @@ public partial class App : Application
         if (parsed is null)
             return false;
 
-        drive = parsed;
-        output = GetArg(args, "--index-output")
-                 ?? Path.Combine(Path.GetTempPath(), $"sparrow-index-{drive}.snapshot");
+        drives = parsed
+            .Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(drive => drive.TrimEnd('\\', ':', '/'))
+            .Where(drive => drive.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (drives.Length == 0)
+            return false;
+
+        indexDirectory = GetArg(args, "--index-directory")
+                         ?? Path.Combine(
+                             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                             "Sparrow",
+                             "index");
 
         return true;
     }
 
     /// <summary>
-    /// 提权实例的索引构建入口：扫描 $MFT，写列式 snapshot，然后立即退出。
+    /// 提权实例的索引构建入口：逐个扫描 $MFT，写列式 snapshot，然后立即退出。
     /// 这个进程没有托盘、热键和窗口，只做一件事。
     /// </summary>
-    private static void RunIndexBuilder(string drive, string output)
+    private static void RunIndexBuilder(string[] drives, string indexDirectory)
     {
-        var statusPath = output + ".status";
+        var statusPath = Path.Combine(indexDirectory, "build.status");
+        var succeeded = 0;
+        var failures = new List<string>();
 
         try
         {
-            var directory = Path.GetDirectoryName(output);
-
-            if (!string.IsNullOrEmpty(directory))
-                Directory.CreateDirectory(directory);
+            Directory.CreateDirectory(indexDirectory);
+            File.WriteAllText(statusPath, "running", Encoding.UTF8);
 
             var reader = new JournalReader();
-            var result = reader.IndexDrive(drive, null, null, null, CancellationToken.None);
 
-            if (result is null)
+            foreach (var drive in drives)
             {
-                File.WriteAllText(
-                    statusPath,
-                    "error 扫描失败（缺少管理员权限或卷不支持）",
-                    Encoding.UTF8);
+                var output = Path.Combine(indexDirectory, $"{drive}.snapshot");
 
-                Environment.Exit(5);
+                try
+                {
+                    var result = reader.IndexDrive(
+                        drive, null, null, null, CancellationToken.None);
+
+                    if (result is null)
+                    {
+                        failures.Add($"{drive}: 扫描失败");
+                        continue;
+                    }
+
+                    SnapshotWriter.Write(result.Store, output);
+                    succeeded++;
+                }
+                catch (Exception ex)
+                {
+                    failures.Add($"{drive}: {ex.Message}");
+                }
             }
 
-            SnapshotWriter.Write(result.Store, output);
-            File.WriteAllText(
-                statusPath,
-                $"ok records={result.Store.Records.Count}",
-                Encoding.UTF8);
+            var message = succeeded > 0
+                ? $"ok built={succeeded}/{drives.Length}"
+                  + (failures.Count > 0 ? " failures=" + string.Join("; ", failures) : string.Empty)
+                : "error " + string.Join("; ", failures);
 
-            Environment.Exit(0);
+            File.WriteAllText(statusPath, message, Encoding.UTF8);
+            Environment.Exit(succeeded > 0 ? 0 : 5);
         }
         catch (Exception ex)
         {

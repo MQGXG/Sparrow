@@ -384,6 +384,27 @@
 
             <Grid ColumnDefinitions="*,Auto" Margin="20,14">
               <StackPanel Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="双击 Ctrl 搜索文件"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                <TextBlock Text="连续按两次 Ctrl 唤出本机文件搜索；首次需要管理员权限建立索引"
+                           FontSize="11"
+                           MaxWidth="520"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextMutedBrush}" />
+              </StackPanel>
+              <ToggleSwitch Grid.Column="1"
+                            OnContent="开"
+                            OffContent="关"
+                            IsChecked="{Binding DoubleCtrlSearchEnabled, Mode=TwoWay}"
+                            VerticalAlignment="Center" />
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
+
+            <Grid ColumnDefinitions="*,Auto" Margin="20,14">
+              <StackPanel Spacing="3" VerticalAlignment="Center">
                 <TextBlock Text="截图识别"
                            FontSize="13"
                            FontWeight="SemiBold"

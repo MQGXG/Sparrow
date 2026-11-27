@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Text;
 using Lertaro.Core.IndexV2;
 using Lertaro.Core.IndexV2.Persistence;
 using Lertaro.Core.IndexV2.Search;
@@ -6,44 +8,48 @@ using Lertaro.Core.IndexV2.Search;
 namespace Sparrow.App.Services;
 
 /// <summary>
-/// 基于 Lertaro Core 的 MFT 文件索引。
+/// 基于 Lertaro Core 的 MFT 文件索引，支持多个固定盘。
 ///
-/// 首次使用时如果没有 snapshot，会以管理员权限重新启动 Sparrow.App 自身
-/// （带 --build-index 参数），由提权实例扫描 $MFT 并写出列式 snapshot；
+/// 每个盘一个 snapshot 文件；首次缺少索引时，以管理员权限重新启动
+/// Sparrow.App 自身（--build-index），一次扫描所有缺失盘并写出列式 snapshot。
 /// 普通权限进程只负责 mmap 打开和查询。
-///
-/// 这条路径的目标是 Everything 级体验：扫描一次约 5–10 秒，
-/// 之后查询走内存映射的唯一文件名表，毫秒级返回。
 /// </summary>
 internal sealed class MftFileIndex : IFileIndex
 {
     private readonly IAppLog _log;
-    private readonly string _drive;
-    private readonly string _snapshotPath;
+    private readonly IReadOnlyList<string> _drives;
+    private readonly string _indexDirectory;
 
-    private LiveIndex? _live;
+    private readonly Dictionary<string, LiveIndex> _liveIndexes =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private readonly object _gate = new();
+
     private int _count;
     private volatile bool _started;
     private volatile bool _indexing;
     private volatile bool _ready;
     private volatile string? _statusMessage;
 
-    public MftFileIndex(IAppLog log, string drive = "C")
+    public MftFileIndex(
+        IAppLog log,
+        IEnumerable<string>? drives = null,
+        string? indexDirectory = null)
     {
         _log = log;
-        _drive = drive.TrimEnd(':', '\\');
-        _snapshotPath = Path.Combine(
+        _drives = NormalizeDrives(drives ?? DefaultDrives());
+
+        _indexDirectory = indexDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Sparrow",
-            "index",
-            $"{_drive}.snapshot");
+            "index");
     }
 
     public bool IsReady => _ready;
 
     public bool IsIndexing => _indexing;
 
-    public int Count => _count;
+    public int Count => Volatile.Read(ref _count);
 
     public string? StatusMessage => _statusMessage;
 
@@ -62,27 +68,46 @@ internal sealed class MftFileIndex : IFileIndex
     {
         try
         {
-            if (File.Exists(_snapshotPath) && new FileInfo(_snapshotPath).Length > 0)
+            _indexing = true;
+
+            var missing = new List<string>();
+
+            foreach (var drive in _drives)
             {
-                Load();
+                var path = SnapshotPath(drive);
+
+                if (File.Exists(path) && new FileInfo(path).Length > 0)
+                {
+                    TryLoadDrive(drive, path);
+                }
+                else
+                {
+                    missing.Add(drive);
+                }
+            }
+
+            if (missing.Count == 0)
+            {
+                FinishBuild();
                 return;
             }
 
-            _indexing = true;
-            _statusMessage = "正在建立文件索引（需要管理员权限）…";
+            _statusMessage = $"正在建立索引：{string.Join("、", missing)}…";
             Changed?.Invoke(this, EventArgs.Empty);
 
-            var built = await RunBuilderAsync();
+            await RunBuilderAsync(missing);
 
-            if (!built)
+            foreach (var drive in missing)
             {
-                _indexing = false;
-                _statusMessage = "索引建立失败；可以稍后重试，或暂时使用简单搜索";
-                Changed?.Invoke(this, EventArgs.Empty);
-                return;
+                var path = SnapshotPath(drive);
+
+                if (File.Exists(path) && new FileInfo(path).Length > 0)
+                    TryLoadDrive(drive, path);
+                else
+                    _log.Warn($"{drive} 盘索引缺失或构建失败");
             }
 
-            Load();
+            FinishBuild();
         }
         catch (Exception ex)
         {
@@ -93,44 +118,51 @@ internal sealed class MftFileIndex : IFileIndex
         }
     }
 
-    private void Load()
+    private void FinishBuild()
     {
-        var snapshot = Snapshot.Open(_snapshotPath);
-        _live = new LiveIndex(snapshot);
-        _count = snapshot.Count;
-        _ready = true;
         _indexing = false;
-        _statusMessage = null;
+        _ready = Count > 0;
+        _statusMessage = _ready ? null : "索引建立失败；可以稍后重试";
 
-        _log.Info($"MFT 索引已加载：{_count:N0} 条");
+        _log.Info($"MFT 索引已加载：{Count:N0} 条 / {_liveIndexes.Count} 个盘");
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>以管理员权限启动自身，扫描 $MFT 并写 snapshot。</summary>
-    private async Task<bool> RunBuilderAsync()
+    private void TryLoadDrive(string drive, string path)
+    {
+        try
+        {
+            var snapshot = Snapshot.Open(path);
+            var live = new LiveIndex(snapshot);
+
+            lock (_gate)
+            {
+                if (_liveIndexes.Remove(drive, out var old))
+                    old.Dispose();
+
+                _liveIndexes[drive] = live;
+            }
+
+            Interlocked.Add(ref _count, snapshot.Count);
+        }
+        catch (Exception ex)
+        {
+            _log.Error($"加载 {drive} 盘索引失败：{path}", ex);
+        }
+    }
+
+    /// <summary>以管理员权限启动自身，扫描所有缺失盘并写 snapshot。</summary>
+    private async Task RunBuilderAsync(IReadOnlyList<string> drives)
     {
         var exe = Environment.ProcessPath;
 
         if (string.IsNullOrEmpty(exe))
-            return false;
+            return;
 
-        var directory = Path.GetDirectoryName(_snapshotPath);
+        Directory.CreateDirectory(_indexDirectory);
 
-        if (!string.IsNullOrEmpty(directory))
-            Directory.CreateDirectory(directory);
-
-        var statusPath = _snapshotPath + ".status";
-
-        try
-        {
-            File.Delete(statusPath);
-        }
-        catch
-        {
-            // 状态文件删不掉不影响构建
-        }
-
-        var arguments = $"--build-index {_drive} --index-output \"{_snapshotPath}\"";
+        var arguments =
+            $"--build-index \"{string.Join(",", drives)}\" --index-directory \"{_indexDirectory}\"";
 
         try
         {
@@ -142,65 +174,151 @@ internal sealed class MftFileIndex : IFileIndex
             });
 
             if (process is null)
-                return false;
+                return;
 
             await process.WaitForExitAsync();
 
             if (process.ExitCode != 0)
-            {
                 _log.Warn($"索引构建进程退出码 {process.ExitCode}");
-                return false;
-            }
-
-            return File.Exists(_snapshotPath)
-                   && new FileInfo(_snapshotPath).Length > 0;
         }
         catch (System.ComponentModel.Win32Exception ex)
         {
             // 1223 = 用户在 UAC 里点了“否”
             _log.Warn($"索引构建未启动：{ex.Message}");
-            return false;
         }
         catch (Exception ex)
         {
             _log.Error("启动索引构建进程失败", ex);
-            return false;
         }
     }
 
     public IReadOnlyList<FileSearchItem> Search(string? query, int limit)
     {
-        var live = _live;
-
-        if (live is null || limit <= 0 || string.IsNullOrWhiteSpace(query))
+        if (limit <= 0 || string.IsNullOrWhiteSpace(query))
             return [];
 
-        var results = new List<FileSearchItem>(Math.Min(limit, 64));
+        LiveIndex[] lives;
 
-        try
+        lock (_gate)
         {
-            IndexV2Searcher.SearchStreaming(live, query.Trim(), limit, row =>
+            lives = _liveIndexes.Values.ToArray();
+        }
+
+        if (lives.Length == 0)
+            return [];
+
+        var term = query.Trim();
+        var perDrive = new List<FileSearchItem>[lives.Length];
+
+        Parallel.For(0, lives.Length, index =>
+        {
+            var rows = perDrive[index] = new List<FileSearchItem>(Math.Min(limit, 64));
+
+            try
             {
-                var directory = row.IsDir
-                    ? row.Path
-                    : Path.GetDirectoryName(row.Path)
-                      ?? row.Drive.TrimEnd(':') + ":\\";
+                IndexV2Searcher.SearchStreaming(lives[index], term, limit, row =>
+                {
+                    var directory = row.IsDir
+                        ? row.Path
+                        : Path.GetDirectoryName(row.Path)
+                          ?? row.Drive.TrimEnd(':') + ":\\";
 
-                results.Add(new FileSearchItem(row.Name, directory, row.Path, row.IsDir));
-            }, CancellationToken.None);
-        }
-        catch (Exception ex)
-        {
-            _log.Error($"MFT 查询失败：{query}", ex);
-        }
+                    rows.Add(new FileSearchItem(row.Name, directory, row.Path, row.IsDir));
+                }, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _log.Error($"MFT 查询失败：{term}", ex);
+            }
+        });
 
-        return results;
+        return perDrive
+            .Where(rows => rows is not null)
+            .SelectMany(rows => rows)
+            .DistinctBy(item => item.FullPath, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(item =>
+                item.Name.StartsWith(term, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(item => item.Name.Length)
+            .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+            .Take(limit)
+            .ToArray();
     }
 
     public void Dispose()
     {
-        _live?.Dispose();
-        _live = null;
+        lock (_gate)
+        {
+            foreach (var live in _liveIndexes.Values)
+                live.Dispose();
+
+            _liveIndexes.Clear();
+        }
+
+        _count = 0;
         _ready = false;
     }
+
+    private string SnapshotPath(string drive) =>
+        Path.Combine(_indexDirectory, $"{drive}.snapshot");
+
+    private static IReadOnlyList<string> NormalizeDrives(IEnumerable<string> drives) =>
+        drives
+            .Select(drive => drive.TrimEnd('\\', ':', '/'))
+            .Where(drive => drive.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+    private static IReadOnlyList<string> DefaultDrives()
+    {
+        try
+        {
+            var candidates = DriveInfo.GetDrives()
+                .Where(drive =>
+                    drive.DriveType == DriveType.Fixed
+                    && drive.IsReady
+                    && !string.IsNullOrWhiteSpace(drive.DriveFormat))
+                .Select(drive => drive.Name.TrimEnd('\\', ':', '/'))
+                .ToArray();
+
+            // subst / 同一卷的多个盘符：卷序列号相同，只索引第一个，避免重复扫描
+            var seenSerials = new HashSet<uint>();
+            var result = new List<string>(candidates.Length);
+
+            foreach (var drive in candidates)
+            {
+                if (GetVolumeInformation(
+                        drive + ":\\",
+                        null,
+                        0,
+                        out var serial,
+                        out _,
+                        out _,
+                        null,
+                        0)
+                    && !seenSerials.Add(serial))
+                {
+                    continue;
+                }
+
+                result.Add(drive);
+            }
+
+            return result;
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool GetVolumeInformation(
+        string rootPathName,
+        StringBuilder? volumeNameBuffer,
+        int volumeNameSize,
+        out uint volumeSerialNumber,
+        out uint maximumComponentLength,
+        out uint fileSystemFlags,
+        StringBuilder? fileSystemNameBuffer,
+        int fileSystemNameSize);
 }

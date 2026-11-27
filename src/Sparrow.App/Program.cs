@@ -40,8 +40,13 @@ internal static class Program
         var isRecordingProbe = !string.IsNullOrWhiteSpace(
             Environment.GetEnvironmentVariable(RecordingProbe.EnvironmentVariable));
 
+        // 提权索引子进程也是独立进程行为：必须绕过单实例，
+        // 否则正在运行的 Sparrow 会让它直接退出，索引永远建不起来。
+        var isIndexBuild = args.Any(arg =>
+            arg.Equals("--build-index", StringComparison.OrdinalIgnoreCase));
+
         using var mutex = new Mutex(initiallyOwned: true, @"Local\Sparrow.SingleInstance", out var isFirst);
-        if (!isFirst && !isRecordingProbe)
+        if (!isFirst && !isRecordingProbe && !isIndexBuild)
             return 0;
 
         try

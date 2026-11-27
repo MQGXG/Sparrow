@@ -110,6 +110,9 @@ public sealed record AppSettings
     /// <summary>滚动截图拼接结果里是否包含截图窗口及其工具栏。</summary>
     public bool CaptureUiInScroll { get; init; } = true;
 
+    /// <summary>双击 Ctrl 是否唤出本机文件搜索。</summary>
+    public bool DoubleCtrlSearchEnabled { get; init; } = true;
+
     /// <summary>是否还原放大镜全屏颜色滤镜。</summary>
     public bool CaptureRestoreColors { get; init; } = true;
 
