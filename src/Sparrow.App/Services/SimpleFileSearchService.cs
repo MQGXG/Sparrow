@@ -5,7 +5,9 @@ public sealed record FileSearchItem(
     string Name,
     string DirectoryPath,
     string FullPath,
-    bool IsDirectory);
+    bool IsDirectory,
+    long Size = 0,
+    DateTime Modified = default);
 
 /// <summary>
 /// 最小可用的本机文件索引。

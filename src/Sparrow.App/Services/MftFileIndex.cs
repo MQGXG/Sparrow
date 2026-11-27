@@ -236,7 +236,13 @@ internal sealed class MftFileIndex : IFileIndex
                         : Path.GetDirectoryName(row.Path)
                           ?? row.Drive.TrimEnd(':') + ":\\";
 
-                    rows.Add(new FileSearchItem(row.Name, directory, row.Path, row.IsDir));
+                    rows.Add(new FileSearchItem(
+                        row.Name,
+                        directory,
+                        row.Path,
+                        row.IsDir,
+                        row.Metadata.Size,
+                        row.Metadata.Modified));
                 }, CancellationToken.None);
             }
             catch (Exception ex)
@@ -292,7 +298,13 @@ internal sealed class MftFileIndex : IFileIndex
                         : Path.GetDirectoryName(row.Path)
                           ?? row.Drive.TrimEnd(':') + ":\\";
 
-                    results.Add(new FileSearchItem(row.Name, directory, row.Path, row.IsDir));
+                    results.Add(new FileSearchItem(
+                        row.Name,
+                        directory,
+                        row.Path,
+                        row.IsDir,
+                        row.Metadata.Size,
+                        row.Metadata.Modified));
                 },
                 CancellationToken.None).GetAwaiter().GetResult();
 

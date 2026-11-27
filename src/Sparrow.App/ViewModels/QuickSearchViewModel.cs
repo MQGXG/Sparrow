@@ -15,6 +15,8 @@ public partial class FileSearchItemViewModel : ObservableObject
         DirectoryPath = item.DirectoryPath;
         FullPath = item.FullPath;
         IsDirectory = item.IsDirectory;
+        Size = item.Size;
+        Modified = item.Modified;
         HighlightTerm = highlightTerm;
     }
 
@@ -26,9 +28,20 @@ public partial class FileSearchItemViewModel : ObservableObject
 
     public bool IsDirectory { get; }
 
+    public long Size { get; }
+
+    public DateTime Modified { get; }
+
     public string HighlightTerm { get; }
 
     public bool IsFile => !IsDirectory;
+
+    /// <summary>索引没有带回元数据时不显示大小/时间列。</summary>
+    public bool HasDetails => Modified != default;
+
+    public string SizeText => IsDirectory || !HasDetails ? string.Empty : FormatSize(Size);
+
+    public string ModifiedText => HasDetails ? Modified.ToString("MM-dd HH:mm") : string.Empty;
 
     /// <summary>Shell 文件类型图标；后台加载，未完成时为 null（显示几何占位）。</summary>
     [ObservableProperty]
@@ -37,6 +50,14 @@ public partial class FileSearchItemViewModel : ObservableObject
     public bool HasIcon => Icon is not null;
 
     partial void OnIconChanged(Bitmap? value) => OnPropertyChanged(nameof(HasIcon));
+
+    private static string FormatSize(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
+        < 1024L * 1024 * 1024 => $"{bytes / (1024.0 * 1024):F1} MB",
+        _ => $"{bytes / (1024.0 * 1024 * 1024):F1} GB"
+    };
 }
 
 /// <summary>
