@@ -40,6 +40,8 @@ public partial class QuickSearchWindow : Window
     /// <summary>双击 Ctrl 入口：已显示时再按一次等于关闭。</summary>
     public void Toggle()
     {
+        App.Log.Info($"文件搜索窗口：{(IsVisible ? "关闭" : "打开")}");
+
         if (IsVisible)
         {
             Hide();

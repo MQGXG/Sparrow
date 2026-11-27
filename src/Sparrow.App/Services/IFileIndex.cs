@@ -24,6 +24,9 @@ public interface IFileIndex : IDisposable
     /// <summary>开始建立或加载索引；重复调用是空操作。</summary>
     void Start();
 
+    /// <summary>清空现有索引并重新建立。</summary>
+    void Rebuild();
+
     /// <summary>按文件名查询；空查询返回空列表。</summary>
     IReadOnlyList<FileSearchItem> Search(string? query, int limit);
 }

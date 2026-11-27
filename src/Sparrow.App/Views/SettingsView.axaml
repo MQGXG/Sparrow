@@ -401,6 +401,35 @@
                             VerticalAlignment="Center" />
             </Grid>
 
+            <Grid ColumnDefinitions="*,Auto" Margin="20,0,20,6">
+              <StackPanel Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="索引磁盘"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                <TextBlock Text="选择要建立文件索引的固定盘；修改后重启 Sparrow 生效"
+                           FontSize="11"
+                           MaxWidth="520"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextMutedBrush}" />
+              </StackPanel>
+              <Button Grid.Column="1"
+                      Classes="ghost"
+                      Content="重建索引"
+                      Click="OnRebuildIndexClick"
+                      ToolTip.Tip="删除现有索引并重新扫描，会弹出管理员确认" />
+            </Grid>
+
+            <ItemsControl ItemsSource="{Binding IndexDriveOptions}" Margin="20,0,20,10">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:IndexDriveOptionViewModel">
+                  <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                            Content="{Binding Label}"
+                            Margin="0,2" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
             <Border Classes="hud-line" Margin="20,0" />
 
             <Grid ColumnDefinitions="*,Auto" Margin="20,14">

@@ -21,7 +21,10 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
     private readonly AiClient? _ai;
     private readonly AiSecretStore? _secrets;
     private readonly ILocalModels? _localModels;
+    private readonly IFileIndex? _fileIndex;
     private AppSettings _settings;
+
+    private bool _initializingIndexDrives = true;
 
     public SettingsViewModel(
         ToolCatalog catalog,
@@ -30,7 +33,8 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         AppSettings settings,
         AiClient? ai = null,
         AiSecretStore? secrets = null,
-        ILocalModels? localModels = null)
+        ILocalModels? localModels = null,
+        IFileIndex? fileIndex = null)
     {
         _catalog = catalog;
         _store = store;
@@ -40,6 +44,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _ai = ai;
         _secrets = secrets;
         _localModels = localModels;
+        _fileIndex = fileIndex;
 
         _searchHotkey = settings.SearchHotkey;
         _captureHotkey = settings.CaptureHotkey;
@@ -62,6 +67,21 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _captureShowCursor = settings.CaptureShowCursor;
         _captureUiInScroll = settings.CaptureUiInScroll;
         _doubleCtrlSearchEnabled = settings.DoubleCtrlSearchEnabled;
+
+        // 文件索引盘：空表示自动选择所有固定盘
+        foreach (var drive in MftFileIndex.DiscoverDrives())
+        {
+            var selected = settings.IndexedDrives.Length == 0
+                || settings.IndexedDrives.Contains(drive, StringComparer.OrdinalIgnoreCase);
+
+            IndexDriveOptions.Add(new IndexDriveOptionViewModel(
+                drive,
+                FormatDriveLabel(drive),
+                selected,
+                SaveIndexedDrives));
+        }
+
+        _initializingIndexDrives = false;
         _captureRestoreColors = settings.CaptureRestoreColors;
 
         _selectionBorderColor = SelectionBorderColorOptions
@@ -314,6 +334,58 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _settings = _settings with { DoubleCtrlSearchEnabled = value };
         _store.Save(_settings);
         DoubleCtrlSearchEnabledChanged?.Invoke(value);
+    }
+
+    /// <summary>设置页的索引盘选项。</summary>
+    public ObservableCollection<IndexDriveOptionViewModel> IndexDriveOptions { get; } = [];
+
+    /// <summary>用户勾选/取消索引盘后保存；重启生效。</summary>
+    private void SaveIndexedDrives()
+    {
+        if (_initializingIndexDrives)
+            return;
+
+        var selected = IndexDriveOptions
+            .Where(option => option.IsSelected)
+            .Select(option => option.Drive)
+            .ToArray();
+
+        _settings = _settings with { IndexedDrives = selected };
+        _store.Save(_settings);
+
+        StatusMessage = selected.Length == 0
+            ? "索引磁盘已清空；重启 Sparrow 后生效"
+            : $"索引磁盘已更新：{string.Join("、", selected)}；重启 Sparrow 后生效";
+    }
+
+    /// <summary>删除现有索引并重建；首次会弹出管理员确认。</summary>
+    public void RebuildIndex()
+    {
+        if (_fileIndex is null)
+        {
+            StatusMessage = "文件索引未初始化";
+            return;
+        }
+
+        _fileIndex.Rebuild();
+        StatusMessage = "正在重建文件索引（会弹出管理员确认）…";
+    }
+
+    private static string FormatDriveLabel(string drive)
+    {
+        try
+        {
+            var info = new DriveInfo(drive + ":\\");
+            var label = string.IsNullOrWhiteSpace(info.VolumeLabel)
+                ? info.DriveFormat
+                : info.VolumeLabel;
+
+            return $"{drive}:  {label}";
+        }
+        catch
+        {
+            return $"{drive}:";
+        }
     }
 
     [ObservableProperty]

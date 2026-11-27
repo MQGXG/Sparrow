@@ -24,6 +24,13 @@ public partial class SettingsView : UserControl
         Loaded += (_, _) => EnsureDonateImage();
     }
 
+    /// <summary>设置页「重建索引」：删除 snapshot 并重新走一次提权扫描。</summary>
+    private void OnRebuildIndexClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is SettingsViewModel viewModel)
+            viewModel.RebuildIndex();
+    }
+
     /// <summary>
     /// 热键录制：点输入框后直接按组合键写入文本；Backspace / Delete 清空。
     /// 只处理 Tag="hotkey" 的输入框，不影响其他输入。

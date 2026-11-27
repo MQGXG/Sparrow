@@ -37,7 +37,7 @@ internal sealed class MftFileIndex : IFileIndex
         string? indexDirectory = null)
     {
         _log = log;
-        _drives = NormalizeDrives(drives ?? DefaultDrives());
+        _drives = NormalizeDrives(drives ?? DiscoverDrives());
 
         _indexDirectory = indexDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -258,6 +258,39 @@ internal sealed class MftFileIndex : IFileIndex
         _ready = false;
     }
 
+    /// <summary>
+    /// 删除现有 snapshot 并重新走一次「缺失盘 → 提权构建 → 加载」。
+    /// 盘列表仍是实例创建时的列表；修改索引盘需要重启宿主。
+    /// </summary>
+    public void Rebuild()
+    {
+        lock (_gate)
+        {
+            foreach (var live in _liveIndexes.Values)
+                live.Dispose();
+
+            _liveIndexes.Clear();
+        }
+
+        _count = 0;
+        _ready = false;
+        _indexing = false;
+        _started = false;
+        _statusMessage = null;
+
+        foreach (var drive in _drives)
+        {
+            var path = SnapshotPath(drive);
+
+            try { File.Delete(path); } catch { }
+            try { File.Delete(path + ".status"); } catch { }
+        }
+
+        try { File.Delete(Path.Combine(_indexDirectory, "build.status")); } catch { }
+
+        Start();
+    }
+
     private string SnapshotPath(string drive) =>
         Path.Combine(_indexDirectory, $"{drive}.snapshot");
 
@@ -268,7 +301,7 @@ internal sealed class MftFileIndex : IFileIndex
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-    private static IReadOnlyList<string> DefaultDrives()
+    internal static IReadOnlyList<string> DiscoverDrives()
     {
         try
         {

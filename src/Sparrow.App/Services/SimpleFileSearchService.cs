@@ -244,6 +244,19 @@ public sealed class SimpleFileSearchService : IFileIndex
         return results.Count > limit ? results.GetRange(0, limit) : results;
     }
 
+    /// <summary>
+    /// 简单索引没有持久化文件，重建就是丢掉当前结果、重新开始枚举。
+    /// 当前主要作为 MFT 不可用时的回退/测试实现。
+    /// </summary>
+    public void Rebuild()
+    {
+        _items = [];
+        _count = 0;
+        _ready = false;
+        _indexing = false;
+        Start();
+    }
+
     private static bool ShouldSkip(string path)
     {
         var name = Path.GetFileName(path);

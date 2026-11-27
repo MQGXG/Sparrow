@@ -41,6 +41,9 @@ public partial class QuickSearchViewModel : ObservableObject
     private readonly IFileIndex _index;
     private readonly DispatcherTimer _debounce;
 
+    /// <summary>查询版本号：只有最后一次查询的结果才允许写回 UI。</summary>
+    private int _version;
+
     [ObservableProperty]
     private string _query = string.Empty;
 
@@ -65,7 +68,7 @@ public partial class QuickSearchViewModel : ObservableObject
         _debounce.Tick += (_, _) =>
         {
             _debounce.Stop();
-            Refresh();
+            RefreshAsync();
         };
     }
 
@@ -74,7 +77,7 @@ public partial class QuickSearchViewModel : ObservableObject
     {
         Query = string.Empty;
         _debounce.Stop();
-        Refresh();
+        RefreshAsync();
     }
 
     partial void OnQueryChanged(string value)
@@ -83,11 +86,30 @@ public partial class QuickSearchViewModel : ObservableObject
         _debounce.Start();
     }
 
-    private void Refresh()
+    /// <summary>
+    /// 在后台线程查询，避免 178 万条索引的冷查询卡住 UI 线程。
+    /// 只允许最后一次查询的结果回写，防止快速输入时旧结果覆盖新结果。
+    /// </summary>
+    private async void RefreshAsync()
     {
-        Items.Clear();
+        var version = Interlocked.Increment(ref _version);
+        var query = Query;
 
-        var results = _index.Search(Query, MaxResults);
+        IReadOnlyList<FileSearchItem> results;
+
+        try
+        {
+            results = await Task.Run(() => _index.Search(query, MaxResults));
+        }
+        catch
+        {
+            return;
+        }
+
+        if (version != Volatile.Read(ref _version))
+            return;
+
+        Items.Clear();
 
         foreach (var item in results)
             Items.Add(new FileSearchItemViewModel(item));
@@ -119,6 +141,6 @@ public partial class QuickSearchViewModel : ObservableObject
     private void OnIndexChanged(object? sender, EventArgs e)
     {
         // 索引在后台线程完成，结果必须回到 UI 线程更新
-        Dispatcher.UIThread.Post(Refresh);
+        Dispatcher.UIThread.Post(() => RefreshAsync());
     }
 }

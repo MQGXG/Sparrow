@@ -113,6 +113,9 @@ public sealed record AppSettings
     /// <summary>双击 Ctrl 是否唤出本机文件搜索。</summary>
     public bool DoubleCtrlSearchEnabled { get; init; } = true;
 
+    /// <summary>用户选择要索引的固定盘（如 ["C","D"]）；空表示自动选择所有固定盘。</summary>
+    public string[] IndexedDrives { get; init; } = [];
+
     /// <summary>是否还原放大镜全屏颜色滤镜。</summary>
     public bool CaptureRestoreColors { get; init; } = true;
 

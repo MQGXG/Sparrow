@@ -202,7 +202,9 @@ public partial class App : Application
         _palette = new PaletteWindow { DataContext = _paletteViewModel };
 
         // 双击 Ctrl 的本机文件搜索：优先用 MFT 索引，首次缺 snapshot 时提权建立
-        _fileIndex = new MftFileIndex(log);
+        _fileIndex = new MftFileIndex(
+            log,
+            settings.IndexedDrives.Length > 0 ? settings.IndexedDrives : null);
         _fileIndex.Start();
         _quickSearch = new QuickSearchWindow(_fileIndex);
 
@@ -211,7 +213,7 @@ public partial class App : Application
 
         // 工作区与面板共用同一个 ToolCatalog：插件只加载一次
         var startup = new StartupService(log);
-        var settingsViewModel = new SettingsViewModel(_catalog, settingsStore, startup, settings, ai, aiSecrets, _localModels);
+        var settingsViewModel = new SettingsViewModel(_catalog, settingsStore, startup, settings, ai, aiSecrets, _localModels, _fileIndex);
         _settingsViewModel = settingsViewModel;
 
         // 设置页禁用双击 Ctrl 时立即卸载钩子，重新打开时再安装
@@ -516,6 +518,8 @@ public partial class App : Application
 
         if (!_doubleCtrl.Start())
             Log.Warn("双击 Ctrl 未能启用（低级键盘钩子安装失败）");
+        else
+            Log.Info("双击 Ctrl 钩子已安装");
     }
 
     /// <summary>卸载双击 Ctrl 钩子。</summary>
