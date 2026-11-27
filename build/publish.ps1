@@ -30,11 +30,11 @@ $artifacts = Join-Path $root 'artifacts'
 $publishDir = Join-Path $artifacts "publish/$Runtime"
 $pluginBin = Join-Path $root "src/Sparrow.App/bin/$Configuration/net10.0/plugins"
 
-Write-Host "== 1/4 构建（$Configuration） ==" -ForegroundColor Cyan
+Write-Host "== 1/5 构建（$Configuration） ==" -ForegroundColor Cyan
 dotnet build (Join-Path $root 'Sparrow.slnx') -c $Configuration -p:Version=$Version -v quiet
 if ($LASTEXITCODE -ne 0) { throw '构建失败' }
 
-Write-Host "== 2/4 发布 App（$Runtime，自包含） ==" -ForegroundColor Cyan
+Write-Host "== 2/5 发布 App（$Runtime，自包含） ==" -ForegroundColor Cyan
 if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
 dotnet publish (Join-Path $root 'src/Sparrow.App/Sparrow.App.csproj') `
     -c $Configuration -r $Runtime --self-contained true `
@@ -42,8 +42,19 @@ dotnet publish (Join-Path $root 'src/Sparrow.App/Sparrow.App.csproj') `
     -o $publishDir -v quiet
 if ($LASTEXITCODE -ne 0) { throw '发布失败' }
 
+# 索引服务也必须单独「自包含」发布：它由 SYSTEM 服务直接启动，
+# 目标机不一定装过 .NET 运行时；框架依赖版本会在干净机器上起不来。
+Write-Host "== 3/5 发布索引服务（$Runtime，自包含） ==" -ForegroundColor Cyan
+$indexServiceDir = Join-Path $publishDir 'index-service'
+if (Test-Path $indexServiceDir) { Remove-Item $indexServiceDir -Recurse -Force }
+dotnet publish (Join-Path $root 'src/Sparrow.IndexService/Sparrow.IndexService.csproj') `
+    -c $Configuration -r $Runtime --self-contained true `
+    -p:Version=$Version -p:DebugType=None -p:DebugSymbols=false `
+    -o $indexServiceDir -v quiet
+if ($LASTEXITCODE -ne 0) { throw '索引服务发布失败' }
 
-Write-Host "== 3/4 复制插件 ==" -ForegroundColor Cyan
+
+Write-Host "== 4/5 复制插件 ==" -ForegroundColor Cyan
 if (-not (Test-Path $pluginBin)) { throw "找不到插件输出目录：$pluginBin" }
 
 $targetPlugins = Join-Path $publishDir 'plugins'
@@ -84,7 +95,7 @@ if ($pdbs) {
 }
 
 $size = (Get-ChildItem $publishDir -Recurse -File | Measure-Object Length -Sum).Sum
-Write-Host ("== 4/4 完成：{0:N1} MB → {1} ==" -f ($size / 1MB), $publishDir) -ForegroundColor Green
+Write-Host ("== 5/5 完成：{0:N1} MB → {1} ==" -f ($size / 1MB), $publishDir) -ForegroundColor Green
 
 if (-not $NoZip) {
     $zip = Join-Path $artifacts "Sparrow-$Version-$Runtime.zip"
