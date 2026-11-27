@@ -166,7 +166,7 @@ public partial class App
 
         Log.Info($"滚动截图完成：{png.Length} 字节，区域 {rect.Width}×{rect.Height}");
 
-        var result = new ScrollResultWindow(png);
+        var result = new ScrollResultWindow(png, control.Horizontal);
         result.Show();
         result.Activate();
         await WaitForClosedAsync(result);

@@ -85,7 +85,7 @@
                 BorderThickness="1"
                 CornerRadius="8"
                 Padding="6"
-                ToolTip.Tip="拖动琥珀色手柄裁掉长图头尾">
+                ToolTip.Tip="拖动琥珀色手柄裁掉长图两端">
           <Grid>
             <Image x:Name="TrimOverview"
                    Stretch="Fill"

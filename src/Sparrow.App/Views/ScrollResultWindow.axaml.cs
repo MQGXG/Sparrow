@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
@@ -12,7 +13,8 @@ namespace Sparrow.App.Views;
 ///
 /// 复用普通截图的动作语义（<see cref="CaptureAction"/>），
 /// 由 App 统一执行，这样「识别 / 复制 / 保存 / 固定」只有一套实现。
-/// 右侧缩略图上的两个手柄可以裁掉长图头尾，动作执行前按行裁剪。
+/// 右侧缩略图上的两个手柄可以裁掉长图头尾：纵向裁上下、横向裁左右，
+/// 动作执行前按对应方向裁剪。
 /// </summary>
 public partial class ScrollResultWindow : Window, IAnnotationImageHost
 {
@@ -23,6 +25,9 @@ public partial class ScrollResultWindow : Window, IAnnotationImageHost
     private byte[]? _png;
     private int _sourceWidth;
     private int _sourceHeight;
+
+    /// <summary>结果是否为横向拼接：true 时裁剪轴是左右方向。</summary>
+    private readonly bool _horizontal;
 
     private double _trimTopFraction;
     private double _trimBottomFraction = 1;
@@ -37,8 +42,14 @@ public partial class ScrollResultWindow : Window, IAnnotationImageHost
         Opened += (_, _) => WindowCaptureExclusion.Exclude(this);
     }
 
-    public ScrollResultWindow(byte[] png) : this()
+    public ScrollResultWindow(byte[] png) : this(png, false)
     {
+    }
+
+    /// <summary>创建结果预览；horizontal 决定裁剪手柄是上下还是左右。</summary>
+    public ScrollResultWindow(byte[] png, bool horizontal) : this()
+    {
+        _horizontal = horizontal;
         _png = png;
         var (width, height) = ImageSizeReader.Read(png);
 
@@ -57,6 +68,22 @@ public partial class ScrollResultWindow : Window, IAnnotationImageHost
         _sourceWidth = width > 0 ? width : _bitmap.PixelSize.Width;
         _sourceHeight = height > 0 ? height : _bitmap.PixelSize.Height;
 
+        TrimTrack.Cursor = horizontal
+            ? new Cursor(StandardCursorType.SizeWestEast)
+            : new Cursor(StandardCursorType.SizeNorthSouth);
+
+        // 横向长图按高度适配、允许左右滚动；纵向长图保持按宽度适配、上下滚动
+        if (horizontal)
+        {
+            PreviewViewport.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
+            PreviewViewport.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
+            Preview.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
+        }
+
+        ToolTip.SetTip(
+            TrimTrack,
+            horizontal ? "拖动琥珀色手柄裁掉长图左右" : "拖动琥珀色手柄裁掉长图头尾");
+
         TrimTrack.SizeChanged += (_, _) => UpdateTrimVisual();
         UpdateTrimVisual();
     }
@@ -67,15 +94,20 @@ public partial class ScrollResultWindow : Window, IAnnotationImageHost
     /// <summary>按当前裁剪范围生成的结果 PNG；没有裁剪时就是原图。</summary>
     public byte[]? OutputPng { get; private set; }
 
-    private int TrimTopRows => Math.Clamp(
-        (int)Math.Round(_trimTopFraction * _sourceHeight),
-        0,
-        Math.Max(0, _sourceHeight - 1));
+    /// <summary>可裁剪的总长度：纵向为高度，横向为宽度。</summary>
+    private int TrimExtent => _horizontal ? _sourceWidth : _sourceHeight;
 
-    private int TrimBottomRows => Math.Clamp(
-        _sourceHeight - (int)Math.Round(_trimBottomFraction * _sourceHeight),
+    /// <summary>起始端裁掉的单位数：纵向为顶部行数，横向为左侧列数。</summary>
+    private int TrimLeadingCount => Math.Clamp(
+        (int)Math.Round(_trimTopFraction * TrimExtent),
         0,
-        Math.Max(0, _sourceHeight - 1 - TrimTopRows));
+        Math.Max(0, TrimExtent - 1));
+
+    /// <summary>结束端裁掉的单位数：纵向为底部行数，横向为右侧列数。</summary>
+    private int TrimTrailingCount => Math.Clamp(
+        TrimExtent - (int)Math.Round(_trimBottomFraction * TrimExtent),
+        0,
+        Math.Max(0, TrimExtent - 1 - TrimLeadingCount));
 
     /// <summary>预览最多约 16 MP；长图按比例缩到预算内，避免整张原图进内存。</summary>
     private static int PreviewWidth(int width, int height)
@@ -139,25 +171,34 @@ public partial class ScrollResultWindow : Window, IAnnotationImageHost
 
     private void OnTrimPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        var height = TrimTrack.Bounds.Height;
-        if (height <= 0)
+        var bounds = TrimTrack.Bounds;
+        var extent = _horizontal ? bounds.Width : bounds.Height;
+        if (extent <= 0)
             return;
 
-        var y = e.GetPosition(TrimTrack).Y;
-        var top = _trimTopFraction * height;
-        var bottom = _trimBottomFraction * height;
+        var point = e.GetPosition(TrimTrack);
+        var position = _horizontal ? point.X : point.Y;
+        var leading = _trimTopFraction * extent;
+        var trailing = _trimBottomFraction * extent;
 
-        _draggingTop = Math.Abs(y - top) <= Math.Abs(y - bottom);
+        _draggingTop = Math.Abs(position - leading) <= Math.Abs(position - trailing);
         _dragging = true;
         e.Pointer.Capture(TrimTrack);
-        ApplyTrimPointer(y, height);
+        ApplyTrimPointer(position, extent);
         e.Handled = true;
     }
 
     private void OnTrimPointerMoved(object? sender, PointerEventArgs e)
     {
-        if (_dragging)
-            ApplyTrimPointer(e.GetPosition(TrimTrack).Y, TrimTrack.Bounds.Height);
+        if (!_dragging)
+            return;
+
+        var bounds = TrimTrack.Bounds;
+        var point = e.GetPosition(TrimTrack);
+
+        ApplyTrimPointer(
+            _horizontal ? point.X : point.Y,
+            _horizontal ? bounds.Width : bounds.Height);
     }
 
     private void OnTrimPointerReleased(object? sender, PointerReleasedEventArgs e)
@@ -172,13 +213,14 @@ public partial class ScrollResultWindow : Window, IAnnotationImageHost
     private void OnTrimPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e) =>
         _dragging = false;
 
-    private void ApplyTrimPointer(double y, double height)
+    /// <summary>按拖动的绝对位置更新裁剪比例；extent 是轨道在裁剪方向上的长度。</summary>
+    private void ApplyTrimPointer(double position, double extent)
     {
-        if (height <= 0)
+        if (extent <= 0)
             return;
 
-        var fraction = Math.Clamp(y / height, 0, 1);
-        var minGap = Math.Min(0.5, MinimumHandleGap / height);
+        var fraction = Math.Clamp(position / extent, 0, 1);
+        var minGap = Math.Min(0.5, MinimumHandleGap / extent);
 
         if (_draggingTop)
             _trimTopFraction = Math.Clamp(fraction, 0, _trimBottomFraction - minGap);
@@ -190,43 +232,101 @@ public partial class ScrollResultWindow : Window, IAnnotationImageHost
 
     private void UpdateTrimVisual()
     {
-        var height = TrimTrack.Bounds.Height;
         var width = TrimTrack.Bounds.Width;
+        var height = TrimTrack.Bounds.Height;
 
-        if (height > 0 && width > 0)
+        if (width > 0 && height > 0)
         {
-            var top = _trimTopFraction * height;
-            var bottom = _trimBottomFraction * height;
+            if (_horizontal)
+            {
+                // 横向：裁剪轴是左右，阴影和手柄都沿垂直方向铺满
+                var left = _trimTopFraction * width;
+                var right = _trimBottomFraction * width;
 
-            LayoutShade(TrimTopShade, 0, Math.Max(0, top), width);
-            LayoutShade(TrimBottomShade, bottom, Math.Max(0, height - bottom), width);
-            LayoutHandle(TrimTopHandle, top, width, height);
-            LayoutHandle(TrimBottomHandle, bottom, width, height);
+                LayoutShade(TrimTopShade, 0, 0, Math.Max(0, left), height);
+                LayoutShade(TrimBottomShade, right, 0, Math.Max(0, width - right), height);
+                LayoutHandle(TrimTopHandle, left, 0, 8, height, width);
+                LayoutHandle(TrimBottomHandle, right, 0, 8, height, width);
+            }
+            else
+            {
+                // 纵向：裁剪轴是上下，阴影和手柄都沿水平方向铺满
+                var top = _trimTopFraction * height;
+                var bottom = _trimBottomFraction * height;
+
+                LayoutShade(TrimTopShade, 0, 0, width, Math.Max(0, top));
+                LayoutShade(TrimBottomShade, 0, bottom, width, Math.Max(0, height - bottom));
+                LayoutHandle(TrimTopHandle, 0, top, width, 8, height);
+                LayoutHandle(TrimBottomHandle, 0, bottom, width, 8, height);
+            }
         }
 
-        var trimmedHeight = Math.Max(1, _sourceHeight - TrimTopRows - TrimBottomRows);
-        var suffix = TrimTopRows > 0 || TrimBottomRows > 0
-            ? $"（原 {_sourceHeight}，上裁 {TrimTopRows} / 下裁 {TrimBottomRows}）"
-            : string.Empty;
-
-        SizeText.Text = $"{_sourceWidth} × {trimmedHeight} px{suffix}";
+        UpdateSizeText();
     }
 
-    private static void LayoutShade(Border shade, double top, double height, double width)
+    /// <summary>标题下的尺寸文字：按方向显示保留的宽高与两端裁剪量。</summary>
+    private void UpdateSizeText()
+    {
+        if (_horizontal)
+        {
+            var trimmedWidth = Math.Max(
+                1, _sourceWidth - TrimLeadingCount - TrimTrailingCount);
+
+            var suffix = TrimLeadingCount > 0 || TrimTrailingCount > 0
+                ? $"（原 {_sourceWidth}，左裁 {TrimLeadingCount} / 右裁 {TrimTrailingCount}）"
+                : string.Empty;
+
+            SizeText.Text = $"{trimmedWidth} × {_sourceHeight} px{suffix}";
+            return;
+        }
+
+        var trimmedHeight = Math.Max(
+            1, _sourceHeight - TrimLeadingCount - TrimTrailingCount);
+
+        var horizontalSuffix = TrimLeadingCount > 0 || TrimTrailingCount > 0
+            ? $"（原 {_sourceHeight}，上裁 {TrimLeadingCount} / 下裁 {TrimTrailingCount}）"
+            : string.Empty;
+
+        SizeText.Text = $"{_sourceWidth} × {trimmedHeight} px{horizontalSuffix}";
+    }
+
+    private static void LayoutShade(
+        Border shade, double left, double top, double width, double height)
     {
         shade.Width = width;
         shade.Height = height;
-        Canvas.SetLeft(shade, 0);
+        Canvas.SetLeft(shade, left);
         Canvas.SetTop(shade, top);
     }
 
-    private static void LayoutHandle(Border handle, double center, double width, double height)
+    /// <summary>
+    /// 定位手柄：纵向时手柄横跨整宽、按 top 定位；
+    /// 横向时手柄纵跨整高、按 left 定位。
+    /// </summary>
+    private void LayoutHandle(
+        Border handle,
+        double left,
+        double top,
+        double width,
+        double height,
+        double trackExtent)
     {
         handle.Width = width;
+        handle.Height = height;
+
+        if (_horizontal)
+        {
+            // 横向：竖条手柄，沿 X 轴移动
+            Canvas.SetLeft(
+                handle, Math.Clamp(left - width / 2, 0, Math.Max(0, trackExtent - width)));
+            Canvas.SetTop(handle, 0);
+            return;
+        }
+
+        // 纵向：横条手柄，沿 Y 轴移动
         Canvas.SetLeft(handle, 0);
         Canvas.SetTop(
-            handle,
-            Math.Clamp(center - handle.Height / 2, 0, Math.Max(0, height - handle.Height)));
+            handle, Math.Clamp(top - height / 2, 0, Math.Max(0, trackExtent - height)));
     }
 
     private void OnRecognizeClick(object? sender, RoutedEventArgs e) => CloseWith(CaptureAction.Recognize);
@@ -300,7 +400,10 @@ public partial class ScrollResultWindow : Window, IAnnotationImageHost
         Action = action;
 
         if (_png is { Length: > 0 })
-            OutputPng = ScrollImageTrimmer.TrimPng(_png, TrimTopRows, TrimBottomRows);
+        {
+            OutputPng = ScrollImageTrimmer.TrimPng(
+                _png, TrimLeadingCount, TrimTrailingCount, _horizontal);
+        }
 
         Close();
     }

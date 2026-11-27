@@ -5,7 +5,7 @@ using Xunit;
 
 namespace Sparrow.Tests;
 
-/// <summary>滚动长图的头尾裁剪。</summary>
+/// <summary>滚动长图的头尾裁剪：纵向裁行、横向裁列。</summary>
 public sealed class ScrollImageTrimmerTests
 {
     private static byte[] Png(int width, int height)
@@ -24,7 +24,7 @@ public sealed class ScrollImageTrimmerTests
     {
         var png = Png(4, 10);
 
-        var trimmed = ScrollImageTrimmer.TrimPng(png, trimTopRows: 2, trimBottomRows: 3);
+        var trimmed = ScrollImageTrimmer.TrimPng(png, trimStart: 2, trimEnd: 3);
 
         using var decoded = SKBitmap.Decode(trimmed);
         decoded.Width.ShouldBe(4);
@@ -44,10 +44,36 @@ public sealed class ScrollImageTrimmerTests
     {
         var png = Png(4, 10);
 
-        var trimmed = ScrollImageTrimmer.TrimPng(png, trimTopRows: 8, trimBottomRows: 8);
+        var trimmed = ScrollImageTrimmer.TrimPng(png, trimStart: 8, trimEnd: 8);
 
         using var decoded = SKBitmap.Decode(trimmed);
         decoded.Height.ShouldBe(1);
+    }
+
+    [Fact]
+    public void 横向裁剪_只保留中间列()
+    {
+        var png = Png(10, 4);
+
+        var trimmed = ScrollImageTrimmer.TrimPng(
+            png, trimStart: 2, trimEnd: 3, horizontal: true);
+
+        using var decoded = SKBitmap.Decode(trimmed);
+        decoded.Width.ShouldBe(5);
+        decoded.Height.ShouldBe(4);
+    }
+
+    [Fact]
+    public void 横向裁过头_至少保留一列()
+    {
+        var png = Png(10, 4);
+
+        var trimmed = ScrollImageTrimmer.TrimPng(
+            png, trimStart: 8, trimEnd: 8, horizontal: true);
+
+        using var decoded = SKBitmap.Decode(trimmed);
+        decoded.Width.ShouldBe(1);
+        decoded.Height.ShouldBe(4);
     }
 
     [Fact]
