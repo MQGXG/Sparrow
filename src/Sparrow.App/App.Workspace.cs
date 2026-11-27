@@ -130,15 +130,31 @@ public partial class App
     }
 
     /// <summary>从托盘打开局域网互传窗口；第一次打开时创建，之后复用。</summary>
-    private void ShowLanShare()
+    private void ShowLanShare() => ShowLanShareCore(null);
+
+    /// <summary>搜索结果右键「发送到设备…」：打开互传窗口并带入待发送文件。</summary>
+    public void OpenLanShareWithFiles(IReadOnlyList<string> files)
+    {
+        Log.Info($"打开局域网互传：{files.Count} 个待发送文件");
+        ShowLanShareCore(files);
+    }
+
+    private void ShowLanShareCore(IReadOnlyList<string>? files)
     {
         if (_lanShare is { IsVisible: true })
         {
+            if (files is { Count: > 0 })
+                _lanShare.SetPendingFiles(files);
+
             _lanShare.Activate();
             return;
         }
 
         _lanShare ??= new LanShareWindow();
+
+        if (files is { Count: > 0 })
+            _lanShare.SetPendingFiles(files);
+
         _lanShare.Show();
         _lanShare.Activate();
     }

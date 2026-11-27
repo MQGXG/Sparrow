@@ -30,15 +30,22 @@ internal static class ShellContextMenu
     private const int HwndMessage = -3;
     private const string WindowClassName = "SparrowShellContextMenu";
 
+    /// <summary>追加到系统菜单末尾的自定义命令 ID，避开 Shell 的 1..0x7FFF 区间。</summary>
+    private const int SendToDeviceCommand = 0x8000;
+    private const uint MfString = 0x00000000;
+    private const uint MfSeparator = 0x00000800;
+
     private static IContextMenu3? _activeMenu3;
     private static WndProcDelegate? _wndProc;
     private static bool _classRegistered;
 
     /// <summary>
     /// 在屏幕坐标 (x, y) 弹出 <paramref name="path"/> 的原生菜单。
+    /// 传入 onSendToDevice 时，会在菜单末尾追加「发送到设备…」，
+    /// 由 Sparrow 自己处理，不经过 Shell。
     /// 返回 false 表示路径不存在或 Shell 拒绝创建菜单。
     /// </summary>
-    public static bool Show(string path, int x, int y)
+    public static bool Show(string path, int x, int y, Action? onSendToDevice = null)
     {
         if (string.IsNullOrWhiteSpace(path)
             || (!File.Exists(path) && !Directory.Exists(path)))
@@ -101,6 +108,13 @@ internal static class ShellContextMenu
                         contextMenu.QueryContextMenu(
                             menu, 0, idFirst, idLast, CmfNormal | CmfExtendedVerbs);
 
+                        // 在 Shell 菜单末尾追加 Sparrow 自己的动作，命令 ID 避开 Shell 区间
+                        if (onSendToDevice is not null)
+                        {
+                            AppendMenu(menu, MfSeparator, UIntPtr.Zero, null);
+                            AppendMenu(menu, MfString, (UIntPtr)SendToDeviceCommand, "发送到设备…");
+                        }
+
                         SetForegroundWindow(hwnd);
 
                         var command = TrackPopupMenuEx(
@@ -110,7 +124,12 @@ internal static class ShellContextMenu
                             hwnd,
                             IntPtr.Zero);
 
-                        if (command > 0)
+                        if (command == SendToDeviceCommand)
+                        {
+                            Sparrow.App.App.Log.Info("原生菜单：发送到设备");
+                            onSendToDevice?.Invoke();
+                        }
+                        else if (command > 0)
                         {
                             var invoke = new CMINVOKECOMMANDINFOEX
                             {
@@ -382,6 +401,10 @@ internal static class ShellContextMenu
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool DestroyMenu(IntPtr hMenu);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AppendMenu(IntPtr hMenu, uint uFlags, UIntPtr uIDNewItem, string? lpNewItem);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern int TrackPopupMenuEx(

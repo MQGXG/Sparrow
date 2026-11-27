@@ -286,7 +286,17 @@ public partial class QuickSearchWindow : Window
 
         try
         {
-            var shown = ShellContextMenu.Show(item.FullPath, cursor.Value.X, cursor.Value.Y);
+            var shown = ShellContextMenu.Show(
+                item.FullPath,
+                cursor.Value.X,
+                cursor.Value.Y,
+                () =>
+                {
+                    // 原生菜单关闭后先收起搜索框，避免它 Topmost 盖住互传窗口
+                    Hide();
+                    (Application.Current as App)?.OpenLanShareWithFiles([item.FullPath]);
+                });
+
             App.Log.Info($"原生菜单返回：{shown}");
         }
         finally

@@ -20,6 +20,7 @@ public partial class LanShareWindow : Window
     private readonly LocalSendServiceManager _manager = LocalSendServiceManager.Instance;
     private readonly LocalSendSettingsModel _settings;
     private readonly ObservableCollection<LocalSendDeviceInfo> _devices = [];
+    private readonly List<string> _pendingFiles = [];
 
     public LanShareWindow()
         : this(new LocalSendSettingsModel())
@@ -103,9 +104,11 @@ public partial class LanShareWindow : Window
                 DeviceList.SelectedItem = match;
         }
 
-        StatusText.Text = _devices.Count == 0
-            ? "没有发现设备。确认对方也开着 LocalSend/Sparrow，或输入 IP 后刷新。"
-            : $"发现 {_devices.Count} 台设备";
+        StatusText.Text = _pendingFiles.Count > 0
+            ? $"已选择 {_pendingFiles.Count} 个文件，选择设备后点「发送文件…」"
+            : _devices.Count == 0
+                ? "没有发现设备。确认对方也开着 LocalSend/Sparrow，或输入 IP 后刷新。"
+                : $"发现 {_devices.Count} 台设备";
     }
 
     private void OnDeviceListChanged(object? sender, EventArgs e) =>
@@ -182,22 +185,42 @@ public partial class LanShareWindow : Window
         }
     }
 
+    /// <summary>搜索结果右键带入的文件；下次点「发送文件…」时直接用它们。</summary>
+    public void SetPendingFiles(IReadOnlyList<string> files)
+    {
+        _pendingFiles.Clear();
+        _pendingFiles.AddRange(files.Where(File.Exists));
+
+        if (_pendingFiles.Count > 0)
+            StatusText.Text = $"已选择 {_pendingFiles.Count} 个文件，选择设备后点「发送文件…」";
+    }
+
     private async void OnSendClick(object? sender, RoutedEventArgs e)
     {
         if (DeviceList.SelectedItem is not LocalSendDeviceInfo device)
             return;
 
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "选择要发送的文件",
-            AllowMultiple = true
-        });
+        string[] paths;
 
-        var paths = files
-            .Select(file => file.TryGetLocalPath())
-            .Where(path => !string.IsNullOrEmpty(path))
-            .Cast<string>()
-            .ToArray();
+        if (_pendingFiles.Count > 0)
+        {
+            // 从搜索结果右键进来：文件已经选好，不再弹文件选择器
+            paths = [.. _pendingFiles];
+        }
+        else
+        {
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "选择要发送的文件",
+                AllowMultiple = true
+            });
+
+            paths = files
+                .Select(file => file.TryGetLocalPath())
+                .Where(path => !string.IsNullOrEmpty(path))
+                .Cast<string>()
+                .ToArray();
+        }
 
         if (paths.Length == 0)
             return;
@@ -226,6 +249,7 @@ public partial class LanShareWindow : Window
         }
         finally
         {
+            _pendingFiles.Clear();
             SendProgress.Value = 0;
             SendButton.IsEnabled = DeviceList.SelectedItem is LocalSendDeviceInfo;
         }
