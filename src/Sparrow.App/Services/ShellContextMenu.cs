@@ -1,3 +1,5 @@
+using Avalonia;
+using Avalonia.Styling;
 using System.Runtime.InteropServices;
 
 namespace Sparrow.App.Services;
@@ -43,6 +45,9 @@ internal static class ShellContextMenu
         {
             return false;
         }
+
+        // 系统菜单默认跟随 Windows 主题；这里让它跟随 Sparrow 自己的深/浅色
+        ApplyMenuTheme();
 
         var pidl = IntPtr.Zero;
         var hwnd = IntPtr.Zero;
@@ -152,6 +157,29 @@ internal static class ShellContextMenu
 
             if (pidl != IntPtr.Zero)
                 Marshal.FreeCoTaskMem(pidl);
+        }
+    }
+
+    /// <summary>
+    /// 让系统菜单按 Sparrow 当前的深/浅色绘制。
+    ///
+    /// SetPreferredAppMode 是 uxtheme 的未文档化导出（#135），Win10 1903+ 可用；
+    /// 老系统上调用会失败，直接忽略即可，菜单回到跟随系统主题。
+    /// </summary>
+    private static void ApplyMenuTheme()
+    {
+        try
+        {
+            // 深色 / 高对比度都按深色菜单处理，只有明确浅色才切浅色
+            var dark = !Equals(Application.Current?.ActualThemeVariant, ThemeVariant.Light);
+
+            // 0=Default 1=AllowDark 2=ForceDark 3=ForceLight
+            SetPreferredAppMode(dark ? 2 : 3);
+            FlushMenuThemes();
+        }
+        catch
+        {
+            // 导出不存在或系统不支持：保持系统默认配色
         }
     }
 
@@ -392,4 +420,10 @@ internal static class ShellContextMenu
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr GetModuleHandle(string? moduleName);
+
+    [DllImport("uxtheme.dll", EntryPoint = "#135", SetLastError = true)]
+    private static extern int SetPreferredAppMode(int appMode);
+
+    [DllImport("uxtheme.dll", EntryPoint = "#136")]
+    private static extern void FlushMenuThemes();
 }

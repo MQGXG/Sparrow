@@ -45,6 +45,14 @@ internal static class Program
 
         Console.WriteLine($"目标：{path}");
 
+        // --dark：尝试让系统菜单按深色绘制（和应用主题一致）
+        if (args.Contains("--dark"))
+        {
+            var previous = SetPreferredAppMode(2);
+            FlushMenuThemes();
+            Console.WriteLine($"SetPreferredAppMode(ForceDark)：{previous}");
+        }
+
         var pidl = IntPtr.Zero;
         var hwnd = IntPtr.Zero;
 
@@ -399,4 +407,10 @@ internal static class Program
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr GetModuleHandle(string? moduleName);
+
+    [DllImport("uxtheme.dll", EntryPoint = "#135", SetLastError = true)]
+    private static extern int SetPreferredAppMode(int appMode);
+
+    [DllImport("uxtheme.dll", EntryPoint = "#136")]
+    private static extern void FlushMenuThemes();
 }

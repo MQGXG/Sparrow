@@ -86,10 +86,7 @@
                    ItemsSource="{Binding Items}"
                    SelectedItem="{Binding Selected, Mode=TwoWay}"
                    Background="Transparent"
-                   BorderThickness="0"
-                   PointerPressed="OnResultPointerPressed"
-                   PointerMoved="OnResultPointerMoved"
-                   PointerReleased="OnResultPointerReleased">
+                   BorderThickness="0">
             <ListBox.Styles>
               <Style Selector="ListBoxItem">
                 <Setter Property="Padding" Value="0" />

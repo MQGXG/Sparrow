@@ -1,10 +1,12 @@
 using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Sparrow.App.Services;
 using Sparrow.App.Services.Recording;
 using Sparrow.App.ViewModels;
@@ -54,6 +56,15 @@ public partial class QuickSearchWindow : Window
             OnResultContextRequested,
             RoutingStrategies.Tunnel,
             handledEventsToo: true);
+
+        // ListBoxItem 也会把左键的 PointerPressed 标记为已处理，
+        // 拖拽起点和单击打开必须挂 handledEventsToo 才收得到
+        AddHandler(PointerPressedEvent, OnResultPointerPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(PointerMovedEvent, OnResultPointerMoved, RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(PointerReleasedEvent, OnResultPointerReleased, RoutingStrategies.Tunnel, handledEventsToo: true);
+
+        // 无边框窗口：按在输入框、列表、按钮以外的空白处可以拖动窗口
+        AddHandler(PointerPressedEvent, OnShellPointerPressed, RoutingStrategies.Tunnel);
     }
 
     public QuickSearchWindow(IFileIndex index) : this()
@@ -214,6 +225,33 @@ public partial class QuickSearchWindow : Window
         _dragStarted = false;
     }
 
+    /// <summary>
+    /// 无边框窗口的拖动：按在输入框、结果列表、按钮以外的空白处时移动窗口。
+    /// 顶部留白、搜索框内边距、底部状态栏都可以当拖动条。
+    /// </summary>
+    private void OnShellPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+
+        if (IsInteractiveSource(e.Source))
+            return;
+
+        BeginMoveDrag(e);
+    }
+
+    /// <summary>点击是否落在自己处理鼠标的控件里（输入框、列表、按钮、滚动条）。</summary>
+    private static bool IsInteractiveSource(object? source)
+    {
+        for (var visual = source as Visual; visual is not null; visual = visual.GetVisualParent())
+        {
+            if (visual is TextBox or Button or ListBox or ListBoxItem or ScrollBar or Thumb)
+                return true;
+        }
+
+        return false;
+    }
+
     /// <summary>右键结果项：弹原生 Shell 上下文菜单。</summary>
     private void OnResultContextRequested(object? sender, ContextRequestedEventArgs e)
     {
@@ -319,8 +357,27 @@ public partial class QuickSearchWindow : Window
         }
     }
 
-    private void OnResultPointerReleased(object? sender, PointerReleasedEventArgs e) =>
+    private void OnResultPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        var item = _dragItem;
+        var wasDragged = _dragStarted;
+
         ResetDrag();
+
+        // 没有发生拖拽的左键释放 = 单击打开（拖拽时保持拖放，不打开）
+        if (wasDragged
+            || item is null
+            || e.InitialPressMouseButton != MouseButton.Left)
+        {
+            return;
+        }
+
+        if (DataContext is QuickSearchViewModel viewModel)
+        {
+            viewModel.Selected = item;
+            OpenSelected(false);
+        }
+    }
 
     private void ResetDrag()
     {
@@ -337,6 +394,8 @@ public partial class QuickSearchWindow : Window
 
         try
         {
+            App.Log.Info($"文件搜索打开{(reveal ? "并定位" : string.Empty)}：{selected.FullPath}");
+
             if (reveal)
             {
                 Process.Start(new ProcessStartInfo(
