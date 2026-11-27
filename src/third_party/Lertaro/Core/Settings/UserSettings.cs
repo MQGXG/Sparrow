@@ -132,7 +132,6 @@ public class UserSettings
     public bool EnableQuickSearchClipboardAutoFill { get; set; } = false;
     public PreviewWindowSettings PreviewWindow { get; set; } = new();
     public MainWindowSettings MainWindow { get; set; } = new();
-    public QuickPanelSettings QuickPanel { get; set; } = new();
     public QuickLaunchSettings QuickLaunch { get; set; } = new();
     public LocalSendSettingsModel LocalSend { get; set; } = new();
 
@@ -234,14 +233,6 @@ public class UserSettings
 
     [System.Text.Json.Serialization.JsonIgnore]
     public Dictionary<string, Dictionary<string, object>> PluginSettings { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-
-    public bool SavePluginSettings() => UserSettingsPersistence.SavePluginSettings(this);
-
-    public T GetPluginSetting<T>(string pluginId, string key, T defaultValue) =>
-        UserSettingsPluginSupport.GetPluginSetting(this, pluginId, key, defaultValue);
-
-    public void SetPluginSetting(string pluginId, string key, object? value) =>
-        UserSettingsPluginSupport.SetPluginSetting(this, pluginId, key, value);
 
     public static string SettingsPath => UserSettingsPersistence.SettingsPath;
     public static UserSettings Load() => UserSettingsPersistence.Load();

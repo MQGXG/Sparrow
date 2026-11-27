@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Lertaro.Core.Settings.Migration;
 
 namespace Lertaro.Core;
 
@@ -39,9 +38,6 @@ internal static class UserSettingsPersistence
     {
         var settings = LoadFromPath(SettingsPath, out _);
         IndexRuleMigration.Ensure(settings);
-        LegacyPluginSettingsMigration.Upgrade(SettingsPath, settings);
-        if (settings.PluginSettingsStorageVersion != 1) throw new InvalidDataException("Unsupported plugin settings storage version.");
-        settings.PluginSettings = PluginSettingsStore.Load(SettingsPath);
         return settings;
     }
 
@@ -81,11 +77,7 @@ internal static class UserSettingsPersistence
             // Explicit per-window values, including following the cursor, take precedence over the old shared preference.
             settings.SearchWindow.DefaultDisplay ??= legacyDisplay;
             settings.MainWindow.DefaultDisplay ??= legacyDisplay;
-            LegacyPluginSettingsMigration.ReadLegacy(json, settings);
             NormalizeHotkeys(settings);
-            settings.UiFontFamilies = UiFontSettings.Normalize(settings.UiFontFamilies);
-            settings.GitHubUpdateMirrors = UpdateMirrorSettings.Normalize(settings.GitHubUpdateMirrors);
-            settings.GitLabUpdateToken = UpdateMirrorSettings.NormalizeToken(settings.GitLabUpdateToken);
             IndexRuleMigration.Ensure(settings);
             return settings;
         }
@@ -110,13 +102,8 @@ internal static class UserSettingsPersistence
     public static bool Save(UserSettings settings)
     {
         NormalizeHotkeys(settings);
-        settings.UiFontFamilies = UiFontSettings.Normalize(settings.UiFontFamilies);
-        settings.GitHubUpdateMirrors = UpdateMirrorSettings.Normalize(settings.GitHubUpdateMirrors);
-        settings.GitLabUpdateToken = UpdateMirrorSettings.NormalizeToken(settings.GitLabUpdateToken);
         lock (CacheLock)
         {
-            if (!SavePluginSettings(settings)) return false;
-            settings.PluginSettingsStorageVersion = 1;
             IndexRuleMigration.MirrorLegacy(settings);
             var json = JsonSerializer.Serialize(settings, WriteOptions);
             // Persist even an unchanged object: another process may have removed/replaced the file.
@@ -129,20 +116,6 @@ internal static class UserSettingsPersistence
         }
         ExclusionRuleSet.InvalidateCache();
         return true;
-    }
-
-    internal static bool SavePluginSettings(UserSettings settings)
-    {
-        lock (CacheLock)
-        {
-            try { PluginSettingsStore.Save(SettingsPath, settings.PluginSettings); return true; }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                _cachedSettings = null;
-                Logger.Log($"[PluginSettings] Save failed: {ex.Message}", LogLevel.Error);
-                return false;
-            }
-        }
     }
 
     internal static bool TryPersist(string json, string settingsPath)
@@ -177,8 +150,6 @@ internal static class UserSettingsPersistence
         json = File.ReadAllText(sourcePath);
         var restored = TryParse(json)
             ?? throw new InvalidDataException($"The file is not a valid user settings file: {sourcePath}");
-        json = LegacyPluginSettingsMigration.Prepare(settingsPath, restored, json) ?? json;
-        restored.PluginSettings = PluginSettingsStore.Load(settingsPath);
         RotateBackups(settingsPath, backupCount);
         AtomicFileStore.Write(settingsPath, json);
         return restored;
