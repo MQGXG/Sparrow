@@ -18,6 +18,8 @@ public sealed class LocalSendDiscoveryService : IDisposable
     private readonly List<UdpClient> _udpListenersV6 = [];
     private CancellationTokenSource? _cts;
     private Task? _listenTask;
+    private readonly List<Task> _backgroundTasks = [];
+    private readonly object _taskGate = new();
     private int _discoveryPort = DefaultPort;
     private int _isDiscovering;
     private int _isValidating;
@@ -44,6 +46,7 @@ public sealed class LocalSendDiscoveryService : IDisposable
             return;
 
         _cts = new CancellationTokenSource();
+        var cts = _cts;
         _discoveryPort = port;
 
         try
@@ -62,15 +65,17 @@ public sealed class LocalSendDiscoveryService : IDisposable
 
             LanShareLog.Log($"[LocalSendDiscovery] Started discovery service on port {port}. Alias={LocalInfo.Alias}, Fingerprint={LocalInfo.Fingerprint}");
 
-            _listenTask = Task.Run(() => ListenLoopAsync(_udpListener, _cts.Token));
+            var listenTask = Task.Run(() => ListenLoopAsync(_udpListener, cts.Token));
+            _listenTask = listenTask;
+            Track(listenTask);
 
             foreach (var listener in LocalSendIpv6Multicast.CreateSockets(port))
             {
                 _udpListenersV6.Add(listener);
-                _ = Task.Run(() => ListenLoopAsync(listener, _cts.Token));
+                Track(Task.Run(() => ListenLoopAsync(listener, cts.Token)));
             }
 
-            _ = Task.Run(AnnounceBurstAsync);
+            Track(Task.Run(() => AnnounceBurstAsync(cts.Token)));
         }
         catch
         {
@@ -202,8 +207,9 @@ public sealed class LocalSendDiscoveryService : IDisposable
             if (!_discoveredDevices.IsEmpty)
                 return;
 
-            _ = AnnounceBurstAsync();
-            await Task.Delay(1000).ConfigureAwait(false);
+            var token = _cts?.Token ?? CancellationToken.None;
+            _ = AnnounceBurstAsync(token);
+            await Task.Delay(1000, token).ConfigureAwait(false);
             if (_discoveredDevices.IsEmpty)
                 await LocalSendSubnetScanner.ScanSubnetAsync(this, LocalInfo, DiscoveryTimeout).ConfigureAwait(false);
         }
@@ -253,12 +259,19 @@ public sealed class LocalSendDiscoveryService : IDisposable
         return (pair.Key, device, response != null && response.Fingerprint == device.Fingerprint);
     }
 
-    private async Task AnnounceBurstAsync()
+    private async Task AnnounceBurstAsync(CancellationToken token)
     {
-        foreach (var delay in new[] { 100, 500, 2000 })
+        try
         {
-            await Task.Delay(delay).ConfigureAwait(false);
-            await AnnounceAsync().ConfigureAwait(false);
+            foreach (var delay in new[] { 100, 500, 2000 })
+            {
+                await Task.Delay(delay, token).ConfigureAwait(false);
+                await AnnounceAsync().ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // 服务已停止
         }
     }
 
@@ -280,9 +293,18 @@ public sealed class LocalSendDiscoveryService : IDisposable
             DeviceListChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    private void Track(Task task)
+    {
+        lock (_taskGate)
+            _backgroundTasks.Add(task);
+    }
+
     public void Stop()
     {
-        _cts?.Cancel();
+        var cts = _cts;
+        _cts = null;
+
+        cts?.Cancel();
 
         _udpListener?.Close();
         _udpListener?.Dispose();
@@ -296,11 +318,37 @@ public sealed class LocalSendDiscoveryService : IDisposable
         _udpListenersV6.Clear();
 
         _discoveredDevices.Clear();
+
+        if (cts is null)
+            return;
+
+        Task[] tasks;
+        lock (_taskGate)
+        {
+            tasks = _backgroundTasks.ToArray();
+            _backgroundTasks.Clear();
+        }
+
+        _ = DisposeCtsWhenDoneAsync(cts, tasks);
     }
 
-    public void Dispose()
+    private static async Task DisposeCtsWhenDoneAsync(
+        CancellationTokenSource cts,
+        IReadOnlyList<Task> tasks)
     {
-        Stop();
-        _cts?.Dispose();
+        try
+        {
+            await Task.WhenAll(tasks).ConfigureAwait(false);
+        }
+        catch
+        {
+            // 监听任务异常不影响 CTS 回收
+        }
+        finally
+        {
+            cts.Dispose();
+        }
     }
+
+    public void Dispose() => Stop();
 }

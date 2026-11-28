@@ -27,6 +27,9 @@ public interface IFileIndex : IDisposable
     /// <summary>清空现有索引并重新建立。</summary>
     void Rebuild();
 
-    /// <summary>按文件名查询；空查询返回空列表。</summary>
-    IReadOnlyList<FileSearchItem> Search(string? query, int limit);
+    /// <summary>按文件名异步查询；空查询返回空列表。</summary>
+    Task<IReadOnlyList<FileSearchItem>> SearchAsync(
+        string? query,
+        int limit,
+        CancellationToken cancellationToken = default);
 }

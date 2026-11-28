@@ -6,7 +6,7 @@
 
 [![.NET](https://img.shields.io/badge/.NET-10-512BD4)](https://dotnet.microsoft.com/)
 [![Avalonia](https://img.shields.io/badge/Avalonia-12-8B44AC)](https://avaloniaui.net/)
-[![Tests](https://img.shields.io/badge/tests-903%20passing-3DD68C)](#从源码构建)
+[![Tests](https://img.shields.io/badge/tests-907%20passing-3DD68C)](#从源码构建)
 [![License](https://img.shields.io/badge/License-MIT-3DD68C)](#协议)
 
 ---

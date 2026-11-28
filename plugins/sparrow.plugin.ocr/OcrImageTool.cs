@@ -20,6 +20,7 @@ namespace Sparrow.Plugin.Ocr;
 public sealed class OcrImageTool : ITool
 {
     private readonly WarmWorkerPool _pool;
+    private int _cleanupRegistered;
 
     public OcrImageTool() : this(new ProcessOcrWorkerRunner())
     {
@@ -66,6 +67,8 @@ public sealed class OcrImageTool : ITool
 
         if (context.Host is null)
             return ToolResult.Failed("宿主未注入能力，无法定位 OCR worker");
+
+        RegisterCleanup(context.Host);
 
         var language = context.GetParameter(OcrParameters.LanguageKey, "ch");
         var formatting = OcrParameters.ResolveFormatting(context);
@@ -662,6 +665,31 @@ public sealed class OcrImageTool : ITool
         catch (OperationCanceledException)
         {
             return ToolResult.Cancelled();
+        }
+    }
+
+    /// <summary>
+    /// 把热池绑定到插件生命周期：插件卸载时停掉空闲 Timer 并结束 worker 进程。
+    /// 否则 Timer 会一直把池、worker 进程和插件 ALC 钉在内存里。
+    /// </summary>
+    private void RegisterCleanup(IToolHost host)
+    {
+        if (Interlocked.Exchange(ref _cleanupRegistered, 1) != 0)
+            return;
+
+        host.OnDispose(() => _ = DisposePoolAsync(host));
+    }
+
+    private async Task DisposePoolAsync(IToolHost host)
+    {
+        try
+        {
+            await _pool.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // 清理失败不能影响卸载；但必须留下日志
+            host.Logger.LogError(ex, "OCR worker 热池清理失败");
         }
     }
 

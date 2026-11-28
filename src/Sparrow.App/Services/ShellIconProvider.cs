@@ -18,25 +18,62 @@ internal static class ShellIconProvider
     private const uint FileAttributeDirectory = 0x00000010;
     private const uint FileAttributeNormal = 0x00000080;
 
-    private static readonly ConcurrentDictionary<string, Bitmap> Cache =
+    /// <summary>同扩展名 / 目录共用一个图标。</summary>
+    private static readonly ConcurrentDictionary<string, Bitmap> ExtensionCache =
         new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>.lnk / .exe / .ico / .url 每个文件图标不同，按完整路径缓存。</summary>
+    private static readonly ConcurrentDictionary<string, Bitmap> PathCache =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>按路径缓存的条数上限；超过后整表清空，避免长期搜索只增不减。</summary>
+    private const int MaxPathEntries = 256;
+
+    private static readonly object Gate = new();
 
     /// <summary>取文件/文件夹图标；失败返回 null，由 UI 回退到几何占位图标。</summary>
     public static Bitmap? GetIcon(string path, bool isDirectory)
     {
-        var key = CacheKey(path, isDirectory);
+        var perFile = IsPerFile(path, isDirectory);
+        var key = CacheKey(path, isDirectory, perFile);
+        var cache = perFile ? PathCache : ExtensionCache;
 
-        if (Cache.TryGetValue(key, out var cached))
-            return cached;
+        // 整段查-解-存必须原子：并发未命中时会各自解码出不同 native 位图
+        lock (Gate)
+        {
+            if (cache.TryGetValue(key, out var cached))
+                return cached;
 
-        var icon = Load(path, isDirectory);
-        if (icon is not null)
-            Cache[key] = icon;
+            var icon = Load(path, isDirectory);
+            if (icon is null)
+                return null;
 
-        return icon;
+            cache[key] = icon;
+
+            // 与 FileIconProvider 一致：路径型图标可能无限增长，到上限清空。
+            // 不主动 Dispose：位图可能仍被 Image.Source 引用，交给 GC/finalizer。
+            if (perFile && PathCache.Count > MaxPathEntries)
+                PathCache.Clear();
+
+            return icon;
+        }
     }
 
-    private static string CacheKey(string path, bool isDirectory)
+    private static bool IsPerFile(string path, bool isDirectory)
+    {
+        if (isDirectory)
+            return false;
+
+        var extension = Path.GetExtension(path);
+
+        // 这些类型的图标取自目标文件，不能只按扩展名缓存
+        return extension.Equals(".lnk", StringComparison.OrdinalIgnoreCase)
+               || extension.Equals(".exe", StringComparison.OrdinalIgnoreCase)
+               || extension.Equals(".ico", StringComparison.OrdinalIgnoreCase)
+               || extension.Equals(".url", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string CacheKey(string path, bool isDirectory, bool perFile)
     {
         if (isDirectory)
             return "<dir>";
@@ -45,16 +82,7 @@ internal static class ShellIconProvider
         if (string.IsNullOrEmpty(extension))
             return "<file>";
 
-        // 这些类型的图标取自目标文件，不能只按扩展名缓存
-        if (extension.Equals(".lnk", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".exe", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".ico", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".url", StringComparison.OrdinalIgnoreCase))
-        {
-            return path.ToLowerInvariant();
-        }
-
-        return extension.ToLowerInvariant();
+        return perFile ? path.ToLowerInvariant() : extension.ToLowerInvariant();
     }
 
     private static Bitmap? Load(string path, bool isDirectory)

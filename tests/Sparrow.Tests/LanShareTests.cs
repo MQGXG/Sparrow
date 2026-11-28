@@ -75,6 +75,36 @@ public sealed class LanShareTests
         }
     }
 
+    [Fact]
+    public void 停止后可以重新启动_不残留旧监听()
+    {
+        using var identity = LocalSendCertificate.LoadOrCreate();
+        var port = GetFreePort();
+
+        using var server = new LocalSendServer
+        {
+            Certificate = identity,
+            IdentityCertificate = identity,
+            DeviceInfo = new LocalSendDeviceInfo
+            {
+                Alias = "SparrowTest",
+                Port = port,
+                Protocol = "https"
+            }
+        };
+
+        server.Start(port);
+        server.ActualPort.ShouldBeGreaterThan(0);
+
+        server.Stop();
+        server.Stop();
+
+        server.Start(port);
+        server.ActualPort.ShouldBeGreaterThan(0);
+
+        server.Stop();
+    }
+
     private static int GetFreePort()
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);

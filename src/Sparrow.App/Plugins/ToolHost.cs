@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Sparrow.App.Overlays;
 using Sparrow.Plugin.Sdk;
 
 namespace Sparrow.App.Plugins;
@@ -35,7 +36,7 @@ public sealed class ToolHost : IToolHost, IDisposable
         LocalModels = localModels ?? NullLocalModels.Instance;
         LocalTranslation = localTranslation ?? NullLocalTranslation.Instance;
         ClipboardHistory = clipboardHistory;
-        Windows = windows;
+        Windows = windows is null ? null : new ScopedWindowOverlay(windows);
     }
 
     public ILogger Logger { get; }
@@ -94,6 +95,10 @@ public sealed class ToolHost : IToolHost, IDisposable
         // 后注册的先执行：与常见的资源栈语义一致
         for (var i = snapshot.Length - 1; i >= 0; i--)
             InvokeSafe(snapshot[i]);
+
+        // 插件自己的清理先跑，最后统一收掉它创建的图钉
+        if (Windows is IDisposable disposableWindows)
+            disposableWindows.Dispose();
     }
 
     private void InvokeSafe(Action callback)

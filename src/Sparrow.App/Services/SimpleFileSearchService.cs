@@ -207,7 +207,18 @@ public sealed class SimpleFileSearchService : IFileIndex
     /// 在内存索引里按文件名过滤：前缀命中优先，其次包含命中。
     /// 空查询返回空列表，避免窗口一打开就铺满内容。
     /// </summary>
-    public IReadOnlyList<FileSearchItem> Search(string? query, int limit)
+    public Task<IReadOnlyList<FileSearchItem>> SearchAsync(
+        string? query,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.Run(() => SearchCore(query, limit, cancellationToken), cancellationToken);
+    }
+
+    private IReadOnlyList<FileSearchItem> SearchCore(
+        string? query,
+        int limit,
+        CancellationToken cancellationToken)
     {
         if (limit <= 0 || string.IsNullOrWhiteSpace(query))
             return [];
@@ -222,6 +233,8 @@ public sealed class SimpleFileSearchService : IFileIndex
 
         foreach (var item in items)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (item.Name.StartsWith(term, StringComparison.OrdinalIgnoreCase))
             {
                 prefix.Add(item);

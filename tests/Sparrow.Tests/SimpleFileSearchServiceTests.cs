@@ -46,7 +46,7 @@ public sealed class SimpleFileSearchServiceTests : IDisposable
     }
 
     [Fact]
-    public void 按文件名搜索_前缀结果排在包含结果前面()
+    public async Task 按文件名搜索_前缀结果排在包含结果前面()
     {
         WriteFile("report.txt");
         WriteFile("my-report-2026.txt");
@@ -54,7 +54,7 @@ public sealed class SimpleFileSearchServiceTests : IDisposable
 
         using var service = BuildService();
 
-        var results = service.Search("report", 10);
+        var results = await service.SearchAsync("report", 10, TestContext.Current.CancellationToken);
 
         results[0].Name.ShouldBe("report.txt");
         results.Any(item => item.Name == "my-report-2026.txt").ShouldBeTrue();
@@ -62,60 +62,75 @@ public sealed class SimpleFileSearchServiceTests : IDisposable
     }
 
     [Fact]
-    public void 子目录里的文件也能搜到()
+    public async Task 子目录里的文件也能搜到()
     {
         var deep = WriteFile(@"sub\deep.txt");
 
         using var service = BuildService();
 
-        var results = service.Search("deep", 10);
+        var results = await service.SearchAsync("deep", 10, TestContext.Current.CancellationToken);
 
         results.ShouldContain(item => item.FullPath == deep);
     }
 
     [Fact]
-    public void 文件夹本身也能搜到()
+    public async Task 文件夹本身也能搜到()
     {
         Directory.CreateDirectory(Path.Combine(_root, "subfolder"));
         WriteFile(@"subfolder\inner.txt");
 
         using var service = BuildService();
 
-        var results = service.Search("subfolder", 10);
+        var results = await service.SearchAsync("subfolder", 10, TestContext.Current.CancellationToken);
 
         results.ShouldContain(item => item.Name == "subfolder" && item.IsDirectory);
     }
 
     [Fact]
-    public void 空查询不返回结果()
+    public async Task 空查询不返回结果()
     {
         WriteFile("anything.txt");
 
         using var service = BuildService();
 
-        service.Search("", 10).ShouldBeEmpty();
-        service.Search("   ", 10).ShouldBeEmpty();
+        (await service.SearchAsync("", 10, TestContext.Current.CancellationToken)).ShouldBeEmpty();
+        (await service.SearchAsync("   ", 10, TestContext.Current.CancellationToken)).ShouldBeEmpty();
     }
 
     [Fact]
-    public void 排除目录不参与索引()
+    public async Task 排除目录不参与索引()
     {
         WriteFile(@"node_modules\hidden.js");
 
         using var service = BuildService();
 
-        service.Search("hidden", 10).ShouldBeEmpty();
+        (await service.SearchAsync("hidden", 10, TestContext.Current.CancellationToken)).ShouldBeEmpty();
     }
 
     [Fact]
-    public void 结果数量不超过上限()
+    public async Task 结果数量不超过上限()
     {
         for (var i = 0; i < 5; i++)
             WriteFile($"file{i}.txt");
 
         using var service = BuildService();
 
-        service.Search("file", 2).Count.ShouldBe(2);
+        var results = await service.SearchAsync("file", 2, TestContext.Current.CancellationToken);
+
+        results.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task 已取消的搜索_直接返回取消()
+    {
+        WriteFile("file.txt");
+
+        using var service = BuildService();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Should.ThrowAsync<OperationCanceledException>(
+            () => service.SearchAsync("file", 10, cancellation.Token));
     }
 
     public void Dispose()

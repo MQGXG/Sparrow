@@ -77,6 +77,8 @@ public partial class QuickSearchViewModel : ObservableObject
     /// <summary>查询版本号：只有最后一次查询的结果才允许写回 UI。</summary>
     private int _version;
 
+    private CancellationTokenSource? _searchCts;
+
     [ObservableProperty]
     private string _query = string.Empty;
 
@@ -131,15 +133,29 @@ public partial class QuickSearchViewModel : ObservableObject
         var version = Interlocked.Increment(ref _version);
         var query = Query;
 
+        // 取消上一次查询：旧查询继续跑只会占线程池和结果列表
+        _searchCts?.Cancel();
+        using var cts = new CancellationTokenSource();
+        _searchCts = cts;
+
         IReadOnlyList<FileSearchItem> results;
 
         try
         {
-            results = await Task.Run(() => _index.Search(query, MaxResults));
+            results = await _index.SearchAsync(query, MaxResults, cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
         }
         catch
         {
             return;
+        }
+        finally
+        {
+            if (ReferenceEquals(_searchCts, cts))
+                _searchCts = null;
         }
 
         if (version != Volatile.Read(ref _version))

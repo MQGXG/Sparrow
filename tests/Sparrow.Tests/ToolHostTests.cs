@@ -54,6 +54,20 @@ public sealed class ToolHostTests
         public void Set(string key, string? value) => Value = value;
     }
 
+    private sealed class FakeWindowOverlay : IWindowOverlay
+    {
+        public List<nint> Shown { get; } = [];
+
+        public List<nint> Hidden { get; } = [];
+
+        public Task<nint> PickWindowAsync(string hint, CancellationToken cancellationToken) =>
+            Task.FromResult<nint>(0);
+
+        public void ShowPinIndicator(nint window, Action onRemove) => Shown.Add(window);
+
+        public void HidePinIndicator(nint window) => Hidden.Add(window);
+    }
+
     /// <summary>记录最后一次执行拿到的 ToolContext。</summary>
     private sealed class HostProbeTool : ITool
     {
@@ -141,6 +155,22 @@ public sealed class ToolHostTests
         host.OnDispose(() => called = true);
 
         called.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void 卸载宿主_会清理插件创建的图钉()
+    {
+        var windows = new FakeWindowOverlay();
+        var host = new ToolHost("sparrow.plugin.test", ".", new NullLog(), windows: windows);
+        var handle = (nint)12345;
+
+        host.Windows.ShouldNotBeNull();
+        host.Windows!.ShowPinIndicator(handle, () => { });
+        windows.Shown.ShouldContain(handle);
+
+        host.Dispose();
+
+        windows.Hidden.ShouldContain(handle);
     }
 
     [Fact]

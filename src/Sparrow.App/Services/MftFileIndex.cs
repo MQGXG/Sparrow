@@ -198,7 +198,10 @@ internal sealed class MftFileIndex : IFileIndex
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    public IReadOnlyList<FileSearchItem> Search(string? query, int limit)
+    public async Task<IReadOnlyList<FileSearchItem>> SearchAsync(
+        string? query,
+        int limit,
+        CancellationToken cancellationToken = default)
     {
         if (limit <= 0 || string.IsNullOrWhiteSpace(query))
             return [];
@@ -206,11 +209,21 @@ internal sealed class MftFileIndex : IFileIndex
         var term = query.Trim();
 
         // 优先查服务内存索引：文件变化通过 USN 实时反映，不依赖 .idx compact
-        var piped = SearchViaPipe(term, limit);
+        var piped = await SearchViaPipeAsync(term, limit, cancellationToken).ConfigureAwait(false);
         if (piped is not null)
             return piped;
 
         // 回退：服务不可用时直接查 .idx（可能不是最新）
+        return await Task.Run(
+            () => SearchLocal(term, limit, cancellationToken),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private IReadOnlyList<FileSearchItem> SearchLocal(
+        string term,
+        int limit,
+        CancellationToken cancellationToken)
+    {
         LiveIndex[] lives;
 
         lock (_gate)
@@ -222,15 +235,19 @@ internal sealed class MftFileIndex : IFileIndex
             return [];
 
         var perDrive = new List<FileSearchItem>[lives.Length];
+        var options = new ParallelOptions { CancellationToken = cancellationToken };
 
-        Parallel.For(0, lives.Length, index =>
+        Parallel.For(0, lives.Length, options, index =>
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var rows = perDrive[index] = new List<FileSearchItem>(Math.Min(limit, 64));
 
             try
             {
                 IndexV2Searcher.SearchStreaming(lives[index], term, limit, row =>
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     var directory = row.IsDir
                         ? row.Path
                         : Path.GetDirectoryName(row.Path)
@@ -243,13 +260,19 @@ internal sealed class MftFileIndex : IFileIndex
                         row.IsDir,
                         row.Metadata.Size,
                         row.Metadata.Modified));
-                }, CancellationToken.None);
+                }, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
                 _log.Error($"MFT 查询失败：{term}", ex);
             }
         });
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         return perDrive
             .Where(rows => rows is not null)
@@ -267,13 +290,16 @@ internal sealed class MftFileIndex : IFileIndex
     /// 通过命名管道查服务内存里的实时索引。
     /// 返回 null 表示服务不可用（调用方回退到 .idx）；空列表表示服务可用但没有匹配。
     /// </summary>
-    private IReadOnlyList<FileSearchItem>? SearchViaPipe(string term, int limit)
+    private async Task<IReadOnlyList<FileSearchItem>?> SearchViaPipeAsync(
+        string term,
+        int limit,
+        CancellationToken cancellationToken)
     {
         try
         {
             var pipeClient = new SearchPipeClient();
 
-            if (!pipeClient.PingAsync(CancellationToken.None).GetAwaiter().GetResult())
+            if (!await pipeClient.PingAsync(cancellationToken).ConfigureAwait(false))
                 return null;
 
             var results = new List<FileSearchItem>(Math.Min(limit, 64));
@@ -289,10 +315,12 @@ internal sealed class MftFileIndex : IFileIndex
                 OrFirstPrecedence = false
             };
 
-            SearchPipeClient.SendSearchPipeCommandAsync(
+            await SearchPipeClient.SendSearchPipeCommandAsync(
                 message,
                 row =>
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     var directory = row.IsDir
                         ? row.Path
                         : Path.GetDirectoryName(row.Path)
@@ -306,7 +334,7 @@ internal sealed class MftFileIndex : IFileIndex
                         row.Metadata.Size,
                         row.Metadata.Modified));
                 },
-                CancellationToken.None).GetAwaiter().GetResult();
+                cancellationToken).ConfigureAwait(false);
 
             return results
                 .DistinctBy(item => item.FullPath, StringComparer.OrdinalIgnoreCase)
@@ -316,6 +344,10 @@ internal sealed class MftFileIndex : IFileIndex
                 .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
                 .Take(limit)
                 .ToArray();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch
         {

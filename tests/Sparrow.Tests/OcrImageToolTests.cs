@@ -27,13 +27,19 @@ public sealed partial class OcrImageToolTests
 
         public int Calls { get; private set; }
 
+        public bool Disposed { get; private set; }
+
         public Task<string> RecognizeAsync(ReadOnlyMemory<byte> image, CancellationToken cancellationToken)
         {
             Calls++;
             return Task.FromResult(_outputs.Count > 0 ? _outputs.Dequeue() : Result(string.Empty));
         }
 
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        public ValueTask DisposeAsync()
+        {
+            Disposed = true;
+            return ValueTask.CompletedTask;
+        }
     }
 
     private sealed class FakeRunner : IOcrWorkerRunner
@@ -176,4 +182,38 @@ public sealed partial class OcrImageToolTests
         }
     }
 
+    [Fact]
+    public async Task 宿主卸载_会释放OCR热池()
+    {
+        var root = CreateWorkerDirectory();
+        try
+        {
+            var runner = new FakeRunner([Result("hello")]);
+            using var host = CreateHost(root);
+            var tool = new OcrImageTool(runner);
+
+            var result = await tool.ExecuteAsync(
+                new ToolContext
+                {
+                    Input = new ImageSetInput([Image("a.png")]),
+                    Host = host
+                },
+                CancellationToken.None);
+
+            result.Success.ShouldBeTrue();
+            runner.Session.Disposed.ShouldBeFalse();
+
+            host.Dispose();
+
+            // 清理是异步的；假 session 通常同步完成，留一点时间给实现替换
+            for (var i = 0; i < 50 && !runner.Session.Disposed; i++)
+                await Task.Delay(10, TestContext.Current.CancellationToken);
+
+            runner.Session.Disposed.ShouldBeTrue();
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
 }

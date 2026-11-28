@@ -15,6 +15,7 @@ public sealed class LocalSendServer : IDisposable
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private Task? _listenTask;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Task, byte> _connectionTasks = new();
     private readonly LocalSendReceiveSessionStore _receiveSessions = new();
     private readonly LocalSendOutgoingSessionStore _outgoingSessions = new();
 
@@ -50,6 +51,7 @@ public sealed class LocalSendServer : IDisposable
     {
         if (_listener != null) return;
         _cts = new CancellationTokenSource();
+        var cts = _cts;
         var requestedPort = port is > 0 and <= IPEndPoint.MaxPort ? port : 53317;
         Exception? lastBindError = null;
         for (var offset = 0; offset < 10; offset++)
@@ -64,7 +66,7 @@ public sealed class LocalSendServer : IDisposable
             LanShareLog.Log($"[LocalSendServer] Requested ports {requestedPort}-{Math.Min(IPEndPoint.MaxPort, requestedPort + 9)} were unavailable; using dynamic port {ActualPort}.", LogLevel.Warn);
         if (_listener == null)
             throw new InvalidOperationException("Failed to bind LocalSend port.", lastBindError);
-        _listenTask = Task.Run(() => AcceptLoopAsync(_cts.Token));
+        _listenTask = Task.Run(() => AcceptLoopAsync(cts.Token));
     }
 
     private bool TryStartListener(int port, out Exception? error)
@@ -102,7 +104,19 @@ public sealed class LocalSendServer : IDisposable
                     client.Dispose();
                     continue;
                 }
-                _ = HandleClientAsync(client, token);
+
+                var connection = HandleClientAsync(client, token);
+                _connectionTasks[connection] = 0;
+                _ = connection.ContinueWith(
+                    static (task, state) =>
+                    {
+                        var tasks = (System.Collections.Concurrent.ConcurrentDictionary<Task, byte>)state!;
+                        tasks.TryRemove(task, out _);
+                    },
+                    _connectionTasks,
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
             }
             catch (OperationCanceledException) { break; }
             catch { await Task.Delay(200, token).ConfigureAwait(false); }
@@ -319,7 +333,44 @@ public sealed class LocalSendServer : IDisposable
     internal void InvokeUploadRequested(LocalSendUploadRequestArgs args) => UploadRequested?.Invoke(this, args);
     internal void InvokeDeviceRegistered(LocalSendDeviceInfo dto) => DeviceRegistered?.Invoke(this, dto);
     internal void InvokeShowRequested(IReadOnlyList<string>? files) => ShowRequested?.Invoke(this, files);
-    public void Stop() { _cts?.Cancel(); try { _listener?.Stop(); } catch { } _listener = null; }
+    public void Stop()
+    {
+        var cts = _cts;
+        _cts = null;
+
+        cts?.Cancel();
+        try { _listener?.Stop(); } catch { }
+        _listener = null;
+
+        if (cts is null)
+            return;
+
+        // 等监听任务和所有连接真正退出后再 Dispose CTS，
+        // 避免任务仍在用 token 注册时触发 ObjectDisposedException。
+        var tasks = _connectionTasks.Keys.ToList();
+        if (_listenTask is not null)
+            tasks.Add(_listenTask);
+
+        _ = DisposeCtsWhenDoneAsync(cts, tasks);
+    }
+
+    private static async Task DisposeCtsWhenDoneAsync(
+        CancellationTokenSource cts,
+        IReadOnlyList<Task> tasks)
+    {
+        try
+        {
+            await Task.WhenAll(tasks).ConfigureAwait(false);
+        }
+        catch
+        {
+            // 连接异常不影响 CTS 回收
+        }
+        finally
+        {
+            cts.Dispose();
+        }
+    }
     public void Dispose()
     {
         Stop();
