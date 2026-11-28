@@ -201,6 +201,36 @@ public partial class SettingsView : UserControl
         }
     }
 
+    private void OnTrayRowUpClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: TrayMenuRowViewModel row } && DataContext is SettingsViewModel viewModel)
+            viewModel.MoveTrayRow(row, -1);
+    }
+
+    private void OnTrayRowDownClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: TrayMenuRowViewModel row } && DataContext is SettingsViewModel viewModel)
+            viewModel.MoveTrayRow(row, 1);
+    }
+
+    private void OnTrayRowRemoveClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: TrayMenuRowViewModel row } && DataContext is SettingsViewModel viewModel)
+            viewModel.RemoveTrayRow(row);
+    }
+
+    private void OnTrayAddClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is SettingsViewModel viewModel)
+            viewModel.AddTrayOption();
+    }
+
+    private void OnTrayAddSeparatorClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is SettingsViewModel viewModel)
+            viewModel.AddTraySeparator();
+    }
+
     /// <summary>外观三态预览卡：Tag 直接是设置值，ViewModel 负责归一化与持久化。</summary>
     private void OnAppearanceClick(object? sender, RoutedEventArgs e)
     {

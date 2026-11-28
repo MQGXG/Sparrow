@@ -6,6 +6,7 @@ public enum SettingsSection
     Plugins = 0,
     Model,
     Hotkeys,
+    Tray,
     General,
     LanShare,
     Data,

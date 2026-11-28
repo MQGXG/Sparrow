@@ -192,8 +192,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
         if (pinned && index < 0)
         {
-            var insertAt = menu.FindIndex(item => item.Separator);
-            menu.Insert(insertAt < 0 ? menu.Count : insertAt, new TrayMenuItemConfig { Tool = id });
+            menu.Insert(InsertBeforeFirstSeparator(menu), new TrayMenuItemConfig { Tool = id });
         }
         else if (!pinned && index >= 0)
         {
@@ -204,8 +203,168 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
             return;
         }
 
+        SaveTrayMenu(menu);
+    }
+
+    // ---------- 托盘菜单编辑 ----------
+
+    /// <summary>宿主动作的可选清单；顺序就是默认菜单顺序。</summary>
+    private static readonly (string Action, string Label)[] TrayActions =
+    [
+        ("palette", "搜索工具"),
+        ("clipboard", "剪贴板面板"),
+        ("capture", "截图识别"),
+        ("record", "屏幕录制"),
+        ("lanshare", "局域网互传"),
+        ("workspace", "工作区"),
+        ("exit", "退出")
+    ];
+
+    public ObservableCollection<TrayMenuRowViewModel> TrayMenuRows { get; } = [];
+
+    public ObservableCollection<TrayMenuOptionViewModel> TrayMenuOptions { get; } = [];
+
+    [ObservableProperty]
+    private TrayMenuOptionViewModel? _selectedTrayOption;
+
+    /// <summary>重建托盘编辑列表：当前条目 + 还能添加的动作 / 工具。</summary>
+    public void ReloadTrayMenu()
+    {
+        var entries = _catalog.GetRegistry().Search(null, int.MaxValue);
+
+        var names = entries.ToDictionary(
+            entry => entry.Descriptor.Id,
+            entry => entry.Descriptor.Name,
+            StringComparer.Ordinal);
+
+        var menu = _settings.TrayMenu;
+        TrayMenuRows.Clear();
+
+        for (var index = 0; index < menu.Count; index++)
+            TrayMenuRows.Add(DescribeTrayRow(index, menu[index], names));
+
+        TrayMenuOptions.Clear();
+
+        foreach (var action in TrayActions)
+        {
+            if (menu.Any(item => string.Equals(item.Action, action.Action, StringComparison.Ordinal)))
+                continue;
+
+            TrayMenuOptions.Add(new TrayMenuOptionViewModel(action.Label, action.Action, null));
+        }
+
+        foreach (var entry in entries)
+        {
+            // 文件类工具没有无头输入来源，固定进托盘只会执行失败
+            if (entry.Descriptor.Accepts == InputShape.Files)
+                continue;
+
+            if (menu.Any(item => string.Equals(item.Tool?.Trim(), entry.Descriptor.Id, StringComparison.Ordinal)))
+                continue;
+
+            TrayMenuOptions.Add(new TrayMenuOptionViewModel(
+                entry.Descriptor.Name,
+                null,
+                entry.Descriptor.Id));
+        }
+
+        SelectedTrayOption = TrayMenuOptions.FirstOrDefault();
+    }
+
+    /// <summary>上移 / 下移一行；delta 为 -1 或 +1。</summary>
+    public void MoveTrayRow(TrayMenuRowViewModel row, int delta)
+    {
+        var menu = _settings.TrayMenu.ToList();
+        var target = row.Position + delta;
+
+        if (row.Position < 0 || row.Position >= menu.Count
+            || target < 0 || target >= menu.Count)
+        {
+            return;
+        }
+
+        (menu[row.Position], menu[target]) = (menu[target], menu[row.Position]);
+        SaveTrayMenu(menu);
+    }
+
+    public void RemoveTrayRow(TrayMenuRowViewModel row)
+    {
+        var menu = _settings.TrayMenu.ToList();
+
+        if (row.Position < 0 || row.Position >= menu.Count)
+            return;
+
+        menu.RemoveAt(row.Position);
+        SaveTrayMenu(menu);
+    }
+
+    /// <summary>把下拉里选中的动作 / 工具加到第一条分隔线之前。</summary>
+    public void AddTrayOption()
+    {
+        if (SelectedTrayOption is not { } option)
+            return;
+
+        var item = option.Action is not null
+            ? new TrayMenuItemConfig { Action = option.Action }
+            : new TrayMenuItemConfig { Tool = option.Tool };
+
+        var menu = _settings.TrayMenu.ToList();
+        menu.Insert(InsertBeforeFirstSeparator(menu), item);
+        SaveTrayMenu(menu);
+    }
+
+    /// <summary>分隔线插在「退出」之前；没有退出项时追加到末尾。</summary>
+    public void AddTraySeparator()
+    {
+        var menu = _settings.TrayMenu.ToList();
+        var exitIndex = menu.FindLastIndex(item =>
+            string.Equals(item.Action?.Trim(), "exit", StringComparison.OrdinalIgnoreCase));
+
+        menu.Insert(exitIndex < 0 ? menu.Count : exitIndex, new TrayMenuItemConfig { Separator = true });
+        SaveTrayMenu(menu);
+    }
+
+    private static int InsertBeforeFirstSeparator(List<TrayMenuItemConfig> menu)
+    {
+        var index = menu.FindIndex(item => item.Separator);
+        return index < 0 ? menu.Count : index;
+    }
+
+    private static TrayMenuRowViewModel DescribeTrayRow(
+        int position,
+        TrayMenuItemConfig item,
+        IReadOnlyDictionary<string, string> toolNames)
+    {
+        if (item.Separator)
+            return new TrayMenuRowViewModel(position, "分隔线", true);
+
+        if (!string.IsNullOrWhiteSpace(item.Action))
+        {
+            var action = item.Action.Trim();
+            var label = item.Label?.Trim();
+            if (string.IsNullOrEmpty(label))
+            {
+                label = TrayActions
+                    .FirstOrDefault(option => string.Equals(option.Action, action, StringComparison.OrdinalIgnoreCase))
+                    .Label;
+            }
+
+            return new TrayMenuRowViewModel(position, label ?? action, false);
+        }
+
+        var toolId = item.Tool?.Trim() ?? string.Empty;
+        var toolLabel = item.Label?.Trim();
+        if (string.IsNullOrEmpty(toolLabel))
+            toolLabel = toolNames.TryGetValue(toolId, out var name) ? name : toolId;
+
+        return new TrayMenuRowViewModel(position, toolLabel, false);
+    }
+
+    private void SaveTrayMenu(List<TrayMenuItemConfig> menu)
+    {
         _settings = _settings with { TrayMenu = menu, TrayMenuCustomized = true };
         _store.Save(_settings);
+        ReloadTrayMenu();
         TrayMenuChanged?.Invoke(menu);
     }
 
@@ -713,6 +872,8 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
     public bool IsHotkeysSelected => SelectedSection == SettingsSection.Hotkeys;
 
+    public bool IsTraySelected => SelectedSection == SettingsSection.Tray;
+
     public bool IsGeneralSelected => SelectedSection == SettingsSection.General;
 
     public bool IsLanShareSelected => SelectedSection == SettingsSection.LanShare;
@@ -857,6 +1018,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         OnPropertyChanged(nameof(IsPluginsSelected));
         OnPropertyChanged(nameof(IsModelSelected));
         OnPropertyChanged(nameof(IsHotkeysSelected));
+        OnPropertyChanged(nameof(IsTraySelected));
         OnPropertyChanged(nameof(IsGeneralSelected));
         OnPropertyChanged(nameof(IsLanShareSelected));
         OnPropertyChanged(nameof(IsDataSelected));
@@ -865,6 +1027,9 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         // 工具热键列表才需要工具注册表：切到热键分段时才加载插件，冷启动路径保持零加载
         if (value == SettingsSection.Hotkeys && !_toolHotkeysLoaded)
             ReloadToolHotkeys();
+
+        if (value == SettingsSection.Tray)
+            ReloadTrayMenu();
 
         if (value == SettingsSection.LanShare)
             OnPropertyChanged(nameof(LanShareStatusText));

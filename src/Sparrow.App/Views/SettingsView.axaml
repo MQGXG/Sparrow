@@ -80,6 +80,16 @@
           </StackPanel>
         </Button>
         <Button Classes="hud-tab"
+                Classes.selected="{Binding IsTraySelected}"
+                Tag="Tray"
+                ToolTip.Tip="系统托盘菜单"
+                Click="OnSectionClick">
+          <StackPanel>
+            <TextBlock Text="托盘" />
+            <Border Classes="tick" />
+          </StackPanel>
+        </Button>
+        <Button Classes="hud-tab"
                 Classes.selected="{Binding IsLanShareSelected}"
                 Tag="LanShare"
                 ToolTip.Tip="局域网文件互传"
@@ -1019,6 +1029,90 @@
                       Classes="accent small"
                       Content="应用并重启"
                       Click="OnApplyLanShareClick" />
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <!-- ============ 托盘 ============ -->
+        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,10,0,10" IsVisible="{Binding IsTraySelected}">
+          <Border Classes="hud-tick" />
+          <TextBlock Grid.Column="1"
+                     Text="托盘"
+                     FontSize="12"
+                     FontWeight="SemiBold"
+                     Margin="10,0,0,0"
+                     VerticalAlignment="Center" />
+          <TextBlock Grid.Column="2" Classes="num" Text="// TRAY" />
+        </Grid>
+
+        <Border Classes="panel" Padding="0" IsVisible="{Binding IsTraySelected}">
+          <StackPanel>
+            <StackPanel Margin="20,14" Spacing="4">
+              <TextBlock Text="右键菜单"
+                         FontSize="13"
+                         FontWeight="SemiBold"
+                         Foreground="{DynamicResource TextPrimaryBrush}" />
+              <TextBlock Text="工具卡片右键也能固定；配了热键不会自动进托盘。文件类工具没有无头输入，不在可添加列表里。"
+                         FontSize="11"
+                         Foreground="{DynamicResource TextMutedBrush}"
+                         TextWrapping="Wrap" />
+            </StackPanel>
+
+            <ItemsControl ItemsSource="{Binding TrayMenuRows}" Margin="20,0,20,8">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:TrayMenuRowViewModel">
+                  <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto"
+                        ColumnSpacing="6"
+                        Margin="0,2">
+                    <TextBlock Classes="num"
+                               Text="{Binding IndexLabel}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding Label}"
+                               VerticalAlignment="Center"
+                               FontSize="12"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <Button Grid.Column="2"
+                            Classes="ghost small"
+                            Content="↑"
+                            Tag="{Binding}"
+                            Click="OnTrayRowUpClick" />
+                    <Button Grid.Column="3"
+                            Classes="ghost small"
+                            Content="↓"
+                            Tag="{Binding}"
+                            Click="OnTrayRowDownClick" />
+                    <Button Grid.Column="4"
+                            Classes="ghost small"
+                            Content="删除"
+                            Tag="{Binding}"
+                            Click="OnTrayRowRemoveClick" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Grid ColumnDefinitions="*,Auto,Auto"
+                  ColumnSpacing="8"
+                  Margin="20,0,20,16">
+              <ComboBox ItemsSource="{Binding TrayMenuOptions}"
+                        SelectedItem="{Binding SelectedTrayOption, Mode=TwoWay}"
+                        PlaceholderText="选择要添加的菜单项">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:TrayMenuOptionViewModel">
+                    <TextBlock Text="{Binding Label}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <Button Grid.Column="1"
+                      Classes="ghost small"
+                      Content="添加"
+                      Click="OnTrayAddClick" />
+              <Button Grid.Column="2"
+                      Classes="ghost small"
+                      Content="分隔线"
+                      Click="OnTrayAddSeparatorClick" />
             </Grid>
           </StackPanel>
         </Border>

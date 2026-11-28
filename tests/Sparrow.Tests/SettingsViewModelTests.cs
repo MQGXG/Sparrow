@@ -303,4 +303,47 @@ public sealed class SettingsViewModelTests
         viewModel.IsToolPinnedToTray("sparrow.json.format").ShouldBeFalse();
         store.Load().TrayMenu.ShouldNotContain(item => item.Tool == "sparrow.json.format");
     }
+
+    [Fact]
+    public void 托盘编辑_移动删除与添加分隔线()
+    {
+        var root = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+
+        var log = new NullLog();
+        var catalog = new ToolCatalog(root, log, new AppSettings());
+        var store = new SettingsStore(System.IO.Path.Combine(root, "settings.json"), log);
+        var settings = new AppSettings
+        {
+            TrayMenu = Sparrow.App.Shell.TrayMenuPlanner.BuildDefaultConfig([]),
+            TrayMenuCustomized = true
+        };
+        var viewModel = new SettingsViewModel(catalog, store, new StartupService(log), settings);
+
+        viewModel.SelectSection(SettingsSection.Tray);
+
+        viewModel.TrayMenuRows.Count.ShouldBe(settings.TrayMenu.Count);
+        viewModel.TrayMenuOptions.ShouldNotContain(option => option.Action == "palette");
+
+        // 搜索工具下移一位
+        viewModel.MoveTrayRow(viewModel.TrayMenuRows[0], 1);
+
+        store.Load().TrayMenu[0].Action.ShouldBe("clipboard");
+        store.Load().TrayMenu[1].Action.ShouldBe("palette");
+
+        // 删除第一项
+        viewModel.RemoveTrayRow(viewModel.TrayMenuRows[0]);
+
+        store.Load().TrayMenu[0].Action.ShouldBe("palette");
+
+        // 分隔线插在「退出」之前
+        var before = store.Load().TrayMenu.Count;
+        viewModel.AddTraySeparator();
+
+        var saved = store.Load();
+        saved.TrayMenu.Count.ShouldBe(before + 1);
+        saved.TrayMenu[^1].Action.ShouldBe("exit");
+        saved.TrayMenu[^2].Separator.ShouldBeTrue();
+    }
 }
