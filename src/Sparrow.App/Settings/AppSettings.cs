@@ -51,6 +51,9 @@ public sealed record AppSettings
     /// <summary>剪贴板快取面板热键，格式 "Ctrl+Alt+B"；只呼出标题行 + 列表，不带主窗框架。</summary>
     public string ClipboardPanelHotkey { get; init; } = "Ctrl+Alt+B";
 
+    /// <summary>是否接管 Win+V 打开 Sparrow 剪贴板；关闭时 Win+V 仍由系统处理。</summary>
+    public bool ClipboardWinVEnabled { get; init; }
+
     /// <summary>屏幕录制开始/停止热键，格式 "Ctrl+Alt+Shift+R"。</summary>
     public string RecordHotkey { get; init; } = "Ctrl+Alt+Shift+R";
 

@@ -154,4 +154,15 @@ public sealed class SettingsStoreTests
         loaded.Appearance.ShouldBe("light");
         loaded.Plugins["sparrow.plugin.test"]["key"].ShouldBe("value");
     }
+
+    [Fact]
+    public void WinV接管开关_保存后能读回()
+    {
+        using var file = new TempSettingsFile();
+        var store = new SettingsStore(file.Path, new NullLog());
+
+        store.Save(new AppSettings { ClipboardWinVEnabled = true }).ShouldBeTrue();
+
+        store.Load().ClipboardWinVEnabled.ShouldBeTrue();
+    }
 }

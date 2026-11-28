@@ -97,6 +97,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _historyMaxEntries = settings.HistoryMaxEntries;
         _historyRetentionDays = settings.HistoryRetentionDays;
         _clipboardHistoryEnabled = settings.ClipboardHistoryEnabled;
+        _clipboardWinVEnabled = settings.ClipboardWinVEnabled;
         _clipboardRetentionDays = settings.ClipboardHistoryRetentionDays;
         _clipboardMaxMb = Math.Max(0, settings.ClipboardHistoryMaxBytes / (1024 * 1024));
 
@@ -122,6 +123,9 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
 
     /// <summary>剪贴板历史开关变化时通知宿主，让监听立即暂停 / 恢复。</summary>
     public event Action<bool>? ClipboardHistoryEnabledChanged;
+
+    /// <summary>Win+V 接管开关变化时通知宿主，立即安装 / 卸载低级键盘钩子。</summary>
+    public event Action<bool>? ClipboardWinVEnabledChanged;
 
     /// <summary>剪贴板保留策略变化时通知宿主，让存储立即清理一次。</summary>
     public event Action<int, long>? ClipboardRetentionChanged;
@@ -609,6 +613,10 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
     [ObservableProperty]
     private bool _clipboardHistoryEnabled = true;
 
+    /// <summary>是否接管 Win+V。改完立即安装 / 卸载低级键盘钩子。</summary>
+    [ObservableProperty]
+    private bool _clipboardWinVEnabled;
+
     /// <summary>当前 provider 预设；切换后自动填端点与默认模型。</summary>
     [ObservableProperty]
     private AiProviderPreset? _selectedAiProvider;
@@ -1047,6 +1055,20 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         _store.Save(_settings);
         ClipboardHistoryEnabledChanged?.Invoke(value);
         StatusMessage = value ? "已恢复记录剪贴板历史" : "已暂停记录剪贴板历史（已记录的内容保留）";
+    }
+
+    /// <summary>Win+V 接管开关：立即生效并落盘。</summary>
+    partial void OnClipboardWinVEnabledChanged(bool value)
+    {
+        if (value == _settings.ClipboardWinVEnabled)
+            return;
+
+        _settings = _settings with { ClipboardWinVEnabled = value };
+        _store.Save(_settings);
+        ClipboardWinVEnabledChanged?.Invoke(value);
+        StatusMessage = value
+            ? "已接管 Win+V；关闭开关后恢复系统剪贴板"
+            : "已释放 Win+V；系统剪贴板快捷键恢复";
     }
 
     /// <summary>剪贴板保留策略改完立即清理一次；容量以 MB 存配置。</summary>

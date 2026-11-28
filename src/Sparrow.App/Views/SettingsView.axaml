@@ -811,7 +811,26 @@
 
             <Border Classes="hud-line" Margin="20,0" />
 
-            <!-- 工具热键：任意工具挂全局热键；留空 = 不绑定 -->
+            <Grid ColumnDefinitions="*,Auto" Margin="20,14">
+              <StackPanel Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="接管 Win+V"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                <TextBlock Text="开启后 Win+V 打开 Sparrow 剪贴板（需开启剪贴板历史）；关闭立即恢复系统剪贴板"
+                           FontSize="11"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           TextWrapping="Wrap"
+                           MaxWidth="520" />
+              </StackPanel>
+              <ToggleSwitch Grid.Column="1"
+                            OnContent="开"
+                            OffContent="关"
+                            IsChecked="{Binding ClipboardWinVEnabled, Mode=TwoWay}"
+                            VerticalAlignment="Center" />
+            </Grid>
+
+            <Border Classes="hud-line" Margin="20,0" />
             <StackPanel IsVisible="{Binding HasToolHotkeys}">
               <Grid ColumnDefinitions="Auto,*" Margin="20,14,20,4">
                 <Border Classes="hud-tick" />

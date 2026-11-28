@@ -74,7 +74,7 @@ dotnet list package --include-transitive | findstr SkiaSharp
 [ ] 已接入测试的插件单测全绿（当前 13 个插件）
 [ ] 快照测试全绿
 [ ] 无跳过的测试（Skip 必须写原因）
-[ ] 当前基线：907 用例（2026-11-28）
+[ ] 当前基线：908 用例（2026-11-28）
 ```
 
 ### 1.6 性能
@@ -122,6 +122,7 @@ dotnet list package --include-transitive | findstr SkiaSharp
 [ ] 被其他软件占用 → 有明确提示，且不崩
 [ ] 切换显示器后仍能正确唤起（出现在鼠标所在屏）
 [ ] 混合 DPI（100% + 150%）下文字不模糊、位置不偏
+[ ] 开启「接管 Win+V」→ Win+V 打开 Sparrow 剪贴板；关闭后 Win+V 恢复系统行为
 ```
 
 ### 2.3 命令面板

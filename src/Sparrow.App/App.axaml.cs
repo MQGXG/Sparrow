@@ -63,6 +63,7 @@ public partial class App : Application
     private IFileIndex? _fileIndex;
     private QuickSearchWindow? _quickSearch;
     private DoubleCtrlHotkey? _doubleCtrl;
+    private WinVHotkey? _winVHotkey;
 
     // 贴图窗口需要宿主一直持有引用，否则会被 GC 回收
     private readonly List<PinnedImageWindow> _pins = [];
@@ -259,7 +260,12 @@ public partial class App : Application
 
         // 设置页改完保留策略后，历史存储立即按新规则清理一次
         settingsViewModel.HistoryRetentionChanged += history.Configure;
-        settingsViewModel.ClipboardHistoryEnabledChanged += enabled => clipboardMonitor.Paused = !enabled;
+        settingsViewModel.ClipboardHistoryEnabledChanged += enabled =>
+        {
+            clipboardMonitor.Paused = !enabled;
+            UpdateClipboardWinVHook();
+        };
+        settingsViewModel.ClipboardWinVEnabledChanged += _ => UpdateClipboardWinVHook();
 
         // 「不记录」名单：启动时给监听器一份，设置页改完立即生效
         clipboardMonitor.SetExcludedApps(settings.ClipboardExcludedApps);
@@ -277,6 +283,8 @@ public partial class App : Application
             clipboardHistory: clipboardHistory,
             pasteService: _pasteService,
             loadClipboardOnCreate: false);
+
+        UpdateClipboardWinVHook();
 
         // 工作台窗口在第一次打开时才创建：启动阶段只保留 ViewModel（很小）
 
@@ -443,6 +451,7 @@ public partial class App : Application
             _windowOverlay?.Dispose();
             _hotkey?.Dispose();
             _doubleCtrl?.Dispose();
+            _winVHotkey?.Dispose();
             _quickSearch?.Close();
             _fileIndex?.Dispose();
             _catalog?.Dispose();
@@ -587,6 +596,41 @@ public partial class App : Application
     {
         _doubleCtrl?.Dispose();
         _doubleCtrl = null;
+    }
+
+    /// <summary>按设置和剪贴板历史状态安装 / 卸载 Win+V 接管钩子。</summary>
+    private void UpdateClipboardWinVHook()
+    {
+        if (_settingsViewModel is { ClipboardWinVEnabled: true, ClipboardHistoryEnabled: true })
+            StartWinVHook();
+        else
+            StopWinVHook();
+    }
+
+    private void StartWinVHook()
+    {
+        if (_winVHotkey is not null)
+            return;
+
+        var hook = new WinVHotkey(
+            () => Avalonia.Threading.Dispatcher.UIThread.Post(ToggleClipboardPanel),
+            Log);
+
+        if (!hook.Start())
+        {
+            hook.Dispose();
+            Log.Warn("Win+V 接管失败（低级键盘钩子安装失败）");
+            return;
+        }
+
+        _winVHotkey = hook;
+        Log.Info("已接管 Win+V");
+    }
+
+    private void StopWinVHook()
+    {
+        _winVHotkey?.Dispose();
+        _winVHotkey = null;
     }
 
     /// <summary>提权索引子进程的参数：--build-index "C,D" --index-directory path。</summary>

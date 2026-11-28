@@ -6,7 +6,7 @@
 
 [![.NET](https://img.shields.io/badge/.NET-10-512BD4)](https://dotnet.microsoft.com/)
 [![Avalonia](https://img.shields.io/badge/Avalonia-12-8B44AC)](https://avaloniaui.net/)
-[![Tests](https://img.shields.io/badge/tests-907%20passing-3DD68C)](#从源码构建)
+[![Tests](https://img.shields.io/badge/tests-908%20passing-3DD68C)](#从源码构建)
 [![License](https://img.shields.io/badge/License-MIT-3DD68C)](#协议)
 
 ---
@@ -54,6 +54,7 @@
 - 尊重 `Clipboard Viewer Ignore`，可按应用「不记录」
 - 拖出到其他应用（文本 / 位图 / 文件，`Shift` / `Ctrl` 可强制单格式）
 - 保留天数与容量上限可配，收藏不受任何清理
+- 可选接管 `Win+V`：开启后 `Win+V` 打开 Sparrow 剪贴板；关闭立即恢复系统快捷键
 
 ### 文件搜索
 
@@ -107,7 +108,7 @@
 | 文件搜索 | `Ctrl+Alt+F`（或双击 `Ctrl`） |
 | 截图 / 标注 | `Ctrl+Alt+C` |
 | 屏幕录制 | `Ctrl+Alt+Shift+R` |
-| 剪贴板面板 | `Ctrl+Alt+B` |
+| 剪贴板面板 | `Ctrl+Alt+B`（可在设置里接管 `Win+V`） |
 | 顺序粘贴队列 | `Ctrl+Alt+V` |
 
 热键可在 **设置 → 热键** 里改，输入框点一下直接按组合键即可录制；文件搜索的触发方式也在 **设置 → 热键** 里改。
