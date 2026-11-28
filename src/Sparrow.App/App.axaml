@@ -53,6 +53,13 @@
           <SolidColorBrush x:Key="AccentOnBrush" Color="#1A1206" />
           <SolidColorBrush x:Key="AccentSelectionBrush" Color="#20E5A44C" />
 
+          <!-- 关于页 Logo 底板：冷色深蓝，衬托 Logo 的蓝 / 橙，避免大面积琥珀 -->
+          <LinearGradientBrush x:Key="BrandTileBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+            <GradientStop Color="#1B3350" Offset="0" />
+            <GradientStop Color="#101C2B" Offset="1" />
+          </LinearGradientBrush>
+          <SolidColorBrush x:Key="BrandTileBorderBrush" Color="#2F5C86" />
+
           <SolidColorBrush x:Key="DangerBrush" Color="#F87171" />
           <SolidColorBrush x:Key="DangerBgBrush" Color="#2A1517" />
           <SolidColorBrush x:Key="DangerLineBrush" Color="#5C2A2E" />
@@ -125,6 +132,13 @@
           <SolidColorBrush x:Key="AccentBorderBrush" Color="#E3C79A" />
           <SolidColorBrush x:Key="AccentOnBrush" Color="#1A1206" />
           <SolidColorBrush x:Key="AccentSelectionBrush" Color="#30A96A16" />
+
+          <!-- 关于页 Logo 底板：浅色主题用同色系的雾蓝 -->
+          <LinearGradientBrush x:Key="BrandTileBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+            <GradientStop Color="#EAF3FD" Offset="0" />
+            <GradientStop Color="#D7E7F7" Offset="1" />
+          </LinearGradientBrush>
+          <SolidColorBrush x:Key="BrandTileBorderBrush" Color="#A9C6E4" />
 
           <SolidColorBrush x:Key="DangerBrush" Color="#C0283A" />
           <SolidColorBrush x:Key="DangerBgBrush" Color="#FDECEF" />

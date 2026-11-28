@@ -1708,9 +1708,9 @@
               <Grid ColumnDefinitions="Auto,*" Margin="24,22,24,18">
                 <Border Width="86"
                         Height="86"
-                        CornerRadius="6"
-                        Background="{DynamicResource AccentSoftBrush}"
-                        BorderBrush="{DynamicResource AccentBrush}"
+                        CornerRadius="14"
+                        Background="{DynamicResource BrandTileBrush}"
+                        BorderBrush="{DynamicResource BrandTileBorderBrush}"
                         BorderThickness="1"
                         VerticalAlignment="Center">
                   <Image Source="avares://Sparrow.App/Assets/sparrow-32.png"
@@ -2007,7 +2007,7 @@
                       CornerRadius="10"
                       Padding="12,10"
                       VerticalAlignment="Center"
-                      ToolTip.Tip="微信扫码，请作者喝瓶矿泉水">
+                      ToolTip.Tip="微信扫码，请作者喝瓶矿泉水；喝完继续写代码">
                 <StackPanel Spacing="8">
                   <TextBlock Text="请作者喝瓶矿泉水"
                              FontSize="12"
@@ -2022,6 +2022,10 @@
                              FontSize="10"
                              HorizontalAlignment="Center"
                              Foreground="#FF666666" />
+                  <TextBlock Text="喝完继续写代码"
+                             FontSize="10"
+                             HorizontalAlignment="Center"
+                             Foreground="#FF8A8A8A" />
                 </StackPanel>
               </Border>
             </Grid>
