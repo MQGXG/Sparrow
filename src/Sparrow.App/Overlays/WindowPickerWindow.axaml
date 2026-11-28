@@ -38,43 +38,32 @@
     <!-- 跟随鼠标的图钉：与标题栏指示共用同一套精制图钉徽记 -->
     <Canvas>
       <Border x:Name="PinGlyph"
-              Width="34"
-              Height="34"
-              CornerRadius="11"
+              Width="32"
+              Height="32"
+              CornerRadius="16"
               Background="{DynamicResource SurfaceGradientBrush}"
-              BorderBrush="{DynamicResource AccentBrush}"
-              BorderThickness="1.2"
-              BoxShadow="0 4 12 0 #99000000"
+              BorderBrush="{DynamicResource AccentBorderBrush}"
+              BorderThickness="1"
+              BoxShadow="0 3 10 0 #99000000"
               IsHitTestVisible="False"
               IsVisible="False">
-        <Viewbox Width="24" Height="24"
+        <Viewbox Width="18" Height="18"
                  Stretch="Uniform"
                  HorizontalAlignment="Center"
                  VerticalAlignment="Center">
           <Canvas Width="24" Height="24">
-            <Path Data="{StaticResource IconPinEmblem}"
-                  Fill="#FF000000"
-                  Opacity="0.35"
-                  Canvas.Left="0"
-                  Canvas.Top="1.2" />
-            <Path Data="{StaticResource IconPinEmblem}"
+            <Path Data="{StaticResource IconPinBadge}"
+                  Fill="#40000000"
+                  Canvas.Top="0.8" />
+            <Path Data="{StaticResource IconPinBadge}"
                   Fill="{DynamicResource AccentGradientBrush}"
                   Stroke="{DynamicResource AccentPressedBrush}"
-                  StrokeThickness="0.5" />
-            <Path Data="{StaticResource IconPinRim}"
+                  StrokeThickness="0.4" />
+            <Path Data="{StaticResource IconPinBadgeGlint}"
                   Stroke="#FFFFFF"
-                  StrokeThickness="0.9"
-                  Opacity="0.5" />
-            <Path Data="{StaticResource IconPinGlint}"
-                  Stroke="#FFFFFF"
-                  StrokeThickness="1.1"
+                  StrokeThickness="1"
                   StrokeLineCap="Round"
-                  Opacity="0.75" />
-            <Path Data="M10.9 9.4 L11.6 17.4"
-                  Stroke="#FFFFFF"
-                  StrokeThickness="0.8"
-                  StrokeLineCap="Round"
-                  Opacity="0.35" />
+                  Opacity="0.55" />
           </Canvas>
         </Viewbox>
       </Border>

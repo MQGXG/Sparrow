@@ -40,7 +40,6 @@ public partial class PinIndicatorWindow : Window
         {
             PinGlyph.IsVisible = false;
             CloseGlyph.IsVisible = true;
-            StatusRing.IsVisible = false;
             Plate.Classes.Add("removing");
         };
 
@@ -48,7 +47,6 @@ public partial class PinIndicatorWindow : Window
         {
             PinGlyph.IsVisible = true;
             CloseGlyph.IsVisible = false;
-            StatusRing.IsVisible = true;
             Plate.Classes.Remove("removing");
         };
 
@@ -101,7 +99,7 @@ public partial class PinIndicatorWindow : Window
         var scale = RenderScaling > 0 ? RenderScaling : 1.0;
         var buttonWidth = (int)Math.Round(WindowPickerApi.GetCaptionButtonWidth() * scale);
         var buttons = WindowPickerApi.GetCaptionButtonCount(_target);
-        var badge = (int)Math.Round(34 * scale);
+        var badge = (int)Math.Round(32 * scale);
         var gap = (int)Math.Round(8 * scale);
 
         Position = new PixelPoint(

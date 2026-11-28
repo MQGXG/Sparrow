@@ -98,9 +98,9 @@ public partial class WindowPickerWindow : Window
     private void PlacePin(Point position)
     {
         PinGlyph.IsVisible = true;
-        // 34px 徽章：右下角贴近光标，让针尖视觉上指向鼠标位置
-        Canvas.SetLeft(PinGlyph, position.X - 14);
-        Canvas.SetTop(PinGlyph, position.Y - 34);
+        // 32px 徽章：底部贴近光标，让针尖视觉上指向鼠标位置
+        Canvas.SetLeft(PinGlyph, position.X - 16);
+        Canvas.SetTop(PinGlyph, position.Y - 32);
     }
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)

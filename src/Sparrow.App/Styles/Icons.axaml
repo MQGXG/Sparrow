@@ -45,15 +45,11 @@
   <!-- 描边图钉：标题栏指示 / 拾取光标共用，避免 Segoe MDL2 字体图标在不同系统上发虚或变方块 -->
   <StreamGeometry x:Key="IconPinOutline">M8 3.5H16 M6.5 9 L8 3.5 H16 L17.5 9 L12 12 Z M12 12 V20.5</StreamGeometry>
 
-  <!-- ============ 精制图钉徽记（标题栏指示 / 拾取光标共用） ============
-       拆成 4 层几何，由窗口分别填充渐变、描边与高光，做出立体感；
-       单色线框版本（IconPinOutline）保留给其它小尺寸场景。 -->
-  <!-- 钉体：扁圆钉帽 + 收窄钉身 + 针尖，三段共用一个填充 -->
-  <StreamGeometry x:Key="IconPinEmblem">M5.8 5.7 a6.2 3.3 0 1 0 12.4 0 a6.2 3.3 0 1 0 -12.4 0 Z M9.6 8.2 H14.4 L12.9 18.2 H11.1 Z M10.9 18.2 H13.1 L12 21.6 Z</StreamGeometry>
-  <!-- 钉帽内圈：细高光环 -->
-  <StreamGeometry x:Key="IconPinRim">M7.6 5.7 a4.4 2.1 0 1 0 8.8 0 a4.4 2.1 0 1 0 -8.8 0</StreamGeometry>
-  <!-- 钉帽左上：短弧高光 -->
-  <StreamGeometry x:Key="IconPinGlint">M8.2 4.3 a4.3 2.1 0 0 1 4.6 -0.8</StreamGeometry>
+  <!-- ============ 图钉徽章（标题栏指示 / 拾取光标共用） ============
+       一个统一轮廓：钉帽 + 收腰 + 针尖；渐变、描边、高光由窗口分别处理。 -->
+  <StreamGeometry x:Key="IconPinBadge">M12 2.3 C9.3 2.3 7.2 4.2 7.2 6.5 C7.2 8.1 8.1 9.4 9.6 10 L9.2 13.4 H14.8 L14.4 10 C15.9 9.4 16.8 8.1 16.8 6.5 C16.8 4.2 14.7 2.3 12 2.3 Z M10.9 13.4 H13.1 L12.5 20.9 L12 22 L11.5 20.9 Z</StreamGeometry>
+  <!-- 钉帽左上高光 -->
+  <StreamGeometry x:Key="IconPinBadgeGlint">M8.6 4.6 C9.4 3.7 10.5 3.3 11.4 3.3</StreamGeometry>
 
   <!-- ============ 类型标识（与工具墙的取景框语言一致，只画轮廓） ============ -->
   <StreamGeometry x:Key="IconLink">M10.5 13.5a4.5 4.5 0 0 0 6.36 0l3-3a4.5 4.5 0 0 0-6.36-6.36l-1.5 1.5 M13.5 10.5a4.5 4.5 0 0 0-6.36 0l-3 3a4.5 4.5 0 0 0 6.36 6.36l1.5-1.5</StreamGeometry>

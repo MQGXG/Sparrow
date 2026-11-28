@@ -2,8 +2,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="Sparrow.App.Overlays.PinIndicatorWindow"
         Title="Pin"
-        Width="34"
-        Height="34"
+        Width="32"
+        Height="32"
         WindowDecorations="None"
         WindowStartupLocation="Manual"
         ShowInTaskbar="False"
@@ -16,90 +16,57 @@
         RequestedThemeVariant="Dark">
 
   <Window.Styles>
-    <!-- 底板：渐变面 + 琥珀描边 + 投影，比纯色方片更有体积 -->
+    <!-- 底板：深色玻璃圆盘 + 琥珀描边 + 投影 -->
     <Style Selector="Border.pin-plate">
       <Setter Property="Background" Value="{DynamicResource SurfaceGradientBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
-      <Setter Property="BoxShadow" Value="0 4 12 0 #99000000" />
+      <Setter Property="BoxShadow" Value="0 3 10 0 #99000000" />
     </Style>
     <Style Selector="Border.pin-plate.removing">
       <Setter Property="Background" Value="{DynamicResource DangerBgBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource DangerLineBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}" />
     </Style>
   </Window.Styles>
 
   <Grid x:Name="Root" Background="Transparent">
     <Border x:Name="Plate"
             Classes="pin-plate"
-            CornerRadius="11"
+            CornerRadius="16"
             BorderThickness="1" />
 
-    <!-- 顶部细高光：给底板一点玻璃质感 -->
-    <Border Height="1"
-            Margin="7,1,7,0"
-            CornerRadius="1"
-            VerticalAlignment="Top"
-            Background="#FFFFFF"
-            Opacity="0.16"
-            IsHitTestVisible="False" />
-
-    <!-- 常态：分层绘制的立体图钉（渐变钉体 + 内圈 + 高光 + 投影） -->
+    <!-- 常态：单色渐变图钉 + 钉帽高光 -->
     <Panel x:Name="PinGlyph" IsHitTestVisible="False">
-      <Viewbox Width="24" Height="24"
+      <Viewbox Width="18" Height="18"
                Stretch="Uniform"
                HorizontalAlignment="Center"
                VerticalAlignment="Center">
         <Canvas Width="24" Height="24">
-          <Path Data="{StaticResource IconPinEmblem}"
-                Fill="#FF000000"
-                Opacity="0.35"
-                Canvas.Left="0"
-                Canvas.Top="1.2" />
-          <Path Data="{StaticResource IconPinEmblem}"
+          <Path Data="{StaticResource IconPinBadge}"
+                Fill="#40000000"
+                Canvas.Top="0.8" />
+          <Path Data="{StaticResource IconPinBadge}"
                 Fill="{DynamicResource AccentGradientBrush}"
                 Stroke="{DynamicResource AccentPressedBrush}"
-                StrokeThickness="0.5" />
-          <Path Data="{StaticResource IconPinRim}"
+                StrokeThickness="0.4" />
+          <Path Data="{StaticResource IconPinBadgeGlint}"
                 Stroke="#FFFFFF"
-                StrokeThickness="0.9"
-                Opacity="0.5" />
-          <Path Data="{StaticResource IconPinGlint}"
-                Stroke="#FFFFFF"
-                StrokeThickness="1.1"
+                StrokeThickness="1"
                 StrokeLineCap="Round"
-                Opacity="0.75" />
-          <Path Data="M10.9 9.4 L11.6 17.4"
-                Stroke="#FFFFFF"
-                StrokeThickness="0.8"
-                StrokeLineCap="Round"
-                Opacity="0.35" />
+                Opacity="0.55" />
         </Canvas>
       </Viewbox>
     </Panel>
 
     <!-- 悬停：危险色圆环 + 矢量叉，明确「点一下取消置顶」 -->
     <Panel x:Name="CloseGlyph" IsVisible="False" IsHitTestVisible="False">
-      <Ellipse Width="20" Height="20"
+      <Ellipse Width="18" Height="18"
                Fill="{DynamicResource DangerBgBrush}"
                Stroke="{DynamicResource DangerBrush}"
-               StrokeThickness="1.2" />
+               StrokeThickness="1.1" />
       <Path Classes="icon icon-sm"
             Data="{StaticResource IconClose}"
             Stroke="{DynamicResource DangerBrush}"
             StrokeThickness="1.8" />
     </Panel>
-
-    <!-- 右下状态环：实心琥珀 + 底色描边，比原来的小圆点更像徽章角标 -->
-    <Border x:Name="StatusRing"
-            Width="8"
-            Height="8"
-            CornerRadius="4"
-            Background="{DynamicResource AccentFillBrush}"
-            BorderBrush="{DynamicResource BgBrush}"
-            BorderThickness="1.5"
-            Margin="0,0,2,2"
-            HorizontalAlignment="Right"
-            VerticalAlignment="Bottom"
-            IsHitTestVisible="False" />
   </Grid>
 </Window>
