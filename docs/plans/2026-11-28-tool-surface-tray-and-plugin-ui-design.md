@@ -442,8 +442,10 @@ OCR 可以用 `PluginThumbnailStrip`。这是最接近「Word 任务窗格」的
 | **P1** | 无页面工具移出墙：`Accepts == None` 不进 `VisibleTools` / chips，默认固定托盘 | 窗口置顶不在墙上，仍可搜、可从托盘执行 | 0.5 天 |
 | **P2** | 转换型工具表面：输入按 `Accepts`、结果按 payload | C4 全部通过 | 1–2 天 |
 | **P3** | 插件界面 spike（D6） | 四项验证有明确结论 | 1 天 |
-| **P4** | 第 2 档 UI SDK + 视频裁剪试点 | D7 | 2–3 天 |
-| **P5** | 第 3 档任意 `Control`（若 P3 通过，仅内置） | guard + 契约包 + 回收断言 | 3–5 天 |
+| **P4-A** | `Sparrow.Plugin.Ui` 契约 + `IToolViewFactory` + 工具台表面槽位 | 插件视图能嵌入工具台，失败回退通用表面 | 2–3 天 |
+| **P4-B** | 视频裁剪迁移到 `PluginTimeline` | D7 | 2–3 天 |
+| **P5** | 第 3 档任意 `Control`（仅内置，且不承诺热卸载） | guard + 契约包 + 回收边界断言 | 3–5 天 |
+| **P6** | 稳定性护栏：结果上限、重任务闸门、worker 进程规则 | 见 `docs/plugin-isolation.md` 验收 | 2–3 天 |
 
 P0–P2 不依赖任何 SDK 变更，可以先做；P3 只产出结论，不产出功能。
 
@@ -455,7 +457,8 @@ P0–P2 不依赖任何 SDK 变更，可以先做；P3 只产出结论，不产�
 - **2026-11-28 · P0 完成**：设置页新增「托盘」分段，可排序、删除、添加宿主动作或可无头执行的工具、插入分隔线。
 - **2026-11-28 · P2 结果表面完成**：`TablePayload` 渲染为只读表格（列宽按内容估算），`FileSetPayload` 渲染为文件卡（打开 / 定位）；纯文本版本仍保留给复制与历史。输入表面此前已按 `Accepts` 区分。
 - **2026-11-28 · P3 spike 完成**：插件 `UserControl` 能显示、`avares://` 能解析、`DynamicResource` 能取宿主资源；但**显示过的视图会让 ALC 无法回收**。据此 P4 不承诺 UI 插件热卸载，禁用带界面的插件需要重启。
-- **待做**：P4 UI SDK + 视频裁剪试点；P5 任意 Control（受信任，且不承诺热卸载）。
+- **2026-11-28 · 隔离边界记录**：插件只隔离类型，不隔离内存 / CPU / 线程池 / UI 线程；已发现问题与护栏见 [`docs/plugin-isolation.md`](../../plugin-isolation.md)。
+- **待做**：P4-A 表面槽位与 UI 契约；P4-B 视频裁剪试点；P5 任意 Control；P6 稳定性护栏。
 
 ## 决策（2026-11-28 定稿）
 
@@ -490,3 +493,4 @@ P0–P2 不依赖任何 SDK 变更，可以先做；P3 只产出结论，不产�
 - `src/Sparrow.App/Views/WorkspaceWindow.axaml`：工具台布局（第 969 行起）
 - `plugins/Directory.Build.targets`：插件构建约束
 - `docs/plugin-model.md`：宿主能力边界
+- `docs/plugin-isolation.md`：插件隔离矩阵、资源边界与已知问题清单
