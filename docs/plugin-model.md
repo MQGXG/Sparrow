@@ -105,7 +105,7 @@ plugins/
 | `sdkVersion` | ✅ | 编译时依赖的 SDK 版本，形如 `1.0` |
 | `entryAssembly` | ✅ | 入口 dll 文件名 |
 | `tools` | ✅ | 本插件提供的工具 ID 列表，**至少一个** |
-| `capabilities` | ✅ | 声明的平台能力（空数组表示纯计算）；宿主据此标记不可用 |
+| `capabilities` | ✅ | 声明的平台能力（空数组表示纯计算）；当前作为清单元数据，实际校验以 `Descriptor.Requires` 为准 |
 | `author` / `description` | ⬜ | 展示用 |
 
 > **实现状态**：宿主用 `HostPlatformCapabilityProbe` 在注册表构建时评估 `Requires`；不满足的工具在面板 / 工作区灰显并禁止执行，但仍加载元数据。
