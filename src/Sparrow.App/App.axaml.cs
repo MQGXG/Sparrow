@@ -263,6 +263,13 @@ public partial class App : Application
             _appSettings = _appSettings with { TrayMenu = [.. menu], TrayMenuCustomized = true };
             OnTrayMenuChanged();
         };
+
+        // 设置页的「恢复快捷键」：解除托盘里的手动暂停
+        settingsViewModel.ResumeHotkeysRequested += () =>
+        {
+            if (_appSettings.HotkeysDisabled)
+                ToggleHotkeysDisabled();
+        };
         _hotkeyPolicy = new HotkeyPolicyMonitor(OnHotkeyPolicyChanged, log);
 
         // 设置页禁用双击 Ctrl 时立即卸载钩子，重新打开时再安装

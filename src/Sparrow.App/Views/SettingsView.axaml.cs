@@ -104,6 +104,13 @@ public partial class SettingsView : UserControl
             viewModel.SaveHotkeys();
     }
 
+    /// <summary>设置页「恢复快捷键」：解除托盘里的手动暂停。</summary>
+    private void OnResumeHotkeysClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is SettingsViewModel viewModel)
+            viewModel.RequestResumeHotkeys();
+    }
+
     private void OnOpenLogsClick(object? sender, RoutedEventArgs e) =>
         OpenFolder(SparrowPaths.Logs);
 

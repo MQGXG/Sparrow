@@ -381,6 +381,33 @@
 
         <Border Classes="panel" Padding="0" IsVisible="{Binding IsHotkeysSelected}">
           <StackPanel>
+            <!-- 暂停提示：托盘里的「禁用快捷键」会同时停掉双击 Ctrl 与 Win+V -->
+            <Border IsVisible="{Binding HotkeysDisabled}"
+                    Background="{DynamicResource AccentSoftBrush}"
+                    BorderBrush="{DynamicResource AccentBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="14,10"
+                    Margin="20,14,20,0">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <StackPanel Spacing="2">
+                  <TextBlock Text="全局快捷键已暂停"
+                             FontSize="13"
+                             FontWeight="SemiBold"
+                             Foreground="{DynamicResource TextPrimaryBrush}" />
+                  <TextBlock Text="托盘里的「禁用快捷键」开着：Ctrl+Alt 组合键、双击 Ctrl 文件搜索、Win+V 接管都不会响。"
+                             FontSize="11"
+                             Foreground="{DynamicResource TextSecondaryBrush}"
+                             TextWrapping="Wrap" />
+                </StackPanel>
+                <Button Grid.Column="1"
+                        Classes="ghost small"
+                        Content="恢复快捷键"
+                        VerticalAlignment="Center"
+                        Click="OnResumeHotkeysClick" />
+              </Grid>
+            </Border>
+
             <Grid ColumnDefinitions="*,Auto" Margin="20,14">
               <StackPanel Spacing="3" VerticalAlignment="Center">
                 <TextBlock Text="搜索面板"

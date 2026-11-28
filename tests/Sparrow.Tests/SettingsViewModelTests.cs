@@ -369,4 +369,22 @@ public sealed class SettingsViewModelTests
 
         window.Close();
     }
+
+    [Fact]
+    public void 快捷键暂停_同步到设置页并可请求恢复()
+    {
+        var (viewModel, _, _) = Create();
+
+        var requested = false;
+        viewModel.ResumeHotkeysRequested += () => requested = true;
+
+        viewModel.SyncHotkeyPolicy(disabled: true, disableInGame: false);
+
+        viewModel.HotkeysDisabled.ShouldBeTrue();
+        viewModel.HotkeysActive.ShouldBeFalse();
+
+        viewModel.RequestResumeHotkeys();
+
+        requested.ShouldBeTrue();
+    }
 }

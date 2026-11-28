@@ -1271,7 +1271,21 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
             HotkeysDisabled = disabled,
             DisableHotkeysInGame = disableInGame
         };
+
+        OnPropertyChanged(nameof(HotkeysDisabled));
+        OnPropertyChanged(nameof(HotkeysActive));
     }
+
+    /// <summary>全局快捷键是否被手动暂停（托盘里的「禁用快捷键」）。</summary>
+    public bool HotkeysDisabled => _settings.HotkeysDisabled;
+
+    /// <summary>快捷键是否处于可用状态；设置页用它显示提示。</summary>
+    public bool HotkeysActive => !_settings.HotkeysDisabled;
+
+    /// <summary>设置页点「恢复快捷键」时通知宿主解除暂停。</summary>
+    public event Action? ResumeHotkeysRequested;
+
+    public void RequestResumeHotkeys() => ResumeHotkeysRequested?.Invoke();
 
     /// <summary>Win+V 接管开关：立即生效并落盘。</summary>
     partial void OnClipboardWinVEnabledChanged(bool value)
