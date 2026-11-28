@@ -107,7 +107,7 @@ Tool : InputShape × Params → OutputShape
 | `sparrow.clipboard.merge` | 合并多段 | Nothing | Text | P2 | ⬜ | 多选历史按序拼接 |
 | `sparrow.clipboard.sync` | 跨设备同步 | — | — | ✂ | — | 违反本地优先 |
 
-> **剪贴板历史已升级为工作区独立页**（`工具 / 最近使用 / 剪贴板`），不再是一个工具：
+> **剪贴板历史已升级为工作区独立页**（`工具 / 剪贴板`；最近使用保留为工具墙顶部 chips），不再是一个工具：
 > 收藏、标签、自动分类、缩略图、删除都需要对宿主数据的读写与富 UI，
 > 做成插件只能得到一个纯文本列表。旧的 `sparrow.clipboard.history` 工具与插件目录已删除。
 

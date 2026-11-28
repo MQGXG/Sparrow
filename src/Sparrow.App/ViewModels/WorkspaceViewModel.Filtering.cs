@@ -14,25 +14,6 @@ namespace Sparrow.App.ViewModels;
 
 public partial class WorkspaceViewModel
 {
-    private void FilterHistory()
-    {
-        Recent.Clear();
-
-        var query = HistoryQuery.Trim();
-        var items = string.IsNullOrEmpty(query)
-            ? _allHistory
-            : _allHistory
-                .Where(item =>
-                    item.ToolName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                    item.Entry.Output.Contains(query, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-        HasHistory = items.Count > 0;
-
-        foreach (var item in items)
-            Recent.Add(item);
-    }
-
     [ObservableProperty]
     private ToolItemViewModel? _selectedTool;
 
@@ -173,17 +154,14 @@ public partial class WorkspaceViewModel
             RebuildCategories();
             RefilterTools();
 
-            SelectedTool = Groups.SelectMany(group => group.Tools).FirstOrDefault(tool => tool.IsAvailable)
-                           ?? Groups.SelectMany(group => group.Tools).FirstOrDefault();
+            SelectedTool = VisibleTools.FirstOrDefault(tool => tool.IsAvailable)
+                           ?? VisibleTools.FirstOrDefault();
             IsDetailOpen = false;
-            IsRecentOpen = false;
             InputText = _clipboard.GetText() ?? string.Empty;
 
             _allHistory = _history.Recent(200)
                 .Select(entry => new HistoryEntryViewModel(entry))
                 .ToList();
-
-            FilterHistory();
 
             // 必须等 _allHistory 载入之后再拼「最近使用」，否则启动时永远是空的
             RebuildRecentTools();
@@ -242,43 +220,14 @@ public partial class WorkspaceViewModel
                 entry.Descriptor.Category.Contains(query, StringComparison.OrdinalIgnoreCase));
         }
 
-        var list = items.ToList();
-        var tools = list.Select(entry => new ToolItemViewModel(entry)).ToList();
-
-        // 全局序号：卡片右上角 01..N，墙面像一份可检索的目录
-        for (var i = 0; i < tools.Count; i++)
-            tools[i].Index = i + 1;
-
-        Groups.Clear();
         VisibleTools.Clear();
 
-        foreach (var tool in tools)
-            VisibleTools.Add(tool);
-
-        var orderedGroups = tools
-            .GroupBy(tool => tool.CategoryLabel)
-            .OrderBy(group => group.Key, StringComparer.Ordinal)
-            .ToList();
-
-        for (var i = 0; i < orderedGroups.Count; i++)
-            Groups.Add(new ToolGroupViewModel(orderedGroups[i].Key, orderedGroups[i], i + 1));
+        foreach (var entry in items)
+            VisibleTools.Add(new ToolItemViewModel(entry));
 
         OnPropertyChanged(nameof(ToolCount));
-        HasTools = list.Count > 0;        UpdateGroupExpansion();
+        HasTools = VisibleTools.Count > 0;
         OnPropertyChanged(nameof(EmptyToolMessage));
-    }
-
-    /// <summary>组装展开状态：搜索时强制全展开；选中分类时该组展开；其余按手动折叠记忆。</summary>
-    private void UpdateGroupExpansion()
-    {
-        var hasQuery = ToolQuery.Trim().Length > 0;
-
-        foreach (var group in Groups)
-        {
-            group.IsExpanded = hasQuery
-                || (SelectedCategory is not null && group.Category == SelectedCategory)
-                || !_collapsedCategories.Contains(group.Category);
-        }
     }
 
     /// <summary>侧栏分类导航：全部 + 各分类（含工具数）。</summary>
@@ -300,7 +249,7 @@ public partial class WorkspaceViewModel
     private void UpdateCategorySelection()
     {
         foreach (var category in Categories)
-            category.IsSelected = !IsRecentOpen && !IsClipboardOpen
+            category.IsSelected = !IsClipboardOpen
                 && (SelectedCategory is null
                     ? category.Name == "全部"
                     : category.Name == SelectedCategory);

@@ -725,13 +725,6 @@ public partial class WorkspaceWindow : Window
             viewModel.SelectCategory(category.Name == "全部" ? null : category.Name);
     }
 
-    /// <summary>点组标题：折叠/展开该分类；手动操作会退出 chip 联动。</summary>
-    private void OnGroupHeaderClick(object? sender, RoutedEventArgs e)
-    {
-        if (sender is Button { Tag: ToolGroupViewModel group } && DataContext is WorkspaceViewModel viewModel)
-            viewModel.ToggleGroup(group.Category);
-    }
-
     private void OnRecentToolClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: RecentToolViewModel recent } && DataContext is WorkspaceViewModel viewModel)

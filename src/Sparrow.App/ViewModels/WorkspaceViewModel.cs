@@ -72,9 +72,6 @@ public partial class WorkspaceViewModel : ObservableObject
     /// <summary>剪贴板页；测试或未接入监听时为 null。</summary>
     public ClipboardHistoryViewModel? Clipboard { get; }
 
-    public ObservableCollection<ToolGroupViewModel> Groups { get; } = [];
-
-    /// <summary>工具墙的扁平清单：搜索过滤后的全集；渲染按 <see cref="Groups"/> 分组进行。</summary>
     public ObservableCollection<ToolItemViewModel> VisibleTools { get; } = [];
 
     public ObservableCollection<CategoryViewModel> Categories { get; } = [];
@@ -86,18 +83,10 @@ public partial class WorkspaceViewModel : ObservableObject
 
     public ObservableCollection<ParameterViewModel> Parameters { get; } = [];
 
-    public ObservableCollection<HistoryEntryViewModel> Recent { get; } = [];
-
     private List<HistoryEntryViewModel> _allHistory = [];
 
     /// <summary>工具全集缓存，侧栏搜索在这上面过滤，不重新扫插件。</summary>
     private List<ToolEntry> _allTools = [];
-
-    /// <summary>手动折叠的分类；chip 选中时由 chip 规则接管。</summary>
-    private readonly HashSet<string> _collapsedCategories = new(StringComparer.Ordinal);
-
-    [ObservableProperty]
-    private string _historyQuery = string.Empty;
 
     /// <summary>顶部的工具搜索框：在工具墙上过滤。</summary>
     [ObservableProperty]
@@ -107,36 +96,19 @@ public partial class WorkspaceViewModel : ObservableObject
     [ObservableProperty]
     private string? _selectedCategory;
 
-    /// <summary>工作区三态：工具墙 / 最近使用 / 工具台。</summary>
+    /// <summary>工作区两态：工具墙 / 工具台。</summary>
     [ObservableProperty]
     private bool _isDetailOpen;
 
-    /// <summary>最近使用页；和工具墙互斥，工具台优先。</summary>
-    [ObservableProperty]
-    private bool _isRecentOpen;
-
-    /// <summary>剪贴板页；和工具墙 / 最近使用互斥，工具台优先。</summary>
+    /// <summary>剪贴板页；和工具墙互斥，工具台优先。</summary>
     [ObservableProperty]
     private bool _isClipboardOpen;
 
-    /// <summary>工具台从哪个页面进入，返回时回到原页面。</summary>
-    private bool _detailFromRecent;
+    public bool IsToolsSelected => !IsClipboardOpen;
 
-    public bool IsToolsSelected => !IsRecentOpen && !IsClipboardOpen;
-
-    public bool IsWallVisible => !IsDetailOpen && !IsRecentOpen && !IsClipboardOpen;
-
-    public bool IsRecentVisible => IsRecentOpen && !IsDetailOpen;
+    public bool IsWallVisible => !IsDetailOpen && !IsClipboardOpen;
 
     public bool IsClipboardVisible => IsClipboardOpen && !IsDetailOpen;
-
-    partial void OnIsRecentOpenChanged(bool value)
-    {
-        OnPropertyChanged(nameof(IsToolsSelected));
-        OnPropertyChanged(nameof(IsWallVisible));
-        OnPropertyChanged(nameof(IsRecentVisible));
-        UpdateCategorySelection();
-    }
 
     partial void OnIsClipboardOpenChanged(bool value)
     {
@@ -149,18 +121,14 @@ public partial class WorkspaceViewModel : ObservableObject
     partial void OnIsDetailOpenChanged(bool value)
     {
         OnPropertyChanged(nameof(IsWallVisible));
-        OnPropertyChanged(nameof(IsRecentVisible));
         OnPropertyChanged(nameof(IsClipboardVisible));
     }
 
     partial void OnToolQueryChanged(string value)
     {
-        // 最近页 / 剪贴板页输入搜索词 = 想找别的工具，直接回工具墙看结果
+        // 剪贴板页输入搜索词 = 想找工具，直接回工具墙看结果
         if (value.Length > 0)
-        {
-            IsRecentOpen = false;
             IsClipboardOpen = false;
-        }
 
         RefilterTools();
     }
@@ -231,10 +199,6 @@ public partial class WorkspaceViewModel : ObservableObject
     /// <summary>工具正在执行：按钮置灰、文案切换，避免重复点击。</summary>
     [ObservableProperty]
     private bool _isExecuting;
-
-    /// <summary>过滤后的历史是否为空，用于空状态提示。</summary>
-    [ObservableProperty]
-    private bool _hasHistory;
 
     public string ExecuteLabel => IsExecuting
         ? string.IsNullOrWhiteSpace(ProgressText) ? "执行中…" : ProgressText

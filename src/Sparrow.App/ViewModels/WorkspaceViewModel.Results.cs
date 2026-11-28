@@ -82,9 +82,7 @@ public partial class WorkspaceViewModel
     {
         _history.Clear();
         _allHistory.Clear();
-        Recent.Clear();
         RecentTools.Clear();
-        HasHistory = false;
         OnPropertyChanged(nameof(HasRecentTools));
     }
 

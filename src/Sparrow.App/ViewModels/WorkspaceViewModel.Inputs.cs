@@ -35,10 +35,10 @@ public partial class WorkspaceViewModel
             if (InputImages.Count == 0)
                 return;
 
-            // 当前是单图工具：保留「拖入图片优先」的老行为
-            if (IsImageInput)
+            // 当前是单图工具且已进入工具台：保留「拖入图片优先」的老行为
+            if (IsImageInput && IsDetailOpen)
                 SetDroppedImage(imagePaths[0]);
-            else if (!IsImagesInput)
+            else if (!IsImagesInput || !IsDetailOpen)
                 OpenFirstMatching(InputShape.Images);
 
             return;
@@ -47,7 +47,7 @@ public partial class WorkspaceViewModel
         SetDroppedFiles(paths);
 
         // 当前就在图片集工具里：混合文件也只收图片，不跳走
-        if (IsImagesInput)
+        if (IsImagesInput && IsDetailOpen)
         {
             if (imagePaths.Count > 0)
                 AddInputImages(imagePaths);
@@ -56,7 +56,7 @@ public partial class WorkspaceViewModel
         }
 
         // 当前就是文件类工具：多选文件全部留给它，不做单文件特化
-        if (IsFilesInput)
+        if (IsFilesInput && IsDetailOpen)
             return;
 
         // 混合 / 多选：有文件类工具就直接切过去
@@ -77,7 +77,7 @@ public partial class WorkspaceViewModel
 
                 InputText = File.ReadAllText(textPath);
 
-                if (!IsTextInput)
+                if (!IsTextInput || !IsDetailOpen)
                     OpenFirstMatching(InputShape.Text);
 
                 return;

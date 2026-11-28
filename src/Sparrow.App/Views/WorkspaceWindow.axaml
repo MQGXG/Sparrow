@@ -267,7 +267,7 @@
         <Grid Grid.Row="1">
           <Grid IsVisible="{Binding !IsDetailOpen}">
 
-          <!-- 墙态：继续上次 + 分类索引 + 分组工具网格 -->
+          <!-- 墙态：继续上次 + 分类索引 + 工具网格 -->
           <ScrollViewer IsVisible="{Binding IsWallVisible}">
             <StackPanel Margin="0,0,8,0">
 
@@ -347,152 +347,82 @@
                            Margin="14,0,0,0" />
               </Grid>
 
-              <!-- 分组工具网格：组标题可折叠；搜索时强制全展开 -->
-              <ItemsControl ItemsSource="{Binding Groups}">
+              <!-- 工具网格：分类由顶部 chips 过滤，墙面本身保持扁平 -->
+              <ItemsControl ItemsSource="{Binding VisibleTools}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel Orientation="Horizontal" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="vm:ToolGroupViewModel">
-                    <StackPanel Margin="0,0,0,6">
+                  <DataTemplate x:DataType="vm:ToolItemViewModel">
+                    <Button Tag="{Binding}"
+                            Click="OnToolClick"
+                            Classes="tool-card"
+                            Opacity="{Binding CardOpacity}"
+                            Width="236"
+                            Height="148"
+                            Margin="0,0,16,16"
+                            Padding="0"
+                            HorizontalContentAlignment="Stretch"
+                            VerticalContentAlignment="Stretch">
+                      <Panel>
+                        <!-- 取景框四角标 -->
+                        <Path Classes="frame" HorizontalAlignment="Left" VerticalAlignment="Top" Data="M0,11 L0,0 L11,0" />
+                        <Path Classes="frame" HorizontalAlignment="Right" VerticalAlignment="Top" Data="M0,0 L11,0 L11,11" />
+                        <Path Classes="frame" HorizontalAlignment="Left" VerticalAlignment="Bottom" Data="M0,0 L0,11 L11,11" />
+                        <Path Classes="frame" HorizontalAlignment="Right" VerticalAlignment="Bottom" Data="M11,0 L11,11 L0,11" />
 
-                      <!-- 组标题：序号 + 琥珀刻度 + 分类名 + 横贯细线 + 数量/折叠状态 -->
-                      <Button Classes="group-header"
-                              Tag="{Binding}"
-                              Click="OnGroupHeaderClick"
-                              HorizontalAlignment="Stretch"
-                              HorizontalContentAlignment="Stretch">
-                        <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
-                          <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
-                            <TextBlock Classes="num"
-                                       Text="{Binding IndexLabel}"
-                                       FontSize="16"
-                                       Foreground="{DynamicResource AccentBrush}"
-                                       VerticalAlignment="Center" />
-                            <Border Classes="hud-tick" Height="15" />
-                            <TextBlock Text="{Binding DisplayName}"
-                                       FontSize="14"
-                                       FontWeight="SemiBold"
-                                       Foreground="{DynamicResource TextPrimaryBrush}"
-                                       VerticalAlignment="Center" />
+                        <Grid RowDefinitions="Auto,*,Auto" Margin="16">
+                          <StackPanel Orientation="Horizontal" Spacing="12">
+                            <Border Width="40"
+                                    Height="40"
+                                    CornerRadius="10"
+                                    Background="{DynamicResource AccentSoftBrush}"
+                                    VerticalAlignment="Center">
+                              <Path Classes="icon icon-lg"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Data="{Binding CategoryLabel, Converter={x:Static converters:IconGeometryConverter.Instance}}" />
+                            </Border>
+                            <StackPanel Spacing="2" VerticalAlignment="Center">
+                              <TextBlock Text="{Binding Name}"
+                                         FontSize="14"
+                                         FontWeight="SemiBold"
+                                         Foreground="{DynamicResource TextPrimaryBrush}" />
+                              <TextBlock Text="{Binding CategoryDisplay}"
+                                         FontSize="11"
+                                         Foreground="{DynamicResource TextMutedBrush}" />
+                            </StackPanel>
                           </StackPanel>
 
-                          <Border Grid.Column="1"
-                                  Height="1"
-                                  Margin="16,0,14,0"
-                                  VerticalAlignment="Center"
-                                  Background="{DynamicResource LineBrush}" />
+                          <TextBlock Grid.Row="1"
+                                     Text="{Binding Description}"
+                                     Margin="0,8,0,0"
+                                     FontSize="12"
+                                     LineHeight="18"
+                                     Foreground="{DynamicResource TextSecondaryBrush}"
+                                     TextWrapping="Wrap"
+                                     MaxLines="2" />
 
-                          <StackPanel Grid.Column="2"
-                                      Orientation="Horizontal"
-                                      Spacing="6"
-                                      VerticalAlignment="Center">
-                            <Path Classes="icon icon-xs"
-                                  VerticalAlignment="Center"
-                                  Stroke="{DynamicResource TextMutedBrush}"
-                                  IsVisible="{Binding IsExpanded}"
-                                  Data="{StaticResource IconChevronDown}" />
-                            <Path Classes="icon icon-xs"
-                                  VerticalAlignment="Center"
-                                  Stroke="{DynamicResource TextMutedBrush}"
-                                  IsVisible="{Binding !IsExpanded}"
-                                  Data="{StaticResource IconChevronRight}" />
-                            <TextBlock Classes="num"
-                                       Text="{Binding Tools.Count, StringFormat='{}{0} 个'}"
-                                       VerticalAlignment="Center" />
-                          </StackPanel>
+                          <TextBlock Grid.Row="2"
+                                     Classes="hint"
+                                     Text="打开 →"
+                                     IsVisible="{Binding IsAvailable}"
+                                     HorizontalAlignment="Right"
+                                     FontSize="11"
+                                     Foreground="{DynamicResource AccentBrush}" />
+                          <TextBlock Grid.Row="2"
+                                     Classes="hint"
+                                     Text="不可用"
+                                     IsVisible="{Binding IsUnavailable}"
+                                     ToolTip.Tip="{Binding UnavailableReason}"
+                                     HorizontalAlignment="Right"
+                                     FontSize="11"
+                                     Foreground="{DynamicResource DangerBrush}" />
                         </Grid>
-                      </Button>
-
-                      <ItemsControl ItemsSource="{Binding Tools}"
-                                    IsVisible="{Binding IsExpanded}"
-                                    Margin="0,8,0,0">
-                        <ItemsControl.ItemsPanel>
-                          <ItemsPanelTemplate>
-                            <WrapPanel Orientation="Horizontal" />
-                          </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                          <DataTemplate x:DataType="vm:ToolItemViewModel">
-                            <Button Tag="{Binding}"
-                                    Click="OnToolClick"
-                                    Classes="tool-card"
-                                    Opacity="{Binding CardOpacity}"
-                                    Width="236"
-                                    Height="148"
-                                    Margin="0,0,16,16"
-                                    Padding="0"
-                                    HorizontalContentAlignment="Stretch"
-                                    VerticalContentAlignment="Stretch">
-                              <Panel>
-                                <!-- 取景框四角标 -->
-                                <Path Classes="frame" HorizontalAlignment="Left" VerticalAlignment="Top" Data="M0,11 L0,0 L11,0" />
-                                <Path Classes="frame" HorizontalAlignment="Right" VerticalAlignment="Top" Data="M0,0 L11,0 L11,11" />
-                                <Path Classes="frame" HorizontalAlignment="Left" VerticalAlignment="Bottom" Data="M0,0 L0,11 L11,11" />
-                                <Path Classes="frame" HorizontalAlignment="Right" VerticalAlignment="Bottom" Data="M11,0 L11,11 L0,11" />
-
-                                <Grid RowDefinitions="Auto,*,Auto" Margin="16">
-                                  <Grid ColumnDefinitions="*,Auto">
-                                    <StackPanel Orientation="Horizontal" Spacing="12">
-                                      <Border Width="40"
-                                              Height="40"
-                                              CornerRadius="10"
-                                              Background="{DynamicResource AccentSoftBrush}"
-                                              VerticalAlignment="Center">
-                                        <Path Classes="icon icon-lg"
-                                              HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"
-                                              Data="{Binding CategoryLabel, Converter={x:Static converters:IconGeometryConverter.Instance}}" />
-                                      </Border>
-                                      <StackPanel Spacing="2" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Name}"
-                                                   FontSize="14"
-                                                   FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource TextPrimaryBrush}" />
-                                        <TextBlock Text="{Binding CategoryDisplay}"
-                                                   FontSize="11"
-                                                   Foreground="{DynamicResource TextMutedBrush}" />
-                                      </StackPanel>
-                                    </StackPanel>
-
-                                    <!-- 目录序号：让每张卡都像索引里的一条 -->
-                                    <TextBlock Grid.Column="1"
-                                               Classes="num"
-                                               Text="{Binding IndexLabel}"
-                                               HorizontalAlignment="Right"
-                                               VerticalAlignment="Top"
-                                               Margin="8,2,0,0"
-                                               Opacity="0.7" />
-                                  </Grid>
-
-                                  <TextBlock Grid.Row="1"
-                                             Text="{Binding Description}"
-                                             Margin="0,8,0,0"
-                                             FontSize="12"
-                                             LineHeight="18"
-                                             Foreground="{DynamicResource TextSecondaryBrush}"
-                                             TextWrapping="Wrap"
-                                             MaxLines="2" />
-
-                                  <TextBlock Grid.Row="2"
-                                             Classes="hint"
-                                             Text="打开 →"
-                                             IsVisible="{Binding IsAvailable}"
-                                             HorizontalAlignment="Right"
-                                             FontSize="11"
-                                             Foreground="{DynamicResource AccentBrush}" />
-                                  <TextBlock Grid.Row="2"
-                                             Classes="hint"
-                                             Text="不可用"
-                                             IsVisible="{Binding IsUnavailable}"
-                                             ToolTip.Tip="{Binding UnavailableReason}"
-                                             HorizontalAlignment="Right"
-                                             FontSize="11"
-                                             Foreground="{DynamicResource DangerBrush}" />
-                                </Grid>
-                              </Panel>
-                            </Button>
-                          </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                      </ItemsControl>
-                    </StackPanel>
+                      </Panel>
+                    </Button>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
@@ -1688,11 +1618,7 @@
                 BorderBrush="{DynamicResource LineBrush}"
                 BorderThickness="0,1,0,0"
                 Padding="24,8">
-          <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Classes="num" Text="SPARROW / LOCAL-FIRST · 所有处理都在本机完成" />
-            <TextBlock Grid.Column="1" Classes="num"
-                       Text="{Binding ToolCount, StringFormat='INDEXED {0:00}'}" />
-          </Grid>
+          <TextBlock Classes="num" Text="SPARROW / LOCAL-FIRST · 所有处理都在本机完成" />
         </Border>
       </Grid>
     </Grid>

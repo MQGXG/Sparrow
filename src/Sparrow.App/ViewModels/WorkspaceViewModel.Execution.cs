@@ -288,7 +288,6 @@ public partial class WorkspaceViewModel
 
         _history.Add(historyEntry);
         _allHistory.Insert(0, new HistoryEntryViewModel(historyEntry));
-        FilterHistory();
         RebuildRecentTools();
     }
 

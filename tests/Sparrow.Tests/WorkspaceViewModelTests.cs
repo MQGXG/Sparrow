@@ -187,63 +187,20 @@ public sealed class WorkspaceViewModelTests
         viewModel.Categories.Single(category => category.Name == target.Name).IsSelected.ShouldBeTrue();
         viewModel.Categories.Single(category => category.Name == "全部").IsSelected.ShouldBeFalse();
 
-        // 分类仍然是过滤：只剩该分类的工具与分组
-        viewModel.Groups.ShouldHaveSingleItem().Category.ShouldBe(target.Name);
-        viewModel.Groups[0].IsExpanded.ShouldBeTrue();
-        viewModel.VisibleTools.Count.ShouldBe(1);
+        // 分类仍然是过滤：只剩该分类的工具
+        viewModel.VisibleTools.ShouldHaveSingleItem().CategoryLabel.ShouldBe(target.Name);
     }
 
     [Fact]
-    public async Task 组标题点击_折叠状态可切换()
+    public async Task 工具搜索词_保持工具墙可见()
     {
         using var root = new TempPluginRoot();
         using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
         var viewModel = Create(catalog, new FakeHistory());
 
         await viewModel.ReloadAsync();
-
-        var group = viewModel.Groups.First();
-        group.IsExpanded.ShouldBeTrue();
-
-        viewModel.ToggleGroup(group.Category);
-        group.IsExpanded.ShouldBeFalse();
-
-        viewModel.ToggleGroup(group.Category);
-        group.IsExpanded.ShouldBeTrue();
-    }
-
-    [Fact]
-    public async Task 搜索时_所有分组强制展开()
-    {
-        using var root = new TempPluginRoot();
-        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
-        var viewModel = Create(catalog, new FakeHistory());
-
-        await viewModel.ReloadAsync();
-
-        var category = viewModel.Groups.First().Category;
-        viewModel.ToggleGroup(category);
-        viewModel.Groups.First(group => group.Category == category).IsExpanded.ShouldBeFalse();
-
-        viewModel.ToolQuery = "json";
-        viewModel.Groups.ShouldAllBe(group => group.IsExpanded);
-
-        viewModel.ToolQuery = string.Empty;
-        viewModel.Groups.Single(group => group.Category == category).IsExpanded.ShouldBeFalse();
-    }
-
-    [Fact]
-    public async Task 最近页输入搜索词_回到工具墙()
-    {
-        using var root = new TempPluginRoot();
-        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
-        var viewModel = Create(catalog, new FakeHistory());
-
-        await viewModel.ReloadAsync();
-        viewModel.ShowRecent();
         viewModel.ToolQuery = "json";
 
-        viewModel.IsRecentOpen.ShouldBeFalse();
         viewModel.IsWallVisible.ShouldBeTrue();
     }
 
@@ -295,8 +252,7 @@ public sealed class WorkspaceViewModelTests
 
         await viewModel.ReloadAsync();
 
-        var json = viewModel.Groups
-            .SelectMany(group => group.Tools)
+        var json = viewModel.VisibleTools
             .First(tool => tool.Entry.Descriptor.Id == "sparrow.json.format");
 
         viewModel.OpenTool(json);
@@ -515,8 +471,7 @@ public sealed class WorkspaceViewModelTests
         var viewModel = Create(catalog, new FakeHistory());
         await viewModel.ReloadAsync();
 
-        var tool = viewModel.Groups
-            .SelectMany(group => group.Tools)
+        var tool = viewModel.VisibleTools
             .First(item => item.Entry.Descriptor.Id == "sparrow.files.hash");
 
         viewModel.OpenTool(tool);
@@ -534,8 +489,7 @@ public sealed class WorkspaceViewModelTests
         var viewModel = Create(catalog, new FakeHistory());
         await viewModel.ReloadAsync();
 
-        var tool = viewModel.Groups
-            .SelectMany(group => group.Tools)
+        var tool = viewModel.VisibleTools
             .First(item => item.Entry.Descriptor.Id == "sparrow.ocr.image");
 
         viewModel.OpenTool(tool);
@@ -571,24 +525,21 @@ public sealed class WorkspaceViewModelTests
     }
 
     [Fact]
-    public async Task 打开最近页_隐藏工具墙并取消分类选中()
+    public async Task 工具墙默认显示_且全部分类选中()
     {
         using var root = new TempPluginRoot();
         using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
         var viewModel = Create(catalog, new FakeHistory());
 
         await viewModel.ReloadAsync();
-        viewModel.ShowRecent();
 
-        viewModel.IsRecentOpen.ShouldBeTrue();
-        viewModel.IsRecentVisible.ShouldBeTrue();
-        viewModel.IsWallVisible.ShouldBeFalse();
-        viewModel.IsToolsSelected.ShouldBeFalse();
-        viewModel.Categories.ShouldAllBe(category => !category.IsSelected);
+        viewModel.IsWallVisible.ShouldBeTrue();
+        viewModel.IsToolsSelected.ShouldBeTrue();
+        viewModel.Categories.Single(category => category.Name == "全部").IsSelected.ShouldBeTrue();
     }
 
     [Fact]
-    public async Task 从最近页打开工具_返回时回到最近页()
+    public async Task 打开工具_返回时回到工具墙()
     {
         using var root = new TempPluginRoot();
         using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
@@ -597,50 +548,55 @@ public sealed class WorkspaceViewModelTests
         await viewModel.ReloadAsync();
         var tool = viewModel.VisibleTools.First();
 
-        viewModel.ShowRecent();
-        viewModel.OpenTool(tool, fromRecent: true);
+        viewModel.OpenTool(tool);
 
         viewModel.IsDetailOpen.ShouldBeTrue();
-        viewModel.IsRecentOpen.ShouldBeFalse();
 
         viewModel.CloseDetail();
 
         viewModel.IsDetailOpen.ShouldBeFalse();
-        viewModel.IsRecentOpen.ShouldBeTrue();
-        viewModel.IsRecentVisible.ShouldBeTrue();
+        viewModel.IsWallVisible.ShouldBeTrue();
     }
 
     [Fact]
-    public async Task 点分类_退出最近页回到工具墙()
+    public async Task 点分类_保持工具墙并选中分类()
     {
         using var root = new TempPluginRoot();
         using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
         var viewModel = Create(catalog, new FakeHistory());
 
         await viewModel.ReloadAsync();
-        viewModel.ShowRecent();
         viewModel.SelectCategory("json");
 
-        viewModel.IsRecentOpen.ShouldBeFalse();
         viewModel.IsWallVisible.ShouldBeTrue();
         viewModel.Categories.Single(category => category.Name == "json").IsSelected.ShouldBeTrue();
     }
 
     [Fact]
-    public async Task 工具墙与分组_共用同一批实例()
+    public async Task 工具搜索词_只保留匹配项且不重复()
     {
         using var root = new TempPluginRoot();
         using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
         var viewModel = Create(catalog, new FakeHistory());
 
         await viewModel.ReloadAsync();
+        var total = viewModel.VisibleTools.Count;
 
-        var wall = viewModel.VisibleTools.ToList();
-        var grouped = viewModel.Groups.SelectMany(group => group.Tools).ToList();
+        viewModel.ToolQuery = "json";
 
-        // 分组只是把同一批实例换了个顺序展示，不能重新 new
-        grouped.Count.ShouldBe(wall.Count);
-        grouped.ShouldBe(wall, ignoreOrder: true);
+        viewModel.VisibleTools.ShouldNotBeEmpty();
+        viewModel.VisibleTools.Count.ShouldBeLessThan(total);
+        viewModel.ToolCount.ShouldBe(viewModel.VisibleTools.Count);
+        viewModel.VisibleTools.ShouldAllBe(tool =>
+            tool.Name.Contains("json", StringComparison.OrdinalIgnoreCase) ||
+            tool.Description.Contains("json", StringComparison.OrdinalIgnoreCase) ||
+            tool.CategoryLabel.Contains("json", StringComparison.OrdinalIgnoreCase));
+
+        var ids = viewModel.VisibleTools.Select(tool => tool.Entry.Descriptor.Id).ToList();
+        ids.Distinct(StringComparer.Ordinal).Count().ShouldBe(ids.Count);
+
+        viewModel.ToolQuery = string.Empty;
+        viewModel.VisibleTools.Count.ShouldBe(total);
     }
 
     [Fact]

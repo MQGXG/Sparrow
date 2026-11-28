@@ -15,54 +15,27 @@ namespace Sparrow.App.ViewModels;
 public partial class WorkspaceViewModel
 {
     /// <summary>打开一个工具：进入工具台。</summary>
-    public void OpenTool(ToolItemViewModel tool, bool fromRecent = false)
+    public void OpenTool(ToolItemViewModel tool)
     {
-        _detailFromRecent = fromRecent;
         SelectedTool = tool;
         IsDetailOpen = true;
-        IsRecentOpen = false;
         IsClipboardOpen = false;
     }
 
-    /// <summary>返回工具墙；从最近页进来的则回到最近页。</summary>
-    public void CloseDetail()
-    {
-        IsDetailOpen = false;
-        IsRecentOpen = _detailFromRecent;
-    }
+    /// <summary>返回工具墙。</summary>
+    public void CloseDetail() => IsDetailOpen = false;
 
     /// <summary>侧栏点分类；name 为 null 表示「全部」。</summary>
     public void SelectCategory(string? name)
     {
-        IsRecentOpen = false;
         IsClipboardOpen = false;
         SelectedCategory = name;
-    }
-
-    /// <summary>点组标题：折叠/展开该组。手动操作即退出 chip 联动模式，避免两套规则打架。</summary>
-    public void ToggleGroup(string category)
-    {
-        SelectedCategory = null;
-
-        if (!_collapsedCategories.Add(category))
-            _collapsedCategories.Remove(category);
-
-        UpdateGroupExpansion();
-    }
-
-    /// <summary>侧栏打开「最近使用」页。</summary>
-    public void ShowRecent()
-    {
-        IsDetailOpen = false;
-        IsRecentOpen = true;
-        IsClipboardOpen = false;
     }
 
     /// <summary>切到剪贴板页；每次进入都重新读一遍，后台新复制的条目立刻能看到。</summary>
     public void ShowClipboard()
     {
         IsDetailOpen = false;
-        IsRecentOpen = false;
         IsClipboardOpen = true;
         Clipboard?.Refresh();
     }
@@ -71,7 +44,6 @@ public partial class WorkspaceViewModel
     public void ShowTools()
     {
         IsDetailOpen = false;
-        IsRecentOpen = false;
         IsClipboardOpen = false;
     }
 
@@ -248,6 +220,4 @@ public partial class WorkspaceViewModel
 
     /// <summary>文件工具的「清除」：清空本次选择的文件清单。</summary>
     public bool CanClearDroppedFiles => IsFilesInput && _droppedFiles.Count > 0;
-
-    partial void OnHistoryQueryChanged(string value) => FilterHistory();
 }
