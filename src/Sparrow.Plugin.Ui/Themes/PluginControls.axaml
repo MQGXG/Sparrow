@@ -30,6 +30,52 @@
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
 
+  <!--
+    区间选择条：轨道、选中区间、左右把手都由宿主模板绘制，
+    颜色引用宿主主题键；插件只设 Duration / Start / End。
+  -->
+  <Style Selector="ui|PluginTimeline">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="MinWidth" Value="180" />
+    <Setter Property="Focusable" Value="True" />
+    <Setter Property="TrackBrush" Value="{DynamicResource LineBrush}" />
+    <Setter Property="SelectionBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="HandleBrush" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="HandleBorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Canvas Background="Transparent">
+          <Border x:Name="PART_Track"
+                  Height="6"
+                  CornerRadius="3"
+                  IsHitTestVisible="False"
+                  Background="{TemplateBinding TrackBrush}" />
+          <Border x:Name="PART_Selection"
+                  Height="6"
+                  CornerRadius="3"
+                  IsHitTestVisible="False"
+                  Background="{TemplateBinding SelectionBrush}" />
+          <Border x:Name="PART_StartHandle"
+                  Width="10"
+                  Height="18"
+                  CornerRadius="3"
+                  BorderThickness="2"
+                  IsHitTestVisible="False"
+                  Background="{TemplateBinding HandleBrush}"
+                  BorderBrush="{TemplateBinding HandleBorderBrush}" />
+          <Border x:Name="PART_EndHandle"
+                  Width="10"
+                  Height="18"
+                  CornerRadius="3"
+                  BorderThickness="2"
+                  IsHitTestVisible="False"
+                  Background="{TemplateBinding HandleBrush}"
+                  BorderBrush="{TemplateBinding HandleBorderBrush}" />
+        </Canvas>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+
   <Style Selector="ui|PluginNumberField">
     <Setter Property="Template">
       <ControlTemplate>

@@ -315,6 +315,18 @@ Avalonia*            → 控件类型必须与宿主同一份，否则主题资�
 所以带界面的插件**不承诺热卸载**：禁用后需要重启宿主。
 只加载、不显示时仍然可以正常回收。
 
+### UI 契约（P4 起）
+
+插件可以有界面，但不是「任意 Avalonia Control」：
+
+- 引用 `Sparrow.Plugin.Ui`，实现可选的 `IToolViewFactory`
+- 用宿主提供的积木组合：`PluginSection` / `PluginHint` / `PluginNumberField` / `PluginTimeline`
+- 参数通过 `IToolViewContext` 读写，最终与 `ToolContext.Parameters` 同一份
+- 宿主只在 UI 线程创建视图；返回 `null` 表示使用默认工具台
+- 视图创建失败 → 宿主回退默认表面，不影响工具台其余部分
+- 引用必须 `Private=false` + `ExcludeAssets=runtime`；产物里出现 `Avalonia*.dll` 或
+  `Sparrow.Plugin.Ui.dll` 会直接构建失败
+
 ### 铁律 2：每个插件一个 LoadContext
 
 ```text

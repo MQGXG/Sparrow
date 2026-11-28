@@ -1,7 +1,9 @@
 using System.Diagnostics;
+using Avalonia.Controls;
 using Sparrow.Plugin.Sdk;
 using Sparrow.Plugin.Sdk.Inputs;
 using Sparrow.Plugin.Sdk.Payloads;
+using Sparrow.Plugin.Ui;
 
 namespace Sparrow.Plugin.Video.Trim;
 
@@ -10,8 +12,9 @@ namespace Sparrow.Plugin.Video.Trim;
 ///
 /// 编码交给随宿主的 ffmpeg（与录屏共用同一个二进制），
 /// 插件只负责参数校验、定位文件和返回 FileSetPayload。
+/// 自定义表面只做起止区间选择，执行逻辑与无头执行完全一致。
 /// </summary>
-public sealed class VideoTrimTool : ITool
+public sealed class VideoTrimTool : ITool, IToolViewFactory
 {
     private const string ParameterStart = "start";
     private const string ParameterEnd = "end";
@@ -103,6 +106,9 @@ public sealed class VideoTrimTool : ITool
 
         return ToolResult.Ok(new FileSetPayload(outputs));
     }
+
+    /// <summary>只在 UI 线程由宿主调用；时间轴写回的就是执行时读取的同一组参数。</summary>
+    public Control? CreateView(IToolViewContext context) => new VideoTrimView(context);
 
     private static string? FindFfmpeg()
     {

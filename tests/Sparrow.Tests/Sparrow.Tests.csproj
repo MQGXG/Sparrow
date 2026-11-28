@@ -36,6 +36,8 @@
     <ProjectReference Include="..\..\plugins\sparrow.plugin.images-resize\Sparrow.Plugin.Images.Resize.csproj" />
     <ProjectReference Include="..\..\plugins\sparrow.plugin.files-hash\Sparrow.Plugin.Files.Hash.csproj" />
     <ProjectReference Include="..\..\plugins\sparrow.plugin.window-pin\Sparrow.Plugin.Window.Pin.csproj" />
+    <!-- P4-B：视频裁剪的自定义表面（时间轴 + 精确输入） -->
+    <ProjectReference Include="..\..\plugins\sparrow.plugin.video-trim\Sparrow.Plugin.Video.Trim.csproj" />
     <!-- 只为测 ToolRegistry / PaletteViewModel，不启动 Avalonia -->
     <ProjectReference Include="..\..\src\Sparrow.App\Sparrow.App.csproj" />
 

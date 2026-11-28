@@ -9,7 +9,19 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!--
+      Avalonia 与 UI 契约都由宿主解析：Private=false + ExcludeAssets=runtime
+      保证插件目录里不会出现副本，否则 Control 类型会分裂。
+    -->
+    <PackageReference Include="Avalonia" PrivateAssets="all" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Sparrow.Plugin.Sdk\Sparrow.Plugin.Sdk.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+    <ProjectReference Include="..\..\src\Sparrow.Plugin.Ui\Sparrow.Plugin.Ui.csproj">
       <Private>false</Private>
       <ExcludeAssets>runtime</ExcludeAssets>
     </ProjectReference>
