@@ -327,10 +327,10 @@ public sealed class SettingsViewModelTests
         viewModel.TrayMenuRows.Count.ShouldBe(settings.TrayMenu.Count);
         viewModel.TrayMenuOptions.ShouldNotContain(option => option.Action == "palette");
 
-        // 搜索工具下移一位
+        // 搜索工具下移一位（下面是文件搜索）
         viewModel.MoveTrayRow(viewModel.TrayMenuRows[0], 1);
 
-        store.Load().TrayMenu[0].Action.ShouldBe("clipboard");
+        store.Load().TrayMenu[0].Action.ShouldBe("filesearch");
         store.Load().TrayMenu[1].Action.ShouldBe("palette");
 
         // 删除第一项
@@ -346,6 +346,30 @@ public sealed class SettingsViewModelTests
         saved.TrayMenu.Count.ShouldBe(before + 1);
         saved.TrayMenu[^1].Action.ShouldBe("exit");
         saved.TrayMenu[^2].Separator.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void 恢复默认托盘_包含文件搜索与退出()
+    {
+        var root = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+
+        var log = new NullLog();
+        var catalog = new ToolCatalog(root, log, new AppSettings());
+        var store = new SettingsStore(System.IO.Path.Combine(root, "settings.json"), log);
+        var settings = new AppSettings
+        {
+            TrayMenu = [new TrayMenuItemConfig { Action = "palette" }],
+            TrayMenuCustomized = true
+        };
+        var viewModel = new SettingsViewModel(catalog, store, new StartupService(log), settings);
+
+        viewModel.ResetTrayMenu();
+
+        var saved = store.Load().TrayMenu;
+        saved.ShouldContain(item => item.Action == "filesearch");
+        saved[^1].Action.ShouldBe("exit");
     }
 
     [AvaloniaFact]

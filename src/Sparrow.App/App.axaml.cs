@@ -254,7 +254,8 @@ public partial class App : Application
 
         // 工作区与面板共用同一个 ToolCatalog：插件只加载一次
         var startup = new StartupService(log);
-        var settingsViewModel = new SettingsViewModel(_catalog, settingsStore, startup, settings, ai, aiSecrets, _localModels, _fileIndex);
+        var settingsViewModel = new SettingsViewModel(
+            _catalog, settingsStore, startup, settings, ai, aiSecrets, _localModels, _fileIndex, defaultTrayToolIds);
         _settingsViewModel = settingsViewModel;
 
         // 托盘菜单是设置的一部分：固定/移除工具后立即重建，无需重启
@@ -384,6 +385,7 @@ public partial class App : Application
             toolId => Avalonia.Threading.Dispatcher.UIThread.Post(
                 () => _ = ExecuteToolHotkeyAsync(toolId)),
             ShowLanShare,
+            showFileSearch: () => Avalonia.Threading.Dispatcher.UIThread.Post(() => _quickSearch?.Toggle()),
             toggleClipboard: () => Avalonia.Threading.Dispatcher.UIThread.Post(ToggleClipboardPanel),
             hotkeysDisabled: () => _appSettings.HotkeysDisabled,
             disableHotkeysInGame: () => _appSettings.DisableHotkeysInGame,

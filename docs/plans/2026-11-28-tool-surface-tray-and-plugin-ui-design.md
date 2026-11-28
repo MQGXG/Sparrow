@@ -210,16 +210,17 @@ public ToolPresentation Presentation { get; init; } = ToolPresentation.Transform
 
 ### B3. 默认菜单
 
-现在空配置会生成 5 条固定项 + 所有「配了热键」的工具。改为：
+现在空配置会生成固定宿主动作 + 插件声明「默认进托盘」的动作工具。默认顺序：
 
 ```text
 搜索工具…            Ctrl+Alt+S
+文件搜索…            双击 Ctrl
 剪贴板面板…          Ctrl+Alt+B
 截图识别…            Ctrl+Alt+A
 屏幕录制…            Ctrl+Alt+Shift+R
 局域网互传…
-窗口置顶…            （Action 工具，默认固定）
 工作区…
+窗口置顶…            （Action 工具，默认固定）
 ────────────
 退出
 ```

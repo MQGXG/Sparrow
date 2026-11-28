@@ -1075,16 +1075,23 @@
 
         <Border Classes="panel" Padding="0" IsVisible="{Binding IsTraySelected}">
           <StackPanel>
-            <StackPanel Margin="20,14" Spacing="4">
-              <TextBlock Text="右键菜单"
-                         FontSize="13"
-                         FontWeight="SemiBold"
-                         Foreground="{DynamicResource TextPrimaryBrush}" />
-              <TextBlock Text="工具卡片右键也能固定；配了热键不会自动进托盘。文件类工具没有无头输入，不在可添加列表里。"
-                         FontSize="11"
-                         Foreground="{DynamicResource TextMutedBrush}"
-                         TextWrapping="Wrap" />
-            </StackPanel>
+            <Grid ColumnDefinitions="*,Auto" Margin="20,14" ColumnSpacing="12">
+              <StackPanel Spacing="4">
+                <TextBlock Text="右键菜单"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                <TextBlock Text="工具卡片右键也能固定；配了热键不会自动进托盘。文件类工具没有无头输入，不在可添加列表里。"
+                           FontSize="11"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           TextWrapping="Wrap" />
+              </StackPanel>
+              <Button Grid.Column="1"
+                      Classes="ghost small"
+                      Content="恢复默认"
+                      VerticalAlignment="Top"
+                      Click="OnTrayResetClick" />
+            </Grid>
 
             <ItemsControl ItemsSource="{Binding TrayMenuRows}" Margin="20,0,20,8">
               <ItemsControl.ItemTemplate>

@@ -52,6 +52,7 @@ public sealed class TrayMenuPlannerTests
         entries.Select(entry => entry.Kind).ShouldBe(
         [
             TrayMenuActionKind.Palette,
+            TrayMenuActionKind.FileSearch,
             TrayMenuActionKind.Clipboard,
             TrayMenuActionKind.Capture,
             TrayMenuActionKind.Record,
@@ -63,11 +64,22 @@ public sealed class TrayMenuPlannerTests
         ]);
 
         entries[0].Label.ShouldContain("Ctrl+Alt+S");
-        entries[1].Label.ShouldContain("Ctrl+Alt+B");
-        entries[2].Label.ShouldContain("Ctrl+Alt+C");
-        entries[3].Label.ShouldContain("Ctrl+Alt+Shift+R");
-        entries[4].Label.ShouldBe("局域网互传…");
-        entries[6].Label.ShouldBe("窗口置顶…    Ctrl+Alt+P");
+        entries[1].Label.ShouldContain("双击 Ctrl");
+        entries[2].Label.ShouldContain("Ctrl+Alt+B");
+        entries[3].Label.ShouldContain("Ctrl+Alt+C");
+        entries[4].Label.ShouldContain("Ctrl+Alt+Shift+R");
+        entries[5].Label.ShouldBe("局域网互传…");
+        entries[7].Label.ShouldBe("窗口置顶…    Ctrl+Alt+P");
+    }
+
+    [Fact]
+    public void 文件搜索动作_可加入自定义菜单()
+    {
+        var entries = Build([new TrayMenuItemConfig { Action = "filesearch", Label = "找文件" }]);
+
+        var entry = entries.ShouldHaveSingleItem();
+        entry.Kind.ShouldBe(TrayMenuActionKind.FileSearch);
+        entry.Label.ShouldBe("找文件");
     }
 
     [Fact]

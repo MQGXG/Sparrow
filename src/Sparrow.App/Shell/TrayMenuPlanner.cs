@@ -7,6 +7,7 @@ namespace Sparrow.App.Shell;
 public enum TrayMenuActionKind
 {
     Palette,
+    FileSearch,
     Clipboard,
     Capture,
     Record,
@@ -76,6 +77,7 @@ public static class TrayMenuPlanner
         var items = new List<TrayMenuItemConfig>
         {
             new() { Action = "palette" },
+            new() { Action = "filesearch" },
             new() { Action = "clipboard" },
             new() { Action = "capture" },
             new() { Action = "record" },
@@ -144,6 +146,14 @@ public static class TrayMenuPlanner
                         item.Label?.Trim() is { Length: > 0 } paletteLabel
                             ? paletteLabel
                             : $"搜索工具…    {searchHotkeyText}"));
+                    break;
+
+                case "filesearch":
+                    entries.Add(new TrayMenuEntry(
+                        TrayMenuActionKind.FileSearch,
+                        item.Label?.Trim() is { Length: > 0 } fileSearchLabel
+                            ? fileSearchLabel
+                            : "文件搜索…    双击 Ctrl"));
                     break;
 
                 case "clipboard":

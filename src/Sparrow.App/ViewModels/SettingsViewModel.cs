@@ -6,6 +6,7 @@ using Sparrow.App.Plugins;
 using Sparrow.App.Services;
 using Sparrow.App.Services.LanShare;
 using Sparrow.App.Settings;
+using Sparrow.App.Shell;
 using Sparrow.Plugin.Sdk;
 
 namespace Sparrow.App.ViewModels;
@@ -24,6 +25,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
     private readonly AiSecretStore? _secrets;
     private readonly ILocalModels? _localModels;
     private readonly IFileIndex? _fileIndex;
+    private readonly IReadOnlyList<string> _defaultTrayToolIds;
     private AppSettings _settings;
 
     private bool _initializingIndexDrives = true;
@@ -36,12 +38,14 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         AiClient? ai = null,
         AiSecretStore? secrets = null,
         ILocalModels? localModels = null,
-        IFileIndex? fileIndex = null)
+        IFileIndex? fileIndex = null,
+        IReadOnlyList<string>? defaultTrayToolIds = null)
     {
         _catalog = catalog;
         _store = store;
         _startup = startup;
         _settings = settings;
+        _defaultTrayToolIds = defaultTrayToolIds ?? [];
         _appearance = ThemeService.Normalize(settings.Appearance);
         _ai = ai;
         _secrets = secrets;
@@ -212,6 +216,7 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
     private static readonly (string Action, string Label)[] TrayActions =
     [
         ("palette", "搜索工具"),
+        ("filesearch", "文件搜索"),
         ("clipboard", "剪贴板面板"),
         ("capture", "截图识别"),
         ("record", "屏幕录制"),
@@ -323,6 +328,10 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         menu.Insert(exitIndex < 0 ? menu.Count : exitIndex, new TrayMenuItemConfig { Separator = true });
         SaveTrayMenu(menu);
     }
+
+    /// <summary>恢复内置默认菜单（含插件声明默认固定进托盘的工具）。</summary>
+    public void ResetTrayMenu() =>
+        SaveTrayMenu(TrayMenuPlanner.BuildDefaultConfig(_defaultTrayToolIds));
 
     private static int InsertBeforeFirstSeparator(List<TrayMenuItemConfig> menu)
     {

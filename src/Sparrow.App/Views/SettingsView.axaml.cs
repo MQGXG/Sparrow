@@ -238,6 +238,12 @@ public partial class SettingsView : UserControl
             viewModel.AddTraySeparator();
     }
 
+    private void OnTrayResetClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is SettingsViewModel viewModel)
+            viewModel.ResetTrayMenu();
+    }
+
     /// <summary>外观三态预览卡：Tag 直接是设置值，ViewModel 负责归一化与持久化。</summary>
     private void OnAppearanceClick(object? sender, RoutedEventArgs e)
     {
