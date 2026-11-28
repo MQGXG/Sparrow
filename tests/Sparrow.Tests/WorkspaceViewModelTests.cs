@@ -1,3 +1,4 @@
+using Avalonia.Headless.XUnit;
 using Shouldly;
 using Sparrow.App;
 using Sparrow.App.History;
@@ -49,6 +50,17 @@ public sealed class WorkspaceViewModelTests
           "sdkVersion": "1.0",
           "entryAssembly": "Sparrow.Plugin.Window.Pin.dll",
           "tools": ["sparrow.window.pin"]
+        }
+        """;
+
+    private const string VideoTrimManifest = """
+        {
+          "id": "sparrow.plugin.video-trim",
+          "name": "视频裁剪",
+          "version": "1.0.0",
+          "sdkVersion": "1.0",
+          "entryAssembly": "Sparrow.Plugin.Video.Trim.dll",
+          "tools": ["sparrow.video.trim"]
         }
         """;
 
@@ -117,7 +129,7 @@ public sealed class WorkspaceViewModelTests
     {
         public string Path { get; }
 
-        public TempPluginRoot()
+        public TempPluginRoot(bool includeVideoTrim = false)
         {
             Path = System.IO.Path.Combine(
                 System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
@@ -128,6 +140,11 @@ public sealed class WorkspaceViewModelTests
             CreatePlugin("sparrow.plugin.ocr", OcrManifest, "Sparrow.Plugin.Ocr.dll");
             CreatePlugin("sparrow.plugin.files-hash", FilesHashManifest, "Sparrow.Plugin.Files.Hash.dll");
             CreatePlugin("sparrow.plugin.window-pin", WindowPinManifest, "Sparrow.Plugin.Window.Pin.dll");
+
+            // 视频裁剪会改变「第一个 Files 工具」的顺序，默认不加入共享根；
+            // 只有验证自定义表面的测试显式打开。
+            if (includeVideoTrim)
+                CreatePlugin("sparrow.plugin.video-trim", VideoTrimManifest, "Sparrow.Plugin.Video.Trim.dll");
         }
 
         private void CreatePlugin(string directoryName, string manifestJson, string entryAssembly)
@@ -300,6 +317,30 @@ public sealed class WorkspaceViewModelTests
 
         viewModel.Categories.Single(category => category.Name == "全部").Count
             .ShouldBe(viewModel.VisibleTools.Count);
+    }
+
+    [AvaloniaFact]
+    public async Task 视频裁剪_打开时嵌入宿主时间轴()
+    {
+        using var root = new TempPluginRoot(includeVideoTrim: true);
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+
+        await viewModel.ReloadAsync();
+
+        var tool = viewModel.VisibleTools
+            .First(item => item.Entry.Descriptor.Id == "sparrow.video.trim");
+
+        viewModel.OpenTool(tool);
+
+        viewModel.HasToolView.ShouldBeTrue();
+        viewModel.ToolView.ShouldNotBeNull();
+        viewModel.ShowParameters.ShouldBeFalse();
+
+        viewModel.CloseDetail();
+
+        viewModel.HasToolView.ShouldBeFalse();
+        viewModel.ToolView.ShouldBeNull();
     }
 
     [Fact]
