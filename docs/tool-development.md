@@ -158,6 +158,7 @@ public sealed class JsonFormatTool : ITool
 | 参数走 `Descriptor.Parameters` | 不要自己读配置文件 |
 | 结果用 `Payload` 表达 | 不要返回裸字符串 |
 | 同一输入重复执行结果一致 | 无状态，便于并发和卸载 |
+| `Requires` 只声明真正离不开的能力 | 不满足时宿主会灰显并禁止执行；可选能力不要声明 |
 
 ### 4.2 禁止做
 
@@ -165,7 +166,7 @@ public sealed class JsonFormatTool : ITool
 ✗ 引用 Avalonia（插件不拥有 UI）
 ✗ 引用 Sparrow.App（只看得到 SDK）
 ✗ 弹 MessageBox / 打开窗口
-✗ 直接读写文件（返回 FileSetPayload，由宿主落盘）
+✗ 直接读写用户文件（输入用 `ToolContext.Files`，产出返回 `FileSetPayload`，由宿主落盘）
 ✗ 直接访问剪贴板（输入已由 ToolContext 提供）
 ✗ new HttpClient()（用 IToolHost.Http，受策略控制）
 ✗ 注册全局热键 / 托盘 / 文件关联（宿主独占）
@@ -184,22 +185,30 @@ public sealed class JsonFormatTool : ITool
 public interface IToolHost
 {
     ILogger Logger { get; }
-    IToolSettings Settings { get; }           // 按 toolId 隔离
-    IHttpClientAccess Http { get; }           // 可被用户策略禁用
-    IClipboardHistory? ClipboardHistory { get; } // 剪贴板历史；关闭记录时为 null
+    IToolSettings Settings { get; }             // 按插件隔离，持久化到 settings.json
+    IHttpClientAccess Http { get; }             // 默认禁用；用前先看 IsAvailable
+    IAiClient Ai { get; }                       // 未配置时 IsAvailable=false
+    ILocalModels LocalModels { get; }           // 本地 GGUF 模型
+    ILocalTranslation LocalTranslation { get; } // 宿主共享的本地翻译
+    IClipboardHistory? ClipboardHistory { get; } // 关闭记录时为 null
+    string PluginDirectory { get; }             // 插件自己的目录，仅用于定位随包资源
+    IWindowOverlay? Windows { get; }            // 窗口拾取 / 图钉
 }
 // 进度用 context.Progress，不是 Host 的能力
 ```
 
-就这四样。**没有文件系统、没有实时剪贴板、没有数据库、没有窗口。**
+**没有文件系统、没有实时剪贴板、没有数据库、没有窗口。**
 
 | 需求 | 正确做法 | 错误做法 |
 |---|---|---|
 | 记日志 | `Host.Logger.Info(...)` | `File.AppendAllText` |
-| 存配置 | `Host.Settings.Get/Set` | 自己读 JSON 文件 |
+| 存配置 | `Host.Settings.Get/Set`（写入 `settings.json`） | 自己读 JSON 文件 |
 | 报进度 | `context.Progress?.Report(...)` | 直接改 UI |
 | 流式中间结果 | `new ToolProgress(...) { Lines = ... }`（OCR 用） | 自己开窗口通信 |
 | 调接口 | `Host.Http.SendAsync` | `new HttpClient()` |
+| 本地模型 | `Host.LocalModels` | 自己下载 GGUF |
+| 本地翻译 | `Host.LocalTranslation` | 自己加载模型 |
+| 窗口拾取 / 图钉 | `Host.Windows?.PickWindowAsync` / `ShowPinIndicator` | 自己 P/Invoke 窗口 API |
 | 产出文件 | 返回 `FileSetPayload` | 自己写磁盘 |
 | 读剪贴板 | 不需要，`ToolContext` 已给 | 调 Win32 API |
 | 显示进度条 | 不需要，宿主根据 `Progress` 渲染 | 引用 Avalonia |

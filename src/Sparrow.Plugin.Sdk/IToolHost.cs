@@ -15,7 +15,7 @@ public interface IToolHost
 {
     ILogger Logger { get; }
 
-    /// <summary>按 toolId 隔离的键值存储，写入 settings.json 的 plugins 节点下。</summary>
+    /// <summary>按插件隔离的键值存储，写入 settings.json 的 plugins 节点下。</summary>
     IToolSettings Settings { get; }
 
     /// <summary>
