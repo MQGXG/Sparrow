@@ -1620,10 +1620,22 @@
                                          FontSize="12"
                                          FontWeight="SemiBold"
                                          Foreground="{DynamicResource TextPrimaryBrush}" />
-                              <TextBlock Text="{Binding Directory}"
-                                         FontSize="11"
-                                         Foreground="{DynamicResource TextMutedBrush}"
-                                         TextTrimming="CharacterEllipsis" />
+                              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <TextBlock Text="{Binding Directory}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding SizeLabel}"
+                                           IsVisible="{Binding !IsMissing}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextMutedBrush}" />
+                                <TextBlock Grid.Column="1"
+                                           Text="文件不存在"
+                                           IsVisible="{Binding IsMissing}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource DangerBrush}" />
+                              </Grid>
                             </StackPanel>
                             <Button Grid.Column="1"
                                     Classes="ghost small"

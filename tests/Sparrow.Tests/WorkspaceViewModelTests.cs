@@ -434,6 +434,33 @@ public sealed class WorkspaceViewModelTests
     }
 
     [Fact]
+    public async Task 返回工具墙_记住当前参数()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+
+        var parameterPath = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(),
+            "sparrow-tests",
+            Guid.NewGuid().ToString("N"),
+            "parameters.json");
+        var parameters = new ToolParameterStore(parameterPath, new NullLog());
+        var viewModel = Create(catalog, new FakeHistory(), parameters);
+
+        await viewModel.ReloadAsync();
+
+        var json = viewModel.VisibleTools
+            .First(tool => tool.Entry.Descriptor.Id == "sparrow.json.format");
+
+        viewModel.OpenTool(json);
+        viewModel.Parameters.First(parameter => parameter.Key == "mode").Value = "压缩";
+
+        viewModel.CloseDetail();
+
+        parameters.GetValue("sparrow.json.format", "mode").ShouldBe("压缩");
+    }
+
+    [Fact]
     public async Task 打开工具时_恢复上次保存的参数()
     {
         using var root = new TempPluginRoot();

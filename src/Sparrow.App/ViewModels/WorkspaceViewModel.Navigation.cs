@@ -23,7 +23,11 @@ public partial class WorkspaceViewModel
     }
 
     /// <summary>返回工具墙。</summary>
-    public void CloseDetail() => IsDetailOpen = false;
+    public void CloseDetail()
+    {
+        PersistCurrentParameters();
+        IsDetailOpen = false;
+    }
 
     /// <summary>侧栏点分类；name 为 null 表示「全部」。</summary>
     public void SelectCategory(string? name)
@@ -45,6 +49,7 @@ public partial class WorkspaceViewModel
     /// <summary>切到剪贴板页；每次进入都重新读一遍，后台新复制的条目立刻能看到。</summary>
     public void ShowClipboard()
     {
+        PersistCurrentParameters();
         IsDetailOpen = false;
         IsClipboardOpen = true;
         Clipboard?.Refresh();
@@ -53,8 +58,19 @@ public partial class WorkspaceViewModel
     /// <summary>侧栏回到工具墙。</summary>
     public void ShowTools()
     {
+        PersistCurrentParameters();
         IsDetailOpen = false;
         IsClipboardOpen = false;
+    }
+
+    /// <summary>
+    /// 离开工具台前记住参数：默认参数区和自定义视图写入的未声明参数都要落盘，
+    /// 否则「改完直接返回」下一次打开会丢。
+    /// </summary>
+    private void PersistCurrentParameters()
+    {
+        if (IsDetailOpen && SelectedTool is { } tool)
+            PersistParameters(tool);
     }
 
     public bool HasRecentTools => RecentTools.Count > 0;

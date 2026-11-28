@@ -50,7 +50,8 @@
   <!-- 把 spike 插件产物复制到测试输出，供 PluginLoader 从独立目录加载 -->
   <Target Name="CopyUiSpikePlugin" AfterTargets="Build">
     <ItemGroup>
-      <_UiSpikeArtifacts Include="..\Sparrow.Plugin.UiSpike\bin\$(Configuration)\net10.0\Sparrow.Plugin.UiSpike.*" />
+      <!-- 用通配 TFM：spike 跟根 props 走，不把 net10.0 写死在测试项目里 -->
+      <_UiSpikeArtifacts Include="..\Sparrow.Plugin.UiSpike\bin\$(Configuration)\*\Sparrow.Plugin.UiSpike.*" />
     </ItemGroup>
     <Copy SourceFiles="@(_UiSpikeArtifacts)"
           DestinationFolder="$(OutDir)ui-spike"
