@@ -18,7 +18,7 @@ public sealed class TrayService
     private readonly Action _record;
     private readonly Action? _lanShare;
     private readonly Action? _toggleClipboard;
-    private readonly IReadOnlyList<TrayMenuEntry> _menuEntries;
+    private IReadOnlyList<TrayMenuEntry> _menuEntries;
     private readonly Action<string> _executeToolHotkey;
     private readonly Func<bool>? _hotkeysDisabled;
     private readonly Func<bool>? _disableHotkeysInGame;
@@ -55,6 +55,42 @@ public sealed class TrayService
     }
 
     public void Initialize()
+    {
+        _icon = new TrayIcon
+        {
+            Icon = TrayIconFactory.Create(),
+            ToolTipText = "Sparrow · 麻雀",
+            Menu = BuildMenu(),
+            IsVisible = true
+        };
+
+        // 左键单击唤出面板（Windows 上 Clicked 即左键）
+        _icon.Clicked += (_, _) => _palette.Toggle();
+
+        // Avalonia 12：new TrayIcon 不会自动挂到应用上。
+        // 必须放进 Application 的 TrayIcons 集合，Attach() 才会创建原生图标。
+        // 少了这一步：进程正常、日志正常，但托盘里什么都没有。
+        if (Avalonia.Application.Current is { } app)
+        {
+            var icons = TrayIcon.GetIcons(app) ?? new TrayIcons();
+            icons.Add(_icon);
+            TrayIcon.SetIcons(app, icons);
+        }
+    }
+
+    /// <summary>
+    /// 用新条目替换菜单（例如用户刚把工具固定到托盘）。
+    /// 图标还没初始化时只记下条目，等 <see cref="Initialize"/> 再建。
+    /// </summary>
+    public void UpdateMenu(IReadOnlyList<TrayMenuEntry> entries)
+    {
+        _menuEntries = entries;
+
+        if (_icon is not null)
+            _icon.Menu = BuildMenu();
+    }
+
+    private NativeMenu BuildMenu()
     {
         var menu = new NativeMenu();
         var policyAdded = false;
@@ -108,26 +144,7 @@ public sealed class TrayService
         if (!policyAdded)
             AddHotkeyPolicyItems(menu);
 
-        _icon = new TrayIcon
-        {
-            Icon = TrayIconFactory.Create(),
-            ToolTipText = "Sparrow · 麻雀",
-            Menu = menu,
-            IsVisible = true
-        };
-
-        // 左键单击唤出面板（Windows 上 Clicked 即左键）
-        _icon.Clicked += (_, _) => _palette.Toggle();
-
-        // Avalonia 12：new TrayIcon 不会自动挂到应用上。
-        // 必须放进 Application 的 TrayIcons 集合，Attach() 才会创建原生图标。
-        // 少了这一步：进程正常、日志正常，但托盘里什么都没有。
-        if (Avalonia.Application.Current is { } app)
-        {
-            var icons = TrayIcon.GetIcons(app) ?? new TrayIcons();
-            icons.Add(_icon);
-            TrayIcon.SetIcons(app, icons);
-        }
+        return menu;
     }
 
     private void AddHotkeyPolicyItems(NativeMenu menu)

@@ -32,6 +32,16 @@ public partial class WorkspaceViewModel
         SelectedCategory = name;
     }
 
+    /// <summary>卡片右键：把工具固定到系统托盘，或从托盘移除。</summary>
+    public void ToggleToolTrayPin(ToolItemViewModel tool)
+    {
+        var id = tool.Entry.Descriptor.Id;
+        var pinned = !Settings.IsToolPinnedToTray(id);
+
+        Settings.SetToolPinnedToTray(id, pinned);
+        tool.IsPinnedToTray = pinned;
+    }
+
     /// <summary>切到剪贴板页；每次进入都重新读一遍，后台新复制的条目立刻能看到。</summary>
     public void ShowClipboard()
     {

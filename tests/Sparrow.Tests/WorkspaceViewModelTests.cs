@@ -275,6 +275,29 @@ public sealed class WorkspaceViewModelTests
     }
 
     [Fact]
+    public async Task 卡片固定到托盘_写入设置并切换状态()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+
+        await viewModel.ReloadAsync();
+
+        var tool = viewModel.VisibleTools.First();
+        tool.IsPinnedToTray.ShouldBeFalse();
+
+        viewModel.ToggleToolTrayPin(tool);
+
+        tool.IsPinnedToTray.ShouldBeTrue();
+        viewModel.Settings.IsToolPinnedToTray(tool.Entry.Descriptor.Id).ShouldBeTrue();
+
+        viewModel.ToggleToolTrayPin(tool);
+
+        tool.IsPinnedToTray.ShouldBeFalse();
+        viewModel.Settings.IsToolPinnedToTray(tool.Entry.Descriptor.Id).ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task 打开工具时_恢复上次保存的参数()
     {
         using var root = new TempPluginRoot();

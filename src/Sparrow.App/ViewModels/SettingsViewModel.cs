@@ -168,6 +168,47 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
     public void ToggleDarkLight() =>
         Appearance = ThemeService.Toggle(_appearance, Application.Current?.ActualThemeVariant);
 
+    /// <summary>托盘菜单被修改后通知宿主重建菜单。</summary>
+    public event Action<IReadOnlyList<TrayMenuItemConfig>>? TrayMenuChanged;
+
+    /// <summary>该工具是否已固定到托盘。</summary>
+    public bool IsToolPinnedToTray(string toolId) =>
+        _settings.TrayMenu.Any(item =>
+            string.Equals(item.Tool?.Trim(), toolId, StringComparison.Ordinal));
+
+    /// <summary>
+    /// 固定 / 取消固定一个工具。写入 settings.json 并通知宿主重建托盘菜单。
+    /// 新条目插在第一条分隔线之前，保持「工具项在上、退出在下」。
+    /// </summary>
+    public void SetToolPinnedToTray(string toolId, bool pinned)
+    {
+        var id = toolId.Trim();
+        if (id.Length == 0)
+            return;
+
+        var menu = _settings.TrayMenu.ToList();
+        var index = menu.FindIndex(item =>
+            string.Equals(item.Tool?.Trim(), id, StringComparison.Ordinal));
+
+        if (pinned && index < 0)
+        {
+            var insertAt = menu.FindIndex(item => item.Separator);
+            menu.Insert(insertAt < 0 ? menu.Count : insertAt, new TrayMenuItemConfig { Tool = id });
+        }
+        else if (!pinned && index >= 0)
+        {
+            menu.RemoveAt(index);
+        }
+        else
+        {
+            return;
+        }
+
+        _settings = _settings with { TrayMenu = menu, TrayMenuCustomized = true };
+        _store.Save(_settings);
+        TrayMenuChanged?.Invoke(menu);
+    }
+
     /// <summary>剪贴板保留天数；0 = 永久。</summary>
     [ObservableProperty]
     private int _clipboardRetentionDays;

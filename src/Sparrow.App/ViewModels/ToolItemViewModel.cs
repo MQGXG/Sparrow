@@ -46,4 +46,8 @@ public sealed partial class ToolItemViewModel : ObservableObject
     /// <summary>工作区左栏的选中态。由 WorkspaceViewModel 在 SelectedTool 变化时维护。</summary>
     [ObservableProperty]
     private bool _isSelected;
+
+    /// <summary>是否已固定到系统托盘；卡片右键菜单据此切换文案。</summary>
+    [ObservableProperty]
+    private bool _isPinnedToTray;
 }

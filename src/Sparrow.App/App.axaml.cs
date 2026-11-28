@@ -33,6 +33,7 @@ public partial class App : Application
     public static IAppLog Log { get; private set; } = new FileAppLog();
 
     private TrayService? _tray;
+    private Func<IReadOnlyList<TrayMenuEntry>>? _rebuildTrayMenu;
     private HotkeyService? _hotkey;
     private ToolCatalog? _catalog;
     private PaletteWindow? _palette;
@@ -255,6 +256,13 @@ public partial class App : Application
         var startup = new StartupService(log);
         var settingsViewModel = new SettingsViewModel(_catalog, settingsStore, startup, settings, ai, aiSecrets, _localModels, _fileIndex);
         _settingsViewModel = settingsViewModel;
+
+        // 托盘菜单是设置的一部分：固定/移除工具后立即重建，无需重启
+        settingsViewModel.TrayMenuChanged += menu =>
+        {
+            _appSettings = _appSettings with { TrayMenu = [.. menu], TrayMenuCustomized = true };
+            OnTrayMenuChanged();
+        };
         _hotkeyPolicy = new HotkeyPolicyMonitor(OnHotkeyPolicyChanged, log);
 
         // 设置页禁用双击 Ctrl 时立即卸载钩子，重新打开时再安装
@@ -347,15 +355,18 @@ public partial class App : Application
 
         var toolNames = ReadToolNames();
 
-        var trayEntries = TrayMenuPlanner.Build(
-            settings.TrayMenu,
-            settings.ToolHotkeys,
+        IReadOnlyList<TrayMenuEntry> BuildTrayMenu() => TrayMenuPlanner.Build(
+            _appSettings.TrayMenu,
+            _appSettings.ToolHotkeys,
             toolNames,
             defaultTrayToolIds,
             HotkeyText.Format(searchModifiers, searchKey),
             HotkeyText.Format(captureModifiers, captureKey),
             HotkeyText.Format(panelModifiers, panelKey),
             log);
+
+        _rebuildTrayMenu = BuildTrayMenu;
+        var trayEntries = BuildTrayMenu();
 
         _tray = new TrayService(
             _palette,
@@ -681,6 +692,15 @@ public partial class App : Application
             StartWinVHook();
         else
             StopWinVHook();
+    }
+
+    /// <summary>托盘菜单内容变化后重建（固定在托盘里的工具增删）。</summary>
+    private void OnTrayMenuChanged()
+    {
+        if (_tray is null || _rebuildTrayMenu is null)
+            return;
+
+        _tray.UpdateMenu(_rebuildTrayMenu());
     }
 
     private void StartWinVHook()

@@ -719,6 +719,26 @@ public partial class WorkspaceWindow : Window
             viewModel.OpenTool(tool);
     }
 
+    /// <summary>卡片右键：固定 / 取消固定到系统托盘。</summary>
+    private void OnToolCardContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (sender is not Button { Tag: ToolItemViewModel tool } button)
+            return;
+
+        if (DataContext is not WorkspaceViewModel viewModel)
+            return;
+
+        var pin = new MenuItem
+        {
+            Header = tool.IsPinnedToTray ? "从托盘移除" : "固定到托盘"
+        };
+        pin.Click += (_, _) => viewModel.ToggleToolTrayPin(tool);
+
+        var menu = new ContextMenu { ItemsSource = new[] { pin } };
+        menu.Open(button);
+        e.Handled = true;
+    }
+
     private void OnCategoryClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: CategoryViewModel category } && DataContext is WorkspaceViewModel viewModel)

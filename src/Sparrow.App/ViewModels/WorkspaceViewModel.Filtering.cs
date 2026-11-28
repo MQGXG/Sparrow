@@ -224,7 +224,12 @@ public partial class WorkspaceViewModel
         VisibleTools.Clear();
 
         foreach (var entry in items)
-            VisibleTools.Add(new ToolItemViewModel(entry));
+        {
+            VisibleTools.Add(new ToolItemViewModel(entry)
+            {
+                IsPinnedToTray = Settings.IsToolPinnedToTray(entry.Descriptor.Id)
+            });
+        }
 
         OnPropertyChanged(nameof(ToolCount));
         HasTools = VisibleTools.Count > 0;

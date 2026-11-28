@@ -358,6 +358,7 @@
                   <DataTemplate x:DataType="vm:ToolItemViewModel">
                     <Button Tag="{Binding}"
                             Click="OnToolClick"
+                            ContextRequested="OnToolCardContextRequested"
                             Classes="tool-card"
                             Opacity="{Binding CardOpacity}"
                             Width="236"

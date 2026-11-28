@@ -271,4 +271,36 @@ public sealed class SettingsViewModelTests
         viewModel.SelectSection(SettingsSection.Plugins);
         panel.IsVisible.ShouldBeFalse();
     }
+
+    [Fact]
+    public void 托盘固定_插在分隔线之前并持久化()
+    {
+        var root = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sparrow-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+
+        var log = new NullLog();
+        var catalog = new ToolCatalog(root, log, new AppSettings());
+        var store = new SettingsStore(System.IO.Path.Combine(root, "settings.json"), log);
+        var settings = new AppSettings
+        {
+            TrayMenu = Sparrow.App.Shell.TrayMenuPlanner.BuildDefaultConfig([]),
+            TrayMenuCustomized = true
+        };
+        var viewModel = new SettingsViewModel(catalog, store, new StartupService(log), settings);
+
+        viewModel.SetToolPinnedToTray("sparrow.json.format", true);
+
+        viewModel.IsToolPinnedToTray("sparrow.json.format").ShouldBeTrue();
+
+        var saved = store.Load();
+        saved.TrayMenu[^1].Action.ShouldBe("exit");
+        saved.TrayMenu[^2].Separator.ShouldBeTrue();
+        saved.TrayMenu[^3].Tool.ShouldBe("sparrow.json.format");
+
+        viewModel.SetToolPinnedToTray("sparrow.json.format", false);
+
+        viewModel.IsToolPinnedToTray("sparrow.json.format").ShouldBeFalse();
+        store.Load().TrayMenu.ShouldNotContain(item => item.Tool == "sparrow.json.format");
+    }
 }
