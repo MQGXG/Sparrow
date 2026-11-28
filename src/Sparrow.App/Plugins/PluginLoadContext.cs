@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.Loader;
+using Sparrow.Plugin.Sdk;
 
 namespace Sparrow.App.Plugins;
 
@@ -24,9 +25,18 @@ internal sealed class PluginLoadContext : AssemblyLoadContext
     {
         var name = assemblyName.Name;
 
-        // 返回 null 表示交给默认 ALC —— 这是全流程里最关键的一行
-        if (name is not null && name.StartsWith("Sparrow.Plugin.Sdk", StringComparison.Ordinal))
+        // 返回 null 表示交给默认 ALC —— 这是全流程里最关键的一行。
+        //
+        // P3 起的规则：SDK、UI 契约、Avalonia 都必须由默认 ALC 解析。
+        // 插件若自带一份 Avalonia，Control 会变成两个类型，宿主强转直接失败；
+        // 更隐蔽的是主题资源取不到、卸载回收不掉。
+        if (name is not null
+            && (name.StartsWith(SdkInfo.SdkAssemblyPrefix, StringComparison.Ordinal)
+                || name.StartsWith(SdkInfo.UiContractAssemblyPrefix, StringComparison.Ordinal)
+                || name.StartsWith("Avalonia", StringComparison.Ordinal)))
+        {
             return null;
+        }
 
         var path = _resolver.ResolveAssemblyToPath(assemblyName);
         return path is null ? null : LoadFromAssemblyPath(path);

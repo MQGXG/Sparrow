@@ -26,5 +26,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Sparrow.Tests/Sparrow.Tests.csproj" />
+    <Project Path="tests/Sparrow.Plugin.UiSpike/Sparrow.Plugin.UiSpike.csproj" />
   </Folder>
 </Solution>

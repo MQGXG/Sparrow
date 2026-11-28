@@ -37,6 +37,21 @@
     <ProjectReference Include="..\..\plugins\sparrow.plugin.window-pin\Sparrow.Plugin.Window.Pin.csproj" />
     <!-- 只为测 ToolRegistry / PaletteViewModel，不启动 Avalonia -->
     <ProjectReference Include="..\..\src\Sparrow.App\Sparrow.App.csproj" />
+
+    <!-- P3 spike：只保证构建顺序，不把插件程序集引用进测试（否则就不在独立 ALC 里了） -->
+    <ProjectReference Include="..\Sparrow.Plugin.UiSpike\Sparrow.Plugin.UiSpike.csproj"
+                      ReferenceOutputAssembly="false"
+                      Private="false" />
   </ItemGroup>
+
+  <!-- 把 spike 插件产物复制到测试输出，供 PluginLoader 从独立目录加载 -->
+  <Target Name="CopyUiSpikePlugin" AfterTargets="Build">
+    <ItemGroup>
+      <_UiSpikeArtifacts Include="..\Sparrow.Plugin.UiSpike\bin\$(Configuration)\net10.0\Sparrow.Plugin.UiSpike.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_UiSpikeArtifacts)"
+          DestinationFolder="$(OutDir)ui-spike"
+          SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>

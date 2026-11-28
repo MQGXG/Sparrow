@@ -1,0 +1,13 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Sparrow.Plugin.UiSpike.SpikeView">
+  <StackPanel Spacing="10" Margin="16">
+    <TextBlock x:Name="SpikeText"
+               Text="插件界面已加载"
+               Foreground="{DynamicResource TextPrimaryBrush}" />
+    <Border x:Name="SpikeBadge"
+            Height="24"
+            CornerRadius="4"
+            Background="{DynamicResource AccentSoftBrush}" />
+  </StackPanel>
+</UserControl>

@@ -298,6 +298,23 @@ internal sealed class PluginLoadContext : AssemblyLoadContext
 
 **配套措施**：插件项目里 `Sparrow.Plugin.Sdk` 必须设 `PrivateAssets="all"` 或 `ExcludeAssets="runtime"`，产物不拷 SDK dll。同时加载器在 `Load()` 里做兜底（上面的代码）。
 
+### 铁律 1.1：UI 契约与 Avalonia 也必须由宿主解析
+
+从 P3 起，插件可以带自己的 Avalonia 界面，此时还有两类程序集必须落回默认 ALC：
+
+```text
+Sparrow.Plugin.Ui*   → UI 契约基类，分裂后宿主强转失败
+Avalonia*            → 控件类型必须与宿主同一份，否则主题资源取不到、卸载更回收不了
+```
+
+`PluginLoadContext.Load()` 对这三个前缀统一 `return null`（见 `SdkInfo.SdkAssemblyPrefix` /
+`SdkInfo.UiContractAssemblyPrefix`）。插件构建侧同样要 `ExcludeAssets="runtime"`，
+产物里出现 `Avalonia*.dll` 就是错的。
+
+**注意**：验证过「显示过的插件视图会让 ALC 无法回收」（P3 spike）。
+所以带界面的插件**不承诺热卸载**：禁用后需要重启宿主。
+只加载、不显示时仍然可以正常回收。
+
 ### 铁律 2：每个插件一个 LoadContext
 
 ```text

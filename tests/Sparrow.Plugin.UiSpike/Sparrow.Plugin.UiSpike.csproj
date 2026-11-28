@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    P3 研究用插件：只验证「插件自带 Avalonia 界面」能不能跨 ALC 加载。
+    不放进 plugins/，不加到宿主输出，避免被当成正式插件注册。
+  -->
+  <PropertyGroup>
+    <AssemblyName>Sparrow.Plugin.UiSpike</AssemblyName>
+    <RootNamespace>Sparrow.Plugin.UiSpike</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Avalonia 不随插件输出：宿主加载时统一到默认 ALC。
+      PrivateAssets=all 防止传递到引用方，ExcludeAssets=runtime 防止拷 dll。
+    -->
+    <PackageReference Include="Avalonia" PrivateAssets="all" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Sparrow.Plugin.Sdk\Sparrow.Plugin.Sdk.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>

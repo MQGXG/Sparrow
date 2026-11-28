@@ -19,4 +19,16 @@ public static class SdkInfo
 
     /// <summary>主版本号，兼容性判断只看它。</summary>
     public const int MajorVersion = 1;
+
+    /// <summary>
+    /// SDK 程序集名前缀。宿主必须由默认 ALC 解析它，
+    /// 否则 <c>ITool</c> 会分裂成两个类型，插件静默不注册。
+    /// </summary>
+    public const string SdkAssemblyPrefix = "Sparrow.Plugin.Sdk";
+
+    /// <summary>
+    /// 插件 UI 契约程序集名前缀（P4 引入）。
+    /// 与 SDK 一样必须由默认 ALC 解析，否则界面基类也会分裂。
+    /// </summary>
+    public const string UiContractAssemblyPrefix = "Sparrow.Plugin.Ui";
 }
