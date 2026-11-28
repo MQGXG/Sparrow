@@ -1,13 +1,23 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:Sparrow.Plugin.Ui"
              x:Class="Sparrow.Plugin.UiSpike.SpikeView">
   <StackPanel Spacing="10" Margin="16">
-    <TextBlock x:Name="SpikeText"
-               Text="插件界面已加载"
-               Foreground="{DynamicResource TextPrimaryBrush}" />
-    <Border x:Name="SpikeBadge"
-            Height="24"
-            CornerRadius="4"
-            Background="{DynamicResource AccentSoftBrush}" />
+    <ui:PluginSection Title="界面验证">
+      <StackPanel Spacing="8">
+        <TextBlock x:Name="SpikeText"
+                   Text="插件界面已加载"
+                   Foreground="{DynamicResource TextPrimaryBrush}" />
+        <Border x:Name="SpikeBadge"
+                Height="24"
+                CornerRadius="4"
+                Background="{DynamicResource AccentSoftBrush}" />
+        <ui:PluginHint Text="这段界面由插件组合宿主控件得到，颜色与主题跟随宿主。" />
+        <ui:PluginNumberField Label="起始时间（秒）"
+                              Value="0"
+                              Minimum="0"
+                              Maximum="600" />
+      </StackPanel>
+    </ui:PluginSection>
   </StackPanel>
 </UserControl>

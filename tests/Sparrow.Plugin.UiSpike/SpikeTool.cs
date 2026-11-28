@@ -1,15 +1,16 @@
 using Avalonia.Controls;
 using Sparrow.Plugin.Sdk;
 using Sparrow.Plugin.Sdk.Payloads;
+using Sparrow.Plugin.Ui;
 
 namespace Sparrow.Plugin.UiSpike;
 
 /// <summary>
-/// 只用于 P3 验证：宿主通过反射调用 <see cref="CreateView"/>，
-/// 确认插件程序集里的 <see cref="Control"/> 能被宿主直接显示。
-/// P4 会把这条路径固化成 IToolViewFactory。
+/// P4-A 验收用的测试插件：实现 <see cref="IToolViewFactory"/>，
+/// 用宿主提供的 <c>PluginSection</c> / <c>PluginHint</c> / <c>PluginNumberField</c>
+/// 组合出界面，证明「宿主控件组合」这条路能跨 ALC 走通。
 /// </summary>
-public sealed class SpikeTool : ITool
+public sealed class SpikeTool : ITool, IToolViewFactory
 {
     public ToolDescriptor Descriptor { get; } = new()
     {
@@ -24,5 +25,6 @@ public sealed class SpikeTool : ITool
     public Task<ToolResult> ExecuteAsync(ToolContext context, CancellationToken cancellationToken) =>
         Task.FromResult(ToolResult.Ok(new TextPayload("ui spike ok")));
 
-    public Control CreateView() => new SpikeView();
+    /// <summary>只会在 UI 线程由宿主调用；返回 null 表示用宿主默认工具台。</summary>
+    public Control? CreateView(IToolViewContext context) => new SpikeView();
 }

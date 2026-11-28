@@ -38,6 +38,10 @@ public partial class WorkspaceViewModel
         foreach (var parameter in Parameters)
             parameters[parameter.Key] = parameter.Value;
 
+        // 自定义视图写入的未声明参数也参与执行，界面值与执行值保持一致
+        foreach (var pair in _viewParameters)
+            parameters[pair.Key] = pair.Value;
+
         // 执行即记忆：下次打开这个工具时参数保持上次的值
         _parameters?.Save(entry.Descriptor.Id, parameters);
 

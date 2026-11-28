@@ -54,6 +54,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Sparrow.Plugin.Sdk\Sparrow.Plugin.Sdk.csproj" />
+    <!-- UI 契约由宿主解析并随宿主输出；插件不得自带副本（见 plugins/Directory.Build.targets）。 -->
+    <ProjectReference Include="..\Sparrow.Plugin.Ui\Sparrow.Plugin.Ui.csproj" />
     <!-- 来源：Lertaro (MIT)。只用于 MFT 索引 / 列式 Snapshot / 查询。 -->
     <ProjectReference Include="..\third_party\Lertaro\Core\Core.csproj" />
     <!-- 索引服务是独立 exe：只保证构建顺序，不作为运行时程序集引用。 -->

@@ -221,6 +221,9 @@ public partial class WorkspaceViewModel
         OnPropertyChanged(nameof(CanClearInputImages));
         OnPropertyChanged(nameof(CanClearDroppedImage));
         OnPropertyChanged(nameof(CanClearDroppedFiles));
+
+        // 工具换了，表面槽位跟着换：旧视图先断开，再问新工具要不要自定义视图
+        RefreshToolView();
     }
 
     /// <summary>工具墙：只放有输入/输出的页面型工具；纯动作（Accepts == None）走托盘与命令面板。</summary>
@@ -328,6 +331,7 @@ public partial class WorkspaceViewModel
         if (tool is null)
         {
             OnPropertyChanged(nameof(HasParameters));
+            OnPropertyChanged(nameof(ShowParameters));
             return;
         }
 
@@ -350,18 +354,23 @@ public partial class WorkspaceViewModel
         }
 
         OnPropertyChanged(nameof(HasParameters));
+        OnPropertyChanged(nameof(ShowParameters));
     }
 
     /// <summary>把当前参数写到参数存储；工具没参数或没接入存储时直接跳过。</summary>
     private void PersistParameters(ToolItemViewModel tool)
     {
-        if (_parameters is null || Parameters.Count == 0)
+        if (_parameters is null || (Parameters.Count == 0 && _viewParameters.Count == 0))
             return;
 
         var values = Parameters.ToDictionary(
             parameter => parameter.Key,
             parameter => parameter.Value,
             StringComparer.Ordinal);
+
+        // 自定义视图可能使用了描述里没有声明的参数，一并记住
+        foreach (var pair in _viewParameters)
+            values.TryAdd(pair.Key, pair.Value);
 
         _parameters.Save(tool.Entry.Descriptor.Id, values);
     }

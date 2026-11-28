@@ -1,0 +1,52 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="using:Sparrow.Plugin.Ui">
+
+  <!--
+    Sparrow.Plugin.Ui 的默认样式。
+    宿主在 App.axaml 里通过 StyleInclude 引入；颜色一律用宿主的 DynamicResource 键，
+    插件不硬编码颜色，深色 / 浅色切换会自动跟随。
+  -->
+
+  <Style Selector="ui|PluginSection">
+    <Setter Property="Margin" Value="0,0,0,10" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <StackPanel Spacing="6">
+          <TextBlock Text="{TemplateBinding Title}"
+                     FontSize="12"
+                     FontWeight="SemiBold"
+                     Foreground="{DynamicResource TextPrimaryBrush}" />
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}" />
+        </StackPanel>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+
+  <Style Selector="ui|PluginHint">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+
+  <Style Selector="ui|PluginNumberField">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <StackPanel Spacing="5">
+          <TextBlock Text="{TemplateBinding Label}"
+                     FontSize="11"
+                     Foreground="{DynamicResource TextMutedBrush}" />
+          <NumericUpDown Value="{Binding Value, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                         Minimum="{TemplateBinding Minimum}"
+                         Maximum="{TemplateBinding Maximum}"
+                         Increment="{TemplateBinding Increment}"
+                         FormatString="{TemplateBinding FormatString}"
+                         MinWidth="140"
+                         HorizontalAlignment="Left" />
+        </StackPanel>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+
+</Styles>

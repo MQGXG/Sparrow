@@ -23,6 +23,11 @@
       <Private>false</Private>
       <ExcludeAssets>runtime</ExcludeAssets>
     </ProjectReference>
+    <!-- UI 契约同样由宿主解析：控件类型必须与宿主同一份 -->
+    <ProjectReference Include="..\..\src\Sparrow.Plugin.Ui\Sparrow.Plugin.Ui.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
   </ItemGroup>
 
 </Project>

@@ -22,6 +22,21 @@
            Text="插件 $(MSBuildProjectName) 不得引用 Sparrow.App，只能引用 Sparrow.Plugin.Sdk。" />
   </Target>
 
+  <!--
+    铁律 1.1：Avalonia 与 Sparrow.Plugin.Ui 必须由宿主解析。
+    插件目录里出现副本会让 Control / UI 契约类型分裂，宿主强转失败，
+    而且主题资源取不到、ALC 更回收不了。构建期直接失败，别等到运行期静默不显示。
+  -->
+  <Target Name="ForbidHostUiCopy" BeforeTargets="CopyPluginToHost">
+    <ItemGroup>
+      <_ForbiddenUiArtifacts Include="$(TargetDir)Avalonia*.dll" />
+      <_ForbiddenUiArtifacts Include="$(TargetDir)Sparrow.Plugin.Ui.dll"
+                             Condition="Exists('$(TargetDir)Sparrow.Plugin.Ui.dll')" />
+    </ItemGroup>
+    <Error Condition="'@(_ForbiddenUiArtifacts)' != ''"
+           Text="插件 $(MSBuildProjectName) 的产物里出现了 @(_ForbiddenUiArtifacts->'%(Filename)%(Extension)', ', ')：Avalonia 与 Sparrow.Plugin.Ui 必须由宿主解析。请在插件项目里对这两个引用使用 Private=false + ExcludeAssets=runtime。" />
+  </Target>
+
   <Target Name="CopyPluginToHost"
           AfterTargets="Build"
           Condition="'$(PluginId)' != ''">

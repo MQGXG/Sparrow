@@ -122,6 +122,12 @@ public partial class WorkspaceViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(IsWallVisible));
         OnPropertyChanged(nameof(IsClipboardVisible));
+
+        // 工具台打开时创建插件视图，返回墙时断开并释放
+        if (value)
+            RefreshToolView();
+        else
+            ClearToolView();
     }
 
     partial void OnToolQueryChanged(string value)

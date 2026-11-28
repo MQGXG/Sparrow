@@ -19,9 +19,12 @@ public sealed class PluginBoundaryTests
         @"""(?<id>sparrow\.(?!plugin\.|sdk\.)[a-z0-9-]+\.[a-z0-9-]+)""",
         RegexOptions.Compiled);
 
-    /// <summary>插件程序集命名空间，Sparrow.Plugin.Sdk 是唯一允许的。</summary>
+    /// <summary>
+    /// 插件程序集命名空间，<c>Sparrow.Plugin.Sdk</c> 与 <c>Sparrow.Plugin.Ui</c>
+    /// 是宿主拥有的契约，其他 <c>Sparrow.Plugin.*</c> 都视为具体插件。
+    /// </summary>
     private static readonly Regex PluginNamespacePattern = new(
-        @"\bSparrow\.Plugin\.(?!Sdk\b)[A-Za-z]",
+        @"\bSparrow\.Plugin\.(?!Sdk\b|Ui\b)[A-Za-z]",
         RegexOptions.Compiled);
 
     /// <summary>宿主直接按字面量写插件参数键（<c>parameters["translate"]</c>）。</summary>
@@ -52,7 +55,7 @@ public sealed class PluginBoundaryTests
             .ToList();
 
         hits.ShouldBeEmpty(
-            "宿主只能依赖 Sparrow.Plugin.Sdk；引用具体插件会把插件变成编译期内置："
+            "宿主只能依赖 Sparrow.Plugin.Sdk / Sparrow.Plugin.Ui 契约；引用具体插件会把插件变成编译期内置："
             + Environment.NewLine
             + string.Join(Environment.NewLine, hits));
     }

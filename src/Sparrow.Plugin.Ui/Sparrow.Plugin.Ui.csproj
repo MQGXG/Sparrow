@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>Sparrow.Plugin.Ui</AssemblyName>
+    <RootNamespace>Sparrow.Plugin.Ui</RootNamespace>
+    <!--
+      UI 契约包（P4）：插件通过宿主提供的控件组合自己的界面，不直接 new 任意 Control。
+      Avalonia 大版本必须与宿主一致；升级时跟随 Directory.Packages.props。
+    -->
+    <Version>1.0.0</Version>
+    <!--
+      与 SDK 同理：契约程序集的 AssemblyVersion 钉死，避免 publish -p:Version 改掉绑定版本。
+    -->
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <Description>Sparrow 工具插件的界面契约包：自定义视图工厂与宿主控件积木。</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 控件类型必须与宿主共用同一份 Avalonia；插件引用本包时不得把它拷进插件目录。 -->
+    <PackageReference Include="Avalonia" />
+  </ItemGroup>
+
+</Project>
