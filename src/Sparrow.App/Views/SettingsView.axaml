@@ -1765,14 +1765,14 @@
             <Border Classes="hud-line" />
             <Border Margin="24,18"
                     Padding="16,12"
-                    Background="{DynamicResource AccentSoftBrush}"
-                    BorderBrush="{DynamicResource AccentBrush}"
+                    Background="{DynamicResource SurfaceRaisedBrush}"
+                    BorderBrush="{DynamicResource LineStrongBrush}"
                     BorderThickness="2,0,0,0"
                     CornerRadius="4">
               <StackPanel Spacing="5">
                 <TextBlock Classes="num"
                            Text="// 所有工具都在本地执行"
-                           Foreground="{DynamicResource AccentBrush}" />
+                           Foreground="{DynamicResource TextMutedBrush}" />
                 <TextBlock Text="屏幕上的每个像素都留在本机：识别、翻译、录制、处理，不经过任何服务器。"
                            FontSize="12"
                            Foreground="{DynamicResource TextSecondaryBrush}"
