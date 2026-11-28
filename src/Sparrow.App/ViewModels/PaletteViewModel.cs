@@ -179,6 +179,10 @@ public partial class PaletteViewModel : ObservableObject
             if (result.Success && result.Payload is not null)
             {
                 var text = FormatPayload(result.Payload);
+
+                if (!string.IsNullOrEmpty(result.Notice))
+                    text = $"{text}{Environment.NewLine}{Environment.NewLine}{result.Notice}";
+
                 ShowResult(text, $"{tool.Descriptor.Name} · {elapsed.TotalMilliseconds:F0} ms");
 
                 _history.Add(new HistoryEntry(

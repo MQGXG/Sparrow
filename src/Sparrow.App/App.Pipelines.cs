@@ -351,6 +351,9 @@ public partial class App
 
             var text = PaletteViewModel.FormatPayload(result.Payload);
 
+            if (!string.IsNullOrEmpty(result.Notice))
+                text = $"{text}{Environment.NewLine}{Environment.NewLine}{result.Notice}";
+
             // 短结果用 toast 就够；长文本仍然交给面板，方便阅读和复制
             if (text.Length <= 160)
                 _toasts?.Show(text);

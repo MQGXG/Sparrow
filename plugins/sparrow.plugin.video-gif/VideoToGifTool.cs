@@ -21,6 +21,7 @@ public sealed class VideoToGifTool : ITool
         Accepts = InputShape.Files,
         Produces = OutputShape.FileSet,
         Order = 50,
+        IsHeavy = true,
         Parameters =
         [
             new ToolParameter

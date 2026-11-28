@@ -161,6 +161,14 @@ public partial class WorkspaceViewModel : ObservableObject
 
     partial void OnResultTextChanged(string? value) => OnPropertyChanged(nameof(ResultSummary));
 
+    /// <summary>宿主附加提示（例如结果被截断）；空表示没有。</summary>
+    [ObservableProperty]
+    private string? _resultNotice;
+
+    public bool HasResultNotice => !string.IsNullOrEmpty(ResultNotice);
+
+    partial void OnResultNoticeChanged(string? value) => OnPropertyChanged(nameof(HasResultNotice));
+
     [ObservableProperty]
     private string? _errorText;
 

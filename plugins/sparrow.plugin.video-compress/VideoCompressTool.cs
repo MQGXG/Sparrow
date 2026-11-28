@@ -33,6 +33,7 @@ public sealed class VideoCompressTool : ITool
         Accepts = InputShape.Files,
         Produces = OutputShape.FileSet,
         Order = 53,
+        IsHeavy = true,
         Parameters =
         [
             new ToolParameter

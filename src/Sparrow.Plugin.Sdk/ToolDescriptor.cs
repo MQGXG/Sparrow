@@ -33,6 +33,12 @@ public sealed record ToolDescriptor
 
     /// <summary>面板默认排序权重，越大越靠前。</summary>
     public int Order { get; init; }
+
+    /// <summary>
+    /// 重任务：同一时间只允许一个执行（本地模型、OCR、视频转码）。
+    /// 纯计算工具保持 false，否则会把 JSON / Base64 也串行化。
+    /// </summary>
+    public bool IsHeavy { get; init; }
 }
 
 /// <summary>

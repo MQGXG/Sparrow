@@ -37,6 +37,7 @@ public sealed class TranslateTool : ITool
         // 在线走 AI、离线走本地模型，两条路都行——不能因为「没配 AI」就把工具置灰
         Requires = PlatformCapability.None,
         Order = 40,
+        IsHeavy = true,
         Parameters =
         [
             new ToolParameter

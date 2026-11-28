@@ -29,6 +29,7 @@ public sealed class VideoTrimTool : ITool, IToolViewFactory
         Accepts = InputShape.Files,
         Produces = OutputShape.FileSet,
         Order = 52,
+        IsHeavy = true,
         Parameters =
         [
             new ToolParameter

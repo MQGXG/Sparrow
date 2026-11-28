@@ -21,6 +21,7 @@ public sealed class VideoFramesTool : ITool
         Accepts = InputShape.Files,
         Produces = OutputShape.FileSet,
         Order = 51,
+        IsHeavy = true,
         Parameters =
         [
             new ToolParameter

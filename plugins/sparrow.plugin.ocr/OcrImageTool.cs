@@ -44,6 +44,7 @@ public sealed class OcrImageTool : ITool
         Produces = OutputShape.Text,
         Requires = PlatformCapability.Ocr,
         Order = 30,
+        IsHeavy = true,
         Parameters =
         [
             OcrParameters.Language,

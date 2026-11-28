@@ -1372,7 +1372,14 @@
                       Padding="16">
               <Grid RowDefinitions="Auto,Auto,*">
                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,0,0,10">
-                  <TextBlock Classes="section" Text="结果" />
+                  <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Classes="section" Text="结果" />
+                    <TextBlock Text="{Binding ResultNotice}"
+                               IsVisible="{Binding HasResultNotice}"
+                               FontSize="11"
+                               Foreground="{DynamicResource AccentBrush}"
+                               VerticalAlignment="Center" />
+                  </StackPanel>
 
                   <!-- 多图时才有：只看当前这张 / 看全部 -->
                   <StackPanel Grid.Column="1"

@@ -89,6 +89,9 @@ public partial class WorkspaceViewModel
 
             if (result.Success && result.Payload is not null)
             {
+                // 结果被截断之类的宿主提示，先挂到界面，再按载荷类型渲染
+                ResultNotice = result.Notice;
+
                 switch (result.Payload)
                 {
                     case SvgPayload svgPayload:

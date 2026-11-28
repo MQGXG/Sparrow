@@ -12,13 +12,14 @@ namespace Sparrow.Tests;
 /// </summary>
 public sealed class ToolRunnerTests
 {
-    private sealed class FakeTool(Func<CancellationToken, Task<ToolResult>> body) : ITool
+    private sealed class FakeTool(Func<CancellationToken, Task<ToolResult>> body, bool heavy = false) : ITool
     {
         public ToolDescriptor Descriptor { get; } = new()
         {
             Id = "sparrow.test.runner",
             Name = "测试工具",
-            Category = "test"
+            Category = "test",
+            IsHeavy = heavy
         };
 
         public Task<ToolResult> ExecuteAsync(ToolContext context, CancellationToken cancellationToken) =>
@@ -164,5 +165,36 @@ public sealed class ToolRunnerTests
         result.Success.ShouldBeFalse();
         result.Payload.ShouldBeNull();
         result.Error!.Message.ShouldContain("过大");
+    }
+
+    [Fact]
+    public async Task 重任务_同一时间只跑一个()
+    {
+        var current = 0;
+        var max = 0;
+        var gate = new object();
+
+        async Task<ToolResult> Body()
+        {
+            var now = Interlocked.Increment(ref current);
+            lock (gate)
+                max = Math.Max(max, now);
+
+            await Task.Delay(30, TestContext.Current.CancellationToken);
+
+            Interlocked.Decrement(ref current);
+            return ToolResult.Ok(new TextPayload("ok"));
+        }
+
+        var tool = new FakeTool(_ => Body(), heavy: true);
+
+        await Task.WhenAll(Enumerable
+            .Range(0, 3)
+            .Select(_ => ToolRunner.ExecuteAsync(
+                tool,
+                Context(),
+                TestContext.Current.CancellationToken)));
+
+        max.ShouldBe(1);
     }
 }

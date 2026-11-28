@@ -75,6 +75,7 @@ public partial class WorkspaceViewModel
         HasImageResult = false;
         ImageResultPng = null;
         ClearStructuredResults();
+        ResultNotice = null;
 
         ResultText = history.Entry.Output;
         HasResult = true;
@@ -101,6 +102,7 @@ public partial class WorkspaceViewModel
         HasImageResult = false;
         ImageResultPng = null;
         ClearStructuredResults();
+        ResultNotice = null;
         ErrorText = message;
         HasError = true;
         HasResult = false;
@@ -113,6 +115,7 @@ public partial class WorkspaceViewModel
         HasImageResult = false;
         ImageResultPng = null;
         ClearStructuredResults();
+        ResultNotice = null;
         ResultText = null;
         ErrorText = null;
         HasResult = false;

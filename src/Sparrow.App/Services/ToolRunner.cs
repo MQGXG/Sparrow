@@ -21,6 +21,16 @@ public static class ToolRunner
     /// <summary>兜底超时。正常工具远小于这个值。</summary>
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromMinutes(10);
 
+    /// <summary>
+    /// 重任务闸门：同一时间只跑一个 <see cref="ToolDescriptor.IsHeavy"/> 工具。
+    /// 本地模型 / OCR / 视频转码会一次性吃掉大量内存或 CPU，
+    /// 同时跑两个的代价远大于排队等待。
+    ///
+    /// 注意：插件忽略取消令牌时，闸门会一直等到它真正结束——
+    /// 进程内无法强制终止第三方代码，这是已知边界。
+    /// </summary>
+    private static readonly SemaphoreSlim HeavyGate = new(1, 1);
+
     public static async Task<ToolResult> ExecuteAsync(
         ITool tool,
         ToolContext context,
@@ -37,10 +47,43 @@ public static class ToolRunner
             cancellationToken,
             timeoutSource.Token);
 
+        var heavy = tool.Descriptor.IsHeavy;
+        var gateHeld = false;
+
+        if (heavy)
+        {
+            try
+            {
+                await HeavyGate.WaitAsync(linkedSource.Token);
+                gateHeld = true;
+            }
+            catch (OperationCanceledException)
+                when (timeoutSource.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                return ToolResult.Timeout($"等待重任务让出执行槽位超时（超过 {limit.TotalSeconds:0} 秒）");
+            }
+            catch (OperationCanceledException)
+            {
+                return ToolResult.Cancelled();
+            }
+        }
+
         // 关键：ExecuteAsync 的调用本身也放到线程池，同步插件不会占用 UI 线程
         var work = Task.Run(
             () => tool.ExecuteAsync(context, linkedSource.Token),
             CancellationToken.None);
+
+        if (gateHeld)
+        {
+            // 闸门跟随「工作真正结束」释放，而不是超时返回时释放；
+            // 被放弃的后台重任务仍然占着它的槽位。
+            _ = work.ContinueWith(
+                static (_, state) => ((SemaphoreSlim)state!).Release(),
+                HeavyGate,
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
 
         try
         {

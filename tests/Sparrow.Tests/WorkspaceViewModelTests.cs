@@ -396,6 +396,44 @@ public sealed class WorkspaceViewModelTests
     }
 
     [Fact]
+    public async Task 超长结果_界面显示截断提示()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+        await viewModel.ReloadAsync();
+
+        var text = new string('a', ToolResultLimits.MaxTextChars + 100);
+        viewModel.OpenTool(CreatePayloadTool(root.Path, new TextPayload(text)));
+
+        await viewModel.ExecuteAsync();
+
+        viewModel.ResultNotice.ShouldBe(ToolResultLimits.TruncatedNotice);
+        viewModel.HasResultNotice.ShouldBeTrue();
+        viewModel.ResultText.ShouldNotBeNull().Length.ShouldBeLessThan(text.Length);
+    }
+
+    [Fact]
+    public async Task 下一次正常结果_清掉截断提示()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+        await viewModel.ReloadAsync();
+
+        var text = new string('a', ToolResultLimits.MaxTextChars + 100);
+        viewModel.OpenTool(CreatePayloadTool(root.Path, new TextPayload(text)));
+        await viewModel.ExecuteAsync();
+        viewModel.HasResultNotice.ShouldBeTrue();
+
+        viewModel.OpenTool(CreatePayloadTool(root.Path, new TextPayload("ok")));
+        await viewModel.ExecuteAsync();
+
+        viewModel.HasResultNotice.ShouldBeFalse();
+        viewModel.ResultText.ShouldBe("ok");
+    }
+
+    [Fact]
     public async Task 打开工具时_恢复上次保存的参数()
     {
         using var root = new TempPluginRoot();
