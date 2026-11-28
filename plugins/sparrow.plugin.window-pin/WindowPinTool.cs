@@ -62,6 +62,9 @@ public sealed class WindowPinTool : ITool
         if (!_api.TryGetTitle(handle, out var title))
             return ToolResult.InvalidInput("无法识别这个窗口，请对准有标题的窗口");
 
+        if (_api.IsMaximized(handle))
+            return ToolResult.InvalidInput("窗口已经最大化，请先还原再置顶");
+
         var wasTopMost = _api.IsTopMost(handle);
         if (!_api.SetTopMost(handle, !wasTopMost))
             return ToolResult.Failed($"设置窗口置顶失败：{title}");

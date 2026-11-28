@@ -41,6 +41,7 @@ public sealed class WindowPinToolTests
     {
         public string? Title { get; set; } = "记事本";
         public bool TopMost { get; set; }
+        public bool Maximized { get; set; }
         public bool SetSucceeds { get; set; } = true;
         /// <summary>模拟系统静默拒绝：调用返回成功，但状态没变。</summary>
         public bool ApplySucceeds { get; set; } = true;
@@ -53,6 +54,8 @@ public sealed class WindowPinToolTests
         }
 
         public bool IsTopMost(nint handle) => TopMost;
+
+        public bool IsMaximized(nint handle) => Maximized;
 
         public bool SetTopMost(nint handle, bool topMost)
         {
@@ -143,6 +146,22 @@ public sealed class WindowPinToolTests
         api.SetCalls.ShouldHaveSingleItem().ShouldBe(((nint)42, true));
         overlay.Shown.ShouldHaveSingleItem().Window.ShouldBe((nint)42);
         overlay.LastHint.ShouldNotBeNull().ShouldContain("点击窗口置顶");
+    }
+
+    [Fact]
+    public async Task 最大化窗口_拒绝置顶()
+    {
+        var api = new FakePinApi { TopMost = false, Maximized = true };
+        var overlay = new FakeOverlay();
+
+        var result = await ExecuteAsync(api, overlay);
+
+        result.Success.ShouldBeFalse();
+        result.Error!.Kind.ShouldBe(ToolErrorKind.InvalidInput);
+        result.Error.Message.ShouldContain("最大化");
+
+        api.SetCalls.ShouldBeEmpty();
+        overlay.Shown.ShouldBeEmpty();
     }
 
     [Fact]

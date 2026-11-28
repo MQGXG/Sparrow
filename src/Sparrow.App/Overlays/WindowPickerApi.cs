@@ -14,8 +14,16 @@ namespace Sparrow.App.Overlays;
 internal static class WindowPickerApi
 {
     private const uint GaRoot = 2;
+    private const int GwlStyle = -16;
     private const int GwlExStyle = -20;
+    private const int GwlHwndParent = -8;
     private const long WsExTopMost = 0x00000008;
+    private const long WsExToolWindow = 0x00000080;
+    private const long WsExContextHelp = 0x00000400;
+    private const long WsSysMenu = 0x00080000;
+    private const long WsMinimizeBox = 0x00020000;
+    private const long WsMaximizeBox = 0x00010000;
+    private const int SmCxSize = 30;
     private const uint SwpNoSize = 0x0001;
     private const uint SwpNoMove = 0x0002;
     private const uint SwpNoActivate = 0x0010;
@@ -95,6 +103,18 @@ internal static class WindowPickerApi
     private static extern bool SetWindowPos(
         IntPtr hWnd, IntPtr hWndInsertAfter,
         int x, int y, int cx, int cy, uint flags);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongW", SetLastError = true)]
+    private static extern int SetWindowLong32(IntPtr hWnd, int nIndex, int dwNewLong);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
+    private static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int nIndex);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsZoomed(IntPtr hWnd);
 
     /// <summary>读取当前光标位置（物理像素）。</summary>
     public static bool TryGetCursor(out Point point) => GetCursorPos(out point);
@@ -197,12 +217,50 @@ internal static class WindowPickerApi
     public static bool IsTopMost(nint handle) =>
         (GetWindowLong(handle, GwlExStyle) & WsExTopMost) != 0;
 
+    public static bool IsMaximized(nint handle) => IsZoomed(handle);
+
+    public static bool IsVisible(nint handle) => IsWindowVisible(handle);
+
     public static void SetTopMost(nint handle, bool topMost) =>
         SetWindowPos(
             handle,
             topMost ? HwndTopMost : HwndNoTopMost,
             0, 0, 0, 0,
             SwpNoSize | SwpNoMove | SwpNoActivate);
+
+    /// <summary>
+    /// 把图钉设成目标窗口的 owned window：owned window 永远在 owner 之上，
+    /// 目标窗口移动 / 激活 / 改 z-order 时图钉不会掉到它下面。
+    /// </summary>
+    public static void SetOwner(nint handle, nint owner) =>
+        SetWindowLongPtr(handle, GwlHwndParent, owner);
+
+    /// <summary>WS_EX_TOOLWINDOW：图钉不进任务栏和 Alt+Tab。</summary>
+    public static void MarkToolWindow(nint handle)
+    {
+        var exStyle = GetWindowLong(handle, GwlExStyle);
+        SetWindowLongPtr(handle, GwlExStyle, new IntPtr(exStyle | WsExToolWindow));
+    }
+
+    /// <summary>标题栏右侧系统按钮数量（关闭 / 最小化 / 最大化 / 帮助）。</summary>
+    public static int GetCaptionButtonCount(nint handle)
+    {
+        var style = GetWindowLong(handle, GwlStyle);
+        if ((style & WsSysMenu) == 0)
+            return 0;
+
+        var count = 1; // 关闭
+        if ((style & (WsMinimizeBox | WsMaximizeBox)) != 0)
+            count += 2;
+
+        if ((GetWindowLong(handle, GwlExStyle) & WsExContextHelp) != 0)
+            count++;
+
+        return count;
+    }
+
+    /// <summary>单个标题栏按钮的宽度（系统 DPI 像素）。</summary>
+    public static int GetCaptionButtonWidth() => GetSystemMetrics(SmCxSize);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetWindowTextW(IntPtr hWnd, StringBuilder text, int maxCount);
@@ -211,6 +269,11 @@ internal static class WindowPickerApi
         IntPtr.Size == 8
             ? GetWindowLongPtr64(hWnd, nIndex).ToInt64()
             : GetWindowLong32(hWnd, nIndex);
+
+    private static IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr value) =>
+        IntPtr.Size == 8
+            ? SetWindowLongPtr64(hWnd, nIndex, value)
+            : new IntPtr(SetWindowLong32(hWnd, nIndex, value.ToInt32()));
 
     private static bool IsShellWindow(IntPtr handle)
     {

@@ -37,6 +37,9 @@ public sealed class Win32WindowPinApi : IWindowPinApi
         IntPtr hWnd, IntPtr hWndInsertAfter,
         int x, int y, int cx, int cy, uint flags);
 
+    [DllImport("user32.dll")]
+    private static extern bool IsZoomed(IntPtr hWnd);
+
     public bool TryGetTitle(nint handle, out string title)
     {
         title = string.Empty;
@@ -56,6 +59,8 @@ public sealed class Win32WindowPinApi : IWindowPinApi
 
     public bool IsTopMost(nint handle) =>
         (GetWindowLong(handle, GwlExStyle) & WsExTopMost) != 0;
+
+    public bool IsMaximized(nint handle) => IsZoomed(handle);
 
     public bool SetTopMost(nint handle, bool topMost) =>
         SetWindowPos(

@@ -13,6 +13,9 @@ public interface IWindowPinApi
 
     bool IsTopMost(nint handle);
 
+    /// <summary>窗口是否最大化；最大化窗口已经占满屏幕，钉了没有意义。</summary>
+    bool IsMaximized(nint handle);
+
     /// <summary>设置/取消置顶；返回是否成功。</summary>
     bool SetTopMost(nint handle, bool topMost);
 }

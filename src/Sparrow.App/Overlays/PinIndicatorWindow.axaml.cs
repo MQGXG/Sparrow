@@ -56,6 +56,16 @@ public partial class PinIndicatorWindow : Window
 
         Opened += (_, _) =>
         {
+            var handle = TryGetPlatformHandle()?.Handle ?? 0;
+
+            if (handle != 0)
+            {
+                // 关键：让图钉成为目标窗口的 owned window。
+                // 只设 Topmost 是不够的——目标窗口一激活就会盖住图钉。
+                WindowPickerApi.SetOwner(handle, _target);
+                WindowPickerApi.MarkToolWindow(handle);
+            }
+
             // 与 Snow-shot 一致：图钉会随屏幕一起被录进视频。
             Follow();
             _timer.Start();
@@ -72,8 +82,8 @@ public partial class PinIndicatorWindow : Window
             return;
         }
 
-        // 最小化时图钉没地方贴，跟着藏起来
-        if (WindowPickerApi.IsMinimized(_target))
+        // 最小化 / 被隐藏时图钉没地方贴，跟着藏起来
+        if (WindowPickerApi.IsMinimized(_target) || !WindowPickerApi.IsVisible(_target))
         {
             IsVisible = false;
             return;
@@ -81,11 +91,22 @@ public partial class PinIndicatorWindow : Window
 
         IsVisible = true;
 
+        // 别的程序可能清掉目标的 TOPMOST；只要图钉还在，就补回来
+        if (!WindowPickerApi.IsTopMost(_target))
+            WindowPickerApi.SetTopMost(_target, true);
+
         var bounds = WindowPickerApi.GetBounds(_target);
 
-        // 位置是物理像素：34px 徽章贴标题栏右侧，留 18px 避开最小化 / 关闭按钮，
-        // 垂直方向在标准标题栏高度里居中。
-        Position = new PixelPoint(bounds.Right - 52, bounds.Top + 6);
+        // 标题栏右侧：系统按钮左边。按系统按钮数 + 当前 DPI 算，避免压住关闭按钮。
+        var scale = RenderScaling > 0 ? RenderScaling : 1.0;
+        var buttonWidth = (int)Math.Round(WindowPickerApi.GetCaptionButtonWidth() * scale);
+        var buttons = WindowPickerApi.GetCaptionButtonCount(_target);
+        var badge = (int)Math.Round(34 * scale);
+        var gap = (int)Math.Round(8 * scale);
+
+        Position = new PixelPoint(
+            bounds.Right - buttons * buttonWidth - badge - gap,
+            bounds.Top + (int)Math.Round(6 * scale));
     }
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
