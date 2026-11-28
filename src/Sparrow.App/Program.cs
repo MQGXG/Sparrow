@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Avalonia;
+using Sparrow.App.Services;
 using Sparrow.App.Services.Recording;
 using Velopack;
 
@@ -31,6 +32,11 @@ internal static class Program
             CrashLog.Write(e.Exception);
             e.SetObserved();
         };
+
+        // 置顶看门狗：独立子进程，不建互斥量、不加载 Avalonia。
+        // 宿主被强杀时 stdin 关闭，它负责把记录的窗口恢复成非置顶。
+        if (args.Any(arg => arg.Equals("--pin-watchdog", StringComparison.OrdinalIgnoreCase)))
+            return PinWatchdog.Run(Console.In, new Win32PinWatchdogNative());
 
         // 单实例：M0 只做「第二个实例直接退出」。
         // 完整做法（把唤起请求转发给第一个实例）留给 M1，避免现在就引入 IPC。

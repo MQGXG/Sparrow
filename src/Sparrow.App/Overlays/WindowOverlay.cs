@@ -12,8 +12,13 @@ public sealed class WindowOverlay : IWindowOverlay, IDisposable
 {
     private readonly IAppLog _log;
     private readonly Dictionary<nint, PinIndicatorWindow> _indicators = [];
+    private readonly PinWatchdogClient _watchdog;
 
-    public WindowOverlay(IAppLog log) => _log = log;
+    public WindowOverlay(IAppLog log)
+    {
+        _log = log;
+        _watchdog = new PinWatchdogClient(log);
+    }
 
     public Task<nint> PickWindowAsync(string hint, CancellationToken cancellationToken) =>
         Dispatcher.UIThread.InvokeAsync<nint>(
@@ -33,9 +38,14 @@ public sealed class WindowOverlay : IWindowOverlay, IDisposable
             {
                 if (_indicators.TryGetValue(window, out var current) && ReferenceEquals(current, indicator))
                     _indicators.Remove(window);
+
+                _watchdog.Unpin(window);
             };
 
             indicator.Show();
+
+            // 看门狗记录「这个窗口被我们置顶了」：宿主被强杀时由它恢复
+            _watchdog.Pin(window);
         });
 
     public void HidePinIndicator(nint window) =>
@@ -43,6 +53,8 @@ public sealed class WindowOverlay : IWindowOverlay, IDisposable
         {
             if (_indicators.Remove(window, out var indicator))
                 indicator.Close();
+
+            _watchdog.Unpin(window);
         });
 
     /// <summary>退出时恢复所有被置顶窗口：不留「钉住但没人管」的状态。</summary>
@@ -64,5 +76,7 @@ public sealed class WindowOverlay : IWindowOverlay, IDisposable
         }
 
         _indicators.Clear();
+        _watchdog.Clear();
+        _watchdog.Dispose();
     }
 }

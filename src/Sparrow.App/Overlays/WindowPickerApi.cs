@@ -182,6 +182,10 @@ internal static class WindowPickerApi
 
     public static bool Exists(nint handle) => IsWindow(handle);
 
+    /// <summary>窗口所属进程；窗口无效时返回 0。</summary>
+    public static uint GetProcessId(nint handle) =>
+        GetWindowThreadProcessId(handle, out var processId) != 0 ? processId : 0;
+
     public static bool IsMinimized(nint handle) => IsIconic(handle);
 
     public static Rect GetBounds(nint handle)
