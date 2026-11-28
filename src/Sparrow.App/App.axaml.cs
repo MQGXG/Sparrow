@@ -64,6 +64,8 @@ public partial class App : Application
     private QuickSearchWindow? _quickSearch;
     private DoubleCtrlHotkey? _doubleCtrl;
     private WinVHotkey? _winVHotkey;
+    private HotkeyPolicyMonitor? _hotkeyPolicy;
+    private bool _hotkeysSuspended;
 
     // 贴图窗口需要宿主一直持有引用，否则会被 GC 回收
     private readonly List<PinnedImageWindow> _pins = [];
@@ -231,6 +233,7 @@ public partial class App : Application
         var startup = new StartupService(log);
         var settingsViewModel = new SettingsViewModel(_catalog, settingsStore, startup, settings, ai, aiSecrets, _localModels, _fileIndex);
         _settingsViewModel = settingsViewModel;
+        _hotkeyPolicy = new HotkeyPolicyMonitor(OnHotkeyPolicyChanged, log);
 
         // 设置页禁用双击 Ctrl 时立即卸载钩子，重新打开时再安装
         settingsViewModel.DoubleCtrlSearchEnabledChanged += enabled =>
@@ -338,7 +341,11 @@ public partial class App : Application
             trayEntries,
             toolId => Avalonia.Threading.Dispatcher.UIThread.Post(
                 () => _ = ExecuteToolHotkeyAsync(toolId)),
-            ShowLanShare);
+            ShowLanShare,
+            hotkeysDisabled: () => _appSettings.HotkeysDisabled,
+            disableHotkeysInGame: () => _appSettings.DisableHotkeysInGame,
+            toggleHotkeysDisabled: ToggleHotkeysDisabled,
+            toggleDisableHotkeysInGame: ToggleDisableHotkeysInGame);
         _tray.Initialize();
 
         // 录制热键可配置；解析失败时退回默认 Ctrl+Alt+Shift+R。
@@ -444,9 +451,12 @@ public partial class App : Application
             log.Error(message);
         }
 
+        _hotkeyPolicy.Configure(_appSettings.HotkeysDisabled, _appSettings.DisableHotkeysInGame);
+
         desktop.Exit += (_, _) =>
         {
             CancelWorkspaceRelease();
+            _hotkeyPolicy?.Dispose();
             _toasts?.Dispose();
             _windowOverlay?.Dispose();
             _hotkey?.Dispose();
@@ -584,6 +594,7 @@ public partial class App : Application
         _doubleCtrl = new DoubleCtrlHotkey(
             () => Avalonia.Threading.Dispatcher.UIThread.Post(() => _quickSearch?.Toggle()),
             Log);
+        _doubleCtrl.SetAllowed(!_hotkeysSuspended);
 
         if (!_doubleCtrl.Start())
             Log.Warn("双击 Ctrl 未能启用（低级键盘钩子安装失败）");
@@ -596,6 +607,46 @@ public partial class App : Application
     {
         _doubleCtrl?.Dispose();
         _doubleCtrl = null;
+    }
+
+    /// <summary>手动禁用 / 全屏游戏自动禁用时，同步所有全局入口。</summary>
+    private void OnHotkeyPolicyChanged(bool suspended)
+    {
+        _hotkeysSuspended = suspended;
+        _hotkey?.SetSuspended(suspended);
+        _winVHotkey?.SetAllowed(!suspended);
+        _doubleCtrl?.SetAllowed(!suspended);
+        Log.Info(suspended ? "全局快捷键已暂停" : "全局快捷键已恢复");
+    }
+
+    private void ToggleHotkeysDisabled()
+    {
+        _appSettings = _appSettings with { HotkeysDisabled = !_appSettings.HotkeysDisabled };
+        PersistHotkeyPolicy();
+        _toasts?.Show(_appSettings.HotkeysDisabled ? "全局快捷键已禁用" : "全局快捷键已启用");
+    }
+
+    private void ToggleDisableHotkeysInGame()
+    {
+        _appSettings = _appSettings with
+        {
+            DisableHotkeysInGame = !_appSettings.DisableHotkeysInGame
+        };
+        PersistHotkeyPolicy();
+        _toasts?.Show(_appSettings.DisableHotkeysInGame
+            ? "全屏游戏时禁用快捷键：开"
+            : "全屏游戏时禁用快捷键：关");
+    }
+
+    private void PersistHotkeyPolicy()
+    {
+        _settingsStore?.Save(_appSettings);
+        _settingsViewModel?.SyncHotkeyPolicy(
+            _appSettings.HotkeysDisabled,
+            _appSettings.DisableHotkeysInGame);
+        _hotkeyPolicy?.Configure(
+            _appSettings.HotkeysDisabled,
+            _appSettings.DisableHotkeysInGame);
     }
 
     /// <summary>按设置和剪贴板历史状态安装 / 卸载 Win+V 接管钩子。</summary>
@@ -624,6 +675,7 @@ public partial class App : Application
         }
 
         _winVHotkey = hook;
+        hook.SetAllowed(!_hotkeysSuspended);
         Log.Info("已接管 Win+V");
     }
 

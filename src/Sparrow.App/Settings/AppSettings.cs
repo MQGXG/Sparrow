@@ -54,6 +54,12 @@ public sealed record AppSettings
     /// <summary>是否接管 Win+V 打开 Sparrow 剪贴板；关闭时 Win+V 仍由系统处理。</summary>
     public bool ClipboardWinVEnabled { get; init; }
 
+    /// <summary>手动禁用所有全局快捷键；托盘菜单可切换。</summary>
+    public bool HotkeysDisabled { get; init; }
+
+    /// <summary>检测到独占全屏 D3D 游戏时自动禁用全局快捷键；托盘菜单可切换。</summary>
+    public bool DisableHotkeysInGame { get; init; }
+
     /// <summary>屏幕录制开始/停止热键，格式 "Ctrl+Alt+Shift+R"。</summary>
     public string RecordHotkey { get; init; } = "Ctrl+Alt+Shift+R";
 

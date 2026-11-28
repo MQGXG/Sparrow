@@ -24,12 +24,14 @@ public sealed class HotkeyService : IDisposable
     public const uint ModNoRepeat = 0x4000;
 
     private const int WmHotkey = 0x0312;
+    private const uint WmSuspend = 0x8000 + 1;
 
     private static readonly IntPtr HwndMessage = new(-3);
 
     private readonly IReadOnlyList<HotkeyBinding> _bindings;
     private readonly Dictionary<int, HotkeyBinding> _byId;
     private readonly List<HotkeyBinding> _failed = [];
+    private readonly object _failedGate = new();
     private readonly WndProcDelegate _wndProc;
     private readonly ManualResetEventSlim _ready = new(false);
     private readonly Thread _thread;
@@ -37,6 +39,7 @@ public sealed class HotkeyService : IDisposable
     private IntPtr _hwnd;
     private ushort _atom;
     private volatile bool _registered;
+    private volatile bool _suspended;
     private volatile bool _disposed;
     private bool _started;
 
@@ -56,7 +59,32 @@ public sealed class HotkeyService : IDisposable
     }
 
     /// <summary>注册失败的条目（被其他软件占用 / 系统拒绝），供界面逐条提示。</summary>
-    public IReadOnlyList<HotkeyBinding> FailedBindings => _failed;
+    public IReadOnlyList<HotkeyBinding> FailedBindings
+    {
+        get
+        {
+            lock (_failedGate)
+                return _failed.ToArray();
+        }
+    }
+
+    /// <summary>暂停 / 恢复全局热键注册；恢复时重新注册当前绑定。</summary>
+    public void SetSuspended(bool suspended)
+    {
+        if (_suspended == suspended)
+            return;
+
+        _suspended = suspended;
+
+        if (_hwnd != IntPtr.Zero)
+        {
+            PostMessage(
+                _hwnd,
+                WmSuspend,
+                suspended ? new IntPtr(1) : IntPtr.Zero,
+                IntPtr.Zero);
+        }
+    }
 
     /// <summary>
     /// 启动消息循环并注册全部热键。
@@ -104,17 +132,11 @@ public sealed class HotkeyService : IDisposable
             return;
         }
 
-        var allRegistered = true;
-        foreach (var binding in _bindings)
-        {
-            if (!RegisterHotKey(_hwnd, binding.Id, binding.Modifiers, binding.VirtualKey))
-            {
-                allRegistered = false;
-                _failed.Add(binding);
-            }
-        }
+        if (!_suspended)
+            ApplyRegistration();
+        else
+            SetFailed([]);
 
-        _registered = allRegistered;
         _ready.Set();
 
         while (!_disposed)
@@ -141,7 +163,13 @@ public sealed class HotkeyService : IDisposable
 
     private IntPtr WndProc(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam)
     {
-        if (message == WmHotkey && _byId.TryGetValue(wParam.ToInt32(), out var binding))
+        if (message == WmSuspend)
+        {
+            ApplySuspend(wParam != IntPtr.Zero);
+            return IntPtr.Zero;
+        }
+
+        if (message == WmHotkey && !_suspended && _byId.TryGetValue(wParam.ToInt32(), out var binding))
         {
             // 在热键线程触发；调用方负责切回 UI 线程
             binding.OnPressed();
@@ -149,6 +177,50 @@ public sealed class HotkeyService : IDisposable
         }
 
         return DefWindowProc(hwnd, message, wParam, lParam);
+    }
+
+    private void ApplySuspend(bool suspended)
+    {
+        if (_hwnd == IntPtr.Zero)
+            return;
+
+        if (suspended)
+        {
+            foreach (var binding in _bindings)
+                UnregisterHotKey(_hwnd, binding.Id);
+
+            SetFailed([]);
+            return;
+        }
+
+        ApplyRegistration();
+    }
+
+    private void ApplyRegistration()
+    {
+        var failed = new List<HotkeyBinding>();
+
+        foreach (var binding in _bindings)
+        {
+            if (binding.VirtualKey == 0)
+                continue;
+
+            if (!RegisterHotKey(_hwnd, binding.Id, binding.Modifiers, binding.VirtualKey))
+                failed.Add(binding);
+        }
+
+        SetFailed(failed);
+    }
+
+    private void SetFailed(IReadOnlyList<HotkeyBinding> failed)
+    {
+        lock (_failedGate)
+        {
+            _failed.Clear();
+            _failed.AddRange(failed);
+        }
+
+        _registered = failed.Count == 0;
     }
 
     public void Dispose()

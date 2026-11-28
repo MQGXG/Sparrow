@@ -76,4 +76,37 @@ public sealed class TrayServiceTests
         item.ShouldNotBeNull("工具热键必须是一级菜单项，不能埋在子菜单里");
         item!.Header!.ShouldContain("Ctrl+Alt+P");
     }
+
+    [AvaloniaFact]
+    public void 托盘菜单_包含热键策略开关()
+    {
+        var palette = new PaletteWindow();
+        var hotkeysDisabled = false;
+        var gameDisabled = false;
+
+        var service = new TrayService(
+            palette,
+            () => { },
+            () => { },
+            () => { },
+            StandardEntries(),
+            _ => { },
+            hotkeysDisabled: () => hotkeysDisabled,
+            disableHotkeysInGame: () => gameDisabled,
+            toggleHotkeysDisabled: () => hotkeysDisabled = !hotkeysDisabled,
+            toggleDisableHotkeysInGame: () => gameDisabled = !gameDisabled);
+
+        service.Initialize();
+
+        var menu = TrayIcon.GetIcons(Application.Current!)![0].Menu;
+        menu.ShouldNotBeNull();
+
+        var headers = menu!.Items
+            .OfType<NativeMenuItem>()
+            .Select(item => item.Header)
+            .ToList();
+
+        headers.ShouldContain("全屏游戏时禁用快捷键");
+        headers.ShouldContain("禁用快捷键");
+    }
 }

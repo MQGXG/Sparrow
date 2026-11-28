@@ -6,7 +6,7 @@
 
 [![.NET](https://img.shields.io/badge/.NET-10-512BD4)](https://dotnet.microsoft.com/)
 [![Avalonia](https://img.shields.io/badge/Avalonia-12-8B44AC)](https://avaloniaui.net/)
-[![Tests](https://img.shields.io/badge/tests-908%20passing-3DD68C)](#从源码构建)
+[![Tests](https://img.shields.io/badge/tests-910%20passing-3DD68C)](#从源码构建)
 [![License](https://img.shields.io/badge/License-MIT-3DD68C)](#协议)
 
 ---
@@ -87,6 +87,7 @@
 
 - 全局热键，任意工具都能单独挂一个（按下直接执行，不经过面板）
 - 系统托盘常驻，菜单可完全自定义
+- 托盘可一键禁用全部全局热键，或仅在检测到独占全屏 D3D 游戏时自动禁用
 - 开机自启（只启动到托盘）
 - Velopack 安装包 + 增量更新
 

@@ -1057,6 +1057,16 @@ public partial class SettingsViewModel : ObservableObject, IClipboardExclusionSt
         StatusMessage = value ? "已恢复记录剪贴板历史" : "已暂停记录剪贴板历史（已记录的内容保留）";
     }
 
+    /// <summary>托盘切换热键策略后，同步 VM 持有的设置快照，避免后续保存把托盘改动覆盖掉。</summary>
+    internal void SyncHotkeyPolicy(bool disabled, bool disableInGame)
+    {
+        _settings = _settings with
+        {
+            HotkeysDisabled = disabled,
+            DisableHotkeysInGame = disableInGame
+        };
+    }
+
     /// <summary>Win+V 接管开关：立即生效并落盘。</summary>
     partial void OnClipboardWinVEnabledChanged(bool value)
     {

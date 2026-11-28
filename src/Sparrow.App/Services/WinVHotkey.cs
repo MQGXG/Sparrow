@@ -48,6 +48,7 @@ internal sealed class WinVHotkey : IDisposable
 
     private IntPtr _hook;
     private uint _threadId;
+    private volatile bool _allowed = true;
     private volatile bool _disposed;
     private bool _failed;
 
@@ -83,6 +84,9 @@ internal sealed class WinVHotkey : IDisposable
         return !_failed && _hook != IntPtr.Zero;
     }
 
+    /// <summary>暂停 / 恢复 Win+V 接管；暂停时事件放行给系统。</summary>
+    public void SetAllowed(bool allowed) => _allowed = allowed;
+
     private void Run()
     {
         _threadId = GetCurrentThreadId();
@@ -117,6 +121,16 @@ internal sealed class WinVHotkey : IDisposable
     {
         if (code == HcAction)
         {
+            if (!_allowed)
+            {
+                _held = false;
+                _winDown = false;
+                _ctrlDown = false;
+                _altDown = false;
+                _shiftDown = false;
+                return CallNextHookEx(_hook, code, wParam, lParam);
+            }
+
             var message = (uint)wParam.ToInt64();
             var info = Marshal.PtrToStructure<KbdLlHookStruct>(lParam);
             var down = message is WmKeyDown or WmSysKeyDown;

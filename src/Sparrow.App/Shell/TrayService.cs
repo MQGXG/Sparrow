@@ -19,6 +19,10 @@ public sealed class TrayService
     private readonly Action? _lanShare;
     private readonly IReadOnlyList<TrayMenuEntry> _menuEntries;
     private readonly Action<string> _executeToolHotkey;
+    private readonly Func<bool>? _hotkeysDisabled;
+    private readonly Func<bool>? _disableHotkeysInGame;
+    private readonly Action? _toggleHotkeysDisabled;
+    private readonly Action? _toggleDisableHotkeysInGame;
     private TrayIcon? _icon;
 
     public TrayService(
@@ -28,7 +32,11 @@ public sealed class TrayService
         Action record,
         IReadOnlyList<TrayMenuEntry> menuEntries,
         Action<string> executeToolHotkey,
-        Action? showLanShare = null)
+        Action? showLanShare = null,
+        Func<bool>? hotkeysDisabled = null,
+        Func<bool>? disableHotkeysInGame = null,
+        Action? toggleHotkeysDisabled = null,
+        Action? toggleDisableHotkeysInGame = null)
     {
         _palette = palette;
         _showWorkspace = showWorkspace;
@@ -37,11 +45,16 @@ public sealed class TrayService
         _lanShare = showLanShare;
         _menuEntries = menuEntries;
         _executeToolHotkey = executeToolHotkey;
+        _hotkeysDisabled = hotkeysDisabled;
+        _disableHotkeysInGame = disableHotkeysInGame;
+        _toggleHotkeysDisabled = toggleHotkeysDisabled;
+        _toggleDisableHotkeysInGame = toggleDisableHotkeysInGame;
     }
 
     public void Initialize()
     {
         var menu = new NativeMenu();
+        var policyAdded = false;
 
         foreach (var entry in _menuEntries)
         {
@@ -73,6 +86,8 @@ public sealed class TrayService
                     break;
 
                 case TrayMenuActionKind.Exit:
+                    AddHotkeyPolicyItems(menu);
+                    policyAdded = true;
                     menu.Add(CreateItem(entry.Label, ExitApplication));
                     break;
 
@@ -82,6 +97,9 @@ public sealed class TrayService
                     break;
             }
         }
+
+        if (!policyAdded)
+            AddHotkeyPolicyItems(menu);
 
         _icon = new TrayIcon
         {
@@ -103,6 +121,47 @@ public sealed class TrayService
             icons.Add(_icon);
             TrayIcon.SetIcons(app, icons);
         }
+    }
+
+    private void AddHotkeyPolicyItems(NativeMenu menu)
+    {
+        if (_toggleHotkeysDisabled is null && _toggleDisableHotkeysInGame is null)
+            return;
+
+        if (menu.Items.LastOrDefault() is not NativeMenuItemSeparator)
+            menu.Add(new NativeMenuItemSeparator());
+
+        if (_toggleDisableHotkeysInGame is not null)
+        {
+            var item = new NativeMenuItem("全屏游戏时禁用快捷键")
+            {
+                ToggleType = MenuItemToggleType.CheckBox,
+                IsChecked = _disableHotkeysInGame?.Invoke() == true
+            };
+            item.Click += (_, _) =>
+            {
+                _toggleDisableHotkeysInGame();
+                item.IsChecked = _disableHotkeysInGame?.Invoke() == true;
+            };
+            menu.Add(item);
+        }
+
+        if (_toggleHotkeysDisabled is not null)
+        {
+            var item = new NativeMenuItem("禁用快捷键")
+            {
+                ToggleType = MenuItemToggleType.CheckBox,
+                IsChecked = _hotkeysDisabled?.Invoke() == true
+            };
+            item.Click += (_, _) =>
+            {
+                _toggleHotkeysDisabled();
+                item.IsChecked = _hotkeysDisabled?.Invoke() == true;
+            };
+            menu.Add(item);
+        }
+
+        menu.Add(new NativeMenuItemSeparator());
     }
 
     private static NativeMenuItem CreateItem(string label, Action onClick)

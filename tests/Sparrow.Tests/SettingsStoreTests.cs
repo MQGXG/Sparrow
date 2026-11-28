@@ -165,4 +165,21 @@ public sealed class SettingsStoreTests
 
         store.Load().ClipboardWinVEnabled.ShouldBeTrue();
     }
+
+    [Fact]
+    public void 热键策略开关_保存后能读回()
+    {
+        using var file = new TempSettingsFile();
+        var store = new SettingsStore(file.Path, new NullLog());
+
+        store.Save(new AppSettings
+        {
+            HotkeysDisabled = true,
+            DisableHotkeysInGame = true
+        }).ShouldBeTrue();
+
+        var loaded = store.Load();
+        loaded.HotkeysDisabled.ShouldBeTrue();
+        loaded.DisableHotkeysInGame.ShouldBeTrue();
+    }
 }
