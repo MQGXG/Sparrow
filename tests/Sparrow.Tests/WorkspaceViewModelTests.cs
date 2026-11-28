@@ -502,6 +502,34 @@ public sealed class WorkspaceViewModelTests
     }
 
     [Fact]
+    public async Task 切换工具_清掉上一个工具的结果()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+
+        await viewModel.ReloadAsync();
+
+        var json = viewModel.VisibleTools
+            .First(tool => tool.Entry.Descriptor.Id == "sparrow.json.format");
+
+        viewModel.OpenTool(json);
+        viewModel.InputText = """{"a":1}""";
+        await viewModel.ExecuteAsync();
+
+        viewModel.HasResult.ShouldBeTrue();
+
+        var base64 = viewModel.VisibleTools
+            .First(tool => tool.Entry.Descriptor.Id == "sparrow.dev.base64");
+
+        viewModel.OpenTool(base64);
+
+        viewModel.HasResult.ShouldBeFalse();
+        viewModel.ResultText.ShouldBeNull();
+        viewModel.IsResultEmpty.ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task 打开工具时_恢复上次保存的参数()
     {
         using var root = new TempPluginRoot();

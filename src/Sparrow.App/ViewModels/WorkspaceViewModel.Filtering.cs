@@ -205,6 +205,17 @@ public partial class WorkspaceViewModel
             oldValue.IsSelected = false;
         }
 
+        // 结果属于上一个工具：换了工具就不能留在新工具的右栏里。
+        // 同一个工具因过滤重建实例时保留结果。
+        if (oldValue is not null
+            && !string.Equals(
+                oldValue.Entry.Descriptor.Id,
+                newValue?.Entry.Descriptor.Id,
+                StringComparison.Ordinal))
+        {
+            ClearResult();
+        }
+
         if (newValue is not null)
             newValue.IsSelected = true;
 
