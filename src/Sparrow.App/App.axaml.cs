@@ -195,6 +195,28 @@ public partial class App : Application
             _localTranslation,
             settingsStore);
 
+        // 插件清单可以声明 trayDefault：把「没有页面、只有一次动作」的工具默认固定进托盘。
+        // 宿主不硬编码任何工具 ID，默认内容完全由清单驱动。
+        var defaultTrayToolIds = _catalog.ScanCandidates()
+            .Where(candidate => candidate.Manifest?.TrayDefault == true)
+            .SelectMany(candidate => candidate.Manifest!.Tools)
+            .ToList();
+
+        // 托盘菜单：旧版本会把「配了热键的工具」自动追加进菜单。
+        // 首次升级时落成显式配置（保留当时的菜单内容），之后热键变化不再偷偷改菜单。
+        if (!settings.TrayMenuCustomized)
+        {
+            var trayMenu = settings.TrayMenu.Count > 0
+                ? settings.TrayMenu
+                : TrayMenuPlanner.BuildDefaultConfig(
+                    defaultTrayToolIds,
+                    isFirstRun ? null : settings.ToolHotkeys.Keys);
+
+            settings = settings with { TrayMenu = trayMenu, TrayMenuCustomized = true };
+            _appSettings = settings;
+            settingsStore.Save(settings);
+        }
+
         var historyPath = SparrowPaths.HistoryFile;
         var history = new JsonlHistoryStore(
             historyPath,
@@ -329,8 +351,10 @@ public partial class App : Application
             settings.TrayMenu,
             settings.ToolHotkeys,
             toolNames,
+            defaultTrayToolIds,
             HotkeyText.Format(searchModifiers, searchKey),
             HotkeyText.Format(captureModifiers, captureKey),
+            HotkeyText.Format(panelModifiers, panelKey),
             log);
 
         _tray = new TrayService(
@@ -342,6 +366,7 @@ public partial class App : Application
             toolId => Avalonia.Threading.Dispatcher.UIThread.Post(
                 () => _ = ExecuteToolHotkeyAsync(toolId)),
             ShowLanShare,
+            toggleClipboard: () => Avalonia.Threading.Dispatcher.UIThread.Post(ToggleClipboardPanel),
             hotkeysDisabled: () => _appSettings.HotkeysDisabled,
             disableHotkeysInGame: () => _appSettings.DisableHotkeysInGame,
             toggleHotkeysDisabled: ToggleHotkeysDisabled,

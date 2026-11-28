@@ -7,5 +7,6 @@
   "author": "sparrow",
   "description": "点一下任意窗口，把它钉在最前面；再点一次取消",
   "capabilities": [],
+  "trayDefault": true,
   "tools": ["sparrow.window.pin"]
 }

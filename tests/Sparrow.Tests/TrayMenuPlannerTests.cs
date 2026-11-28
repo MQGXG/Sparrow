@@ -30,13 +30,18 @@ public sealed class TrayMenuPlannerTests
         ["sparrow.window.pin"] = "窗口置顶"
     };
 
+    /// <summary>插件清单声明「默认进托盘」的工具。</summary>
+    private static readonly string[] DefaultToolIds = ["sparrow.window.pin"];
+
     private static IReadOnlyList<TrayMenuEntry> Build(IReadOnlyList<TrayMenuItemConfig>? config) =>
         TrayMenuPlanner.Build(
             config,
             ToolHotkeys,
             ToolNames,
+            DefaultToolIds,
             "Ctrl+Alt+S",
             "Ctrl+Alt+C",
+            "Ctrl+Alt+B",
             new NullLog());
 
     [Fact]
@@ -47,6 +52,7 @@ public sealed class TrayMenuPlannerTests
         entries.Select(entry => entry.Kind).ShouldBe(
         [
             TrayMenuActionKind.Palette,
+            TrayMenuActionKind.Clipboard,
             TrayMenuActionKind.Capture,
             TrayMenuActionKind.Record,
             TrayMenuActionKind.LanShare,
@@ -57,10 +63,40 @@ public sealed class TrayMenuPlannerTests
         ]);
 
         entries[0].Label.ShouldContain("Ctrl+Alt+S");
-        entries[1].Label.ShouldContain("Ctrl+Alt+C");
-        entries[2].Label.ShouldContain("Ctrl+Alt+Shift+R");
-        entries[3].Label.ShouldBe("局域网互传…");
-        entries[5].Label.ShouldBe("窗口置顶…    Ctrl+Alt+P");
+        entries[1].Label.ShouldContain("Ctrl+Alt+B");
+        entries[2].Label.ShouldContain("Ctrl+Alt+C");
+        entries[3].Label.ShouldContain("Ctrl+Alt+Shift+R");
+        entries[4].Label.ShouldBe("局域网互传…");
+        entries[6].Label.ShouldBe("窗口置顶…    Ctrl+Alt+P");
+    }
+
+    [Fact]
+    public void 配了热键的工具_不再自动追加进默认菜单()
+    {
+        var entries = TrayMenuPlanner.Build(
+            null,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["sparrow.window.pin"] = "Ctrl+Alt+P",
+                ["sparrow.json.format"] = "Ctrl+Alt+J"
+            },
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["sparrow.window.pin"] = "窗口置顶",
+                ["sparrow.json.format"] = "JSON 格式化"
+            },
+            DefaultToolIds,
+            "Ctrl+Alt+S",
+            "Ctrl+Alt+C",
+            "Ctrl+Alt+B",
+            new NullLog());
+
+        var toolLabels = entries
+            .Where(entry => entry.Kind == TrayMenuActionKind.Tool)
+            .Select(entry => entry.Label)
+            .ToList();
+
+        toolLabels.ShouldBe(["窗口置顶…    Ctrl+Alt+P"]);
     }
 
     [Fact]
@@ -97,14 +133,37 @@ public sealed class TrayMenuPlannerTests
             [new TrayMenuItemConfig { Tool = "unknown.tool" }],
             new Dictionary<string, string>(),
             new Dictionary<string, string>(),
+            [],
             "Ctrl+Alt+S",
             "Ctrl+Alt+C",
+            "Ctrl+Alt+B",
             new NullLog());
 
         var entry = entries.ShouldHaveSingleItem();
         entry.Kind.ShouldBe(TrayMenuActionKind.Tool);
         entry.Label.ShouldBe("unknown.tool");
         entry.ToolId.ShouldBe("unknown.tool");
+    }
+
+    [Fact]
+    public void 默认配置_包含剪贴板面板与窗口置顶()
+    {
+        var config = TrayMenuPlanner.BuildDefaultConfig(DefaultToolIds);
+
+        config.ShouldContain(item => item.Action == "clipboard");
+        config.ShouldContain(item => item.Tool == "sparrow.window.pin");
+        config.Last().Action.ShouldBe("exit");
+    }
+
+    [Fact]
+    public void 迁移配置_保留旧热键工具且不重复默认项()
+    {
+        var config = TrayMenuPlanner.BuildDefaultConfig(
+            DefaultToolIds,
+            ["sparrow.window.pin", "sparrow.json.format"]);
+
+        config.Count(item => item.Tool == "sparrow.window.pin").ShouldBe(1);
+        config.ShouldContain(item => item.Tool == "sparrow.json.format");
     }
 
     [Fact]

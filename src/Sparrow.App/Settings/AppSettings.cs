@@ -84,6 +84,13 @@ public sealed record AppSettings
     /// </summary>
     public List<TrayMenuItemConfig> TrayMenu { get; init; } = [];
 
+    /// <summary>
+    /// 托盘菜单是否已经落成显式配置。
+    /// 旧版本会「自动把配了热键的工具加进菜单」，升级时一次性转成显式条目；
+    /// 之后热键变化不再偷偷改菜单。
+    /// </summary>
+    public bool TrayMenuCustomized { get; init; }
+
     /// <summary>历史最多保留多少条；默认 500，和 M1 行为一致。</summary>
     public int HistoryMaxEntries { get; init; } = 500;
 

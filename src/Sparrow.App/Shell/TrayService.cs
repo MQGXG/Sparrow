@@ -17,6 +17,7 @@ public sealed class TrayService
     private readonly Action _capture;
     private readonly Action _record;
     private readonly Action? _lanShare;
+    private readonly Action? _toggleClipboard;
     private readonly IReadOnlyList<TrayMenuEntry> _menuEntries;
     private readonly Action<string> _executeToolHotkey;
     private readonly Func<bool>? _hotkeysDisabled;
@@ -33,6 +34,7 @@ public sealed class TrayService
         IReadOnlyList<TrayMenuEntry> menuEntries,
         Action<string> executeToolHotkey,
         Action? showLanShare = null,
+        Action? toggleClipboard = null,
         Func<bool>? hotkeysDisabled = null,
         Func<bool>? disableHotkeysInGame = null,
         Action? toggleHotkeysDisabled = null,
@@ -43,6 +45,7 @@ public sealed class TrayService
         _capture = capture;
         _record = record;
         _lanShare = showLanShare;
+        _toggleClipboard = toggleClipboard;
         _menuEntries = menuEntries;
         _executeToolHotkey = executeToolHotkey;
         _hotkeysDisabled = hotkeysDisabled;
@@ -66,6 +69,10 @@ public sealed class TrayService
 
                 case TrayMenuActionKind.Palette:
                     menu.Add(CreateItem(entry.Label, () => _palette.Toggle()));
+                    break;
+
+                case TrayMenuActionKind.Clipboard when _toggleClipboard is { } toggleClipboard:
+                    menu.Add(CreateItem(entry.Label, toggleClipboard));
                     break;
 
                 case TrayMenuActionKind.Capture:

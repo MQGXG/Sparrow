@@ -428,6 +428,12 @@ OCR 可以用 `PluginThumbnailStrip`。这是最接近「Word 任务窗格」的
 
 P0–P2 不依赖任何 SDK 变更，可以先做；P3 只产出结论，不产出功能。
 
+## 实施状态
+
+- **2026-11-28 · P1 完成**：`Accepts == None` 的工具不再进 `VisibleTools`、「继续上次」与分类计数；命令面板行为不变。
+- **2026-11-28 · P0 核心完成**：新增 `TrayMenuActionKind.Clipboard` 与 `"action": "clipboard"`；默认菜单加入剪贴板面板与窗口置顶；新增清单字段 `trayDefault`，宿主不再硬编码工具 ID；删除「配了热键自动进托盘」，并用 `trayMenuCustomized` 做一次性迁移。
+- **待做**：P0 的卡片右键「固定到托盘」与设置页托盘编辑；P2 转换型工具表面；P3–P5。
+
 ## 决策（2026-11-28 定稿）
 
 | 问题 | 决定 |

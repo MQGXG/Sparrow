@@ -24,6 +24,12 @@ public sealed record PluginManifest
 
     public string[] Capabilities { get; init; } = [];
 
+    /// <summary>
+    /// 插件建议把本插件声明的工具默认固定进托盘。
+    /// 面向「没有页面、只有一次动作」的工具（如窗口置顶）；用户仍可在托盘里移除。
+    /// </summary>
+    public bool TrayDefault { get; init; }
+
     public string? Author { get; init; }
 
     public string? Description { get; init; }
