@@ -706,6 +706,25 @@ public sealed class WorkspaceViewModelTests
     }
 
     [Fact]
+    public async Task 拖入单个视频_切到文件类工具()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+        await viewModel.ReloadAsync();
+
+        var path = System.IO.Path.Combine(root.Path, "clip.mp4");
+        File.WriteAllBytes(path, [0, 1, 2, 3]);
+
+        viewModel.AcceptDroppedFiles([path]);
+
+        viewModel.IsDetailOpen.ShouldBeTrue();
+        viewModel.IsFilesInput.ShouldBeTrue();
+        viewModel.DroppedFileCount.ShouldBe(1);
+        viewModel.HasError.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task 拖入多个非图片文件_切到文件类工具并保留文件清单()
     {
         using var root = new TempPluginRoot();

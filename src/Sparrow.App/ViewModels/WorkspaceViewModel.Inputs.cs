@@ -59,12 +59,10 @@ public partial class WorkspaceViewModel
         if (IsFilesInput && IsDetailOpen)
             return;
 
-        // 混合 / 多选：有文件类工具就直接切过去
-        if (paths.Count > 1 && OpenFirstMatching(InputShape.Files))
-            return;
-
-        var textPath = paths.FirstOrDefault(path => TextExtensions.Contains(Path.GetExtension(path)));
-        if (textPath is not null)
+        // 单个文本文件：直接填输入框，不占用文件工具
+        if (paths.Count == 1
+            && paths[0] is { } textPath
+            && TextExtensions.Contains(Path.GetExtension(textPath)))
         {
             try
             {
@@ -89,7 +87,11 @@ public partial class WorkspaceViewModel
             }
         }
 
-        ShowError("只支持拖入图片或文本文件");
+        // 其余（视频 / PDF / 压缩包 / 多选）交给文件类工具
+        if (OpenFirstMatching(InputShape.Files))
+            return;
+
+        ShowError("只支持拖入图片、文本，或文件类工具能处理的文件");
     }
 
     /// <summary>把一张图片设为单图工具的输入（拖入优先于剪贴板）。</summary>
