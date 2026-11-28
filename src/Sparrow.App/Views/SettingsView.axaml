@@ -2004,19 +2004,24 @@
                       Background="#FFFFFFFF"
                       BorderBrush="{DynamicResource AccentBrush}"
                       BorderThickness="1"
-                      CornerRadius="6"
-                      Padding="6"
+                      CornerRadius="10"
+                      Padding="12,10"
                       VerticalAlignment="Center"
-                      ToolTip.Tip="微信扫码打赏作者">
-                <StackPanel Spacing="4">
+                      ToolTip.Tip="微信扫码，请作者喝瓶矿泉水">
+                <StackPanel Spacing="8">
+                  <TextBlock Text="请作者喝瓶矿泉水"
+                             FontSize="12"
+                             FontWeight="SemiBold"
+                             Foreground="#FF222222"
+                             HorizontalAlignment="Center" />
                   <Image x:Name="DonateImage"
-                         Width="112"
-                         Height="112"
+                         Width="116"
+                         Height="116"
                          Stretch="Uniform" />
-                  <TextBlock Text="微信打赏"
+                  <TextBlock Text="微信扫码 · 金额随意"
                              FontSize="10"
                              HorizontalAlignment="Center"
-                             Foreground="#FF333333" />
+                             Foreground="#FF666666" />
                 </StackPanel>
               </Border>
             </Grid>
