@@ -21,6 +21,12 @@ public partial class WorkspaceViewModel
 
         var entry = SelectedTool.Entry;
 
+        if (!entry.IsAvailable)
+        {
+            ShowError(entry.UnavailableReason ?? "当前环境不支持这个工具");
+            return;
+        }
+
         var input = BuildInput(entry.Descriptor, out var inputError);
         if (input is null)
         {

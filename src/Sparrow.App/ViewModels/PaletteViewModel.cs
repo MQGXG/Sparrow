@@ -113,7 +113,7 @@ public partial class PaletteViewModel : ObservableObject
         foreach (var entry in entries)
             Items.Add(new ToolItemViewModel(entry, Query));
 
-        Selected = Items.FirstOrDefault();
+        Selected = Items.FirstOrDefault(item => item.IsAvailable) ?? Items.FirstOrDefault();
         IsEmpty = Items.Count == 0;
         ClearResult();
 
@@ -143,6 +143,13 @@ public partial class PaletteViewModel : ObservableObject
 
         var entry = Selected.Entry;
         var tool = entry.Tool;
+
+        if (!entry.IsAvailable)
+        {
+            _log.Warn($"工具 {entry.Descriptor.Id} 当前不可用：{entry.UnavailableReason}");
+            ShowError(entry.UnavailableReason ?? "当前环境不支持这个工具");
+            return;
+        }
 
         // 每次执行独立的取消源：面板 Esc 优先取消执行，而不是直接隐藏
         using var cancellation = new CancellationTokenSource();

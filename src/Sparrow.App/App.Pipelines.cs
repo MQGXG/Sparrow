@@ -322,6 +322,13 @@ public partial class App
                 return;
             }
 
+            if (!entry.IsAvailable)
+            {
+                Log.Warn($"工具热键对应的工具当前不可用：{toolId}，{entry.UnavailableReason}");
+                _toasts?.Show(entry.UnavailableReason ?? "当前环境不支持这个工具", TimeSpan.FromSeconds(5));
+                return;
+            }
+
             var (context, error) = _paletteViewModel.CreateContext(entry);
             if (context is null)
             {

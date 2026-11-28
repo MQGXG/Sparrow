@@ -1,4 +1,5 @@
 using Shouldly;
+using Sparrow.App.Plugins;
 using Sparrow.App.Services;
 using Sparrow.Plugin.Sdk;
 using Xunit;
@@ -19,15 +20,32 @@ public sealed class ToolRegistryTests
             Task.FromResult(new ToolResult { Success = true });
     }
 
-    private static ToolDescriptor Descriptor(string id, string name, InputShape accepts, int order = 0) =>
+    private static ToolDescriptor Descriptor(string id, string name, InputShape accepts, int order = 0,
+        PlatformCapability requires = PlatformCapability.None) =>
         new()
         {
             Id = id,
             Name = name,
             Category = "test",
             Accepts = accepts,
-            Order = order
+            Order = order,
+            Requires = requires
         };
+
+    private sealed class FakeProbe(PlatformCapability supported) : IPlatformCapabilityProbe
+    {
+        public PlatformCapability Supported => supported;
+
+        public string? DescribeMissing(PlatformCapability required) =>
+            (required & ~supported) == PlatformCapability.None ? null : "当前环境不支持";
+    }
+
+    private static ToolEntry Entry(ITool tool, PlatformCapability supported) => new()
+    {
+        Tool = tool,
+        Host = NullToolHost.Instance,
+        CapabilityProbe = new FakeProbe(supported)
+    };
 
     [Fact]
     public void 只返回接受该输入形态的工具()
@@ -83,5 +101,59 @@ public sealed class ToolRegistryTests
         ]);
 
         registry.FindAccepting(InputShape.None).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void FindAccepting_跳过当前环境不可用的工具()
+    {
+        var registry = new ToolRegistry(
+        [
+            Entry(
+                new FakeTool(Descriptor("a.ok", "可用图像", InputShape.Image,
+                    requires: PlatformCapability.Screenshot)),
+                PlatformCapability.Screenshot),
+            Entry(
+                new FakeTool(Descriptor("a.no", "不可用图像", InputShape.Image,
+                    requires: PlatformCapability.Ai)),
+                PlatformCapability.None)
+        ]);
+
+        var found = registry.FindAccepting(InputShape.Image);
+
+        found.Count.ShouldBe(1);
+        found[0].Descriptor.Id.ShouldBe("a.ok");
+    }
+
+    [Fact]
+    public void Search_同分时可用工具排在不可用之前()
+    {
+        var registry = new ToolRegistry(
+        [
+            Entry(
+                new FakeTool(Descriptor("a.no", "图像乙", InputShape.Image,
+                    requires: PlatformCapability.Ai)),
+                PlatformCapability.None),
+            Entry(
+                new FakeTool(Descriptor("a.ok", "图像甲", InputShape.Image,
+                    requires: PlatformCapability.Screenshot)),
+                PlatformCapability.Screenshot)
+        ]);
+
+        var found = registry.Search("图像");
+
+        found.Count.ShouldBe(2);
+        found[0].Descriptor.Id.ShouldBe("a.ok");
+    }
+
+    [Fact]
+    public void 不可用工具_带可读原因()
+    {
+        var entry = Entry(
+            new FakeTool(Descriptor("a.no", "不可用", InputShape.Text,
+                requires: PlatformCapability.Ai)),
+            PlatformCapability.None);
+
+        entry.IsAvailable.ShouldBeFalse();
+        entry.UnavailableReason.ShouldBe("当前环境不支持");
     }
 }

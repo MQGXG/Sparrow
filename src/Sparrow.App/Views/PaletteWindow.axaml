@@ -94,7 +94,7 @@
                  BorderThickness="0">
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="vm:ToolItemViewModel">
-              <Grid ColumnDefinitions="Auto,*,Auto" Margin="12,8">
+              <Grid ColumnDefinitions="Auto,*,Auto" Margin="12,8" Opacity="{Binding CardOpacity}">
                 <Path Grid.Column="0"
                       Classes="icon icon-md"
                       Margin="0,1,10,0"
@@ -112,6 +112,11 @@
                                                FontSize="11"
                                                Foreground="{DynamicResource TextSecondaryBrush}"
                                                TextWrapping="Wrap" />
+                  <TextBlock Text="{Binding UnavailableReason}"
+                             IsVisible="{Binding IsUnavailable}"
+                             FontSize="11"
+                             Foreground="{DynamicResource DangerBrush}"
+                             TextWrapping="Wrap" />
                 </StackPanel>
 
                 <Border Grid.Column="2"

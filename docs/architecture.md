@@ -17,7 +17,7 @@
 
 ## 二、项目结构
 
-### 2.1 宿主（2 个项目 + OCR worker）
+### 2.1 宿主（2 个项目 + 索引服务 + OCR worker）
 
 ```text
 Sparrow/
@@ -36,7 +36,7 @@ Sparrow/
 │  │  ├─ Inputs.cs  Payloads.cs  ClipboardHistory.cs
 │  │  └─ Enums.cs
 │  │
-│  └─ Sparrow.App/                ← Avalonia 壳 + ViewModel + 服务 + 平台互操作
+│  ├─ Sparrow.App/                ← Avalonia 壳 + ViewModel + 服务 + 平台互操作
 │     ├─ Program.cs  App.axaml(.cs)  App.*.cs（执行 / 截图 / 录制 / AI 分部）
 │     ├─ Shell/                   托盘、热键、单实例、剪贴板监听、粘贴注入
 │     ├─ Plugins/                 扫描 / 清单 / ALC / 加载 / ToolHost / ToolCatalog
@@ -48,9 +48,14 @@ Sparrow/
 │     │  ├─ ClipboardHistoryStore.*  SQLite（WAL + FTS5）
 │     │  ├─ ClipboardMonitor.cs / ClipboardPasteService.cs
 │     │  ├─ Recording/            WGC 取帧、WASAPI、ffmpeg 编码
+│     │  ├─ MftFileIndex.cs       只读索引快照 + 命名管道查询
+│     │  ├─ LanShare/             LocalSend 协议：发现 / TLS / 上传 / 下载
 │     │  └─ ScreenCapture / ScrollCapture / UI Automation
 │     ├─ Settings/  History/
 │     └─ Converters/
+│
+│  ├─ Sparrow.IndexService/       ← SYSTEM 权限的 Windows 索引服务（MFT + USN）
+│  └─ third_party/Lertaro/        ← MIT vendor：MFT / Snapshot / 文件名查询
 │
 ├─ plugins/                        ← 每个工具一个插件项目（13 个）
 │  ├─ sparrow.plugin.json-format/
@@ -66,7 +71,7 @@ Sparrow/
 ### 2.2 项目数量怎么控制
 
 ```text
-宿主  2 个（Sdk / App）+ OCR worker（随 OCR 插件构建）
+宿主  2 个（Sdk / App）+ 索引服务（IndexService）+ OCR worker（随 OCR 插件构建）
 插件  每个工具 1 个（当前 13 个）
 ```
 
@@ -84,6 +89,17 @@ Sparrow/
 
 **对策**：计划提供 `dotnet new sparrow-tool` 模板（尚未落地，见 [`tool-development.md`](tool-development.md)）；当前按现有插件目录复制骨架。
 
+### 2.3 宿主级子系统
+
+有些能力不是「一次输入 → 输出」，因此不按插件实现，但仍要有明确边界：
+
+| 子系统 | 位置 | 为什么在宿主 |
+|---|---|---|
+| 截图 / 录制 | `Views/CaptureWindow.*`、`Services/Recording` | 产生输入、持有 UI 与会话状态 |
+| 文件索引 | `Services/MftFileIndex.cs` + `Sparrow.IndexService` | 需要 SYSTEM 权限维护 MFT / USN 索引，宿主只读快照 |
+| 局域网互传 | `Services/LanShare` | 常驻监听、TLS 服务端、接收确认与落盘 |
+| 剪贴板历史 | `Services/ClipboardHistoryStore.*` | 需要宿主数据读写与富 UI |
+
 ---
 
 ## 三、依赖规则（编译器强制）
@@ -98,19 +114,25 @@ tests/*             → 依赖 App / Sdk 和已接入测试的插件
 
 ### 3.1 边界断言（不是靠自觉）
 
-`tests/Sparrow.Tests/PluginBoundaryTests.cs` 守以下六条：
+`tests/Sparrow.Tests/PluginBoundaryTests.cs` 当前自动化 4 条：
 
 ```text
-1. Sparrow.Plugin.Sdk 的 ProjectReference 数量必须 = 0
-2. plugins/* 的 ProjectReference 只能是 Sdk（OCR worker 例外）
-3. plugins/* 的 csproj 里不得出现 Avalonia
-4. Sparrow.App 源码里不得出现具体工具 ID
-5. Sparrow.App 源码里不得散落插件参数键（parameters["..."]），
-   截图 OCR 的三个键集中到 CaptureOcrParameters
-6. Sparrow.App 对 plugins/* 的引用必须是构建期依赖（ReferenceOutputAssembly=false、Private=false）
+1. 宿主源码里不得出现具体工具 ID
+2. 宿主源码里不得引用插件命名空间（Sparrow.Plugin.Sdk 除外）
+3. 宿主源码里不得散落插件参数键（parameters["..."]）
+4. 插件 csproj 不得引用 Sparrow.App
 ```
 
-第 4、5 条最有用。边界一旦变成「宿主知道某个插件」，插件化就会慢慢退化成编译期内置。
+另外四条仍是人工 / 构建期检查，尚未进入上述测试：
+
+```text
+5. Sparrow.Plugin.Sdk 的 ProjectReference 数量 = 0
+6. plugins/* 的 ProjectReference 只能是 Sdk（OCR worker 例外）
+7. plugins/* 的 csproj 不得出现 Avalonia
+8. Sparrow.App 对 plugins/* 的引用必须是构建期依赖（ReferenceOutputAssembly=false、Private=false）
+```
+
+第 1、3 条最有用。边界一旦变成「宿主知道某个插件」，插件化就会慢慢退化成编译期内置。
 
 ### 3.2 插件允许与禁止的依赖
 
@@ -190,14 +212,15 @@ public sealed record ToolResult
 
 ## 五、版本钉死
 
-`Directory.Packages.props` 是唯一版本来源。**以下四个版本禁止「顺手升级」。**
+`Directory.Packages.props` 是唯一版本来源。**以下三个版本禁止「顺手升级」。**
 
 | 包 | 钉死版本 | 为什么不能升 |
 |---|---|---|
 | `Avalonia` / `Avalonia.Desktop` / `Avalonia.Themes.Fluent` | **12.1.6** | 核心与扩展包版本不同步，见 5.2 |
 | `SkiaSharp` | **3.119.4** | 由 `Avalonia.Skia 12.1.6` 决定 |
 | `Svg.Skia` | **5.1.1** | 5.2.0 起依赖 SkiaSharp 4.148.0，与 Avalonia 冲突 |
-| `Avalonia.AvaloniaEdit` | **12.0.0** | 包名不是 `AvaloniaEdit`（那个停在 0.10.12） |
+
+`Avalonia.AvaloniaEdit` 当前未引用；将来接入时钉 **12.0.0**，注意包名不是 `AvaloniaEdit`（那个停在 0.10.12）。
 
 ### 5.1 依赖冲突的实证
 
@@ -229,7 +252,7 @@ svg 插件             → SkiaSharp 3.119.4（必须与宿主一致，因为共
 ocr 插件             → 独立进程，不受此约束
 ```
 
-**例外**：SkiaSharp 是 native 库，同一进程内只能存在一份。所以 8 个插件里如果是 8 份 SkiaSharp 3.119.4，运行时仍是同一份 native 库。**这要求所有用 SkiaSharp 的插件必须锁同一个版本**，由 `Directory.Packages.props` 统一强制。
+**例外**：SkiaSharp 是 native 库，同一进程内只能存在一份。所以多个插件各自带一份 SkiaSharp 3.119.4，运行时仍是同一份 native 库。**这要求所有用 SkiaSharp 的插件必须锁同一个版本**，由 `Directory.Packages.props` 统一强制。
 
 ---
 
@@ -295,6 +318,8 @@ UI 线程未处理异常由 `Dispatcher.UIThread.UnhandledException` 记录并�
 | ADR-006 | 不做插件市场、不做插件沙箱 | ALC 不是安全边界；插件必须可信 | 决定支持第三方分发时，需子进程 + 受限 IPC |
 | ADR-007 | 内置工具也走插件机制，无双轨 | 双轨必然导致「内置能做的插件做不了」，边界一破就回单体 | 不推翻 |
 | ADR-008 | 插件禁用时真卸载（ALC 回收） | 否则「禁用」只是隐藏，内存仍占着 | 不推翻 |
+| ADR-009 | 文件索引由独立 Windows 服务维护 | MFT / USN 需要 SYSTEM 权限；宿主只读快照，避免常驻提权 | 改用用户态索引时 |
+| ADR-010 | 局域网互传按宿主能力实现 | 常驻监听、TLS 服务端、接收确认与落盘不是无状态工具调用 | 协议改为纯工具调用时 |
 
 ---
 
@@ -304,14 +329,20 @@ UI 线程未处理异常由 `Dispatcher.UIThread.UnhandledException` 记录并�
 %LOCALAPPDATA%\Sparrow\                  （Windows）
 ~/Library/Application Support/Sparrow/   （macOS）
 ~/.local/share/Sparrow/                  （Linux）
-├─ settings.json        普通设置（含 schemaVersion、disabledPlugins）
-├─ history.db           SQLite：历史 / 固定 / 会话
+├─ settings.json        普通设置（含 schemaVersion、disabledPlugins、插件设置）
+├─ parameters.json      工具参数的上次值（宿主 UI 状态）
+├─ clipboard.db         SQLite：剪贴板历史 / 收藏 / 会话
 ├─ secrets.bin          加密密钥（DPAPI / Keychain / libsecret）
 ├─ results/{id}.svg     大结果文件（超 256KB 才落盘）
 ├─ plugins/             用户放入的插件（与安装目录的 plugins 合并扫描）
-└─ logs/                滚动日志，保留 7 天
+└─ logs/                按天文件 sparrow-yyyyMMdd.log；当前未自动清理
 ```
 
-**插件数据隔离**：每个插件的设置存 `settings.json` 的 `plugins.{pluginId}` 节点下，不单独占文件。
+Windows 上另有两处数据：
+
+- `%ProgramData%\Sparrow\indexes`：文件索引快照（只含文件名、路径等元数据）
+- `%LOCALAPPDATA%\Sparrow\LanShare`：局域网互传证书与状态
+
+**插件数据隔离**：每个插件的设置存 `settings.json` 的 `plugins.{pluginId}` 节点下，不单独占文件；工具参数另存 `parameters.json`。
 
 **日志红线**：禁止记录完整剪贴板内容、密钥、AI 请求原文。只记 `pluginId` / `toolId` / 耗时 / 结果大小 / 错误类型。

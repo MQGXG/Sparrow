@@ -106,4 +106,52 @@ public sealed class SettingsStoreTests
         File.Exists(file.Path + ".tmp").ShouldBeFalse();
         store.Load().SchemaVersion.ShouldBe(AppSettings.CurrentSchemaVersion);
     }
+
+    [Fact]
+    public void 插件设置_写盘后能读回()
+    {
+        using var file = new TempSettingsFile();
+        var store = new SettingsStore(file.Path, new NullLog());
+        var settings = new AppSettings();
+        var plugin = new PluginSettings("sparrow.plugin.test", settings.Plugins, store);
+
+        plugin.Set("endpoint", "http://localhost:11434");
+        plugin.Set("count", "3");
+
+        var loaded = store.Load();
+        loaded.Plugins["sparrow.plugin.test"]["endpoint"].ShouldBe("http://localhost:11434");
+        loaded.Plugins["sparrow.plugin.test"]["count"].ShouldBe("3");
+        plugin.Get("endpoint").ShouldBe("http://localhost:11434");
+    }
+
+    [Fact]
+    public void 插件设置_删除最后一个键后移除空节点()
+    {
+        using var file = new TempSettingsFile();
+        var store = new SettingsStore(file.Path, new NullLog());
+        var settings = new AppSettings();
+        var plugin = new PluginSettings("sparrow.plugin.test", settings.Plugins, store);
+
+        plugin.Set("key", "value");
+        plugin.Set("key", null);
+
+        plugin.Get("key").ShouldBeNull();
+        store.Load().Plugins.ContainsKey("sparrow.plugin.test").ShouldBeFalse();
+    }
+
+    [Fact]
+    public void 插件设置_不覆盖磁盘上的普通设置()
+    {
+        using var file = new TempSettingsFile();
+        var store = new SettingsStore(file.Path, new NullLog());
+        store.Save(new AppSettings { Appearance = "light" }).ShouldBeTrue();
+
+        var settings = new AppSettings();
+        var plugin = new PluginSettings("sparrow.plugin.test", settings.Plugins, store);
+        plugin.Set("key", "value");
+
+        var loaded = store.Load();
+        loaded.Appearance.ShouldBe("light");
+        loaded.Plugins["sparrow.plugin.test"]["key"].ShouldBe("value");
+    }
 }

@@ -2,11 +2,11 @@
 
 > 一个热键，唤起你需要的那件小事。
 
-**本地优先的 Windows 桌面工具集合。** 截图标注、屏幕录制、OCR 翻译、剪贴板历史，以及一个可以自由增删的插件工具台。
+**本地优先的 Windows 桌面工具集合。** 截图标注、屏幕录制、OCR 翻译、剪贴板历史、本机文件搜索、局域网互传，以及一个可以自由增删的插件工具台。
 
 [![.NET](https://img.shields.io/badge/.NET-10-512BD4)](https://dotnet.microsoft.com/)
 [![Avalonia](https://img.shields.io/badge/Avalonia-12-8B44AC)](https://avaloniaui.net/)
-[![Tests](https://img.shields.io/badge/tests-850%20passing-3DD68C)](#从源码构建)
+[![Tests](https://img.shields.io/badge/tests-898%20passing-3DD68C)](#从源码构建)
 [![License](https://img.shields.io/badge/License-MIT-3DD68C)](#协议)
 
 ---
@@ -42,7 +42,7 @@
 
 ### OCR 与翻译
 
-- 进程内插件 + PP-OCRv5，一张卡支持剪贴板单图、拖入多图、选图
+- 插件薄壳 + 独立 worker（PP-OCRv5），一张卡支持剪贴板单图、拖入多图、选图
 - 翻译可走在线 API 或本地模型（TranslateGemma 4B，首次使用自动下载）
 - 识别结果按行框显示，可逐行 / 逐字选择复制，支持表格转 HTML / Markdown
 
@@ -54,6 +54,26 @@
 - 尊重 `Clipboard Viewer Ignore`，可按应用「不记录」
 - 拖出到其他应用（文本 / 位图 / 文件，`Shift` / `Ctrl` 可强制单格式）
 - 保留天数与容量上限可配，收藏不受任何清理
+
+### 文件搜索
+
+`Ctrl+Alt+F`（或连按两次 `Ctrl`）唤起本机文件搜索。
+
+- 基于 NTFS `$MFT` 的全盘文件名索引，不遍历目录
+- 索引由独立的 Windows 服务维护，宿主只读快照，不需要常驻管理员权限
+- 首次建立索引需要管理员权限；可在 **设置 → 热键** 里选择索引盘、重建索引、安装 / 卸载索引服务
+- 索引文件位于 `%ProgramData%\Sparrow\indexes`，只含文件名、路径等元数据，不读取文件内容
+- 双击 `Ctrl` 与自定义热键可分别开关；热键留空表示只使用双击 `Ctrl`
+
+### 局域网互传
+
+与同一局域网内的 LocalSend / Sparrow 设备互发文件，不经过云端。
+
+- 默认开启接收，App 常驻托盘时监听 `53317` 端口（被占用时自动顺延）
+- 自动发现同网段设备，也支持手动输入 `IP:端口`
+- 可设置接收 PIN；默认每次上传都要在确认框里点「接收」，可改为免确认
+- 接收目录默认跟随系统 Downloads，可在 **设置 → 互传** 里修改
+- 传输走 LocalSend 协议（HTTP / HTTPS，自签名证书），证书与状态文件在 `%LOCALAPPDATA%\Sparrow\LanShare`
 
 ### 工具台与插件
 
@@ -84,12 +104,13 @@
 | 操作 | 默认快捷键 |
 |---|---|
 | 命令面板 | `Ctrl+Alt+S` |
+| 文件搜索 | `Ctrl+Alt+F`（或双击 `Ctrl`） |
 | 截图 / 标注 | `Ctrl+Alt+C` |
 | 屏幕录制 | `Ctrl+Alt+Shift+R` |
 | 剪贴板面板 | `Ctrl+Alt+B` |
 | 顺序粘贴队列 | `Ctrl+Alt+V` |
 
-全部可在 **设置 → 热键** 里改；输入框点一下直接按组合键即可录制。
+热键可在 **设置 → 热键** 里改，输入框点一下直接按组合键即可录制；文件搜索的触发方式也在 **设置 → 热键** 里改。
 
 ---
 
@@ -103,10 +124,14 @@
 | 剪贴板历史 | `%LOCALAPPDATA%\Sparrow\clipboard.db` |
 | 离线模型 | `%LOCALAPPDATA%\Sparrow\models` |
 | 录制文件 | `%LOCALAPPDATA%\Sparrow\recordings` |
+| 文件索引 | `%ProgramData%\Sparrow\indexes`（只含文件名、路径等元数据） |
+| 互传证书 / 状态 | `%LOCALAPPDATA%\Sparrow\LanShare` |
 
 **设置 → 数据** 里可以把数据根目录、模型目录、录制目录分别换到其他盘。
 
 联网只发生在你显式触发时：AI 翻译 / 在线 OCR / 更新检查 / 首次下载 FFmpeg。
+
+**例外：局域网互传默认开启。** 它只在同一局域网内监听 `53317` 端口，用于接收其他 LocalSend / Sparrow 设备发来的文件，不连接互联网；收到的文件写入本机接收目录。不需要时在 **设置 → 互传** 关闭「开启互传」，也可以设置接收 PIN 或关闭「免确认接收」。
 
 ---
 
@@ -116,7 +141,7 @@
 plugins/
 └─ sparrow.plugin.json-format/
    ├─ plugin.json
-   └─ Sparrow.Plugin.JsonFormat.dll
+   └─ Sparrow.Plugin.Json.Format.dll
 ```
 
 宿主不做「内置工具特殊处理」，随包分发的插件和你自己写的走同一条加载路径：
@@ -125,7 +150,7 @@ plugins/
 - 禁用 → 不加载、不占内存、不进搜索
 - 独立依赖 → 一个工具换库版本不影响其他工具
 
-`Sparrow.Plugin.Sdk` 提供 `IToolPlugin`、`IAiClient`、`IWindowOverlay` 等能力，输入 / 结果 / 运行时归宿主，工具一律插件。
+`Sparrow.Plugin.Sdk` 提供 `ITool`、`IAiClient`、`IWindowOverlay` 等能力，输入 / 结果 / 运行时归宿主，工具一律插件。
 
 详见 [`docs/plugin-model.md`](docs/plugin-model.md) 与 [`docs/tool-development.md`](docs/tool-development.md)。
 
@@ -152,7 +177,7 @@ dotnet run --project src/Sparrow.App
 dotnet test tests/Sparrow.Tests/Sparrow.Tests.csproj
 ```
 
-技术栈：C# 14 / .NET 10、Avalonia 12、CommunityToolkit.Mvvm、SQLite + FTS5、SkiaSharp、Svg.Skia、Velopack。
+技术栈：C# 14 / .NET 10、Avalonia 12、CommunityToolkit.Mvvm、SQLite + FTS5、SkiaSharp、Svg.Skia、Velopack、PaddleOCR、Lertaro（MFT 索引）。
 
 ---
 
@@ -181,7 +206,8 @@ dotnet test tests/Sparrow.Tests/Sparrow.Tests.csproj
 **第三方组件：**
 
 - [Avalonia](https://avaloniaui.net/)、[SkiaSharp](https://github.com/mono/SkiaSharp)、[Svg.Skia](https://github.com/wieslawsoltes/Svg.Skia)、[CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet)、[Velopack](https://velopack.io/) 均为 MIT
-- [Serilog](https://serilog.net/) 为 Apache-2.0
+- [Lertaro](https://github.com/Lertaro/Lertaro) 为 MIT；`src/third_party/Lertaro` 用于 NTFS `$MFT` 扫描、快照索引与文件名查询
+- [PaddleOCR / PP-OCRv5](https://github.com/PaddlePaddle/PaddleOCR) 为 Apache-2.0，仅 OCR worker 使用
 - [FFmpeg](https://ffmpeg.org/) 以**独立进程**方式调用，不链接、不修改。项目本身下载的构建为 GPL 版，其许可与源码获取方式见 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)
 - 如果二次分发包含 `ffmpeg.exe` 的安装包，需要同时遵守 FFmpeg 的 GPL 条款
 
@@ -196,6 +222,7 @@ dotnet test tests/Sparrow.Tests/Sparrow.Tests.csproj
 | 整体架构 | [`docs/architecture.md`](docs/architecture.md) |
 | 加一个新工具 | [`docs/tool-development.md`](docs/tool-development.md) |
 | 界面规范 | [`docs/ui-spec.md`](docs/ui-spec.md) |
+| 性能与内存 | [`docs/performance.md`](docs/performance.md) |
 | 发布检查清单 | [`docs/release-checklist.md`](docs/release-checklist.md) |
 
 ---
@@ -203,7 +230,7 @@ dotnet test tests/Sparrow.Tests/Sparrow.Tests.csproj
 ## 三条原则
 
 1. **一次热键闭环** —— 从唤起到拿到结果，不超过一次热键 + 一次确认。
-2. **本地默认** —— 数据不出本机；联网必须是显式触发的可选增强。
+2. **本地默认** —— 数据不出本机；互联网访问必须是显式触发的可选增强。局域网互传是唯一默认开启的局域网点对点能力，可在设置里关闭。
 3. **每个工具都是插件** —— 加工具是加一个目录，删工具是删一个目录。
 
 > 麻雀虽小，五脏俱全。

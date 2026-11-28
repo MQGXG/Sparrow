@@ -358,7 +358,8 @@ public partial class WorkspaceViewModel
 
     private bool OpenFirstMatching(InputShape shape)
     {
-        var entry = _allTools.FirstOrDefault(tool => tool.Descriptor.Accepts == shape);
+        var entry = _allTools.FirstOrDefault(tool =>
+            tool.Descriptor.Accepts == shape && tool.IsAvailable);
         if (entry is null)
             return false;
 

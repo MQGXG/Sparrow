@@ -181,7 +181,16 @@ public partial class App : Application
 
         _localModels = new LocalModelManager(log) { MirrorUrl = settings.LocalModelMirror };
         _localTranslation = new LocalTranslationService(_localModels, log);
-        _catalog = new ToolCatalog(pluginsRoot, log, settings, ai, clipboardHistory, _windowOverlay, _localModels, _localTranslation);
+        _catalog = new ToolCatalog(
+            pluginsRoot,
+            log,
+            settings,
+            ai,
+            clipboardHistory,
+            _windowOverlay,
+            _localModels,
+            _localTranslation,
+            settingsStore);
 
         var historyPath = SparrowPaths.HistoryFile;
         var history = new JsonlHistoryStore(

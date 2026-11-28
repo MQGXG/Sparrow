@@ -14,5 +14,13 @@ public sealed class ToolEntry
 
     public required IToolHost Host { get; init; }
 
+    /// <summary>宿主能力探测器；测试或没有宿主环境的场景可以为 null（视为全部可用）。</summary>
+    public IPlatformCapabilityProbe? CapabilityProbe { get; init; }
+
     public ToolDescriptor Descriptor => Tool.Descriptor;
+
+    /// <summary>缺失的能力原因；null 表示当前环境可用。</summary>
+    public string? UnavailableReason => CapabilityProbe?.DescribeMissing(Descriptor.Requires);
+
+    public bool IsAvailable => UnavailableReason is null;
 }

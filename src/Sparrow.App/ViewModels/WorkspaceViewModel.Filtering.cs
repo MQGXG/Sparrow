@@ -173,7 +173,8 @@ public partial class WorkspaceViewModel
             RebuildCategories();
             RefilterTools();
 
-            SelectedTool = Groups.SelectMany(group => group.Tools).FirstOrDefault();
+            SelectedTool = Groups.SelectMany(group => group.Tools).FirstOrDefault(tool => tool.IsAvailable)
+                           ?? Groups.SelectMany(group => group.Tools).FirstOrDefault();
             IsDetailOpen = false;
             IsRecentOpen = false;
             InputText = _clipboard.GetText() ?? string.Empty;
@@ -211,6 +212,8 @@ public partial class WorkspaceViewModel
             newValue.IsSelected = true;
 
         LoadParameters(newValue);
+        OnPropertyChanged(nameof(CanExecute));
+        OnPropertyChanged(nameof(UnavailableText));
         OnPropertyChanged(nameof(InputHint));
         OnPropertyChanged(nameof(IsTextInput));
         OnPropertyChanged(nameof(IsImageInput));
@@ -319,7 +322,7 @@ public partial class WorkspaceViewModel
             var entry = _allTools.Find(tool =>
                 tool.Descriptor.Name == history.ToolName);
 
-            if (entry is null)
+            if (entry is null || !entry.IsAvailable)
                 continue;
 
             RecentTools.Add(new RecentToolViewModel(new ToolItemViewModel(entry), history.TimeLabel));
@@ -331,7 +334,11 @@ public partial class WorkspaceViewModel
         OnPropertyChanged(nameof(HasRecentTools));
     }
 
-    partial void OnIsExecutingChanged(bool value) => OnPropertyChanged(nameof(ExecuteLabel));
+    partial void OnIsExecutingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ExecuteLabel));
+        OnPropertyChanged(nameof(CanExecute));
+    }
 
     private void LoadParameters(ToolItemViewModel? tool)
     {

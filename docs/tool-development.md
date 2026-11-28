@@ -224,7 +224,7 @@ public sealed record ToolParameter
 
 **参数上限 5 个。** 超过说明这个工具在做两件事，拆开。
 
-参数的持久化由宿主负责（按 `pluginId + toolId + key` 存最近值），插件不关心。
+参数的持久化由宿主负责（按 `toolId + key` 存到 `parameters.json`），插件不关心。
 
 ---
 
@@ -351,7 +351,7 @@ dir /s src\Sparrow.App\bin\Debug\net10.0\plugins\Sparrow.Plugin.Sdk.dll
 |---|---|
 | 面板里没有这个工具 | 目录名 ≠ `plugin.json` 的 `id` |
 | 同上，且日志有 "no ITool found" | **SDK dll 被拷进了插件目录**（铁律 1） |
-| 面板里灰显 | `Requires` 声明了当前平台不具备的能力 |
+| 面板里灰显 | `Requires` 声明了当前平台不具备的能力；宿主据此标记不可用并给出原因 |
 | 参数改了没生效 | 用了 `Parameters["x"]`（会抛），应 `GetParameter` |
 | 切换工具后结果还在 | 宿主的工作区状态没按 `toolId` 重置 |
 | 禁用插件后内存没降 | 插件里有静态事件订阅 / Timer / 静态缓存 |

@@ -21,11 +21,12 @@ public sealed class ToolHost : IToolHost
         IClipboardHistory? clipboardHistory = null,
         IWindowOverlay? windows = null,
         ILocalModels? localModels = null,
-        ILocalTranslation? localTranslation = null)
+        ILocalTranslation? localTranslation = null,
+        IToolSettings? settings = null)
     {
         PluginDirectory = pluginDirectory;
         Logger = new PluginLogger(pluginId, log);
-        Settings = new InMemoryToolSettings();
+        Settings = settings ?? new InMemoryToolSettings();
         Http = DisabledHttpAccess.Instance;
         Ai = ai ?? NullAiClient.Instance;
         LocalModels = localModels ?? NullLocalModels.Instance;

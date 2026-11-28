@@ -37,6 +37,7 @@ public sealed class ToolRegistry
             return [];
 
         return _entries
+            .Where(entry => entry.IsAvailable)
             .Where(entry => entry.Descriptor.Accepts == shape)
             .OrderByDescending(entry => entry.Descriptor.Order)
             .ThenBy(entry => entry.Descriptor.Name, StringComparer.Ordinal)
@@ -52,7 +53,8 @@ public sealed class ToolRegistry
         if (string.IsNullOrWhiteSpace(query))
         {
             return _entries
-                .OrderByDescending(e => e.Descriptor.Order)
+                .OrderByDescending(e => e.IsAvailable)
+                .ThenByDescending(e => e.Descriptor.Order)
                 .ThenBy(e => e.Descriptor.Name, StringComparer.Ordinal)
                 .Take(limit)
                 .ToArray();
@@ -64,6 +66,7 @@ public sealed class ToolRegistry
             .Select(entry => (Entry: entry, Score: Score(entry.Descriptor, trimmed)))
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score)
+            .ThenByDescending(x => x.Entry.IsAvailable)
             .ThenByDescending(x => x.Entry.Descriptor.Order)
             .Take(limit)
             .Select(x => x.Entry)

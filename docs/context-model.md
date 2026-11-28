@@ -93,7 +93,9 @@ public ToolContext FromDropped(IDataObject data) => ...;
 | **截图** | `BitBlt` / `PrintWindow` / Win10+ `GraphicsCapture` | `CGWindowListCreateImage`，需屏幕录制授权 | X11 `XGetImage`；Wayland 需 portal |
 | **拖入文件** | 统一 `IDataObject` | 统一 | 统一 |
 
-**结论**：上下文模型的抽象是跨平台的，但**实现不是**。M0 只做 Windows，其他平台靠 `IPlatformCapabilities` 把不支持的工具置灰，而不是假装能跑。
+**结论**：上下文模型的抽象是跨平台的，但**实现不是**。M0 只做 Windows，其他平台的能力由 `IPlatformCapabilityProbe` 判断并置灰，而不是假装能跑。
+
+> **实现状态（2026-11-28）**：当前只支持 Windows；宿主用 `HostPlatformCapabilityProbe` 评估 `PlatformCapability`，不满足的工具在面板 / 工作区灰显。
 
 ### 4.2 能力声明
 
@@ -135,7 +137,7 @@ public sealed record ImageRef(string CacheKey, int Width, int Height, long ByteS
 | 文件 | 总是 | 只传路径列表，不读内容 |
 | 结果 | > 256 KB | 落盘到 `results/{id}.ext`，`Payload` 里存路径 |
 
-**历史库同理**：只存预览（前 2KB）+ 指针，不存全文。否则 `history.db` 会在一周内涨到几个 GB。
+**历史库同理**：只存预览（前 2KB）+ 指针，不存全文。否则 `clipboard.db` 会在一周内涨到几个 GB。
 
 ---
 

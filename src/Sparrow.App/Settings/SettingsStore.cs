@@ -21,6 +21,7 @@ public sealed class SettingsStore
 
     private readonly string _path;
     private readonly IAppLog _log;
+    private readonly object _gate = new();
 
     public SettingsStore(string path, IAppLog log)
     {
@@ -46,6 +47,10 @@ public sealed class SettingsStore
                 return new AppSettings();
             }
 
+            // 手改 JSON 可能写成 "plugins": null；归一成空字典，避免后续写入丢节点
+            if (settings.Plugins is null)
+                settings = settings with { Plugins = new(StringComparer.Ordinal) };
+
             return settings;
         }
         catch (Exception ex)
@@ -57,6 +62,38 @@ public sealed class SettingsStore
 
     /// <summary>保存设置。失败只记日志，不向调用方抛异常。</summary>
     public bool Save(AppSettings settings)
+    {
+        var plugins = settings.Plugins ?? new(StringComparer.Ordinal);
+
+        lock (_gate)
+        {
+            // 插件设置是可变字典：序列化期间不要让它被 Set 改掉
+            lock (plugins)
+                return SaveCore(settings with { Plugins = plugins });
+        }
+    }
+
+    /// <summary>
+    /// 只更新一个插件的设置节点，其余字段以磁盘上的最新内容为准。
+    /// 这样插件写设置不会覆盖用户在设置页刚改的普通设置。
+    /// </summary>
+    public bool SavePluginSettings(string pluginId, IReadOnlyDictionary<string, string> values)
+    {
+        lock (_gate)
+        {
+            var current = Load();
+            var plugins = current.Plugins ?? new(StringComparer.Ordinal);
+
+            if (values.Count == 0)
+                plugins.Remove(pluginId);
+            else
+                plugins[pluginId] = new Dictionary<string, string>(values, StringComparer.Ordinal);
+
+            return SaveCore(current with { Plugins = plugins });
+        }
+    }
+
+    private bool SaveCore(AppSettings settings)
     {
         var tempPath = _path + ".tmp";
 

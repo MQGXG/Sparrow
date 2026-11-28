@@ -17,6 +17,7 @@ public sealed class PluginLoader : IDisposable
     private readonly IWindowOverlay? _windows;
     private readonly ILocalModels? _localModels;
     private readonly ILocalTranslation? _localTranslation;
+    private readonly Func<string, IToolSettings>? _settingsFactory;
     private readonly List<LoadedPlugin> _loaded = [];
     private bool _disposed;
 
@@ -26,7 +27,8 @@ public sealed class PluginLoader : IDisposable
         IClipboardHistory? clipboardHistory = null,
         IWindowOverlay? windows = null,
         ILocalModels? localModels = null,
-        ILocalTranslation? localTranslation = null)
+        ILocalTranslation? localTranslation = null,
+        Func<string, IToolSettings>? settingsFactory = null)
     {
         _log = log;
         _ai = ai;
@@ -34,6 +36,7 @@ public sealed class PluginLoader : IDisposable
         _windows = windows;
         _localModels = localModels;
         _localTranslation = localTranslation;
+        _settingsFactory = settingsFactory;
     }
 
     /// <summary>当前已加载的插件。注册表重建与卸载都基于它。</summary>
@@ -85,7 +88,16 @@ public sealed class PluginLoader : IDisposable
                 Manifest = manifest,
                 Directory = candidate.Directory,
                 Tools = tools,
-                Host = new ToolHost(manifest.Id, candidate.Directory, _log, _ai, _clipboardHistory, _windows, _localModels, _localTranslation),
+                Host = new ToolHost(
+                    manifest.Id,
+                    candidate.Directory,
+                    _log,
+                    _ai,
+                    _clipboardHistory,
+                    _windows,
+                    _localModels,
+                    _localTranslation,
+                    _settingsFactory?.Invoke(manifest.Id)),
                 Context = context
             };
 

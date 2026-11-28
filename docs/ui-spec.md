@@ -147,7 +147,7 @@ Windows 原生标题栏通过 DWM 切成深色（`WindowChrome`），并把扩�
 
 | Payload | 渲染器 |
 |---|---|
-| `TextPayload` | 等宽文本 + 语法高亮（AvaloniaEdit） |
+| `TextPayload` | 等宽可选文本；语法高亮（AvaloniaEdit）尚未接入 |
 | `SvgPayload` | ✅ Svg.Skia 5.1.1 渲染 PNG；预览 / 源码切换；宿主先做安全清洗 |
 | `ImagePayload` | 图片查看（缩放 / 适应宽度） |
 | `FileSetPayload` | ✅ 文件清单（数量 + 逐行路径）；「打开所在位置」仍待结果动作契约 |

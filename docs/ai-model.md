@@ -93,6 +93,8 @@ Descriptor 声明：
 Requires = PlatformCapability.Ai
 ```
 
+> **实现状态**：`Requires` / `capabilities` 由宿主在注册表构建时评估；不满足时工具在面板 / 工作区灰显并禁止执行。
+
 需要本地推理的工具还可用 `IToolHost.LocalModels`（下载、缓存由宿主负责），见 `docs/local-models.md`。
 
 **`Requires` 的语义是「必须满足才能用」，不是「可能用到」。** 有离线替代的工具

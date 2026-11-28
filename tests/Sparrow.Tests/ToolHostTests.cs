@@ -45,6 +45,15 @@ public sealed class ToolHostTests
         }
     }
 
+    private sealed class FakeSettings : IToolSettings
+    {
+        public string? Value { get; set; }
+
+        public string? Get(string key) => Value;
+
+        public void Set(string key, string? value) => Value = value;
+    }
+
     /// <summary>记录最后一次执行拿到的 ToolContext。</summary>
     private sealed class HostProbeTool : ITool
     {
@@ -81,6 +90,16 @@ public sealed class ToolHostTests
 
         host.Settings.Set("key", null);
         host.Settings.Get("key").ShouldBeNull();
+    }
+
+    [Fact]
+    public void 可以注入持久化设置实现()
+    {
+        var settings = new FakeSettings { Value = "from-store" };
+        var host = new ToolHost("sparrow.plugin.test", ".", new NullLog(), settings: settings);
+
+        host.Settings.ShouldBeSameAs(settings);
+        host.Settings.Get("any").ShouldBe("from-store");
     }
 
     [Fact]

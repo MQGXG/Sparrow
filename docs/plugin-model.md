@@ -105,8 +105,10 @@ plugins/
 | `sdkVersion` | ✅ | 编译时依赖的 SDK 版本，形如 `1.0` |
 | `entryAssembly` | ✅ | 入口 dll 文件名 |
 | `tools` | ✅ | 本插件提供的工具 ID 列表，**至少一个** |
-| `capabilities` | ✅ | 声明的平台能力（空数组表示纯计算） |
+| `capabilities` | ✅ | 声明的平台能力（空数组表示纯计算）；宿主据此标记不可用 |
 | `author` / `description` | ⬜ | 展示用 |
+
+> **实现状态**：宿主用 `HostPlatformCapabilityProbe` 在注册表构建时评估 `Requires`；不满足的工具在面板 / 工作区灰显并禁止执行，但仍加载元数据。
 
 ### 4.2 一个插件几个工具
 
@@ -157,18 +159,22 @@ Sparrow.Plugin.Sdk
 | 不提供 | 原因 |
 |---|---|
 | `IHistoryStore` | 历史由宿主记录，插件不参与 |
-| `ISettingsStore` | 插件用 `IToolHost.Settings`，按 toolId 隔离 |
+| `ISettingsStore` | 插件用 `IToolHost.Settings`，按 pluginId 隔离 |
 | `IClipboardService` | 输入已由 `ToolContext` 提供，插件不需要读剪贴板 |
 | `ISecretStore` | 密钥不进插件 |
 | 任何 Avalonia 类型 | 插件不拥有 UI |
 | `ILogger` 之外的日志设施 | 用 `IToolHost.Logger` |
+
+**实现状态**：`IToolHost.Settings` 由 `PluginSettings` 持久化到 `settings.json` 的 `plugins.{pluginId}` 节点，重启后保留。
+
+> 注意区分：工具参数（`Descriptor.Parameters` 的上次值）由宿主的 `ToolParameterStore` 持久化到 `%LOCALAPPDATA%\Sparrow\parameters.json`，与上面的插件设置不是同一套存储。
 
 ```csharp
 // 插件能用的全部外部能力
 public interface IToolHost
 {
     ILogger Logger { get; }
-    IToolSettings Settings { get; }           // 按 toolId 隔离的键值存储
+    IToolSettings Settings { get; }           // 按 pluginId 隔离的键值存储
     IHttpClientAccess Http { get; }           // 受策略控制，可被禁用
     IAiClient Ai { get; }                     // 模型能力；未配置时 IsAvailable=false
     ILocalModels LocalModels { get; }          // 本地模型：宿主管下载/缓存，插件只拿路径
@@ -237,7 +243,7 @@ public interface IToolHost
   ├ 1. 扫描 plugins/ 下所有目录
   ├ 2. 读 plugin.json，JSON 解析失败 → 跳过并记日志
   ├ 3. 校验：id == 目录名？tools 非空？sdkVersion 兼容？
-  ├ 4. 校验：capabilities ⊆ 当前平台能力？（不满足只标记不可用，不阻止加载元数据）
+  ├ 4. 校验：capabilities ⊆ 当前平台能力？不满足只标记不可用，不阻止加载元数据
   ├ 5. 读 settings 里的 disabledPlugins，命中则跳过
   ├ 6. 创建 PluginLoadContext（isCollectible: true）
   ├ 7. 加载 entryAssembly，找 ITool 实现
@@ -314,7 +320,7 @@ ALC 卸载的条件是「该上下文中没有任何存活的引用」。以下�
 ✗ 插件注册了 AppDomain.ProcessExit
 ```
 
-**宿主的做法**：`ToolRegistry` 只存 `WeakReference<ITool>`，卸载时置空；卸载前调 `plugin.Dispose()`，并断言 ALC 可回收（`GC.Collect()` 后 `weakRef.IsAlive == false`，不成立就记告警）。
+**宿主的做法**：`ToolRegistry` 当前仍持有 `ITool` 强引用（M1 简化）。卸载时 `ToolCatalog.UnloadPlugin` 丢弃整个旧注册表并重建，从而断开强引用；`PluginLoader.Unload` 返回指向 ALC 的 `WeakReference`，由测试在 `GC.Collect()` 后断言 `IsAlive == false`。目标形态是注册表只存 `WeakReference<ITool>`，尚未落地。
 
 ### 铁律 5：插件不注册任何全局钩子
 
@@ -351,7 +357,7 @@ ALC 卸载的条件是「该上下文中没有任何存活的引用」。以下�
 | Discovered | 正常显示 | 能（首次执行时加载） |
 | Loaded / Active | 正常显示 | 能 |
 | Disabled | 不显示（设置页可见） | 不能 |
-| Faulted | 灰显 + 「插件异常」 | 不能，除非手动重试 |
+| Faulted | 灰显 + 「插件异常」（规划） | 不能，除非手动重试（当前未实现） |
 | 能力不满足 | 灰显 + 原因文案 | 不能 |
 
 **实现状态（M1）**：
@@ -362,6 +368,7 @@ ALC 卸载的条件是「该上下文中没有任何存活的引用」。以下�
 | Disabled | ✅ 已实现（启动时读 `settings.json` 的 `disabledPlugins`） |
 | Unloaded | ✅ 已实现（`ToolCatalog.UnloadPlugin`，GC 后断言 ALC 回收） |
 | Faulted（连续失败 3 次） | ⬜ 未实现 |
+| 能力校验（`capabilities`） | ✅ 已实现（`HostPlatformCapabilityProbe`） |
 
 卸载的回收断言在 `tests/Sparrow.Tests/PluginLoadingTests.cs` 的 `卸载插件_ALC能被回收`：
 `Unload()` 后多轮 `GC.Collect`，弱引用必须变成 `IsAlive == false`。
@@ -434,7 +441,7 @@ ALC 是「加载隔离」，不是「安全隔离」。
 
 ## 十一、内置工具不是例外
 
-M0 的 3 个工具同样以插件形式存在，随安装包分发到 `plugins/` 目录：
+早期 3 个工具同样以插件形式存在，随安装包分发到 `plugins/` 目录；现在随包分发的是 13 个插件：
 
 ```text
 安装目录/
@@ -443,7 +450,7 @@ M0 的 3 个工具同样以插件形式存在，随安装包分发到 `plugins/`
 └─ plugins/
    ├─ sparrow.plugin.dev-base64/
    ├─ sparrow.plugin.json-format/
-   └─ sparrow.plugin.ocr-region/
+   └─ sparrow.plugin.ocr/
 ```
 
 **没有任何代码路径能区分「内置插件」和「外部插件」。** 唯一的差别是「谁把它放进 plugins 目录」。
@@ -520,9 +527,10 @@ M0 的 3 个工具同样以插件形式存在，随安装包分发到 `plugins/`
 | `ForbidHostReference` | `plugins/Directory.Build.targets` | 插件项目引用 `Sparrow.App` 时构建直接失败 |
 | `PluginBoundaryTests.宿主不得硬编码具体工具ID` | `tests/Sparrow.Tests` | 宿主源码出现 `"sparrow.<分类>.<动作>"` 字面量即失败（行注释除外） |
 | `PluginBoundaryTests.宿主不得引用插件里的命名空间` | 同上 | 宿主出现 `Sparrow.Plugin.*`（`Sparrow.Plugin.Sdk` 除外）即失败 |
+| `PluginBoundaryTests.宿主不得散落插件参数键` | 同上 | 宿主出现 `parameters["..."]` 字面量即失败 |
 | `PluginBoundaryTests.插件项目不得引用宿主` | 同上 | 任何插件 csproj 出现 `Sparrow.App` 即失败 |
 
-新功能评审时先跑这三条；要绕过它们，说明设计已经越界。
+新功能评审时先跑这些检查；要绕过它们，说明设计已经越界。
 
 ---
 

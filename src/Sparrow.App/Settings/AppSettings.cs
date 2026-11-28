@@ -5,7 +5,7 @@ using Sparrow.App.Services.LanShare;
 /// <summary>
 /// 用户设置。
 ///
-/// M1 只有「禁用插件」一项，后续字段加在同一个文件里，靠 <see cref="SchemaVersion"/> 迁移。
+/// 所有字段加在同一个文件里，靠 <see cref="SchemaVersion"/> 迁移。
 /// 设置文件损坏时回退默认值，绝不让宿主起不来。
 /// </summary>
 public sealed record AppSettings
@@ -22,6 +22,12 @@ public sealed record AppSettings
 
     /// <summary>被禁用的插件 ID（等于插件目录名）。命中的插件不扫描、不加载、不进搜索结果。</summary>
     public string[] DisabledPlugins { get; init; } = [];
+
+    /// <summary>
+    /// 插件私有设置：pluginId → (key → value)。
+    /// 由 <c>IToolHost.Settings</c> 写入，持久化在 settings.json 的 plugins 节点。
+    /// </summary>
+    public Dictionary<string, Dictionary<string, string>> Plugins { get; init; } = new(StringComparer.Ordinal);
 
     /// <summary>搜索面板热键，格式 "Ctrl+Alt+S"。</summary>
     public string SearchHotkey { get; init; } = "Ctrl+Alt+S";

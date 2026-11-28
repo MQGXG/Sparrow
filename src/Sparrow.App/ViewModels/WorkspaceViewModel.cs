@@ -240,6 +240,12 @@ public partial class WorkspaceViewModel : ObservableObject
         ? string.IsNullOrWhiteSpace(ProgressText) ? "执行中…" : ProgressText
         : "执行";
 
+    /// <summary>当前选中的工具可用，且没有在执行。</summary>
+    public bool CanExecute => !IsExecuting && SelectedTool?.IsAvailable == true;
+
+    /// <summary>选中工具不可用时的原因；可用时为空。</summary>
+    public string? UnavailableText => SelectedTool?.UnavailableReason;
+
     /// <summary>执行中的一行进度（批量工具会填「正在处理 2/5」）。</summary>
     [ObservableProperty]
     private string? _progressText;

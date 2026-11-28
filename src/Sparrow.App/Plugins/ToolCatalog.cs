@@ -23,6 +23,8 @@ public sealed class ToolCatalog : IDisposable
     private readonly IWindowOverlay? _windows;
     private readonly ILocalModels? _localModels;
     private readonly ILocalTranslation? _localTranslation;
+    private readonly SettingsStore? _settingsStore;
+    private readonly IPlatformCapabilityProbe _capabilityProbe;
 
     private PluginLoader? _loader;
     private ToolRegistry? _registry;
@@ -37,7 +39,9 @@ public sealed class ToolCatalog : IDisposable
         IClipboardHistory? clipboardHistory = null,
         IWindowOverlay? windows = null,
         ILocalModels? localModels = null,
-        ILocalTranslation? localTranslation = null)
+        ILocalTranslation? localTranslation = null,
+        SettingsStore? settingsStore = null,
+        IPlatformCapabilityProbe? capabilityProbe = null)
     {
         _pluginsRoot = pluginsRoot;
         _log = log;
@@ -47,6 +51,8 @@ public sealed class ToolCatalog : IDisposable
         _windows = windows;
         _localModels = localModels;
         _localTranslation = localTranslation;
+        _settingsStore = settingsStore;
+        _capabilityProbe = capabilityProbe ?? new HostPlatformCapabilityProbe(ai);
     }
 
     /// <summary>是否已经完成扫描 + 加载。用于验证懒加载是结构性成立的。</summary>
@@ -68,12 +74,15 @@ public sealed class ToolCatalog : IDisposable
     /// </summary>
     public IReadOnlyList<PluginCandidate> ScanCandidates()
     {
-        if (_scannedCandidates is not null)
-            return _scannedCandidates;
+        lock (_gate)
+        {
+            if (_scannedCandidates is not null)
+                return _scannedCandidates;
 
-        var scanner = new PluginScanner(_pluginsRoot, _log);
-        _scannedCandidates = scanner.Scan();
-        return _scannedCandidates;
+            var scanner = new PluginScanner(_pluginsRoot, _log);
+            _scannedCandidates = scanner.Scan();
+            return _scannedCandidates;
+        }
     }
 
     /// <summary>取工具注册表。首次调用触发扫描 + 加载，之后走缓存。</summary>
@@ -118,7 +127,20 @@ public sealed class ToolCatalog : IDisposable
             _candidates = ScanCandidates();
 
             var disabled = new HashSet<string>(_settings.DisabledPlugins, StringComparer.Ordinal);
-            _loader = new PluginLoader(_log, _ai, _clipboardHistory, _windows, _localModels, _localTranslation);
+            var pluginSettings = _settings.Plugins
+                ?? new Dictionary<string, Dictionary<string, string>>(StringComparer.Ordinal);
+            Func<string, IToolSettings>? settingsFactory = _settingsStore is null
+                ? null
+                : pluginId => new PluginSettings(pluginId, pluginSettings, _settingsStore);
+
+            _loader = new PluginLoader(
+                _log,
+                _ai,
+                _clipboardHistory,
+                _windows,
+                _localModels,
+                _localTranslation,
+                settingsFactory);
 
             foreach (var candidate in _candidates)
             {
@@ -161,9 +183,17 @@ public sealed class ToolCatalog : IDisposable
             .SelectMany(plugin => plugin.Tools.Select(tool => new ToolEntry
             {
                 Tool = tool,
-                Host = plugin.Host
+                Host = plugin.Host,
+                CapabilityProbe = _capabilityProbe
             }))
             .ToArray();
+
+        foreach (var entry in entries)
+        {
+            var reason = entry.UnavailableReason;
+            if (reason is not null)
+                _log.Warn($"工具 {entry.Descriptor.Id} 当前不可用：{reason}");
+        }
 
         return new ToolRegistry(entries);
     }

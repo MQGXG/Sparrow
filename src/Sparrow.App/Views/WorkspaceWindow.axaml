@@ -414,6 +414,7 @@
                             <Button Tag="{Binding}"
                                     Click="OnToolClick"
                                     Classes="tool-card"
+                                    Opacity="{Binding CardOpacity}"
                                     Width="236"
                                     Height="148"
                                     Margin="0,0,16,16"
@@ -473,9 +474,18 @@
                                   <TextBlock Grid.Row="2"
                                              Classes="hint"
                                              Text="打开 →"
+                                             IsVisible="{Binding IsAvailable}"
                                              HorizontalAlignment="Right"
                                              FontSize="11"
                                              Foreground="{DynamicResource AccentBrush}" />
+                                  <TextBlock Grid.Row="2"
+                                             Classes="hint"
+                                             Text="不可用"
+                                             IsVisible="{Binding IsUnavailable}"
+                                             ToolTip.Tip="{Binding UnavailableReason}"
+                                             HorizontalAlignment="Right"
+                                             FontSize="11"
+                                             Foreground="{DynamicResource DangerBrush}" />
                                 </Grid>
                               </Panel>
                             </Button>
@@ -1054,6 +1064,15 @@
                   <TextBlock Text="{Binding SelectedTool.CategoryDisplay}"
                              Classes="num" />
                 </Border>
+
+                <Border Classes="chip"
+                        VerticalAlignment="Center"
+                        IsVisible="{Binding SelectedTool.IsUnavailable}"
+                        ToolTip.Tip="{Binding SelectedTool.UnavailableReason}">
+                  <TextBlock Text="不可用"
+                             Classes="num"
+                             Foreground="{DynamicResource DangerBrush}" />
+                </Border>
               </StackPanel>
 
               <StackPanel Grid.Column="1"
@@ -1083,16 +1102,21 @@
                 <Button Classes="accent"
                         Content="{Binding ExecuteLabel}"
                         ToolTip.Tip="执行当前工具"
-                        IsEnabled="{Binding !IsExecuting}"
+                        IsEnabled="{Binding CanExecute}"
                         Click="OnExecuteClick" />
               </StackPanel>
             </Grid>
 
-            <TextBlock Grid.Row="1"
-                       Classes="caption"
-                       Text="{Binding SelectedTool.Description}"
-                       TextWrapping="Wrap"
-                       Margin="0,4,0,0" />
+            <StackPanel Grid.Row="1" Spacing="4" Margin="0,4,0,0">
+              <TextBlock Classes="caption"
+                         Text="{Binding SelectedTool.Description}"
+                         TextWrapping="Wrap" />
+              <TextBlock Classes="caption"
+                         Text="{Binding SelectedTool.UnavailableReason}"
+                         IsVisible="{Binding SelectedTool.IsUnavailable}"
+                         Foreground="{DynamicResource DangerBrush}"
+                         TextWrapping="Wrap" />
+            </StackPanel>
 
             <!-- 参数：行内控件，不占整栏 -->
             <StackPanel Grid.Row="2" IsVisible="{Binding HasParameters}" Margin="0,12,0,0">
