@@ -41,6 +41,17 @@ public sealed class WorkspaceViewModelTests
         }
         """;
 
+    private const string WindowPinManifest = """
+        {
+          "id": "sparrow.plugin.window-pin",
+          "name": "窗口置顶",
+          "version": "1.0.0",
+          "sdkVersion": "1.0",
+          "entryAssembly": "Sparrow.Plugin.Window.Pin.dll",
+          "tools": ["sparrow.window.pin"]
+        }
+        """;
+
     /// <summary>图片集工具的来源：OCR 接受 1..N 张图片。</summary>
     private const string OcrManifest = """
         {
@@ -116,6 +127,7 @@ public sealed class WorkspaceViewModelTests
             CreatePlugin("sparrow.plugin.dev-base64", Base64Manifest, "Sparrow.Plugin.Dev.Base64.dll");
             CreatePlugin("sparrow.plugin.ocr", OcrManifest, "Sparrow.Plugin.Ocr.dll");
             CreatePlugin("sparrow.plugin.files-hash", FilesHashManifest, "Sparrow.Plugin.Files.Hash.dll");
+            CreatePlugin("sparrow.plugin.window-pin", WindowPinManifest, "Sparrow.Plugin.Window.Pin.dll");
         }
 
         private void CreatePlugin(string directoryName, string manifestJson, string entryAssembly)
@@ -228,6 +240,38 @@ public sealed class WorkspaceViewModelTests
 
         viewModel.HasRecentTools.ShouldBeTrue();
         viewModel.RecentTools.ShouldHaveSingleItem().Tool.Name.ShouldBe(json.Descriptor.Name);
+    }
+
+    [Fact]
+    public async Task 无页面工具_不进工具墙也不进继续上次()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+
+        var pin = catalog.GetRegistry()
+            .Search("窗口置顶", int.MaxValue)
+            .First(entry => entry.Descriptor.Id == "sparrow.window.pin");
+
+        var history = new FakeHistory();
+        history.Entries.Add(new HistoryEntry(
+            "h-pin",
+            pin.Descriptor.Id,
+            pin.Descriptor.Name,
+            "已置顶：记事本",
+            "",
+            DateTimeOffset.Now,
+            12));
+
+        var viewModel = Create(catalog, history);
+
+        await viewModel.ReloadAsync();
+
+        viewModel.VisibleTools.ShouldAllBe(tool => tool.Entry.Descriptor.Accepts != InputShape.None);
+        viewModel.VisibleTools.ShouldNotContain(tool => tool.Entry.Descriptor.Id == "sparrow.window.pin");
+        viewModel.RecentTools.ShouldBeEmpty();
+
+        viewModel.Categories.Single(category => category.Name == "全部").Count
+            .ShouldBe(viewModel.VisibleTools.Count);
     }
 
     [Fact]

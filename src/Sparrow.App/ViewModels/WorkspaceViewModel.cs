@@ -181,7 +181,7 @@ public partial class WorkspaceViewModel : ObservableObject
     public bool IsToolListEmpty => !IsLoading && !HasTools;
 
     /// <summary>空态文案：区分「没有插件」和「搜索没命中」，避免新拉仓库时误判为程序坏了。</summary>
-    public string EmptyToolMessage => _allTools.Count == 0
+    public string EmptyToolMessage => !_allTools.Any(IsWallTool)
         ? "没有加载到工具。开发环境请先构建解决方案（dotnet build Sparrow.slnx）。"
         : "没有匹配的工具";
 

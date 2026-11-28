@@ -204,12 +204,13 @@ public partial class WorkspaceViewModel
         OnPropertyChanged(nameof(CanClearDroppedFiles));
     }
 
-    /// <summary>工具墙：先按分类过滤（和之前一致），再按搜索词过滤；分组只负责视觉分节。</summary>
+    /// <summary>工具墙：只放有输入/输出的页面型工具；纯动作（Accepts == None）走托盘与命令面板。</summary>
     private void RefilterTools()
     {
-        IEnumerable<ToolEntry> items = SelectedCategory is null
-            ? _allTools
-            : _allTools.Where(entry => entry.Descriptor.Category == SelectedCategory);
+        IEnumerable<ToolEntry> items = _allTools.Where(IsWallTool);
+
+        if (SelectedCategory is not null)
+            items = items.Where(entry => entry.Descriptor.Category == SelectedCategory);
 
         var query = ToolQuery.Trim();
         if (query.Length > 0)
@@ -230,13 +231,19 @@ public partial class WorkspaceViewModel
         OnPropertyChanged(nameof(EmptyToolMessage));
     }
 
+    /// <summary>没有页面的工具（纯动作）不进工具墙：没有输入、没有结果可看。</summary>
+    private static bool IsWallTool(ToolEntry entry) =>
+        entry.Descriptor.Accepts != InputShape.None;
+
     /// <summary>侧栏分类导航：全部 + 各分类（含工具数）。</summary>
     private void RebuildCategories()
     {
-        Categories.Clear();
-        Categories.Add(new CategoryViewModel("全部", _allTools.Count));
+        var wallTools = _allTools.Where(IsWallTool).ToList();
 
-        foreach (var group in _allTools
+        Categories.Clear();
+        Categories.Add(new CategoryViewModel("全部", wallTools.Count));
+
+        foreach (var group in wallTools
                      .GroupBy(entry => entry.Descriptor.Category)
                      .OrderBy(group => group.Key, StringComparer.Ordinal))
         {
@@ -271,7 +278,8 @@ public partial class WorkspaceViewModel
             var entry = _allTools.Find(tool =>
                 tool.Descriptor.Name == history.ToolName);
 
-            if (entry is null || !entry.IsAvailable)
+            // 纯动作没有页面，不该出现在「继续上次」里
+            if (entry is null || !entry.IsAvailable || !IsWallTool(entry))
                 continue;
 
             RecentTools.Add(new RecentToolViewModel(new ToolItemViewModel(entry), history.TimeLabel));
