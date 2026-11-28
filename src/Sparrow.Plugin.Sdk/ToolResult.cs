@@ -23,6 +23,12 @@ public sealed record ToolResult
     /// <summary>执行耗时，由宿主填入（插件可以不填）。</summary>
     public TimeSpan Duration { get; init; }
 
+    /// <summary>
+    /// 宿主附加的提示（例如结果被截断）。插件可以忽略；
+    /// 空表示没有额外说明。
+    /// </summary>
+    public string? Notice { get; init; }
+
     private static readonly IReadOnlyList<ToolAction> DefaultActions = new[]
     {
         ToolAction.Copy,

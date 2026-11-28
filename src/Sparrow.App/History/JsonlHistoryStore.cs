@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Sparrow.App.Services;
 
 namespace Sparrow.App.History;
 
@@ -58,6 +59,16 @@ public sealed class JsonlHistoryStore : IHistoryStore
         {
             try
             {
+                // 结果截断是最后一道闸：插件/历史接口都可能有别的调用方，
+                // 落盘前再收一次，保证单条记录不会把 JSONL 撑爆。
+                var output = ToolResultLimits.TruncateText(
+                    entry.Output,
+                    ToolResultLimits.MaxTextChars,
+                    out var truncated);
+
+                if (truncated)
+                    entry = entry with { Output = output };
+
                 var directory = Path.GetDirectoryName(_path);
                 if (!string.IsNullOrEmpty(directory))
                     Directory.CreateDirectory(directory);

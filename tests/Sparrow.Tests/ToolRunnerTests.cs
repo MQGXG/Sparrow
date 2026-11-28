@@ -100,4 +100,69 @@ public sealed class ToolRunnerTests
         await Should.ThrowAsync<InvalidOperationException>(
             () => ToolRunner.ExecuteAsync(tool, Context(), TestContext.Current.CancellationToken));
     }
+
+    [Fact]
+    public async Task 超长文本_被截断并标记()
+    {
+        var text = new string('a', ToolResultLimits.MaxTextChars + 10);
+        var tool = new FakeTool(_ => Task.FromResult(ToolResult.Ok(new TextPayload(text))));
+
+        var result = await ToolRunner.ExecuteAsync(tool, Context(), TestContext.Current.CancellationToken);
+
+        result.Success.ShouldBeTrue();
+        result.Notice.ShouldBe(ToolResultLimits.TruncatedNotice);
+
+        var payload = result.Payload.ShouldBeOfType<TextPayload>();
+        payload.IsTruncated.ShouldBeTrue();
+        payload.Text.Length.ShouldBeLessThan(text.Length);
+        payload.Text.ShouldContain("已截断");
+    }
+
+    [Fact]
+    public async Task 表格超限_行数被截断并标记()
+    {
+        var rows = Enumerable
+            .Range(0, ToolResultLimits.MaxTableRows + 5)
+            .Select(index => (IReadOnlyList<string>)new[] { index.ToString() })
+            .ToList();
+
+        var tool = new FakeTool(_ => Task.FromResult(
+            ToolResult.Ok(new TablePayload(["值"], rows))));
+
+        var result = await ToolRunner.ExecuteAsync(tool, Context(), TestContext.Current.CancellationToken);
+
+        result.Notice.ShouldBe(ToolResultLimits.TruncatedNotice);
+        result.Payload.ShouldBeOfType<TablePayload>().Rows.Count.ShouldBe(ToolResultLimits.MaxTableRows);
+    }
+
+    [Fact]
+    public async Task 文件集超限_路径被截断并标记()
+    {
+        var paths = Enumerable
+            .Range(0, ToolResultLimits.MaxFilePaths + 5)
+            .Select(index => $@"C:\temp\{index}.bin")
+            .ToList();
+
+        var tool = new FakeTool(_ => Task.FromResult(
+            ToolResult.Ok(new FileSetPayload(paths))));
+
+        var result = await ToolRunner.ExecuteAsync(tool, Context(), TestContext.Current.CancellationToken);
+
+        result.Notice.ShouldBe(ToolResultLimits.TruncatedNotice);
+        result.Payload.ShouldBeOfType<FileSetPayload>().Paths.Count.ShouldBe(ToolResultLimits.MaxFilePaths);
+    }
+
+    [Fact]
+    public async Task 超大图片_返回失败而不是让宿主再复制一份()
+    {
+        var bytes = new byte[ToolResultLimits.MaxImageBytes + 1];
+        var tool = new FakeTool(_ => Task.FromResult(
+            ToolResult.Ok(new ImagePayload(bytes, ImageFormat.Png))));
+
+        var result = await ToolRunner.ExecuteAsync(tool, Context(), TestContext.Current.CancellationToken);
+
+        result.Success.ShouldBeFalse();
+        result.Payload.ShouldBeNull();
+        result.Error!.Message.ShouldContain("过大");
+    }
 }

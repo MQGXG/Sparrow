@@ -166,4 +166,25 @@ public sealed class JsonlHistoryStoreTests
         recent.Count.ShouldBe(1);
         recent[0].Output.ShouldBe("fresh");
     }
+
+    [Fact]
+    public void 超长输出_落盘前被截断()
+    {
+        using var temp = new TempStore();
+        var output = new string('x', Sparrow.App.Services.ToolResultLimits.MaxTextChars + 100);
+
+        temp.Store.Add(new HistoryEntry(
+            "h1",
+            "sparrow.test",
+            "测试工具",
+            output,
+            "",
+            DateTimeOffset.Now,
+            1));
+
+        var recent = temp.Store.Recent(1);
+        var saved = recent.ShouldHaveSingleItem();
+        saved.Output.Length.ShouldBeLessThan(output.Length);
+        saved.Output.ShouldContain("已截断");
+    }
 }

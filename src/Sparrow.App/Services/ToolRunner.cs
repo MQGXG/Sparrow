@@ -44,7 +44,8 @@ public static class ToolRunner
 
         try
         {
-            return await work.WaitAsync(linkedSource.Token);
+            var result = await work.WaitAsync(linkedSource.Token);
+            return ToolResultLimits.Apply(result);
         }
         catch (OperationCanceledException)
             when (timeoutSource.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
