@@ -913,6 +913,48 @@ public partial class WorkspaceWindow : Window
             viewModel.ShowSvgPreview();
     }
 
+    /// <summary>文件集结果：用默认程序打开。</summary>
+    private void OnOpenResultFileClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: ResultFileViewModel file })
+            return;
+
+        try
+        {
+            if (System.IO.File.Exists(file.Path))
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(file.Path)
+                {
+                    UseShellExecute = true
+                });
+        }
+        catch (Exception ex)
+        {
+            App.Log.Error("打开结果文件失败", ex);
+        }
+    }
+
+    /// <summary>文件集结果：在资源管理器中定位。</summary>
+    private void OnRevealResultFileClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: ResultFileViewModel file })
+            return;
+
+        try
+        {
+            if (System.IO.File.Exists(file.Path))
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                    "explorer.exe",
+                    $"/select,\"{file.Path}\"")
+                {
+                    UseShellExecute = true
+                });
+        }
+        catch (Exception ex)
+        {
+            App.Log.Error("定位结果文件失败", ex);
+        }
+    }
+
     private void OnSvgSourceClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is WorkspaceViewModel viewModel)

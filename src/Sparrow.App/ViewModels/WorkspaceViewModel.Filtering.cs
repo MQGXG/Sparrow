@@ -94,7 +94,22 @@ public partial class WorkspaceViewModel
 
     public bool IsSvgSourceVisible => HasSvgResult && ShowSvgSource;
 
-    public bool IsTextResultVisible => !HasSvgResult && !HasImageResult && !HasSections;
+    public bool IsTextResultVisible =>
+        !HasSvgResult && !HasImageResult && !HasSections && !HasTableResult && !HasFileSetResult;
+
+    /// <summary>表格结果（文件哈希等）：列 + 行，宿主用只读表格渲染。</summary>
+    public ObservableCollection<ResultTableColumnViewModel> ResultTableColumns { get; } = [];
+
+    public ObservableCollection<ResultTableRowViewModel> ResultTableRows { get; } = [];
+
+    [ObservableProperty]
+    private bool _hasTableResult;
+
+    /// <summary>文件集结果（视频工具等）：宿主用文件卡渲染。</summary>
+    public ObservableCollection<ResultFileViewModel> ResultFiles { get; } = [];
+
+    [ObservableProperty]
+    private bool _hasFileSetResult;
 
     /// <summary>图片结果（缩放 / 格式转换）；非空时结果区显示位图预览。</summary>
     [ObservableProperty]
@@ -121,6 +136,10 @@ public partial class WorkspaceViewModel
     }
 
     partial void OnHasImageResultChanged(bool value) => OnPropertyChanged(nameof(IsTextResultVisible));
+
+    partial void OnHasTableResultChanged(bool value) => OnPropertyChanged(nameof(IsTextResultVisible));
+
+    partial void OnHasFileSetResultChanged(bool value) => OnPropertyChanged(nameof(IsTextResultVisible));
 
     partial void OnHasSectionsChanged(bool value)
     {

@@ -71,6 +71,11 @@ public partial class WorkspaceViewModel
     /// <summary>点击历史记录：把内容放回结果区和剪贴板。</summary>
     public void CopyHistory(HistoryEntryViewModel history)
     {
+        ClearSvgResult();
+        HasImageResult = false;
+        ImageResultPng = null;
+        ClearStructuredResults();
+
         ResultText = history.Entry.Output;
         HasResult = true;
         HasError = false;
@@ -95,6 +100,7 @@ public partial class WorkspaceViewModel
         ClearSvgResult();
         HasImageResult = false;
         ImageResultPng = null;
+        ClearStructuredResults();
         ErrorText = message;
         HasError = true;
         HasResult = false;
@@ -106,6 +112,7 @@ public partial class WorkspaceViewModel
         ClearSvgResult();
         HasImageResult = false;
         ImageResultPng = null;
+        ClearStructuredResults();
         ResultText = null;
         ErrorText = null;
         HasResult = false;

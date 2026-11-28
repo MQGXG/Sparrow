@@ -85,7 +85,7 @@ public static class ResultTextFormatter
     }
 
     /// <summary>显示宽度：CJK / 全角字符占两列，其余占一列。</summary>
-    private static int DisplayWidth(string text)
+    public static int DisplayWidth(string text)
     {
         var width = 0;
 

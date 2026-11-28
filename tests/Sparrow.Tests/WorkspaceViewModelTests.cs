@@ -158,6 +158,34 @@ public sealed class WorkspaceViewModelTests
         }
     }
 
+    /// <summary>返回固定载荷的假工具，用来验证宿主的结果渲染分支。</summary>
+    private sealed class FixedPayloadTool(ToolDescriptor descriptor, IToolPayload payload) : ITool
+    {
+        public ToolDescriptor Descriptor { get; } = descriptor;
+
+        public Task<ToolResult> ExecuteAsync(ToolContext context, CancellationToken cancellationToken) =>
+            Task.FromResult(ToolResult.Ok(payload));
+    }
+
+    private static ToolItemViewModel CreatePayloadTool(string directory, IToolPayload payload)
+    {
+        var tool = new FixedPayloadTool(
+            new ToolDescriptor
+            {
+                Id = "sparrow.test.payload",
+                Name = "测试载荷",
+                Category = "test",
+                Accepts = InputShape.None
+            },
+            payload);
+
+        return new ToolItemViewModel(new ToolEntry
+        {
+            Tool = tool,
+            Host = new ToolHost("sparrow.test", directory, new NullLog())
+        });
+    }
+
     private static WorkspaceViewModel Create(
         ToolCatalog catalog,
         IHistoryStore history,
@@ -295,6 +323,76 @@ public sealed class WorkspaceViewModelTests
 
         tool.IsPinnedToTray.ShouldBeFalse();
         viewModel.Settings.IsToolPinnedToTray(tool.Entry.Descriptor.Id).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task 表格结果_渲染为表格而不是纯文本()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+        await viewModel.ReloadAsync();
+
+        var table = new TablePayload(
+            ["文件", "哈希"],
+            [new[] { "a.txt", "abc123" }]);
+
+        viewModel.OpenTool(CreatePayloadTool(root.Path, table));
+
+        await viewModel.ExecuteAsync();
+
+        viewModel.HasTableResult.ShouldBeTrue();
+        viewModel.IsTextResultVisible.ShouldBeFalse();
+        viewModel.ResultTableColumns.Count.ShouldBe(2);
+        viewModel.ResultTableRows.ShouldHaveSingleItem().Cells.Count.ShouldBe(2);
+        viewModel.ResultTableColumns[0].Width.ShouldBeGreaterThan(0);
+        viewModel.ResultText.ShouldNotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task 文件集结果_渲染为文件卡()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+        await viewModel.ReloadAsync();
+
+        var files = new FileSetPayload(
+        [
+            System.IO.Path.Combine(root.Path, "a.png"),
+            System.IO.Path.Combine(root.Path, "b.png")
+        ]);
+
+        viewModel.OpenTool(CreatePayloadTool(root.Path, files));
+
+        await viewModel.ExecuteAsync();
+
+        viewModel.HasFileSetResult.ShouldBeTrue();
+        viewModel.IsTextResultVisible.ShouldBeFalse();
+        viewModel.ResultFiles.Count.ShouldBe(2);
+        viewModel.ResultFiles[0].Name.ShouldBe("a.png");
+        viewModel.ResultText.ShouldNotBeNull().ShouldContain("2 个文件");
+    }
+
+    [Fact]
+    public async Task 普通文本结果_清掉上一次的表格()
+    {
+        using var root = new TempPluginRoot();
+        using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
+        var viewModel = Create(catalog, new FakeHistory());
+        await viewModel.ReloadAsync();
+
+        var table = new TablePayload(["列"], [new[] { "值" }]);
+        viewModel.OpenTool(CreatePayloadTool(root.Path, table));
+        await viewModel.ExecuteAsync();
+        viewModel.HasTableResult.ShouldBeTrue();
+
+        viewModel.OpenTool(CreatePayloadTool(root.Path, new TextPayload("纯文本")));
+        await viewModel.ExecuteAsync();
+
+        viewModel.HasTableResult.ShouldBeFalse();
+        viewModel.IsTextResultVisible.ShouldBeTrue();
+        viewModel.ResultTableRows.ShouldBeEmpty();
     }
 
     [Fact]
@@ -736,7 +834,7 @@ public sealed class WorkspaceViewModelTests
     }
 
     [Fact]
-    public async Task 表格结果_按文本展示而不是报失败()
+    public async Task 表格结果_渲染为表格而不是报失败()
     {
         using var root = new TempPluginRoot();
         using var catalog = new ToolCatalog(root.Path, new NullLog(), new AppSettings());
@@ -752,7 +850,10 @@ public sealed class WorkspaceViewModelTests
 
         viewModel.HasResult.ShouldBeTrue();
         viewModel.HasError.ShouldBeFalse();
-        viewModel.IsTextResultVisible.ShouldBeTrue();
+        viewModel.HasTableResult.ShouldBeTrue();
+        viewModel.IsTextResultVisible.ShouldBeFalse();
+        viewModel.ResultTableColumns.ShouldHaveSingleItem();
+        viewModel.ResultTableRows.ShouldHaveSingleItem();
 
         var text = viewModel.ResultText.ShouldNotBeNull();
         text.ShouldContain("列");

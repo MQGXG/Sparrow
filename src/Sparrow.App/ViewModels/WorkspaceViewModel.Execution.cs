@@ -113,11 +113,11 @@ public partial class WorkspaceViewModel
                         return;
 
                     case TablePayload tablePayload:
-                        ShowTextResult(entry, context, ResultTextFormatter.Format(tablePayload), elapsed);
+                        ShowTableResult(entry, context, tablePayload, elapsed);
                         return;
 
                     case FileSetPayload fileSetPayload:
-                        ShowTextResult(entry, context, ResultTextFormatter.Format(fileSetPayload), elapsed);
+                        ShowFileSetResult(entry, context, fileSetPayload, elapsed);
                         return;
 
                     default:
@@ -158,6 +158,7 @@ public partial class WorkspaceViewModel
         ClearSvgResult();
         HasImageResult = false;
         ImageResultPng = null;
+        ClearStructuredResults();
 
         // 单段结果或普通文本：清掉上一次的分段列表，避免列表残留
         ResultSections.Clear();
@@ -170,6 +171,96 @@ public partial class WorkspaceViewModel
 
         AddHistory(entry, context, text, elapsed);
     }
+
+    /// <summary>表格结果：宿主用只读表格渲染；纯文本版本仍留给复制和历史。</summary>
+    private void ShowTableResult(ToolEntry entry, ToolContext context, TablePayload payload, long elapsed)
+    {
+        ClearSvgResult();
+        HasImageResult = false;
+        ImageResultPng = null;
+        ResultSections.Clear();
+        HasSections = false;
+        ClearStructuredResults();
+
+        var widths = BuildColumnWidths(payload);
+
+        for (var index = 0; index < payload.Columns.Count; index++)
+            ResultTableColumns.Add(new ResultTableColumnViewModel(payload.Columns[index], widths[index]));
+
+        foreach (var row in payload.Rows)
+        {
+            var cells = new List<ResultTableCellViewModel>(widths.Length);
+            for (var index = 0; index < widths.Length; index++)
+                cells.Add(new ResultTableCellViewModel(Cell(row, index), widths[index]));
+
+            ResultTableRows.Add(new ResultTableRowViewModel(cells));
+        }
+
+        HasTableResult = true;
+
+        var text = ResultTextFormatter.Format(payload);
+        ResultText = text;
+        HasResult = true;
+        HasError = false;
+        ErrorText = null;
+
+        AddHistory(entry, context, text, elapsed);
+    }
+
+    /// <summary>文件集结果：宿主用文件卡渲染；纯文本版本仍留给复制和历史。</summary>
+    private void ShowFileSetResult(ToolEntry entry, ToolContext context, FileSetPayload payload, long elapsed)
+    {
+        ClearSvgResult();
+        HasImageResult = false;
+        ImageResultPng = null;
+        ResultSections.Clear();
+        HasSections = false;
+        ClearStructuredResults();
+
+        foreach (var path in payload.Paths)
+            ResultFiles.Add(new ResultFileViewModel(path));
+
+        HasFileSetResult = true;
+
+        var text = ResultTextFormatter.Format(payload);
+        ResultText = text;
+        HasResult = true;
+        HasError = false;
+        ErrorText = null;
+
+        AddHistory(entry, context, text, elapsed);
+    }
+
+    private void ClearStructuredResults()
+    {
+        ResultTableColumns.Clear();
+        ResultTableRows.Clear();
+        ResultFiles.Clear();
+        HasTableResult = false;
+        HasFileSetResult = false;
+    }
+
+    /// <summary>列宽按内容估算；等宽字体 12px，CJK 按两列算。上限防止超长哈希把表格撑爆。</summary>
+    private static double[] BuildColumnWidths(TablePayload table)
+    {
+        var widths = new int[table.Columns.Count];
+
+        for (var index = 0; index < table.Columns.Count; index++)
+            widths[index] = ResultTextFormatter.DisplayWidth(table.Columns[index]);
+
+        foreach (var row in table.Rows)
+        {
+            for (var index = 0; index < widths.Length; index++)
+                widths[index] = Math.Max(widths[index], ResultTextFormatter.DisplayWidth(Cell(row, index)));
+        }
+
+        return widths
+            .Select(display => Math.Clamp(display * 7.0 + 28, 120, 360))
+            .ToArray();
+    }
+
+    private static string Cell(IReadOnlyList<string> row, int index) =>
+        index < row.Count ? row[index] ?? string.Empty : string.Empty;
 
     /// <summary>
     /// 多图识别的分段结果。列表负责「哪张图 / 哪段文字 / 哪张失败」，
@@ -185,6 +276,7 @@ public partial class WorkspaceViewModel
         ClearSvgResult();
         HasImageResult = false;
         ImageResultPng = null;
+        ClearStructuredResults();
 
         ResultSections.Clear();
         foreach (var section in sections)
@@ -226,6 +318,9 @@ public partial class WorkspaceViewModel
     private void ShowImageResult(ToolEntry entry, ToolContext context, ImagePayload payload, long elapsed)
     {
         ClearSvgResult();
+        ClearStructuredResults();
+        ResultSections.Clear();
+        HasSections = false;
 
         ImageResultPng = payload.Data.ToArray();
         ImageResultFormat = payload.Format;
@@ -254,6 +349,12 @@ public partial class WorkspaceViewModel
         }
 
         var svg = sanitized.Svg!;
+
+        ClearStructuredResults();
+        HasImageResult = false;
+        ImageResultPng = null;
+        ResultSections.Clear();
+        HasSections = false;
 
         ResultText = svg;
         SvgSource = svg;

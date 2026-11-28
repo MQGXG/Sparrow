@@ -1535,6 +1535,102 @@
                                        TextWrapping="Wrap" />
                 </ScrollViewer>
 
+                <!-- 表格结果：列宽由 ViewModel 算好，长哈希换行不截断 -->
+                <ScrollViewer Grid.Row="2"
+                              IsVisible="{Binding HasTableResult}"
+                              HorizontalScrollBarVisibility="Auto">
+                  <StackPanel>
+                    <ItemsControl ItemsSource="{Binding ResultTableColumns}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ResultTableColumnViewModel">
+                          <Border Width="{Binding Width}"
+                                  Padding="10,7"
+                                  Background="{DynamicResource SurfaceRaisedBrush}"
+                                  BorderBrush="{DynamicResource LineBrush}"
+                                  BorderThickness="0,1,1,1">
+                            <TextBlock Text="{Binding Text}"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextMutedBrush}" />
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <ItemsControl ItemsSource="{Binding ResultTableRows}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ResultTableRowViewModel">
+                          <ItemsControl ItemsSource="{Binding Cells}">
+                            <ItemsControl.ItemsPanel>
+                              <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" />
+                              </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate x:DataType="vm:ResultTableCellViewModel">
+                                <Border Width="{Binding Width}"
+                                        Padding="10,7"
+                                        BorderBrush="{DynamicResource LineBrush}"
+                                        BorderThickness="0,0,1,1">
+                                  <SelectableTextBlock Text="{Binding Text}"
+                                                       FontFamily="{StaticResource MonoFont}"
+                                                       FontSize="12"
+                                                       TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource TextPrimaryBrush}" />
+                                </Border>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </ScrollViewer>
+
+                <!-- 文件集结果：文件卡 + 打开 / 定位 -->
+                <ScrollViewer Grid.Row="2" IsVisible="{Binding HasFileSetResult}">
+                  <ItemsControl ItemsSource="{Binding ResultFiles}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ResultFileViewModel">
+                        <Border Background="{DynamicResource SurfaceRaisedBrush}"
+                                BorderBrush="{DynamicResource LineBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="12"
+                                Margin="0,0,0,8">
+                          <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                            <StackPanel Spacing="2">
+                              <TextBlock Text="{Binding Name}"
+                                         FontSize="12"
+                                         FontWeight="SemiBold"
+                                         Foreground="{DynamicResource TextPrimaryBrush}" />
+                              <TextBlock Text="{Binding Directory}"
+                                         FontSize="11"
+                                         Foreground="{DynamicResource TextMutedBrush}"
+                                         TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                            <Button Grid.Column="1"
+                                    Classes="ghost small"
+                                    Content="打开"
+                                    Tag="{Binding}"
+                                    Click="OnOpenResultFileClick" />
+                            <Button Grid.Column="2"
+                                    Classes="ghost small"
+                                    Content="位置"
+                                    Tag="{Binding}"
+                                    Click="OnRevealResultFileClick" />
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+
                 <!-- SVG 源码 -->
                 <ScrollViewer Grid.Row="2" IsVisible="{Binding IsSvgSourceVisible}">
                   <SelectableTextBlock Text="{Binding ResultText}"
