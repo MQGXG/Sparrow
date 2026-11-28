@@ -17,10 +17,10 @@ public partial class WorkspaceViewModel
     [ObservableProperty]
     private Control? _toolView;
 
-    /// <summary>是否有插件自定义表面；XAML 用它切换「表面对 / 默认表面对」。</summary>
+    /// <summary>是否有插件自定义配置区；XAML 用它决定是否在输入/结果之上显示。</summary>
     public bool HasToolView => ToolView is not null;
 
-    /// <summary>有自定义表面时参数由视图自己负责，默认参数行隐藏，避免双份。</summary>
+    /// <summary>有自定义配置区时参数由视图自己负责，默认参数行隐藏，避免双份。</summary>
     public bool ShowParameters => HasParameters && !HasToolView;
 
     /// <summary>视图自己写入、但工具描述里没有声明的参数；执行时并入参数表。</summary>

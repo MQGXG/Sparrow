@@ -1104,15 +1104,19 @@
               </ItemsControl>
             </StackPanel>
 
-            <!-- 表面槽位：插件自定义视图优先；没有时保持原来的输入 / 结果分栏 -->
-            <Grid Grid.Row="3" Margin="0,12,0,0">
-              <ContentControl Content="{Binding ToolView}"
-                              IsVisible="{Binding HasToolView}" />
+            <!-- 自定义配置区在输入 / 结果之上；文件选择与结果始终由宿主负责 -->
+            <Grid Grid.Row="3"
+                  RowDefinitions="Auto,*"
+                  Margin="0,12,0,0">
+              <ContentControl Grid.Row="0"
+                              Content="{Binding ToolView}"
+                              IsVisible="{Binding HasToolView}"
+                              Margin="0,0,0,12" />
 
               <!-- 左右分栏：左输入 / 右结果 -->
-              <Grid ColumnDefinitions="*,*"
-                    ColumnSpacing="16"
-                    IsVisible="{Binding !HasToolView}">
+              <Grid Grid.Row="1"
+                    ColumnDefinitions="*,*"
+                    ColumnSpacing="16">
               <Panel Grid.Column="0">
 
                 <!-- 输入：文本工具给编辑框，图片/无输入工具给一条提示 -->
