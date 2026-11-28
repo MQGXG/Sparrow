@@ -103,6 +103,47 @@ public sealed class ToolHostTests
     }
 
     [Fact]
+    public void 清理回调_后注册先执行且只执行一次()
+    {
+        var host = new ToolHost("sparrow.plugin.test", ".", new NullLog());
+        var order = new List<int>();
+
+        host.OnDispose(() => order.Add(1));
+        host.OnDispose(() => order.Add(2));
+        host.OnDispose(() => order.Add(3));
+
+        host.Dispose();
+        host.Dispose();
+
+        order.ShouldBe([3, 2, 1]);
+    }
+
+    [Fact]
+    public void 清理回调异常_不影响其他回调()
+    {
+        var host = new ToolHost("sparrow.plugin.test", ".", new NullLog());
+        var secondCalled = false;
+
+        host.OnDispose(() => throw new InvalidOperationException("boom"));
+        host.OnDispose(() => secondCalled = true);
+
+        Should.NotThrow(host.Dispose);
+        secondCalled.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void 卸载后登记清理_立即执行()
+    {
+        var host = new ToolHost("sparrow.plugin.test", ".", new NullLog());
+        host.Dispose();
+
+        var called = false;
+        host.OnDispose(() => called = true);
+
+        called.ShouldBeTrue();
+    }
+
+    [Fact]
     public void 网络禁用时_调用SendAsync抛异常而不是静默失败()
     {
         var host = new ToolHost("sparrow.plugin.test", ".", new NullLog());

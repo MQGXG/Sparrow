@@ -5,7 +5,8 @@ namespace Sparrow.Plugin.Sdk;
 /// <summary>
 /// 宿主注入给插件的全部外部能力。
 ///
-/// 只有七样：日志、设置、受控的网络、模型、剪贴板历史、插件目录、窗口覆盖。
+/// 能力清单：日志、设置、受控网络、AI、本地模型、本地翻译、剪贴板历史、插件目录、
+/// 窗口覆盖，以及一个卸载清理登记入口。
 /// **没有文件系统、没有实时剪贴板、没有数据库、没有窗口**——
 /// 需要产出文件时返回 FileSetPayload，由宿主落盘；
 /// 需要读取剪贴板时，输入已经在 <see cref="ToolContext.Input"/> 里了；
@@ -14,6 +15,13 @@ namespace Sparrow.Plugin.Sdk;
 public interface IToolHost
 {
     ILogger Logger { get; }
+
+    /// <summary>
+    /// 注册一个卸载时执行的清理动作；后注册的先执行。
+    /// 用于 Timer、事件订阅、原生句柄等宿主无法自动回收的副作用。
+    /// 卸载后迟到的注册会立即执行，避免调用方误以为登记成功。
+    /// </summary>
+    void OnDispose(Action callback);
 
     /// <summary>按插件隔离的键值存储，写入 settings.json 的 plugins 节点下。</summary>
     IToolSettings Settings { get; }

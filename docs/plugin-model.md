@@ -174,6 +174,7 @@ Sparrow.Plugin.Sdk
 public interface IToolHost
 {
     ILogger Logger { get; }
+    void OnDispose(Action callback);          // 卸载时回收副作用（后注册先执行）
     IToolSettings Settings { get; }           // 按 pluginId 隔离的键值存储
     IHttpClientAccess Http { get; }           // 受策略控制，可被禁用
     IAiClient Ai { get; }                     // 模型能力；未配置时 IsAvailable=false
@@ -322,6 +323,8 @@ ALC 卸载的条件是「该上下文中没有任何存活的引用」。以下�
 
 **宿主的做法**：`ToolRegistry` 当前仍持有 `ITool` 强引用（M1 简化）。卸载时 `ToolCatalog.UnloadPlugin` 丢弃整个旧注册表并重建，从而断开强引用；`PluginLoader.Unload` 返回指向 ALC 的 `WeakReference`，由测试在 `GC.Collect()` 后断言 `IsAlive == false`。目标形态是注册表只存 `WeakReference<ITool>`，尚未落地。
 
+**副作用回收**：插件用 `context.Host?.OnDispose(...)` 登记 Timer、事件订阅、原生句柄等宿主无法自动回收的资源。卸载时 `ToolHost.Dispose()` 按后进先出执行这些回调，再 `PluginLoadContext.Unload()`。这不能阻止插件绕过契约，但能让守规矩的插件真正无残留。
+
 ### 铁律 5：插件不注册任何全局钩子
 
 热键、托盘、文件关联、协议注册——全部由宿主独占。插件声明需求，宿主实现。
@@ -367,6 +370,7 @@ ALC 卸载的条件是「该上下文中没有任何存活的引用」。以下�
 | Discovered → Loaded → Active | ✅ 已实现（懒加载，首次搜索触发） |
 | Disabled | ✅ 已实现（启动时读 `settings.json` 的 `disabledPlugins`） |
 | Unloaded | ✅ 已实现（`ToolCatalog.UnloadPlugin`，GC 后断言 ALC 回收） |
+| 卸载副作用回收 | ✅ 已实现（`OnDispose` 回调，后注册先执行） |
 | Faulted（连续失败 3 次） | ⬜ 未实现 |
 | 能力校验（`capabilities`） | ✅ 已实现（`HostPlatformCapabilityProbe`） |
 
@@ -405,6 +409,7 @@ plugin.sdkVersion 的 major  ==  host.sdkVersion 的 major   → 兼容
 | 1.7 | `ClipboardHistoryEntry.SourceApp`：复制来源进程名 |
 | 1.8 | `IToolHost.LocalModels` / `ILocalModels`：本地模型清单、下载、缓存、删除 |
 | 1.9 | `IToolHost.LocalTranslation` / `ILocalTranslation`：宿主共享的本地翻译引擎 |
+| 1.10 | `IToolHost.OnDispose`：卸载时回收插件副作用 |
 
 ---
 

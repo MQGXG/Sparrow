@@ -11,8 +11,11 @@ namespace Sparrow.App.Plugins;
 /// 每个插件一个实例，<see cref="PluginDirectory"/> 指向它自己的目录。
 /// 网络默认关闭（本地优先），需要联网的插件必须先看 <c>Http.IsAvailable</c>。
 /// </summary>
-public sealed class ToolHost : IToolHost
+public sealed class ToolHost : IToolHost, IDisposable
 {
+    private readonly List<Action> _disposers = [];
+    private bool _disposed;
+
     public ToolHost(
         string pluginId,
         string pluginDirectory,
@@ -37,6 +40,23 @@ public sealed class ToolHost : IToolHost
 
     public ILogger Logger { get; }
 
+    public void OnDispose(Action callback)
+    {
+        ArgumentNullException.ThrowIfNull(callback);
+
+        lock (_disposers)
+        {
+            if (!_disposed)
+            {
+                _disposers.Add(callback);
+                return;
+            }
+        }
+
+        // 已经卸载：立即清理，避免调用方以为登记成功
+        InvokeSafe(callback);
+    }
+
     public IToolSettings Settings { get; }
 
     public IHttpClientAccess Http { get; }
@@ -56,6 +76,38 @@ public sealed class ToolHost : IToolHost
 
     /// <summary>通用窗口覆盖能力；无 UI 的测试环境为 null。</summary>
     public IWindowOverlay? Windows { get; }
+
+    public void Dispose()
+    {
+        Action[] snapshot;
+
+        lock (_disposers)
+        {
+            if (_disposed)
+                return;
+
+            _disposed = true;
+            snapshot = _disposers.ToArray();
+            _disposers.Clear();
+        }
+
+        // 后注册的先执行：与常见的资源栈语义一致
+        for (var i = snapshot.Length - 1; i >= 0; i--)
+            InvokeSafe(snapshot[i]);
+    }
+
+    private void InvokeSafe(Action callback)
+    {
+        try
+        {
+            callback();
+        }
+        catch (Exception ex)
+        {
+            // 一个清理回调失败不能阻止其他回调，也不能把卸载路径打断
+            Logger.LogError(ex, "插件清理回调执行失败");
+        }
+    }
 }
 
 /// <summary>
@@ -67,6 +119,8 @@ public sealed class NullToolHost : IToolHost
     public static NullToolHost Instance { get; } = new();
 
     public ILogger Logger => NullLogger.Instance;
+
+    public void OnDispose(Action callback) { }
 
     public IToolSettings Settings { get; } = new InMemoryToolSettings();
 

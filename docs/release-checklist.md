@@ -74,7 +74,7 @@ dotnet list package --include-transitive | findstr SkiaSharp
 [ ] 已接入测试的插件单测全绿（当前 13 个插件）
 [ ] 快照测试全绿
 [ ] 无跳过的测试（Skip 必须写原因）
-[ ] 当前基线：898 用例（2026-11-28）
+[ ] 当前基线：903 用例（2026-11-28）
 ```
 
 ### 1.6 性能
@@ -183,6 +183,7 @@ dotnet list package --include-transitive | findstr SkiaSharp
 [ ] 删掉一个插件目录 → 重启正常，无报错，其他插件不受影响
 [ ] 故意改坏某插件的 plugin.json → 该插件被跳过并提示「清单无效」，其他插件正常
 [ ] 连续禁用/启用 10 次 → 任务管理器内存无持续增长
+[ ] 插件登记的 `Host.OnDispose` 清理回调 → 禁用/卸载后执行，内存不持续增长
 [ ] 把插件目录的 SDK dll 手动放回去 → 日志出现「loaded but no ITool found」（验证铁律 1 的告警有效）
 ```
 

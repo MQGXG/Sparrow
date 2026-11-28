@@ -55,6 +55,9 @@ public sealed class PluginLoader : IDisposable
         // 先从列表移除，断开宿主对插件对象的强引用
         _loaded.Remove(plugin);
 
+        // 先回收插件登记的副作用（Timer / 事件 / 句柄），再卸载程序集
+        DisposeHost(plugin);
+
         var weak = new WeakReference(plugin.Context);
         plugin.Context.Unload();
 
@@ -183,9 +186,26 @@ public sealed class PluginLoader : IDisposable
         // 真正卸载每个 ALC，而不是只清空列表——
         // 只清列表会让加载上下文一直存活到进程退出
         foreach (var plugin in _loaded)
+        {
+            DisposeHost(plugin);
             plugin.Context.Unload();
+        }
 
         _loaded.Clear();
         _log.Info("插件加载器已释放");
+    }
+
+    private void DisposeHost(LoadedPlugin plugin)
+    {
+        try
+        {
+            if (plugin.Host is IDisposable disposable)
+                disposable.Dispose();
+        }
+        catch (Exception ex)
+        {
+            // 清理失败不阻止 ALC 卸载；但必须留下日志
+            _log.Error($"清理插件 {plugin.Manifest.Id} 的副作用失败", ex);
+        }
     }
 }

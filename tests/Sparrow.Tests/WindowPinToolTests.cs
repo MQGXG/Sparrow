@@ -71,6 +71,8 @@ public sealed class WindowPinToolTests
 
         public ILogger Logger => NullLogger.Instance;
 
+        public void OnDispose(Action callback) { }
+
         public IToolSettings Settings { get; } = new FakeSettings();
 
         public IHttpClientAccess Http => throw new NotSupportedException();

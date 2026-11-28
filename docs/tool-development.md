@@ -187,6 +187,7 @@ public sealed class JsonFormatTool : ITool
 public interface IToolHost
 {
     ILogger Logger { get; }
+    void OnDispose(Action callback);             // 卸载时回收副作用
     IToolSettings Settings { get; }             // 按插件隔离，持久化到 settings.json
     IHttpClientAccess Http { get; }             // 默认禁用；用前先看 IsAvailable
     IAiClient Ai { get; }                       // 未配置时 IsAvailable=false
@@ -201,9 +202,15 @@ public interface IToolHost
 
 **没有文件系统、没有实时剪贴板、没有数据库、没有窗口。**
 
+```csharp
+var timer = new Timer(...);
+context.Host?.OnDispose(() => timer.Dispose());
+```
+
 | 需求 | 正确做法 | 错误做法 |
 |---|---|---|
 | 记日志 | `Host.Logger.Info(...)` | `File.AppendAllText` |
+| 卸载清理 | `Host.OnDispose(() => ...)` | 起 Timer / 订阅事件后不登记 |
 | 存配置 | `Host.Settings.Get/Set`（写入 `settings.json`） | 自己读 JSON 文件 |
 | 报进度 | `context.Progress?.Report(...)` | 直接改 UI |
 | 流式中间结果 | `new ToolProgress(...) { Lines = ... }`（OCR 用） | 自己开窗口通信 |

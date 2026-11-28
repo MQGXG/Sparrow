@@ -304,6 +304,8 @@ var result = await ToolRunner.ExecuteAsync(entry.Tool, context, cancellationToke
 UI 线程未处理异常由 `Dispatcher.UIThread.UnhandledException` 记录并标记 Handled；
 后台线程与未观察任务异常写入 `CrashLog`，避免 WinExe 静默退出。
 
+**插件卸载顺序**：`ToolHost.Dispose()` 先执行 `OnDispose` 登记的清理回调，再 `PluginLoadContext.Unload()`。顺序反了会让 Timer / 事件订阅把 ALC 拉住。
+
 ---
 
 ## 八、决策记录（ADR）

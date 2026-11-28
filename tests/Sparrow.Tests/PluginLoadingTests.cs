@@ -231,6 +231,46 @@ public sealed class PluginLoadingTests
     }
 
     [Fact]
+    public void 卸载插件_先执行插件登记的清理回调()
+    {
+        using var root = new TempPluginRoot();
+        root.CreatePlugin("sparrow.plugin.json-format", ValidManifest);
+
+        var candidate = Scanner(root).Scan().ShouldHaveSingleItem();
+        using var loader = new PluginLoader(new NullLog());
+
+        var plugin = loader.Load(candidate);
+        plugin.ShouldNotBeNull();
+
+        var disposed = false;
+        plugin!.Host.OnDispose(() => disposed = true);
+
+        loader.Unload("sparrow.plugin.json-format").ShouldNotBeNull();
+
+        disposed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void 释放加载器_也会执行插件登记的清理回调()
+    {
+        using var root = new TempPluginRoot();
+        root.CreatePlugin("sparrow.plugin.json-format", ValidManifest);
+
+        var candidate = Scanner(root).Scan().ShouldHaveSingleItem();
+        var loader = new PluginLoader(new NullLog());
+
+        var plugin = loader.Load(candidate);
+        plugin.ShouldNotBeNull();
+
+        var disposed = false;
+        plugin!.Host.OnDispose(() => disposed = true);
+
+        loader.Dispose();
+
+        disposed.ShouldBeTrue();
+    }
+
+    [Fact]
     public void 工具目录_构造时不加载_首次取注册表才构建()
     {
         using var root = new TempPluginRoot();
