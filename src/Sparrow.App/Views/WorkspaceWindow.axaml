@@ -5,7 +5,7 @@
         xmlns:converters="using:Sparrow.App.Converters"
         x:Class="Sparrow.App.Views.WorkspaceWindow"
         x:DataType="vm:WorkspaceViewModel"
-        Title="Sparrow · 工具台"
+        Title="Sparrow"
         Width="1120"
         Height="730"
         DragDrop.AllowDrop="True"
@@ -108,7 +108,7 @@
           <Image Source="avares://Sparrow.App/Assets/sparrow-32.png"
                  Width="22" Height="22"
                  VerticalAlignment="Center" />
-          <TextBlock Text="麻雀"
+          <TextBlock Text="Sparrow"
                      FontFamily="{DynamicResource DisplayFont}"
                      FontSize="16"
                      FontWeight="SemiBold"

@@ -5,7 +5,7 @@
         xmlns:converters="using:Sparrow.App.Converters"
         x:Class="Sparrow.App.Views.ClipboardPanelWindow"
         x:DataType="vm:ClipboardHistoryViewModel"
-        Title="麻雀 · 剪贴板"
+        Title="Sparrow"
         Width="440"
         Height="720"
         MinWidth="380"

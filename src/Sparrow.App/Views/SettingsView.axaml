@@ -1728,7 +1728,7 @@
                              FontSize="27"
                              FontWeight="Bold"
                              Foreground="{DynamicResource TextPrimaryBrush}"
-                             Text="麻雀 · 工具台" />
+                             Text="Sparrow" />
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <Border Classes="chip">
                       <TextBlock Classes="num"
@@ -1848,10 +1848,14 @@
 
             <!-- 项目来源：源码 / 反馈 / 本地优先说明 -->
             <Grid ColumnDefinitions="*,*,*" Margin="24,16" ColumnSpacing="10">
-              <Button Classes="link-card" Tag="https://github.com/MQXGXG/Sparrow" Click="OnOpenLinkClick">
+              <Button Classes="link-card" Tag="https://github.com/MQGXG/Sparrow" Click="OnOpenLinkClick">
                 <StackPanel Spacing="6">
                   <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Path Data="{StaticResource IconLink}" Classes="icon icon-xs" />
+                    <Path Data="{StaticResource IconGitHub}"
+                          Width="13" Height="13"
+                          Fill="{DynamicResource TextPrimaryBrush}"
+                          Stretch="Uniform"
+                          VerticalAlignment="Center" />
                     <TextBlock Text="GitHub" FontSize="13" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextPrimaryBrush}" />
                   </StackPanel>
@@ -1863,7 +1867,7 @@
 
               <Button Grid.Column="1"
                       Classes="link-card"
-                      Tag="https://github.com/MQXGXG/Sparrow/issues"
+                      Tag="https://github.com/MQGXG/Sparrow/issues"
                       Click="OnOpenLinkClick">
                 <StackPanel Spacing="6">
                   <StackPanel Orientation="Horizontal" Spacing="8">
@@ -1940,20 +1944,59 @@
 
             <Border Classes="hud-line" />
 
-            <!-- 作者 / 打赏：二维码图片存在时才显示 -->
+            <!-- 作者 / 打赏：头像 + 简介 + GitHub；二维码图片存在时才显示 -->
             <Grid ColumnDefinitions="*,Auto" Margin="24,16" ColumnSpacing="20">
-              <StackPanel Spacing="6" VerticalAlignment="Center">
-                <TextBlock Classes="num" Text="AUTHOR / 作者" />
-                <TextBlock Text="MQXGXG"
-                           FontSize="16"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextPrimaryBrush}" />
-                <TextBlock Text="Sparrow 是一个本地优先的桌面工具台：处理都在本机完成，源码开源在 GitHub。"
-                           FontSize="11"
-                           Foreground="{DynamicResource TextMutedBrush}"
-                           TextWrapping="Wrap"
-                           MaxWidth="480" />
-              </StackPanel>
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" VerticalAlignment="Center">
+                <Border Width="56"
+                        Height="56"
+                        CornerRadius="28"
+                        ClipToBounds="True"
+                        Background="{DynamicResource SurfaceRaisedBrush}"
+                        BorderBrush="{DynamicResource AccentBorderBrush}"
+                        BorderThickness="1"
+                        VerticalAlignment="Center">
+                  <Image Source="avares://Sparrow.App/Assets/author-mqgxg.png"
+                         Stretch="UniformToFill"
+                         RenderOptions.BitmapInterpolationMode="HighQuality" />
+                </Border>
+
+                <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="MQGXG"
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                    <Border Classes="chip">
+                      <TextBlock Classes="num" Text="AUTHOR" />
+                    </Border>
+                  </StackPanel>
+
+                  <TextBlock Text="独立开发者 · Sparrow 作者"
+                             FontSize="11"
+                             Foreground="{DynamicResource TextSecondaryBrush}" />
+
+                  <TextBlock Text="Sparrow 是一个本地优先的桌面工具台：处理都在本机完成，源码开源在 GitHub。"
+                             FontSize="11"
+                             Foreground="{DynamicResource TextMutedBrush}"
+                             TextWrapping="Wrap"
+                             MaxWidth="480" />
+
+                  <Button Classes="ghost small"
+                          Tag="https://github.com/MQGXG"
+                          Click="OnOpenLinkClick"
+                          HorizontalAlignment="Left"
+                          Margin="0,2,0,0">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Path Data="{StaticResource IconGitHub}"
+                            Width="12" Height="12"
+                            Fill="{DynamicResource TextSecondaryBrush}"
+                            Stretch="Uniform"
+                            VerticalAlignment="Center" />
+                      <TextBlock Text="GitHub @MQGXG" />
+                    </StackPanel>
+                  </Button>
+                </StackPanel>
+              </Grid>
 
               <Border x:Name="DonatePanel"
                       Grid.Column="1"
@@ -1982,7 +2025,7 @@
 
             <!-- 版权 -->
             <Grid ColumnDefinitions="*,Auto" Margin="24,12,24,16">
-              <TextBlock Classes="num" Text="© 2026 MQXGXG · 本地优先，数据不出机器" />
+              <TextBlock Classes="num" Text="© 2026 MQGXG · 本地优先，数据不出机器" />
               <TextBlock Grid.Column="1" Classes="num" Text="SPARROW / END" />
             </Grid>
           </StackPanel>

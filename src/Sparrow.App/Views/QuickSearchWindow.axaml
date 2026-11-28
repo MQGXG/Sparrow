@@ -4,7 +4,7 @@
         xmlns:controls="using:Sparrow.App.Controls"
         x:Class="Sparrow.App.Views.QuickSearchWindow"
         x:DataType="vm:QuickSearchViewModel"
-        Title="Sparrow 文件搜索"
+        Title="Sparrow"
         Width="800"
         MaxHeight="720"
         SizeToContent="Height"

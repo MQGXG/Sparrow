@@ -1,4 +1,4 @@
-# Sparrow · 麻雀
+# Sparrow
 
 > 一个热键，唤起你需要的那件小事。
 
@@ -95,7 +95,7 @@
 
 ## 下载安装
 
-从 [Releases](https://github.com/MQXGXG/Sparrow/releases) 下载最新安装包。
+从 [Releases](https://github.com/MQGXG/Sparrow/releases) 下载最新安装包。
 
 首次使用屏幕录制时，如果本机没有 FFmpeg，会自动下载到 `%LOCALAPPDATA%\Sparrow\ffmpeg`（约 80 MB，仅一次）。
 

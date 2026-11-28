@@ -62,7 +62,7 @@ public sealed class TrayService
         _icon = new TrayIcon
         {
             Icon = TrayIconFactory.Create(),
-            ToolTipText = "Sparrow · 麻雀",
+            ToolTipText = "Sparrow",
             Menu = BuildMenu(),
             IsVisible = true
         };

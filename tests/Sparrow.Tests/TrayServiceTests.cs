@@ -44,7 +44,7 @@ public sealed class TrayServiceTests
 
         icons.ShouldNotBeNull();
         icons!.Count.ShouldBe(1);
-        icons[0].ToolTipText.ShouldBe("Sparrow · 麻雀");
+        icons[0].ToolTipText.ShouldBe("Sparrow");
     }
 
     [AvaloniaFact]
