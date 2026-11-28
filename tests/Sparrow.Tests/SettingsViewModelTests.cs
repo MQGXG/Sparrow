@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.VisualTree;
 using Shouldly;
 using Sparrow.App;
 using Sparrow.App.Plugins;
@@ -345,5 +346,27 @@ public sealed class SettingsViewModelTests
         saved.TrayMenu.Count.ShouldBe(before + 1);
         saved.TrayMenu[^1].Action.ShouldBe("exit");
         saved.TrayMenu[^2].Separator.ShouldBeTrue();
+    }
+
+    [AvaloniaFact]
+    public void 外观三张卡_各占一列不重叠()
+    {
+        var (viewModel, _, _) = Create();
+        viewModel.SelectSection(SettingsSection.General);
+
+        var view = new SettingsView { DataContext = viewModel };
+        var window = new Window { Content = view, Width = 1100, Height = 800 };
+        window.Show();
+
+        var cards = view.GetVisualDescendants()
+            .OfType<Button>()
+            .Where(button => button.Classes.Contains("appearance-card"))
+            .ToList();
+
+        cards.Count.ShouldBe(3);
+        cards.Select(card => Math.Round(card.Bounds.X)).Distinct().Count().ShouldBe(3);
+        cards.ShouldAllBe(card => card.Bounds.Width > 100);
+
+        window.Close();
     }
 }

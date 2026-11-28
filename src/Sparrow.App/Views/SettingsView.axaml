@@ -28,6 +28,7 @@
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="10" />
       <Setter Property="Padding" Value="8" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
@@ -1153,7 +1154,8 @@
 
               <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
                 <!-- 跟随系统：左深右浅 -->
-                <Button Classes="appearance-card"
+                <Button Grid.Column="0"
+                        Classes="appearance-card"
                         Classes.appearance-selected="{Binding IsSystemAppearance}"
                         Tag="system"
                         Click="OnAppearanceClick"
@@ -1179,7 +1181,8 @@
                 </Button>
 
                 <!-- 浅色 -->
-                <Button Classes="appearance-card"
+                <Button Grid.Column="1"
+                        Classes="appearance-card"
                         Classes.appearance-selected="{Binding IsLightAppearance}"
                         Tag="light"
                         Click="OnAppearanceClick"
@@ -1204,7 +1207,8 @@
                 </Button>
 
                 <!-- 深色 -->
-                <Button Classes="appearance-card"
+                <Button Grid.Column="2"
+                        Classes="appearance-card"
                         Classes.appearance-selected="{Binding IsDarkAppearance}"
                         Tag="dark"
                         Click="OnAppearanceClick"
